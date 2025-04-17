@@ -27,7 +27,10 @@ export default function ChatPresence() {
 					});
 				}
 			});
-	}, [user]);
+		return () => {
+			channel.unsubscribe();
+		};
+	}, [user, supabase]); // Added supabase to the dependency array
 
 	if (!user) {
 		return <div className=" h-3 w-1"></div>;

@@ -49,8 +49,8 @@ export default function ListMessages() {
 					if (
 						scrollContainer.scrollTop <
 						scrollContainer.scrollHeight -
-							scrollContainer.clientHeight -
-							10
+						scrollContainer.clientHeight -
+						10
 					) {
 						setNotification((current) => current + 1);
 					}
@@ -75,14 +75,14 @@ export default function ListMessages() {
 		return () => {
 			channel.unsubscribe();
 		};
-	}, [messages]);
+	}, [messages, supabase, optimisticIds, addMessage, optimisticDeleteMessage, optimisticUpdateMessage]); // Added missing dependencies
 
 	useEffect(() => {
 		const scrollContainer = scrollRef.current;
 		if (scrollContainer && !userScrolled) {
 			scrollContainer.scrollTop = scrollContainer.scrollHeight;
 		}
-	}, [messages]);
+	}, [messages, userScrolled]); // Added userScrolled to the dependency array
 
 	const handleOnScroll = () => {
 		const scrollContainer = scrollRef.current;
@@ -90,8 +90,8 @@ export default function ListMessages() {
 			const isScroll =
 				scrollContainer.scrollTop <
 				scrollContainer.scrollHeight -
-					scrollContainer.clientHeight -
-					10;
+				scrollContainer.clientHeight -
+				10;
 			setUserScrolled(isScroll);
 			if (
 				scrollContainer.scrollTop ===
