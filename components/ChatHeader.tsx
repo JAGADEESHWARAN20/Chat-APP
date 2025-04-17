@@ -1,22 +1,29 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "./ui/button";
 import { supabaseBrowser } from "@/lib/supabase/browser";
-import { User } from "@supabase/supabase-js";
+import { User as SupabaseUser } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 import ChatPresence from "./ChatPresence";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Search } from "lucide-react";
+import { Search, User as UserIcon, Settings } from "lucide-react"; // Import Settings icon
 import { Input } from "@/components/ui/input";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Database } from "@/lib/types/supabase"; // Import the generated Database type
 
-export default function ChatHeader({ user }: { user: User | undefined }) {
+// Use the generated User type from supabase.ts for consistency
+type UserProfile = Database["public"]["Tables"]["users"]["Row"];
+
+export default function ChatHeader({ user }: { user: SupabaseUser | undefined }) {
 	const router = useRouter();
 	const [searchQuery, setSearchQuery] = useState("");
 	const [searchType, setSearchType] = useState<"rooms" | "users" | null>(null);
-	const [searchResults, setSearchResults] = useState<string[]>([]); // Placeholder for search results
+	const [users, setUsers] = useState<UserProfile[]>([]);
+	const [searchResults, setSearchResults] = useState<UserProfile[]>([]);
+	const supabase = supabaseBrowser();
+	const [isPopoverOpen, setIsPopoverOpen] = useState(false); // Control popover state
 
 	const handleLoginWithGithub = () => {
-		const supabase = supabaseBrowser();
 		supabase.auth.signInWithOAuth({
 			provider: "github",
 			options: {
@@ -26,25 +33,53 @@ export default function ChatHeader({ user }: { user: User | undefined }) {
 	};
 
 	const handleLogout = async () => {
-		const supabase = supabaseBrowser();
 		await supabase.auth.signOut();
 		router.refresh();
 	};
 
 	const handleSearchInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
 		setSearchQuery(event.target.value);
-		// In a real application, you might trigger a search here or after a certain delay
 	};
+
+	const fetchUsers = async () => {
+		const { data, error } = await supabase
+			.from("users")
+			.select("id, avatar_url, username, display_name, created_at"); // Select the necessary fields
+
+		if (error) {
+			console.error("Error fetching users:", error);
+		} else if (data) {
+			setUsers(data); // 'data' is already correctly typed by Supabase
+		}
+	};
+
+	useEffect(() => {
+		if (searchType === "users") {
+			fetchUsers();
+		} else {
+			setUsers([]);
+			setSearchResults([]);
+		}
+	}, [searchType, supabase]);
+
+	useEffect(() => {
+		if (searchType === "users" && users.length > 0) {
+			const filteredResults = users.filter((user) =>
+				user?.username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+				user?.display_name?.toLowerCase().includes(searchQuery.toLowerCase())
+			);
+			setSearchResults(filteredResults);
+		} else if (searchType === "rooms") {
+			// Implement room search logic here if needed
+			setSearchResults([]); // For now, clear results when not searching users
+		} else {
+			setSearchResults([]);
+		}
+	}, [searchQuery, searchType, users]);
 
 	const handleSearchByType = (type: "rooms" | "users") => {
 		setSearchType(type);
-		// In a real application, you would trigger a fetch based on the searchType and searchQuery
-		// For now, let's just update the search results for UI demonstration
-		if (type === "rooms") {
-			setSearchResults(["Room 1", "Room 2", "General Room"]);
-		} else if (type === "users") {
-			setSearchResults(["User A", "User B", "Online User"]);
-		}
+		setSearchQuery(""); // Clear previous search query
 	};
 
 	return (
@@ -56,7 +91,7 @@ export default function ChatHeader({ user }: { user: User | undefined }) {
 				</div>
 
 				<div className="flex items-center gap-2">
-					<Popover>
+					<Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
 						<PopoverTrigger asChild>
 							<Button variant="outline" size="icon">
 								<Search className="h-4 w-4" />
@@ -64,10 +99,22 @@ export default function ChatHeader({ user }: { user: User | undefined }) {
 						</PopoverTrigger>
 						<PopoverContent className="w-80">
 							<div className="p-4">
+								<div className="flex justify-end mb-2">
+									<Button
+										variant="ghost"
+										size="icon"
+										onClick={() => {
+											setIsPopoverOpen(false);
+											router.push("/profile");
+										}}
+									>
+										<Settings className="h-4 w-4" />
+									</Button>
+								</div>
 								<h3 className="font-semibold text-lg mb-2">Search</h3>
 								<Input
 									type="text"
-									placeholder="Search..."
+									placeholder="Search users..."
 									value={searchQuery}
 									onChange={handleSearchInputChange}
 									className="mb-4"
@@ -86,18 +133,42 @@ export default function ChatHeader({ user }: { user: User | undefined }) {
 										Users
 									</Button>
 								</div>
-								{searchResults.length > 0 && (
+								{searchType === "users" && searchResults.length > 0 && (
 									<div className="mt-4">
-										<h4 className="font-semibold text-sm mb-2">Results</h4>
+										<h4 className="font-semibold text-sm mb-2">User Profiles</h4>
 										<ul className="space-y-2">
-											{searchResults.map((result, index) => (
-												<li key={index} className="text-sm text-gray-600">{result}</li>
+											{searchResults.map((userProfile) => (
+												<li
+													key={userProfile.id}
+													className="flex items-center justify-between"
+												>
+													<div className="flex items-center gap-2">
+														<Avatar>
+															{userProfile.avatar_url ? (
+																<AvatarImage src={userProfile.avatar_url} alt={userProfile.username || "Avatar"} />
+															) : (
+																<AvatarFallback>{userProfile.username?.charAt(0).toUpperCase() || userProfile.display_name?.charAt(0).toUpperCase() || "?"}</AvatarFallback>
+															)}
+														</Avatar>
+														<div>
+															<div className="text-xs text-gray-500">{userProfile.username}</div>
+															<div className="text-sm font-semibold">{userProfile.display_name}</div>
+														</div>
+													</div>
+													<UserIcon className="h-4 w-4 text-gray-500" />
+												</li>
 											))}
 										</ul>
 									</div>
 								)}
-								{searchType && searchResults.length === 0 && (
-									<p className="text-sm text-muted-foreground mt-2">No results found.</p>
+								{searchType === "users" && users.length > 0 && searchResults.length === 0 && searchQuery.length > 0 && (
+									<p className="text-sm text-muted-foreground mt-2">No users found matching your search.</p>
+								)}
+								{searchType === "users" && users.length === 0 && (
+									<p className="text-sm text-muted-foreground mt-2">Loading users...</p>
+								)}
+								{searchType === "rooms" && (
+									<p className="text-sm text-muted-foreground mt-2">Room search functionality will be implemented here.</p>
 								)}
 							</div>
 						</PopoverContent>

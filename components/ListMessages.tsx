@@ -1,5 +1,5 @@
 "use client";
-import { Imessage, useMessage } from "@/lib/store/messages";
+import { Imessage, useMessage } from "@/lib/store/messages"; // Make sure this Imessage definition aligns with the structure below
 import React, { useEffect, useRef, useState } from "react";
 import Message from "./Message";
 import { DeleteAlert, EditAlert } from "./MessasgeActions";
@@ -7,6 +7,10 @@ import { supabaseBrowser } from "@/lib/supabase/browser";
 import { toast } from "sonner";
 import { ArrowDown } from "lucide-react";
 import LoadMoreMessages from "./LoadMoreMessages";
+import { Database } from "@/lib/types/supabase"; // Import Database type
+
+type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
+type UserRow = Database["public"]["Tables"]["users"]["Row"];
 
 export default function ListMessages() {
 	const scrollRef = useRef() as React.MutableRefObject<HTMLDivElement>;
@@ -29,20 +33,32 @@ export default function ListMessages() {
 				"postgres_changes",
 				{ event: "INSERT", schema: "public", table: "messages" },
 				async (payload) => {
-					if (!optimisticIds.includes(payload.new.id)) {
-						const { error, data } = await supabase
+					const newMessagePayload = payload.new as MessageRow;
+					if (!optimisticIds.includes(newMessagePayload.id)) {
+						const { error, data: user } = await supabase
 							.from("users")
 							.select("*")
-							.eq("id", payload.new.send_by)
-							.single();
+							.eq("id", newMessagePayload.send_by)
+							.single<UserRow>();
+
 						if (error) {
 							toast.error(error.message);
-						} else {
-							const newMessage = {
-								...payload.new,
-								users: data,
+						} else if (user) {
+							const newMessage: Imessage = {
+								id: newMessagePayload.id,
+								created_at: newMessagePayload.created_at,
+								is_edit: newMessagePayload.is_edit,
+								send_by: newMessagePayload.send_by,
+								text: newMessagePayload.text,
+								users: { // Assuming 'Imessage' expects a nested 'users' object
+									avatar_url: user.avatar_url,
+									display_name: user.display_name,
+									username: user.username,
+									id: user.id, // Include user ID if needed in Imessage
+									created_at: user.created_at, // Include user creation time if needed
+								},
 							};
-							addMessage(newMessage as Imessage);
+							addMessage(newMessage);
 						}
 					}
 					const scrollContainer = scrollRef.current;
@@ -75,14 +91,14 @@ export default function ListMessages() {
 		return () => {
 			channel.unsubscribe();
 		};
-	}, [messages, supabase, optimisticIds, addMessage, optimisticDeleteMessage, optimisticUpdateMessage]); // Added missing dependencies
+	}, [messages, optimisticIds, addMessage, optimisticDeleteMessage, optimisticUpdateMessage, supabase]); // Added missing dependencies
 
 	useEffect(() => {
 		const scrollContainer = scrollRef.current;
 		if (scrollContainer && !userScrolled) {
 			scrollContainer.scrollTop = scrollContainer.scrollHeight;
 		}
-	}, [messages, userScrolled]); // Added userScrolled to the dependency array
+	}, [messages, userScrolled]);
 
 	const handleOnScroll = () => {
 		const scrollContainer = scrollRef.current;
