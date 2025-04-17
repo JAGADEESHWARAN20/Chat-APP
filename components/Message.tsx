@@ -1,7 +1,7 @@
+"use client";
 import { Imessage, useMessage } from "@/lib/store/messages";
 import React from "react";
 import Image from "next/image";
-
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -20,18 +20,18 @@ export default function Message({ message }: { message: Imessage }) {
 		<div className="flex gap-2">
 			<div>
 				<Image
-					src={message.users?.avatar_url!}
-					alt={message.users?.display_name!}
+					src={message.users?.avatar_url || "/default-avatar.png"} // Fallback image
+					alt={message.users?.display_name || "Unknown User"}
 					width={40}
 					height={40}
-					className=" rounded-full ring-2"
+					className="rounded-full ring-2"
 				/>
 			</div>
 			<div className="flex-1">
 				<div className="flex items-center justify-between">
 					<div className="flex items-center gap-1">
 						<h1 className="font-bold">
-							{message.users?.display_name}
+							{message.users?.display_name || "Unknown User"}
 						</h1>
 						<h1 className="text-sm text-gray-400">
 							{new Date(message.created_at).toDateString()}
@@ -40,9 +40,7 @@ export default function Message({ message }: { message: Imessage }) {
 							<h1 className="text-sm text-gray-400">edited</h1>
 						)}
 					</div>
-					{message.users?.id === user?.id && (
-						<MessageMenu message={message} />
-					)}
+					{message.users?.id === user?.id && <MessageMenu message={message} />}
 				</div>
 				<p className="text-gray-300">{message.text}</p>
 			</div>
@@ -63,7 +61,8 @@ const MessageMenu = ({ message }: { message: Imessage }) => {
 				<DropdownMenuSeparator />
 				<DropdownMenuItem
 					onClick={() => {
-						document.getElementById("trigger-edit")?.click();
+						const trigger = document.getElementById("trigger-edit");
+						if (trigger) trigger.click();
 						setActionMessage(message);
 					}}
 				>
@@ -71,7 +70,8 @@ const MessageMenu = ({ message }: { message: Imessage }) => {
 				</DropdownMenuItem>
 				<DropdownMenuItem
 					onClick={() => {
-						document.getElementById("trigger-delete")?.click();
+						const trigger = document.getElementById("trigger-delete");
+						if (trigger) trigger.click();
 						setActionMessage(message);
 					}}
 				>

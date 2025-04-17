@@ -9,7 +9,7 @@ import { ArrowDown } from "lucide-react";
 import LoadMoreMessages from "./LoadMoreMessages";
 
 export default function ListMessages() {
-	const scrollRef = useRef() as React.MutableRefObject<HTMLDivElement>;
+	const scrollRef = useRef<HTMLDivElement>(null);
 	const [userScrolled, setUserScrolled] = useState(false);
 	const [notification, setNotification] = useState(0);
 
@@ -22,77 +22,98 @@ export default function ListMessages() {
 	} = useMessage((state) => state);
 
 	const supabase = supabaseBrowser();
+
+	// Fetch initial messages and set up real-time subscription
 	useEffect(() => {
-		const channel = supabase
-			.channel("roomx")
-			.on(
-				"postgres_changes",
-				{ event: "INSERT", schema: "public", table: "messages" },
-				async (payload) => {
-					if (!optimisticIds.includes(payload.new.id)) {
-						const { error, data } = await supabase
-							.from("users")
-							.select("*")
-							.eq("id", payload.new.send_by)
-							.single();
-						if (error) {
-							toast.error(error.message);
-						} else {
-							const newMessage = {
-								...payload.new,
-								users: data,
-							};
-							addMessage(newMessage as Imessage);
+		const fetchMessages = async () => {
+			const { data, error } = await supabase
+				.from("messages")
+				.select("*, users(*)")
+				.order("created_at", { ascending: false })
+				.limit(50);
+			if (error) {
+				toast.error(error.message);
+			} else {
+				data.forEach((msg) => addMessage(msg as Imessage));
+			}
+		};
+
+		const channel = supabase.channel("chat-room");
+		const handleSubscription = () => {
+			channel
+				.on(
+					"postgres_changes",
+					{ event: "INSERT", schema: "public", table: "messages" },
+					async (payload) => {
+						if (!optimisticIds.includes(payload.new.id)) {
+							const { error, data } = await supabase
+								.from("users")
+								.select("*")
+								.eq("id", payload.new.send_by)
+								.single();
+							if (error) {
+								toast.error(error.message);
+							} else {
+								const newMessage = { ...payload.new, users: data };
+								addMessage(newMessage as Imessage);
+							}
+						}
+						const scrollContainer = scrollRef.current;
+						if (
+							scrollContainer &&
+							scrollContainer.scrollTop <
+							scrollContainer.scrollHeight - scrollContainer.clientHeight - 10
+						) {
+							setNotification((current) => current + 1);
 						}
 					}
-					const scrollContainer = scrollRef.current;
-					if (
-						scrollContainer.scrollTop <
-						scrollContainer.scrollHeight -
-							scrollContainer.clientHeight -
-							10
-					) {
-						setNotification((current) => current + 1);
+				)
+				.on(
+					"postgres_changes",
+					{ event: "DELETE", schema: "public", table: "messages" },
+					(payload) => {
+						optimisticDeleteMessage(payload.old.id);
 					}
-				}
-			)
-			.on(
-				"postgres_changes",
-				{ event: "DELETE", schema: "public", table: "messages" },
-				(payload) => {
-					optimisticDeleteMessage(payload.old.id);
-				}
-			)
-			.on(
-				"postgres_changes",
-				{ event: "UPDATE", schema: "public", table: "messages" },
-				(payload) => {
-					optimisticUpdateMessage(payload.new as Imessage);
-				}
-			)
-			.subscribe();
+				)
+				.on(
+					"postgres_changes",
+					{ event: "UPDATE", schema: "public", table: "messages" },
+					(payload) => {
+						optimisticUpdateMessage(payload.new as Imessage);
+					}
+				)
+				.subscribe(async (status) => {
+					if (status === "SUBSCRIBED") {
+						console.log("Subscribed to roomx");
+						await fetchMessages(); // Fetch initial messages after subscription
+					} else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+						console.error("Channel error, attempting to resubscribe...");
+						channel.unsubscribe();
+						setTimeout(handleSubscription, 1000);
+					}
+				});
+		};
+		handleSubscription();
 
 		return () => {
 			channel.unsubscribe();
 		};
-	}, [messages]);
+	}, [addMessage, optimisticIds, optimisticDeleteMessage, optimisticUpdateMessage]);
 
 	useEffect(() => {
 		const scrollContainer = scrollRef.current;
 		if (scrollContainer && !userScrolled) {
 			scrollContainer.scrollTop = scrollContainer.scrollHeight;
 		}
-	}, [messages]);
+	}, [messages, userScrolled]);
 
 	const handleOnScroll = () => {
 		const scrollContainer = scrollRef.current;
 		if (scrollContainer) {
-			const isScroll =
+			setUserScrolled(
 				scrollContainer.scrollTop <
-				scrollContainer.scrollHeight -
-					scrollContainer.clientHeight -
-					10;
-			setUserScrolled(isScroll);
+				scrollContainer.scrollHeight - scrollContainer.clientHeight - 10
+			);
 			if (
 				scrollContainer.scrollTop ===
 				scrollContainer.scrollHeight - scrollContainer.clientHeight
@@ -101,9 +122,12 @@ export default function ListMessages() {
 			}
 		}
 	};
+
 	const scrollDown = () => {
 		setNotification(0);
-		scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+		if (scrollRef.current) {
+			scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+		}
 	};
 
 	return (
@@ -113,20 +137,19 @@ export default function ListMessages() {
 				ref={scrollRef}
 				onScroll={handleOnScroll}
 			>
-				<div className="flex-1 pb-5 ">
+				<div className="flex-1 pb-5">
 					<LoadMoreMessages />
 				</div>
-				<div className=" space-y-7">
-					{messages.map((value, index) => {
-						return <Message key={index} message={value} />;
-					})}
+				<div className="space-y-7">
+					{messages.map((value, index) => (
+						<Message key={index} message={value} />
+					))}
 				</div>
-
 				<DeleteAlert />
 				<EditAlert />
 			</div>
 			{userScrolled && (
-				<div className=" absolute bottom-20 w-full">
+				<div className="absolute bottom-20 w-full">
 					{notification ? (
 						<div
 							className="w-36 mx-auto bg-indigo-500 p-1 rounded-md cursor-pointer"
