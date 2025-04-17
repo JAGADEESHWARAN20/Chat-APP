@@ -9,7 +9,7 @@ export default function ChatPresence() {
 	const [onlineUsers, setOnlineUsers] = useState(0);
 
 	useEffect(() => {
-		const channel = supabase.channel("room1");
+		const channel = supabase.channel("roomx");
 		channel
 			.on("presence", { event: "sync" }, () => {
 				const userIds = [];

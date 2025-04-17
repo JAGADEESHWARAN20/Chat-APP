@@ -39,8 +39,11 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/deploym
 [ ] Edit
 [ ] Delete Message
 [ ] Realtime listener
-[x] Pagination
+[ ] Pagination
+
+
 
 curl 'https://exdezzoyljbzksrsnfqc.supabase.co/rest/v1/profile?select=*' \
 -H "apikey: SUPABASE_CLIENT_ANON_KEY" \
 -H "Authorization: Bearer SUPABASE_CLIENT_ANON_KEY"
+          

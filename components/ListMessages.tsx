@@ -24,7 +24,7 @@ export default function ListMessages() {
 	const supabase = supabaseBrowser();
 	useEffect(() => {
 		const channel = supabase
-			.channel("chat-room")
+			.channel("roomx")
 			.on(
 				"postgres_changes",
 				{ event: "INSERT", schema: "public", table: "messages" },
