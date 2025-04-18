@@ -18,22 +18,37 @@ export default function ChatInput() {
 	const supabase = supabaseBrowser();
 
 	const handleSendMessage = async (text: string) => {
-		if (!text.trim() || !user) return;
+		if (!text.trim() || !user) {
+			toast.error("Please log in and enter a message");
+			return;
+		}
 		if (!selectedRoom && !selectedDirectChat) {
 			toast.error("Please select a room or user to chat with");
 			return;
 		}
 
 		const id = uuidv4();
+		const roomId = selectedRoom?.id;
+		const directChatId = selectedDirectChat?.id;
+
+		if (roomId && !selectedRoom) {
+			toast.error("Room selection is invalid");
+			return;
+		}
+		if (directChatId && !selectedDirectChat) {
+			toast.error("Direct chat selection is invalid");
+			return;
+		}
+
 		const newMessage: Imessage = {
 			id,
 			text,
 			send_by: user.id,
-			room_id: selectedRoom?.id || null,
-			direct_chat_id: selectedDirectChat?.id || null,
+			room_id: roomId || null,
+			direct_chat_id: directChatId || null,
 			is_edit: false,
 			created_at: new Date().toISOString(),
-			status: null, // Added to satisfy Imessage interface
+			status: "sent", // Match database schema
 			users: {
 				id: user.id,
 				avatar_url: user.user_metadata.avatar_url || "",
@@ -42,27 +57,35 @@ export default function ChatInput() {
 				username: user.user_metadata.user_name || "",
 			},
 		};
-		addMessage(newMessage); // Optimistic
+
+		// Optimistic update
+		addMessage(newMessage);
+		setOptimisticIds(id);
 
 		try {
 			const { error } = await supabase
 				.from("messages")
 				.insert({
-					text,
 					id,
-					room_id: selectedRoom?.id || null,
-					direct_chat_id: selectedDirectChat?.id || null,
+					text,
+					room_id: roomId,
+					direct_chat_id: directChatId,
 					send_by: user.id,
-					status: null // Added to match database schema
+					status: "sent",
 				});
 
-			if (error) throw error;
-
-			addMessage(newMessage);
-			setOptimisticIds(id);
+			if (error) {
+				console.error("Supabase error:", error); // Log for debugging
+				throw error;
+			}
 		} catch (error) {
-			toast.error("Failed to send message");
+			if (error instanceof Error) {
+				toast.error(`Failed to send message: ${error.message}`);
+			} else {
+				toast.error("Failed to send message due to an unknown error");
+			}
 			useMessage.getState().optimisticDeleteMessage(id);
+			return;
 		}
 	};
 
@@ -77,7 +100,7 @@ export default function ChatInput() {
 							: "Select a room or user to start chatting"
 				}
 				onKeyDown={(e) => {
-					if (e.key === "Enter") {
+					if (e.key === "Enter" && e.currentTarget.value.trim()) {
 						handleSendMessage(e.currentTarget.value);
 						e.currentTarget.value = "";
 					}
