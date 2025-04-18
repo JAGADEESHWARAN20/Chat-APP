@@ -25,7 +25,7 @@ export default function RootLayout({
 					defaultTheme="dark"
 					enableSystem
 					disableTransitionOnChange
-				>
+					>
 					<RoomInitializer/>
 					{children}
 					<Toaster position="top-center" />

@@ -14,11 +14,11 @@ export const useRoomStore = create<RoomState>((set, get) => ({
      selectedRoom: null,
      setRooms: (rooms) => set({ rooms }),
      setSelectedRoom: (room) => set({ selectedRoom: room }),
-     initializeDefaultRoom: async () => {
-          const { rooms } = get();
-          if (rooms.length > 0 && !get().selectedRoom) {
-               // Select General room if it exists, otherwise select first room
-               const defaultRoom = rooms.find(r => r.name === 'General') || rooms[0];
+     initializeDefaultRoom: () => {
+          const { rooms, selectedRoom } = get();
+          if (rooms.length > 0 && !selectedRoom) {
+               // Try to find General Chat room first, fall back to first room
+               const defaultRoom = rooms.find(r => r.name === 'General Chat') || rooms[0];
                set({ selectedRoom: defaultRoom });
           }
      }

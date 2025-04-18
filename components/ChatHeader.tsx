@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { useRoomStore } from '@/lib/store/roomstore';
 
 type UserProfile = Database["public"]["Tables"]["users"]["Row"];
 
@@ -29,6 +30,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 	const [newRoomName, setNewRoomName] = useState("");
 	const [isPrivate, setIsPrivate] = useState(false);
 	const [isCreating, setIsCreating] = useState(false);
+	const selectedRoom = useRoomStore((state) => state.selectedRoom);
 
 	const handleCreateRoom = async () => {
 		if (!user) {
@@ -130,7 +132,9 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 		<div className="h-20">
 			<div className="p-5 border-b flex items-center justify-between h-full">
 				<div>
-					<h1 className="text-xl font-bold">Daily Chat</h1>
+					<h1 className="text-xl font-bold">
+						{selectedRoom ? selectedRoom.name : 'Daily Chat'}
+					</h1>
 					<ChatPresence />
 				</div>
 
