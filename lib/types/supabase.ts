@@ -58,32 +58,62 @@ export type Database = {
           },
         ]
       }
+      direct_message_threads: {
+        Row: {
+          created_at: string
+          id: string
+          status: string | null
+          user1_id: string
+          user2_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          status?: string | null
+          user1_id: string
+          user2_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          status?: string | null
+          user1_id?: string
+          user2_id?: string
+        }
+        Relationships: []
+      }
       messages: {
         Row: {
           created_at: string
           direct_chat_id: string | null
+          dm_thread_id: string | null
           id: string
           is_edit: boolean
           room_id: string | null
           send_by: string
+          status: string | null
           text: string
         }
         Insert: {
           created_at?: string
           direct_chat_id?: string | null
+          dm_thread_id?: string | null
           id?: string
           is_edit?: boolean
           room_id?: string | null
           send_by?: string
+          status?: string | null
           text: string
         }
         Update: {
           created_at?: string
           direct_chat_id?: string | null
+          dm_thread_id?: string | null
           id?: string
           is_edit?: boolean
           room_id?: string | null
           send_by?: string
+          status?: string | null
           text?: string
         }
         Relationships: [
@@ -99,6 +129,13 @@ export type Database = {
             columns: ["direct_chat_id"]
             isOneToOne: false
             referencedRelation: "direct_chats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_dm_thread_id_fkey"
+            columns: ["dm_thread_id"]
+            isOneToOne: false
+            referencedRelation: "direct_message_threads"
             referencedColumns: ["id"]
           },
           {
@@ -150,23 +187,55 @@ export type Database = {
           },
         ]
       }
+      room_participants: {
+        Row: {
+          joined_at: string
+          room_id: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          joined_at?: string
+          room_id: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          joined_at?: string
+          room_id?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_participants_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rooms: {
         Row: {
           created_at: string
           created_by: string | null
           id: string
+          is_private: boolean
           name: string
         }
         Insert: {
           created_at?: string
           created_by?: string | null
           id?: string
+          is_private?: boolean
           name: string
         }
         Update: {
           created_at?: string
           created_by?: string | null
           id?: string
+          is_private?: boolean
           name?: string
         }
         Relationships: []

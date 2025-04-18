@@ -1,190 +1,130 @@
-// components/RoomList.tsx
-"use client";
-
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
+import { useRoomStore } from '@/lib/store/roomstore';
 import { supabaseBrowser } from '@/lib/supabase/browser';
 import { Button } from './ui/button';
-import { Input } from './ui/input';
 import { toast } from 'sonner';
-import { PlusCircle } from 'lucide-react';
-import {
-     Dialog,
-     DialogContent,
-     DialogDescription,
-     DialogFooter,
-     DialogHeader,
-     DialogTitle,
-     DialogTrigger,
-     DialogClose, // Import DialogClose
-} from "@/components/ui/dialog";
-import { useRoomStore } from '@/lib/store/roomstore'; // We'll create this store next
-import { useUser } from '@/lib/store/user'; // Assuming you still use this for user info
 
-// Define the Room type based on your Supabase table
 export interface IRoom {
      id: string;
      name: string;
-     created_by: string | null;
+     created_by: string;
      created_at: string;
+     is_private: boolean;
+}
+
+interface IRoomParticipant {
+     room_id: string;
+     user_id: string;
+     status: 'pending' | 'accepted' | 'rejected';
 }
 
 export default function RoomList() {
-     const user = useUser((state) => state.user);
-     const { rooms, setRooms, setSelectedRoom, selectedRoom } = useRoomStore((state) => state);
-     const [newRoomName, setNewRoomName] = useState('');
-     const [isLoading, setIsLoading] = useState(false);
-     const [isCreating, setIsCreating] = useState(false);
-     const [isDialogOpen, setIsDialogOpen] = useState(false); // Control dialog visibility
-
+     const [userParticipations, setUserParticipations] = useState<IRoomParticipant[]>([]);
+     const { rooms, setRooms, selectedRoom, setSelectedRoom } = useRoomStore();
      const supabase = supabaseBrowser();
 
-     // Fetch rooms on mount or when user logs in
      useEffect(() => {
-          const fetchRooms = async () => {
-               setIsLoading(true);
-               const { data, error } = await supabase
+          // Fetch rooms and user's participation status
+          const fetchRoomsAndStatus = async () => {
+               const { data: roomsData } = await supabase
                     .from('rooms')
-                    .select('*')
-                    .order('created_at', { ascending: true });
+                    .select('*');
 
-               if (error) {
-                    toast.error(`Failed to fetch rooms: ${error.message}`);
-               } else {
-                    setRooms(data || []);
-                    // Optionally select the first room by default if none is selected
-                    if (!selectedRoom && data && data.length > 0) {
-                         // setSelectedRoom(data[0]); // Or leave it null until user clicks
-                    }
-               }
-               setIsLoading(false);
+               const { data: participations } = await supabase
+                    .from('room_participants')
+                    .select('*')
+                    .eq('user_id', user?.id);
+
+               if (roomsData) setRooms(roomsData);
+               if (participations) setUserParticipations(participations);
           };
 
-          if (user) { // Only fetch if user is logged in
-               fetchRooms();
-          } else {
-               setRooms([]); // Clear rooms if user logs out
-               setSelectedRoom(null);
-          }
+          fetchRoomsAndStatus();
 
-          // Listen for new rooms added via Realtime (optional but nice)
+          // Subscribe to room_participants changes
           const channel = supabase
-               .channel('public:rooms')
-               .on<IRoom>(
-                    'postgres_changes',
-                    { event: 'INSERT', schema: 'public', table: 'rooms' },
+               .channel('room_participants_changes')
+               .on('postgres_changes',
+                    { event: '*', schema: 'public', table: 'room_participants' },
                     (payload) => {
-                         console.log('New room detected:', payload.new);
-                         setRooms([...rooms, payload.new]); // Add the new room to the list
-                    }
-               )
-               // Add listeners for DELETE/UPDATE if needed
+                         fetchRoomsAndStatus();
+                    })
                .subscribe();
 
           return () => {
                supabase.removeChannel(channel);
           };
+     }, []);
 
-     }, [user, supabase, setRooms, setSelectedRoom, selectedRoom, rooms]); // Added rooms to dependencies for realtime update
-
-     const handleCreateRoom = async () => {
-          if (!newRoomName.trim()) {
-               toast.error('Room name cannot be empty');
-               return;
-          }
-          if (!user) {
-               toast.error('You must be logged in to create a room.');
-               return;
-          }
-
-          setIsCreating(true);
+     const handleJoinRoom = async (roomId: string) => {
           try {
-               const response = await fetch('/api/rooms', {
+               const response = await fetch(`/api/rooms/${roomId}/join`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name: newRoomName.trim() }),
                });
 
-               if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-               }
+               if (!response.ok) throw new Error('Failed to join room');
 
-               const createdRoom: IRoom = await response.json();
-               // No need to manually add here if realtime listener works,
-               // but doing it provides immediate feedback
-               if (!rooms.some(room => room.id === createdRoom.id)) {
-                    setRooms([...rooms, createdRoom]);
-               }
-               toast.success(`Room "${createdRoom.name}" created!`);
-               setNewRoomName('');
-               setIsDialogOpen(false); // Close dialog on success
-
-          } catch (error: any) {
-               toast.error(`Failed to create room: ${error.message}`);
-          } finally {
-               setIsCreating(false);
+               const data = await response.json();
+               toast.success(
+                    data.status === 'pending'
+                         ? 'Join request sent'
+                         : 'Joined room successfully'
+               );
+          } catch (error) {
+               toast.error('Failed to join room');
           }
      };
 
-     if (!user) return null; // Don't show rooms if not logged in
+     const canJoinRoom = (room: IRoom) => {
+          const participation = userParticipations.find(p => p.room_id === room.id);
+          return !participation || participation.status === 'rejected';
+     };
 
      return (
-          <div className="w-64 border-r p-4 flex flex-col gap-4 bg-secondary/50">
-               <div className='flex justify-between items-center'>
-                    <h2 className="text-xl font-semibold">Rooms</h2>
-                    <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                         <DialogTrigger asChild>
-                              <Button variant="ghost" size="icon" className='text-muted-foreground'>
-                                   <PlusCircle size={20} />
-                              </Button>
-                         </DialogTrigger>
-                         <DialogContent>
-                              <DialogHeader>
-                                   <DialogTitle>Create New Room</DialogTitle>
-                                   <DialogDescription>
-                                        Enter a name for your new chat room.
-                                   </DialogDescription>
-                              </DialogHeader>
-                              <div className="grid gap-4 py-4">
-                                   <Input
-                                        id="name"
-                                        placeholder="e.g., General Discussion"
-                                        value={newRoomName}
-                                        onChange={(e) => setNewRoomName(e.target.value)}
-                                        disabled={isCreating}
-                                   />
-                              </div>
-                              <DialogFooter>
-                                   <DialogClose asChild>
-                                        <Button variant="outline" disabled={isCreating}>Cancel</Button>
-                                   </DialogClose>
-                                   <Button onClick={handleCreateRoom} disabled={isCreating}>
-                                        {isCreating ? 'Creating...' : 'Create Room'}
-                                   </Button>
-                              </DialogFooter>
-                         </DialogContent>
-                    </Dialog>
-               </div>
+          <div className="w-64 border-r p-4">
+               <h2 className="text-xl font-bold mb-4">Rooms</h2>
+               <div className="space-y-2">
+                    {rooms.map(room => {
+                         const participation = userParticipations.find(
+                              p => p.room_id === room.id
+                         );
 
-
-               {isLoading ? (
-                    <p>Loading rooms...</p>
-               ) : (
-                    <ul className="space-y-2 overflow-y-auto flex-1">
-                         {rooms.length === 0 && <p className='text-muted-foreground text-sm'>No rooms yet. Create one!</p>}
-                         {rooms.map((room) => (
-                              <li key={room.id}>
+                         return (
+                              <div key={room.id} className="flex justify-between items-center">
                                    <Button
                                         variant={selectedRoom?.id === room.id ? 'secondary' : 'ghost'}
                                         className="w-full justify-start"
-                                        onClick={() => setSelectedRoom(room)}
+                                        onClick={() => {
+                                             if (participation?.status === 'accepted') {
+                                                  setSelectedRoom(room);
+                                             }
+                                        }}
+                                        disabled={!participation || participation.status !== 'accepted'}
                                    >
-                                        {room.name}
+                                        <span className="truncate">
+                                             {room.name}
+                                             {room.is_private && ' 🔒'}
+                                        </span>
                                    </Button>
-                              </li>
-                         ))}
-                    </ul>
-               )}
+
+                                   {canJoinRoom(room) && (
+                                        <Button
+                                             size="sm"
+                                             onClick={() => handleJoinRoom(room.id)}
+                                        >
+                                             Join
+                                        </Button>
+                                   )}
+
+                                   {participation?.status === 'pending' && (
+                                        <span className="text-sm text-muted-foreground">
+                                             Pending
+                                        </span>
+                                   )}
+                              </div>
+                         );
+                    })}
+               </div>
           </div>
      );
 }
