@@ -1,7 +1,7 @@
 export interface IRoom {
      id: string;
      name: string;
-     created_by: string ;
+     created_by: string | null ;
      created_at: string;
      is_private: boolean;
 }
