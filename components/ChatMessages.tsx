@@ -2,7 +2,6 @@
 import React, { Suspense, useEffect } from "react";
 import ListMessages from "./ListMessages";
 import { supabaseBrowser } from "@/lib/supabase/browser";
-import InitMessages from "@/lib/store/InitMessages";
 import { LIMIT_MESSAGE } from "@/lib/constant";
 import { useRoomStore } from "@/lib/store/roomstore";
 import { useDirectChatStore } from "@/lib/store/directChatStore";
