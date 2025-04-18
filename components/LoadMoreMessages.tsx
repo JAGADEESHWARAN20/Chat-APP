@@ -8,7 +8,7 @@ import { toast } from "sonner";
 
 export default function LoadMoreMessages() {
 	const page = useMessage((state) => state.page);
-	const setMesssages = useMessage((state) => state.setMesssages);
+	const setMessages = useMessage((state) => state.setMessages); // Fixed typo
 	const hasMore = useMessage((state) => state.hasMore);
 
 	const fetchMore = async () => {
@@ -25,7 +25,7 @@ export default function LoadMoreMessages() {
 		if (error) {
 			toast.error(error.message);
 		} else {
-			setMesssages(data.reverse());
+			setMessages(data.reverse());
 		}
 	};
 

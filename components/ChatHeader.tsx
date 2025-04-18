@@ -69,7 +69,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 		} else {
 			setSearchResults([]);
 		}
-	}, [searchQuery, searchType]);
+	}, [searchQuery, searchType, fetchSearchResults]); // Added fetchSearchResults to dependency array
 
 	const handleCreateRoom = async () => {
 		if (!user) {
