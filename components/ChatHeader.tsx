@@ -35,44 +35,75 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 	const [isCreating, setIsCreating] = useState(false);
 	const selectedRoom = useRoomStore((state) => state.selectedRoom);
 	const isMounted = useRef(true); // Moved to top level
+	const [isLoading, setIsLoading] = useState(false);
 
 	const [debouncedCallback] = useDebounce((value: string) => setSearchQuery(value), 300);
+	
+	
+	
+	// Debounce the search input change handler
+	const [debouncedSearchQuery] = useDebounce(searchQuery, 300);
+	
 	const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		debouncedCallback(e.target.value);
+		setSearchQuery(e.target.value);
 	};
 
 	const fetchSearchResults = useCallback(async () => {
-		if (!searchQuery.trim()) {
+		// Do not search if query is empty or searchType is not selected
+		if (!debouncedSearchQuery.trim() || !searchType) {
 			setSearchResults([]);
+			setIsLoading(false); // Ensure loading is off when clearing results or no type selected
 			return;
 		}
+
 		setIsLoading(true);
 		try {
-			const response = await fetch(`/api/${searchType}/search?query=${encodeURIComponent(searchQuery)}`);
+			const response = await fetch(`/api/${searchType}/search?query=${encodeURIComponent(debouncedSearchQuery)}`);
 			const data = await response.json();
-			if (response.ok) {
-				setSearchResults(data[searchType === "users" ? "users" : "rooms"] || data.rooms || []);
-			} else {
-				toast.error(data.error || `Failed to search ${searchType}`);
-				setSearchResults([]);
+
+			// Only update state if component is mounted
+			if (isMounted.current) {
+				if (response.ok) {
+					let results: SearchResult[] = [];
+					if (searchType === "users") {
+						// Assuming /api/users/search returns the array directly
+						results = Array.isArray(data) ? (data as UserProfile[]) : [];
+					} else if (searchType === "rooms") {
+						// Assuming /api/rooms/search returns { rooms: [...], total: ..., ... }
+						results = data.rooms && Array.isArray(data.rooms) ? (data.rooms as Room[]) : [];
+					}
+					setSearchResults(results);
+				} else {
+					// Handle API errors
+					toast.error(data.error || `Failed to search ${searchType}`);
+					setSearchResults([]);
+				}
 			}
 		} catch (error) {
-			toast.error("An error occurred while searching");
-			setSearchResults([]);
+			console.error("Search error:", error); // Log the actual error for debugging
+			if (isMounted.current) {
+				toast.error("An error occurred while searching");
+				setSearchResults([]);
+			}
 		} finally {
-			setIsLoading(false);
+			if (isMounted.current) {
+				setIsLoading(false);
+			}
 		}
-	}, [searchQuery, searchType]); // Dependencies for useCallback
+	}, [debouncedSearchQuery, searchType]); // Dependencies for useCallback updated to debouncedQuery
 
-	const [isLoading, setIsLoading] = useState(false);
-
+	// Trigger search whenever the debounced query or search type changes
 	useEffect(() => {
-		if (searchQuery && searchType) {
-			fetchSearchResults();
-		} else {
-			setSearchResults([]);
-		}
-	}, [searchQuery, searchType, fetchSearchResults]); // Updated dependency array
+		fetchSearchResults();
+	}, [debouncedSearchQuery, searchType, fetchSearchResults]);
+
+	// Effect to clean up the mounted ref
+	useEffect(() => {
+		return () => {
+			isMounted.current = false;
+		};
+	}, []); // Runs only on unmount
 
 	useEffect(() => {
 		const channel = supabase
