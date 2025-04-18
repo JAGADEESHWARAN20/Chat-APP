@@ -3,11 +3,12 @@ import { useRoomStore } from '@/lib/store/roomstore';
 import { supabaseBrowser } from '@/lib/supabase/browser';
 import { Button } from './ui/button';
 import { toast } from 'sonner';
+import { useUser } from '@/lib/store/user'; // Add this import
 
 export interface IRoom {
      id: string;
      name: string;
-     created_by: string;
+     created_by: string | null; // Updated to allow null
      created_at: string;
      is_private: boolean;
 }
@@ -15,17 +16,21 @@ export interface IRoom {
 interface IRoomParticipant {
      room_id: string;
      user_id: string;
-     status: 'pending' | 'accepted' | 'rejected';
+     status: 'pending' | 'accepted' | 'rejected'; // Strict union type
+     joined_at: string;
 }
 
 export default function RoomList() {
      const [userParticipations, setUserParticipations] = useState<IRoomParticipant[]>([]);
      const { rooms, setRooms, selectedRoom, setSelectedRoom } = useRoomStore();
      const supabase = supabaseBrowser();
+     const user = useUser((state) => state.user); // Add this line to get user from store
 
      useEffect(() => {
           // Fetch rooms and user's participation status
           const fetchRoomsAndStatus = async () => {
+               if (!user) return; // Add check for user
+
                const { data: roomsData } = await supabase
                     .from('rooms')
                     .select('*');
@@ -33,10 +38,21 @@ export default function RoomList() {
                const { data: participations } = await supabase
                     .from('room_participants')
                     .select('*')
-                    .eq('user_id', user?.id);
+                    .eq('user_id', user.id);
 
-               if (roomsData) setRooms(roomsData);
-               if (participations) setUserParticipations(participations);
+               if (roomsData) {
+                    // Type assertion to match IRoom interface
+                    setRooms(roomsData as IRoom[]);
+               }
+
+               if (participations) {
+                    // Type assertion and mapping to ensure correct status type
+                    const typedParticipations = participations.map(p => ({
+                         ...p,
+                         status: p.status as 'pending' | 'accepted' | 'rejected'
+                    }));
+                    setUserParticipations(typedParticipations);
+               }
           };
 
           fetchRoomsAndStatus();
@@ -54,9 +70,14 @@ export default function RoomList() {
           return () => {
                supabase.removeChannel(channel);
           };
-     }, []);
+     }, [user]); // Add user to dependency array
 
      const handleJoinRoom = async (roomId: string) => {
+          if (!user) {
+               toast.error('You must be logged in to join a room');
+               return;
+          }
+
           try {
                const response = await fetch(`/api/rooms/${roomId}/join`, {
                     method: 'POST',
@@ -79,6 +100,14 @@ export default function RoomList() {
           const participation = userParticipations.find(p => p.room_id === room.id);
           return !participation || participation.status === 'rejected';
      };
+
+     if (!user) {
+          return (
+               <div className="w-64 border-r p-4">
+                    <p className="text-muted-foreground">Please login to view rooms</p>
+               </div>
+          );
+     }
 
      return (
           <div className="w-64 border-r p-4">
