@@ -45,7 +45,7 @@ export function DeleteAlert() {
 		if (error) {
 			toast.error(error.message);
 		} else {
-			toast.success("Successfully delete a message");
+			toast.success("Successfully deleted a message");
 		}
 	};
 
@@ -88,11 +88,7 @@ export function EditAlert() {
 		const supabase = supabaseBrowser();
 		const text = inputRef.current.value.trim();
 		if (text) {
-			optimisticUpdateMessage({
-				...actionMessage,
-				text,
-				is_edit: true,
-			} as Imessage);
+			optimisticUpdateMessage(actionMessage?.id!, { text, is_edit: true }); // Fixed to pass messageId and updates separately
 			const { error } = await supabase
 				.from("messages")
 				.update({ text, is_edit: true })
