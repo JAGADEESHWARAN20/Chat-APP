@@ -1,70 +1,109 @@
 "use client";
-import React, { useState, useEffect } from "react";
-import { Button } from "./ui/button";
-import { supabaseBrowser } from "@/lib/supabase/browser";
-import { User as SupabaseUser } from "@supabase/supabase-js";
-import { useRouter } from "next/navigation";
-import ChatPresence from "./ChatPresence";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Search, User as UserIcon, Settings, PlusCircle } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { Database } from "@/lib/types/supabase";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { toast } from "sonner";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
-import { useRoomStore } from '@/lib/store/roomstore';
 
-type UserProfile = Database["public"]["Tables"]["users"]["Row"];
+import { useState, useEffect } from 'react';
+import { Button } from './ui/button';
+import { supabaseBrowser } from '@/lib/supabase/browser';
+import { User as SupabaseUser } from '@supabase/supabase-js';
+import { useRouter } from 'next/navigation';
+import ChatPresence from './ChatPresence';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Search, User as UserIcon, Settings, PlusCircle } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { Database } from '@/lib/types/supabase';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { toast } from 'sonner';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { useRoomStore } from '@/lib/store/roomstore';
+import { useDebounce } from 'use-debounce';
+
+type UserProfile = Database['public']['Tables']['users']['Row'];
+type Room = Database['public']['Tables']['rooms']['Row'];
+type SearchResult = UserProfile | Room;
 
 export default function ChatHeader({ user }: { user: SupabaseUser | undefined }) {
 	const router = useRouter();
-	const [searchQuery, setSearchQuery] = useState("");
-	const [searchType, setSearchType] = useState<"rooms" | "users" | null>(null);
-	const [users, setUsers] = useState<UserProfile[]>([]);
-	const [searchResults, setSearchResults] = useState<UserProfile[]>([]);
+	const [searchQuery, setSearchQuery] = useState('');
+	const [searchType, setSearchType] = useState<'rooms' | 'users' | null>(null);
+	const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
 	const supabase = supabaseBrowser();
 	const [isPopoverOpen, setIsPopoverOpen] = useState(false);
 	const [isDialogOpen, setIsDialogOpen] = useState(false);
-	const [newRoomName, setNewRoomName] = useState("");
+	const [newRoomName, setNewRoomName] = useState('');
 	const [isPrivate, setIsPrivate] = useState(false);
 	const [isCreating, setIsCreating] = useState(false);
 	const selectedRoom = useRoomStore((state) => state.selectedRoom);
 
+	const [debouncedCallback] = useDebounce((value: string) => setSearchQuery(value), 300);
+	const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+		debouncedCallback(e.target.value);
+	};
+	const [isLoading, setIsLoading] = useState(false);
+	const fetchSearchResults = async () => {
+		if (!searchQuery.trim()) {
+			setSearchResults([]);
+			return;
+		}
+		setIsLoading(true);
+		try {
+			const response = await fetch(`/api/${searchType}/search?query=${encodeURIComponent(searchQuery)}`);
+			const data = await response.json();
+			if (response.ok) {
+				setSearchResults(data[searchType === 'users' ? 'users' : 'rooms'] || data.rooms || []);
+			} else {
+				toast.error(data.error || `Failed to search ${searchType}`);
+				setSearchResults([]);
+			}
+		} catch (error) {
+			toast.error('An error occurred while searching');
+			setSearchResults([]);
+		} finally {
+			setIsLoading(false);
+		}
+	};
+
+	useEffect(() => {
+		if (searchQuery && searchType) {
+			fetchSearchResults();
+		} else {
+			setSearchResults([]);
+		}
+	}, [searchQuery, searchType]);
+
 	const handleCreateRoom = async () => {
 		if (!user) {
-			toast.error("You must be logged in to create a room");
+			toast.error('You must be logged in to create a room');
 			return;
 		}
 
 		if (!newRoomName.trim()) {
-			toast.error("Room name cannot be empty");
+			toast.error('Room name cannot be empty');
 			return;
 		}
 
 		setIsCreating(true);
 		try {
-			const response = await fetch("/api/rooms", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
+			const response = await fetch('/api/rooms', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					name: newRoomName.trim(),
-					is_private: isPrivate
+					is_private: isPrivate,
 				}),
 			});
 
 			if (!response.ok) {
 				const error = await response.json();
-				throw new Error(error.error || "Failed to create room");
+				throw new Error(error.error || 'Failed to create room');
 			}
 
-			toast.success("Room created successfully!");
-			setNewRoomName("");
+			toast.success('Room created successfully!');
+			setNewRoomName('');
 			setIsPrivate(false);
 			setIsDialogOpen(false);
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : "Failed to create room");
+			toast.error(error instanceof Error ? error.message : 'Failed to create room');
 		} finally {
 			setIsCreating(false);
 		}
@@ -72,9 +111,9 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 
 	const handleLoginWithGithub = () => {
 		supabase.auth.signInWithOAuth({
-			provider: "github",
+			provider: 'github',
 			options: {
-				redirectTo: location.origin + "/auth/callback",
+				redirectTo: location.origin + '/auth/callback',
 			},
 		});
 	};
@@ -84,48 +123,27 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 		router.refresh();
 	};
 
-	const handleSearchInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-		setSearchQuery(event.target.value);
-	};
-
-	const fetchUsers = async () => {
-		const { data, error } = await supabase
-			.from("users")
-			.select("id, avatar_url, username, display_name, created_at");
-
-		if (error) {
-			console.error("Error fetching users:", error);
-		} else if (data) {
-			setUsers(data);
-		}
-	};
-
-	useEffect(() => {
-		if (searchType === "users") {
-			fetchUsers();
-		} else {
-			setUsers([]);
-			setSearchResults([]);
-		}
-	}, [searchType, supabase]);
-
-	useEffect(() => {
-		if (searchType === "users" && users.length > 0) {
-			const filteredResults = users.filter((user) =>
-				user?.username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-				user?.display_name?.toLowerCase().includes(searchQuery.toLowerCase())
-			);
-			setSearchResults(filteredResults);
-		} else if (searchType === "rooms") {
-			setSearchResults([]);
-		} else {
-			setSearchResults([]);
-		}
-	}, [searchQuery, searchType, users]);
-
-	const handleSearchByType = (type: "rooms" | "users") => {
+	const handleSearchByType = (type: 'rooms' | 'users') => {
 		setSearchType(type);
-		setSearchQuery("");
+		setSearchQuery('');
+	};
+
+	const handleJoinRoom = (roomId: string) => {
+		if (!user) {
+			toast.error('You must be logged in to join a room');
+			return;
+		}
+		fetch(`/api/rooms/${roomId}/join`, { method: 'POST' })
+			.then(response => {
+				if (!response.ok) throw new Error('Failed to join room');
+				return response.json();
+			})
+			.then(data => {
+				toast.success(data.status === 'pending' ? 'Join request sent' : 'Joined room successfully');
+			})
+			.catch(error => {
+				toast.error(error.message || 'Failed to join room');
+			});
 	};
 
 	return (
@@ -182,11 +200,8 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 									>
 										Cancel
 									</Button>
-									<Button
-										onClick={handleCreateRoom}
-										disabled={isCreating}
-									>
-										{isCreating ? "Creating..." : "Create Room"}
+									<Button onClick={handleCreateRoom} disabled={isCreating}>
+										{isCreating ? 'Creating...' : 'Create Room'}
 									</Button>
 								</DialogFooter>
 							</DialogContent>
@@ -207,7 +222,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 										size="icon"
 										onClick={() => {
 											setIsPopoverOpen(false);
-											router.push("/profile");
+											router.push('/profile');
 										}}
 									>
 										<Settings className="h-4 w-4" />
@@ -216,62 +231,95 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 								<h3 className="font-semibold text-lg mb-2">Search</h3>
 								<Input
 									type="text"
-									placeholder="Search users..."
+									placeholder="Search..."
 									value={searchQuery}
 									onChange={handleSearchInputChange}
 									className="mb-4"
 								/>
 								<div className="flex gap-2 mb-4">
 									<Button
-										variant={searchType === "rooms" ? "default" : "outline"}
-										onClick={() => handleSearchByType("rooms")}
+										variant={searchType === 'rooms' ? 'default' : 'outline'}
+										onClick={() => handleSearchByType('rooms')}
 									>
 										Rooms
 									</Button>
 									<Button
-										variant={searchType === "users" ? "default" : "outline"}
-										onClick={() => handleSearchByType("users")}
+										variant={searchType === 'users' ? 'default' : 'outline'}
+										onClick={() => handleSearchByType('users')}
 									>
 										Users
 									</Button>
 								</div>
-								{searchType === "users" && searchResults.length > 0 && (
+								{searchResults.length > 0 && (
 									<div className="mt-4">
-										<h4 className="font-semibold text-sm mb-2">User Profiles</h4>
+										<h4 className="font-semibold text-sm mb-2">
+											{searchType === 'users' ? 'User Profiles' : 'Rooms'}
+										</h4>
 										<ul className="space-y-2">
-											{searchResults.map((userProfile) => (
-												<li
-													key={userProfile.id}
-													className="flex items-center justify-between"
-												>
-													<div className="flex items-center gap-2">
-														<Avatar>
-															{userProfile.avatar_url ? (
-																<AvatarImage src={userProfile.avatar_url} alt={userProfile.username || "Avatar"} />
-															) : (
-																<AvatarFallback>{userProfile.username?.charAt(0).toUpperCase() || userProfile.display_name?.charAt(0).toUpperCase() || "?"}</AvatarFallback>
-															)}
-														</Avatar>
-														<div>
-															<div className="text-xs text-gray-500">{userProfile.username}</div>
-															<div className="text-sm font-semibold">{userProfile.display_name}</div>
+											{searchResults.map((result) =>
+												'username' in result ? (
+													<li
+														key={result.id}
+														className="flex items-center justify-between"
+													>
+														<div className="flex items-center gap-2">
+															<Avatar>
+																{result.avatar_url ? (
+																	<AvatarImage
+																		src={result.avatar_url}
+																		alt={result.username || 'Avatar'}
+																	/>
+																) : (
+																	<AvatarFallback>
+																		{result.username?.charAt(0).toUpperCase() ||
+																			result.display_name?.charAt(0).toUpperCase() ||
+																			'?'}
+																	</AvatarFallback>
+																)}
+															</Avatar>
+															<div>
+																<div className="text-xs text-gray-500">
+																	{result.username}
+																</div>
+																<div className="text-sm font-semibold">
+																	{result.display_name}
+																</div>
+															</div>
 														</div>
-													</div>
-													<UserIcon className="h-4 w-4 text-gray-500" />
-												</li>
-											))}
+														<UserIcon className="h-4 w-4 text-gray-500" />
+													</li>
+												) : (
+													<li
+														key={result.id}
+														className="flex items-center justify-between"
+													>
+														<div className="flex items-center gap-2">
+															<span className="text-sm font-semibold">
+																{result.name} {result.is_private && '🔒'}
+															</span>
+														</div>
+														<Button
+															size="sm"
+															onClick={() => handleJoinRoom(result.id)}
+															disabled={!user}
+														>
+															Join
+														</Button>
+													</li>
+												)
+											)}
 										</ul>
 									</div>
 								)}
-								{searchType === "users" && users.length > 0 && searchResults.length === 0 && searchQuery.length > 0 && (
-									<p className="text-sm text-muted-foreground mt-2">No users found matching your search.</p>
+								{searchResults.length === 0 && searchQuery.length > 0 && (
+									<p className="text-sm text-muted-foreground mt-2">
+										No {searchType || 'results'} found matching your search.
+									</p>
 								)}
-								{searchType === "users" && users.length === 0 && (
-									<p className="text-sm text-muted-foreground mt-2">Loading users...</p>
+								{searchQuery.length === 0 && searchType && (
+									<p className="text-sm text-muted-foreground mt-2">Start typing to search...</p>
 								)}
-								{searchType === "rooms" && (
-									<p className="text-sm text-muted-foreground mt-2">Room search functionality will be implemented here.</p>
-								)}
+								{isLoading && <p className="text-sm text-muted-foreground mt-2">Loading...</p>}
 							</div>
 						</PopoverContent>
 					</Popover>

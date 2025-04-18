@@ -25,7 +25,7 @@ export default function ChatInput() {
 		}
 
 		const id = uuidv4();
-		const newMessage = {
+		const newMessage: Imessage = {
 			id,
 			text,
 			send_by: user.id,
@@ -33,6 +33,7 @@ export default function ChatInput() {
 			direct_chat_id: selectedDirectChat?.id || null,
 			is_edit: false,
 			created_at: new Date().toISOString(),
+			status: null, // Added to satisfy Imessage interface
 			users: {
 				id: user.id,
 				avatar_url: user.user_metadata.avatar_url || "",
@@ -41,6 +42,7 @@ export default function ChatInput() {
 				username: user.user_metadata.user_name || "",
 			},
 		};
+		addMessage(newMessage); // Optimistic
 
 		try {
 			const { error } = await supabase
@@ -50,15 +52,17 @@ export default function ChatInput() {
 					id,
 					room_id: selectedRoom?.id || null,
 					direct_chat_id: selectedDirectChat?.id || null,
-					send_by: user.id
+					send_by: user.id,
+					status: null // Added to match database schema
 				});
 
 			if (error) throw error;
 
-			addMessage(newMessage as Imessage);
+			addMessage(newMessage);
 			setOptimisticIds(id);
 		} catch (error) {
 			toast.error("Failed to send message");
+			useMessage.getState().optimisticDeleteMessage(id);
 		}
 	};
 

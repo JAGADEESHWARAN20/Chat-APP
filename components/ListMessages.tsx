@@ -15,14 +15,14 @@ type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
 type UserRow = Database["public"]["Tables"]["users"]["Row"];
 
 export default function ListMessages() {
-	const scrollRef = useRef() as React.MutableRefObject<HTMLDivElement>;
+	const scrollRef = useRef<HTMLDivElement>(null);
 	const [userScrolled, setUserScrolled] = useState(false);
 	const [notification, setNotification] = useState(0);
 	const [isInitialLoad, setIsInitialLoad] = useState(true);
 	const selectedRoom = useRoomStore((state) => state.selectedRoom);
 	const {
 		messages,
-		setMesssages,
+		setMessages,
 		addMessage,
 		optimisticIds,
 		optimisticDeleteMessage,
@@ -30,26 +30,16 @@ export default function ListMessages() {
 	} = useMessage((state) => state);
 	const supabase = supabaseBrowser();
 
-	// Add the missing handleOnScroll function
 	const handleOnScroll = () => {
+		if (!scrollRef.current) return;
 		const scrollContainer = scrollRef.current;
-		if (scrollContainer) {
-			const isScroll =
-				scrollContainer.scrollTop <
-				scrollContainer.scrollHeight -
-				scrollContainer.clientHeight -
-				10;
-			setUserScrolled(isScroll);
-			if (
-				scrollContainer.scrollTop ===
-				scrollContainer.scrollHeight - scrollContainer.clientHeight
-			) {
-				setNotification(0);
-			}
+		const isScroll = scrollContainer.scrollTop < scrollContainer.scrollHeight - scrollContainer.clientHeight - 10;
+		setUserScrolled(isScroll);
+		if (scrollContainer.scrollTop === scrollContainer.scrollHeight - scrollContainer.clientHeight) {
+			setNotification(0);
 		}
 	};
 
-	// Add the missing scrollDown function
 	const scrollDown = () => {
 		setNotification(0);
 		if (scrollRef.current) {
@@ -57,63 +47,68 @@ export default function ListMessages() {
 		}
 	};
 
-	// Initial messages load
 	useEffect(() => {
 		if (!selectedRoom) return;
 
 		const loadInitialMessages = async () => {
-			const { data: messagesData, error } = await supabase
-				.from("messages")
-				.select(`
-                    *,
-                    users (
-                        id,
-                        username,
-                        avatar_url,
-                        display_name,
-                        created_at
-                    )
-                `)
-				.eq('room_id', selectedRoom.id)
-				.order('created_at', { ascending: false })
-				.limit(LIMIT_MESSAGE);
+			try {
+				const { data: messagesData, error } = await supabase
+					.from("messages")
+					.select(`
+                        *,
+                        users (
+                            id,
+                            username,
+                            avatar_url,
+                            display_name,
+                            created_at
+                        )
+                    `)
+					.eq('room_id', selectedRoom.id)
+					.order('created_at', { ascending: false })
+					.limit(LIMIT_MESSAGE);
 
-			if (error) {
-				toast.error('Failed to load messages');
-				return;
-			}
+				if (error) {
+					toast.error('Failed to load messages');
+					return;
+				}
 
-			if (messagesData) {
-				const formattedMessages: Imessage[] = messagesData.reverse().map(msg => ({
-					id: msg.id,
-					created_at: msg.created_at,
-					is_edit: msg.is_edit,
-					send_by: msg.send_by,
-					text: msg.text,
-					room_id: msg.room_id,
-					users: msg.users ? {
-						id: msg.users.id,
-						avatar_url: msg.users.avatar_url || '',
-						display_name: msg.users.display_name || '',
-						username: msg.users.username || '',
-						created_at: msg.users.created_at
-					} : null
-				}));
-
-				setMesssages(formattedMessages);
-				setIsInitialLoad(false);
+				if (messagesData) {
+					const formattedMessages: Imessage[] = messagesData.reverse().map(msg => ({
+						id: msg.id,
+						created_at: msg.created_at,
+						is_edit: msg.is_edit,
+						send_by: msg.send_by,
+						text: msg.text,
+						room_id: msg.room_id,
+						direct_chat_id: msg.direct_chat_id,
+						dm_thread_id: msg.dm_thread_id,
+						status: msg.status, // Now accepts string | null
+						users: msg.users ? {
+							id: msg.users.id,
+							avatar_url: msg.users.avatar_url || '',
+							display_name: msg.users.display_name || '',
+							username: msg.users.username || '',
+							created_at: msg.users.created_at
+						} : null
+					}));
+					setMessages(formattedMessages);
+					setIsInitialLoad(false);
+				}
+			} catch (err) {
+				toast.error('Unexpected error loading messages');
+				console.error(err);
 			}
 		};
 
 		loadInitialMessages();
-	}, [selectedRoom, supabase, setMesssages]);
+	}, [selectedRoom, supabase, setMessages]);
 
-	// Real-time subscription
 	useEffect(() => {
 		if (!selectedRoom) return;
 
 		const channel = supabase
-			.channel(`room:${selectedRoom.id}`)
+			.channel(`room_messages_${selectedRoom.id}`)
 			.on('postgres_changes',
 				{
 					event: '*',
@@ -121,50 +116,64 @@ export default function ListMessages() {
 					table: 'messages',
 					filter: `room_id=eq.${selectedRoom.id}`
 				},
-				async (payload) => {
-					if (payload.eventType === 'INSERT') {
-						const newMessagePayload = payload.new as MessageRow;
-						if (!optimisticIds.includes(newMessagePayload.id)) {
-							const { data: user, error } = await supabase
-								.from("users")
+				(payload) => {
+					try {
+						const messagePayload = payload.new as MessageRow;
+						if (payload.eventType === 'INSERT' && !optimisticIds.includes(messagePayload.id)) {
+							supabase.from("users")
 								.select("*")
-								.eq("id", newMessagePayload.send_by)
-								.single<UserRow>();
-
-							if (error) {
-								toast.error(error.message);
-								return;
-							}
-
-							if (user) {
-								const newMessage: Imessage = {
-									id: newMessagePayload.id,
-									created_at: newMessagePayload.created_at,
-									is_edit: newMessagePayload.is_edit,
-									send_by: newMessagePayload.send_by,
-									room_id: newMessagePayload.room_id,
-									text: newMessagePayload.text,
-									users: {
-										id: user.id,
-										avatar_url: user.avatar_url || '',
-										display_name: user.display_name || '',
-										username: user.username || '',
-										created_at: user.created_at
+								.eq("id", messagePayload.send_by)
+								.single<UserRow>()
+								.then(({ data: user, error }) => {
+									if (error) {
+										toast.error(error.message);
+										return;
 									}
-								};
-								addMessage(newMessage);
+									if (user) {
+										const newMessage: Imessage = {
+											id: messagePayload.id,
+											created_at: messagePayload.created_at,
+											is_edit: messagePayload.is_edit,
+											send_by: messagePayload.send_by,
+											room_id: messagePayload.room_id,
+											direct_chat_id: messagePayload.direct_chat_id,
+											dm_thread_id: messagePayload.dm_thread_id,
+											status: messagePayload.status, // Now accepts string | null
+											text: messagePayload.text,
+											users: {
+												id: user.id,
+												avatar_url: user.avatar_url || '',
+												display_name: user.display_name || '',
+												username: user.username || '',
+												created_at: user.created_at
+											}
+										};
+										addMessage(newMessage);
 
-								const scrollContainer = scrollRef.current;
-								if (
-									scrollContainer.scrollTop <
-									scrollContainer.scrollHeight -
-									scrollContainer.clientHeight -
-									10
-								) {
-									setNotification((current) => current + 1);
-								}
-							}
+										if (scrollRef.current && scrollRef.current.scrollTop < scrollRef.current.scrollHeight - scrollRef.current.clientHeight - 10) {
+											setNotification(prev => prev + 1);
+										}
+									}
+								});
+						} else if (payload.eventType === 'UPDATE') {
+							const updatedMessage = payload.new as MessageRow;
+							optimisticUpdateMessage(updatedMessage.id, {
+								id: updatedMessage.id,
+								text: updatedMessage.text,
+								is_edit: updatedMessage.is_edit,
+								created_at: updatedMessage.created_at,
+								send_by: updatedMessage.send_by,
+								room_id: updatedMessage.room_id,
+								direct_chat_id: updatedMessage.direct_chat_id,
+								dm_thread_id: updatedMessage.dm_thread_id,
+								status: updatedMessage.status // Now accepts string | null
+							});
+						} else if (payload.eventType === 'DELETE') {
+							optimisticDeleteMessage(payload.old.id);
 						}
+					} catch (err) {
+						toast.error('Error processing real-time message update');
+						console.error(err);
 					}
 				})
 			.subscribe();
@@ -172,13 +181,11 @@ export default function ListMessages() {
 		return () => {
 			supabase.removeChannel(channel);
 		};
-	}, [selectedRoom, optimisticIds, addMessage, supabase]);
+	}, [selectedRoom, optimisticIds, addMessage, optimisticUpdateMessage, optimisticDeleteMessage, supabase]);
 
-	// Scroll effect
 	useEffect(() => {
-		const scrollContainer = scrollRef.current;
-		if (scrollContainer && !userScrolled) {
-			scrollContainer.scrollTop = scrollContainer.scrollHeight;
+		if (scrollRef.current && !userScrolled) {
+			scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
 		}
 	}, [messages, userScrolled]);
 

@@ -8,8 +8,10 @@ export interface Imessage {
 	send_by: string;
 	room_id: string | null;
 	direct_chat_id?: string | null;
+	dm_thread_id?: string | null;
 	is_edit: boolean;
 	created_at: string;
+	status: string | null; // Updated to match database schema
 	users: {
 		id: string;
 		avatar_url: string;
@@ -28,9 +30,9 @@ interface MessageState {
 	addMessage: (message: Imessage) => void;
 	setActionMessage: (message: Imessage | undefined) => void;
 	optimisticDeleteMessage: (messageId: string) => void;
-	optimisticUpdateMessage: (message: Imessage) => void;
+	optimisticUpdateMessage: (messageId: string, updates: Partial<Imessage>) => void;
 	setOptimisticIds: (id: string) => void;
-	setMesssages: (messages: Imessage[]) => void;
+	setMessages: (messages: Imessage[]) => void;
 }
 
 export const useMessage = create<MessageState>()((set) => ({
@@ -39,7 +41,7 @@ export const useMessage = create<MessageState>()((set) => ({
 	messages: [],
 	optimisticIds: [],
 	actionMessage: undefined,
-	setMesssages: (messages) =>
+	setMessages: (messages) =>
 		set((state) => ({
 			messages: [...messages, ...state.messages],
 			page: state.page + 1,
@@ -47,29 +49,19 @@ export const useMessage = create<MessageState>()((set) => ({
 		})),
 	setOptimisticIds: (id: string) =>
 		set((state) => ({ optimisticIds: [...state.optimisticIds, id] })),
-	addMessage: (newMessages) =>
+	addMessage: (newMessage) =>
 		set((state) => ({
-			messages: [...state.messages, newMessages],
+			messages: [...state.messages, newMessage],
 		})),
 	setActionMessage: (message) => set(() => ({ actionMessage: message })),
 	optimisticDeleteMessage: (messageId) =>
-		set((state) => {
-			return {
-				messages: state.messages.filter(
-					(message) => message.id !== messageId
-				),
-			};
-		}),
-	optimisticUpdateMessage: (updateMessage) =>
-		set((state) => {
-			return {
-				messages: state.messages.filter((message) => {
-					if (message.id === updateMessage.id) {
-						(message.text = updateMessage.text),
-							(message.is_edit = updateMessage.is_edit);
-					}
-					return message;
-				}),
-			};
-		}),
+		set((state) => ({
+			messages: state.messages.filter((message) => message.id !== messageId),
+		})),
+	optimisticUpdateMessage: (messageId, updates) =>
+		set((state) => ({
+			messages: state.messages.map((message) =>
+				message.id === messageId ? { ...message, ...updates } : message
+			),
+		})),
 }));

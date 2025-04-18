@@ -18,30 +18,40 @@ export default function RoomList() {
           if (!user) return;
 
           const fetchRooms = async () => {
-               // Get public rooms and rooms user is a member of
-               const { data: roomsData, error } = await supabase
-                    .from('rooms')
-                    .select('*, room_members(status, user_id)')
-                    .or(`is_private.eq.false,and(room_members.user_id.eq.${user.id})`);
+               try {
+                    // Fetch rooms where the user is a member or public rooms
+                    const { data: roomsData, error } = await supabase
+                         .from('rooms')
+                         .select('id, name, is_private, created_by')
+                         .or(`is_private.eq.false, id.in((
+                        SELECT room_id FROM room_members 
+                        WHERE user_id = '${user.id}' AND status = 'accepted'
+                    ))`);
 
-               if (error) {
-                    toast.error('Failed to fetch rooms');
-                    return;
-               }
+                    if (error) {
+                         toast.error('Failed to fetch rooms');
+                         console.error('Error fetching rooms:', error);
+                         return;
+                    }
 
-               if (roomsData) {
-                    // Filter out the room_members field before setting rooms
-                    const cleanedRooms = roomsData.map(({ room_members, ...room }) => room);
-                    setRooms(cleanedRooms as IRoom[]);
+                    if (roomsData) {
+                         setRooms(roomsData as IRoom[]);
+                    }
+               } catch (err) {
+                    toast.error('Unexpected error fetching rooms');
+                    console.error('Unexpected error:', err);
                }
           };
 
           fetchRooms();
 
-          const roomChannel = supabase.channel('room_changes')
-               .on('postgres_changes',
+          const roomChannel = supabase
+               .channel('room_changes')
+               .on(
+                    'postgres_changes',
                     { event: '*', schema: 'public', table: 'rooms' },
-                    () => fetchRooms())
+                    () => fetchRooms()
+               )
                .subscribe();
 
           return () => {
@@ -53,17 +63,28 @@ export default function RoomList() {
           if (!user) return;
 
           const fetchParticipations = async () => {
-               const { data: participations } = await supabase
-                    .from('room_participants')
-                    .select('*')
-                    .eq('user_id', user.id);
+               try {
+                    const { data: participations, error } = await supabase
+                         .from('room_participants')
+                         .select('*')
+                         .eq('user_id', user.id);
 
-               if (participations) {
-                    const typedParticipations = participations.map(p => ({
-                         ...p,
-                         status: p.status as 'pending' | 'accepted' | 'rejected'
-                    }));
-                    setUserParticipations(typedParticipations);
+                    if (error) {
+                         toast.error('Failed to fetch participations');
+                         console.error('Error fetching participations:', error);
+                         return;
+                    }
+
+                    if (participations) {
+                         const typedParticipations = participations.map(p => ({
+                              ...p,
+                              status: p.status as 'pending' | 'accepted' | 'rejected'
+                         }));
+                         setUserParticipations(typedParticipations);
+                    }
+               } catch (err) {
+                    toast.error('Unexpected error fetching participations');
+                    console.error('Unexpected error:', err);
                }
           };
 
@@ -71,9 +92,11 @@ export default function RoomList() {
 
           const channel = supabase
                .channel('room_participants_changes')
-               .on('postgres_changes',
+               .on(
+                    'postgres_changes',
                     { event: '*', schema: 'public', table: 'room_participants' },
-                    () => fetchParticipations())
+                    () => fetchParticipations()
+               )
                .subscribe();
 
           return () => {
@@ -92,7 +115,10 @@ export default function RoomList() {
                     method: 'POST',
                });
 
-               if (!response.ok) throw new Error('Failed to join room');
+               if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to join room');
+               }
 
                const data = await response.json();
                toast.success(
@@ -101,7 +127,7 @@ export default function RoomList() {
                          : 'Joined room successfully'
                );
           } catch (error) {
-               toast.error('Failed to join room');
+               toast.error(error instanceof Error ? error.message : 'Failed to join room');
           }
      };
 
