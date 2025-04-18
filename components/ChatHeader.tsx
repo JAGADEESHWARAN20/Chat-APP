@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "./ui/button";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { User as SupabaseUser } from "@supabase/supabase-js";
@@ -34,13 +34,14 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 	const [isPrivate, setIsPrivate] = useState(false);
 	const [isCreating, setIsCreating] = useState(false);
 	const selectedRoom = useRoomStore((state) => state.selectedRoom);
+	const isMounted = useRef(true); // Moved to top level
 
 	const [debouncedCallback] = useDebounce((value: string) => setSearchQuery(value), 300);
 	const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		debouncedCallback(e.target.value);
 	};
-	const [isLoading, setIsLoading] = useState(false);
-	const fetchSearchResults = async () => {
+
+	const fetchSearchResults = useCallback(async () => {
 		if (!searchQuery.trim()) {
 			setSearchResults([]);
 			return;
@@ -61,7 +62,9 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 		} finally {
 			setIsLoading(false);
 		}
-	};
+	}, [searchQuery, searchType]); // Dependencies for useCallback
+
+	const [isLoading, setIsLoading] = useState(false);
 
 	useEffect(() => {
 		if (searchQuery && searchType) {
@@ -69,17 +72,16 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 		} else {
 			setSearchResults([]);
 		}
-	}, [searchQuery, searchType, fetchSearchResults]);
+	}, [searchQuery, searchType, fetchSearchResults]); // Updated dependency array
 
 	useEffect(() => {
-		let isMounted = true;
 		const channel = supabase
 			.channel("rooms")
 			.on(
 				"postgres_changes",
 				{ event: "*", schema: "public", table: "rooms" },
 				(payload) => {
-					if (isMounted && payload.new) useRoomStore.getState().setRooms(Array.isArray(payload.new) ? payload.new : [payload.new]);
+					if (isMounted.current && payload.new) useRoomStore.getState().setRooms(Array.isArray(payload.new) ? payload.new : [payload.new]);
 				}
 			)
 			.subscribe((status) => {
@@ -88,10 +90,10 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 			});
 
 		return () => {
-			isMounted = false;
+			isMounted.current = false;
 			supabase.removeChannel(channel);
 		};
-	}, []);
+	}, [supabase]); // Added supabase to dependencies
 
 	const handleCreateRoom = async () => {
 		if (!user) {
@@ -105,7 +107,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 		}
 
 		setIsCreating(true);
-		const isMounted = useRef(true);
 
 		try {
 			const response = await fetch("/api/rooms", {
@@ -139,10 +140,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 				setIsCreating(false);
 			}
 		}
-
-		return () => {
-			isMounted.current = false;
-		};
 	};
 
 	const handleLoginWithGithub = () => {
