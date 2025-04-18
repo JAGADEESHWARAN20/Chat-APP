@@ -7,23 +7,30 @@ import { v4 as uuidv4 } from "uuid";
 import { useUser } from "@/lib/store/user";
 import { Imessage, useMessage } from "@/lib/store/messages";
 import { useRoomStore } from '@/lib/store/roomstore';
+import { useDirectChatStore } from '@/lib/store/directChatStore';
 
 export default function ChatInput() {
 	const user = useUser((state) => state.user);
 	const addMessage = useMessage((state) => state.addMessage);
 	const setOptimisticIds = useMessage((state) => state.setOptimisticIds);
-	const supabase = supabaseBrowser();
 	const selectedRoom = useRoomStore((state) => state.selectedRoom);
+	const selectedDirectChat = useDirectChatStore((state) => state.selectedChat);
+	const supabase = supabaseBrowser();
 
 	const handleSendMessage = async (text: string) => {
-		if (!text.trim() || !user || !selectedRoom) return;
+		if (!text.trim() || !user) return;
+		if (!selectedRoom && !selectedDirectChat) {
+			toast.error("Please select a room or user to chat with");
+			return;
+		}
 
 		const id = uuidv4();
 		const newMessage = {
 			id,
 			text,
 			send_by: user.id,
-			room_id: selectedRoom.id,
+			room_id: selectedRoom?.id || null,
+			direct_chat_id: selectedDirectChat?.id || null,
 			is_edit: false,
 			created_at: new Date().toISOString(),
 			users: {
@@ -31,7 +38,7 @@ export default function ChatInput() {
 				avatar_url: user.user_metadata.avatar_url || "",
 				created_at: new Date().toISOString(),
 				display_name: user.user_metadata.user_name || "",
-				username: user.user_metadata.user_name || "", // Add the missing username field
+				username: user.user_metadata.user_name || "",
 			},
 		};
 
@@ -41,14 +48,15 @@ export default function ChatInput() {
 				.insert({
 					text,
 					id,
-					room_id: selectedRoom.id,
+					room_id: selectedRoom?.id || null,
+					direct_chat_id: selectedDirectChat?.id || null,
 					send_by: user.id
 				});
 
 			if (error) throw error;
 
 			addMessage(newMessage as Imessage);
-			setOptimisticIds(id); // Add this line back to maintain optimistic updates
+			setOptimisticIds(id);
 		} catch (error) {
 			toast.error("Failed to send message");
 		}
@@ -57,13 +65,20 @@ export default function ChatInput() {
 	return (
 		<div className="p-5">
 			<Input
-				placeholder="send message"
+				placeholder={
+					selectedRoom
+						? `Message #${selectedRoom.name}`
+						: selectedDirectChat
+							? "Send direct message"
+							: "Select a room or user to start chatting"
+				}
 				onKeyDown={(e) => {
 					if (e.key === "Enter") {
 						handleSendMessage(e.currentTarget.value);
 						e.currentTarget.value = "";
 					}
 				}}
+				disabled={!selectedRoom && !selectedDirectChat}
 			/>
 		</div>
 	);
