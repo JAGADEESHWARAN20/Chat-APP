@@ -1,36 +1,36 @@
 "use client";
 
-import { useState, useEffect } from 'react';
-import { Button } from './ui/button';
-import { supabaseBrowser } from '@/lib/supabase/browser';
-import { User as SupabaseUser } from '@supabase/supabase-js';
-import { useRouter } from 'next/navigation';
-import ChatPresence from './ChatPresence';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Search, User as UserIcon, Settings, PlusCircle } from 'lucide-react';
-import { Input } from '@/components/ui/input';
-import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { Database } from '@/lib/types/supabase';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { toast } from 'sonner';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
-import { useRoomStore } from '@/lib/store/roomstore';
-import { useDebounce } from 'use-debounce';
+import { useState, useEffect, useRef } from "react";
+import { Button } from "./ui/button";
+import { supabaseBrowser } from "@/lib/supabase/browser";
+import { User as SupabaseUser } from "@supabase/supabase-js";
+import { useRouter } from "next/navigation";
+import ChatPresence from "./ChatPresence";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Search, User as UserIcon, Settings, PlusCircle } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Database } from "@/lib/types/supabase";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { toast } from "sonner";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { useRoomStore } from "@/lib/store/roomstore";
+import { useDebounce } from "use-debounce";
 
-type UserProfile = Database['public']['Tables']['users']['Row'];
-type Room = Database['public']['Tables']['rooms']['Row'];
+type UserProfile = Database["public"]["Tables"]["users"]["Row"];
+type Room = Database["public"]["Tables"]["rooms"]["Row"];
 type SearchResult = UserProfile | Room;
 
 export default function ChatHeader({ user }: { user: SupabaseUser | undefined }) {
 	const router = useRouter();
-	const [searchQuery, setSearchQuery] = useState('');
-	const [searchType, setSearchType] = useState<'rooms' | 'users' | null>(null);
+	const [searchQuery, setSearchQuery] = useState("");
+	const [searchType, setSearchType] = useState<"rooms" | "users" | null>(null);
 	const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
 	const supabase = supabaseBrowser();
 	const [isPopoverOpen, setIsPopoverOpen] = useState(false);
 	const [isDialogOpen, setIsDialogOpen] = useState(false);
-	const [newRoomName, setNewRoomName] = useState('');
+	const [newRoomName, setNewRoomName] = useState("");
 	const [isPrivate, setIsPrivate] = useState(false);
 	const [isCreating, setIsCreating] = useState(false);
 	const selectedRoom = useRoomStore((state) => state.selectedRoom);
@@ -50,13 +50,13 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 			const response = await fetch(`/api/${searchType}/search?query=${encodeURIComponent(searchQuery)}`);
 			const data = await response.json();
 			if (response.ok) {
-				setSearchResults(data[searchType === 'users' ? 'users' : 'rooms'] || data.rooms || []);
+				setSearchResults(data[searchType === "users" ? "users" : "rooms"] || data.rooms || []);
 			} else {
 				toast.error(data.error || `Failed to search ${searchType}`);
 				setSearchResults([]);
 			}
 		} catch (error) {
-			toast.error('An error occurred while searching');
+			toast.error("An error occurred while searching");
 			setSearchResults([]);
 		} finally {
 			setIsLoading(false);
@@ -69,24 +69,48 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 		} else {
 			setSearchResults([]);
 		}
-	}, [searchQuery, searchType, fetchSearchResults]); // Added fetchSearchResults to dependency array
+	}, [searchQuery, searchType, fetchSearchResults]);
+
+	useEffect(() => {
+		let isMounted = true;
+		const channel = supabase
+			.channel("rooms")
+			.on(
+				"postgres_changes",
+				{ event: "*", schema: "public", table: "rooms" },
+				(payload) => {
+					if (isMounted && payload.new) useRoomStore.getState().setRooms(Array.isArray(payload.new) ? payload.new : [payload.new]);
+				}
+			)
+			.subscribe((status) => {
+				console.log("Subscription status:", status);
+				if (status === "CLOSED") toast.error("Room subscription closed");
+			});
+
+		return () => {
+			isMounted = false;
+			supabase.removeChannel(channel);
+		};
+	}, []);
 
 	const handleCreateRoom = async () => {
 		if (!user) {
-			toast.error('You must be logged in to create a room');
+			toast.error("You must be logged in to create a room");
 			return;
 		}
 
 		if (!newRoomName.trim()) {
-			toast.error('Room name cannot be empty');
+			toast.error("Room name cannot be empty");
 			return;
 		}
 
 		setIsCreating(true);
+		const isMounted = useRef(true);
+
 		try {
-			const response = await fetch('/api/rooms', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
+			const response = await fetch("/api/rooms", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
 					name: newRoomName.trim(),
 					is_private: isPrivate,
@@ -95,25 +119,37 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 
 			if (!response.ok) {
 				const error = await response.json();
-				throw new Error(error.error || 'Failed to create room');
+				throw new Error(error.error || "Failed to create room");
 			}
 
-			toast.success('Room created successfully!');
-			setNewRoomName('');
-			setIsPrivate(false);
-			setIsDialogOpen(false);
+			if (isMounted.current) {
+				const { data: newRooms } = await supabase.from("rooms").select("*");
+				useRoomStore.getState().setRooms(newRooms || []);
+				toast.success("Room created successfully!");
+				setNewRoomName("");
+				setIsPrivate(false);
+				setIsDialogOpen(false);
+			}
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : 'Failed to create room');
+			if (isMounted.current) {
+				toast.error(error instanceof Error ? error.message : "Failed to create room");
+			}
 		} finally {
-			setIsCreating(false);
+			if (isMounted.current) {
+				setIsCreating(false);
+			}
 		}
+
+		return () => {
+			isMounted.current = false;
+		};
 	};
 
 	const handleLoginWithGithub = () => {
 		supabase.auth.signInWithOAuth({
-			provider: 'github',
+			provider: "github",
 			options: {
-				redirectTo: location.origin + '/auth/callback',
+				redirectTo: location.origin + "/auth/callback",
 			},
 		});
 	};
@@ -123,26 +159,26 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 		router.refresh();
 	};
 
-	const handleSearchByType = (type: 'rooms' | 'users') => {
+	const handleSearchByType = (type: "rooms" | "users") => {
 		setSearchType(type);
-		setSearchQuery('');
+		setSearchQuery("");
 	};
 
 	const handleJoinRoom = (roomId: string) => {
 		if (!user) {
-			toast.error('You must be logged in to join a room');
+			toast.error("You must be logged in to join a room");
 			return;
 		}
-		fetch(`/api/rooms/${roomId}/join`, { method: 'POST' })
-			.then(response => {
-				if (!response.ok) throw new Error('Failed to join room');
+		fetch(`/api/rooms/${roomId}/join`, { method: "POST" })
+			.then((response) => {
+				if (!response.ok) throw new Error("Failed to join room");
 				return response.json();
 			})
-			.then(data => {
-				toast.success(data.status === 'pending' ? 'Join request sent' : 'Joined room successfully');
+			.then((data) => {
+				toast.success(data.status === "pending" ? "Join request sent" : "Joined room successfully");
 			})
-			.catch(error => {
-				toast.error(error.message || 'Failed to join room');
+			.catch((error) => {
+				toast.error(error.message || "Failed to join room");
 			});
 	};
 
@@ -150,9 +186,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 		<div className="h-20">
 			<div className="p-5 border-b flex items-center justify-between h-full">
 				<div>
-					<h1 className="text-xl font-bold">
-						{selectedRoom ? selectedRoom.name : 'Daily Chat'}
-					</h1>
+					<h1 className="text-xl font-bold">{selectedRoom ? selectedRoom.name : "Daily Chat"}</h1>
 					<ChatPresence />
 				</div>
 
@@ -193,15 +227,11 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 									</div>
 								</div>
 								<DialogFooter>
-									<Button
-										variant="outline"
-										onClick={() => setIsDialogOpen(false)}
-										disabled={isCreating}
-									>
+									<Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isCreating}>
 										Cancel
 									</Button>
 									<Button onClick={handleCreateRoom} disabled={isCreating}>
-										{isCreating ? 'Creating...' : 'Create Room'}
+										{isCreating ? "Creating..." : "Create Room"}
 									</Button>
 								</DialogFooter>
 							</DialogContent>
@@ -222,7 +252,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 										size="icon"
 										onClick={() => {
 											setIsPopoverOpen(false);
-											router.push('/profile');
+											router.push("/profile");
 										}}
 									>
 										<Settings className="h-4 w-4" />
@@ -238,14 +268,14 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 								/>
 								<div className="flex gap-2 mb-4">
 									<Button
-										variant={searchType === 'rooms' ? 'default' : 'outline'}
-										onClick={() => handleSearchByType('rooms')}
+										variant={searchType === "rooms" ? "default" : "outline"}
+										onClick={() => handleSearchByType("rooms")}
 									>
 										Rooms
 									</Button>
 									<Button
-										variant={searchType === 'users' ? 'default' : 'outline'}
-										onClick={() => handleSearchByType('users')}
+										variant={searchType === "users" ? "default" : "outline"}
+										onClick={() => handleSearchByType("users")}
 									>
 										Users
 									</Button>
@@ -253,49 +283,39 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 								{searchResults.length > 0 && (
 									<div className="mt-4">
 										<h4 className="font-semibold text-sm mb-2">
-											{searchType === 'users' ? 'User Profiles' : 'Rooms'}
+											{searchType === "users" ? "User Profiles" : "Rooms"}
 										</h4>
 										<ul className="space-y-2">
 											{searchResults.map((result) =>
-												'username' in result ? (
-													<li
-														key={result.id}
-														className="flex items-center justify-between"
-													>
+												"username" in result ? (
+													<li key={result.id} className="flex items-center justify-between">
 														<div className="flex items-center gap-2">
 															<Avatar>
 																{result.avatar_url ? (
 																	<AvatarImage
 																		src={result.avatar_url}
-																		alt={result.username || 'Avatar'}
+																		alt={result.username || "Avatar"}
 																	/>
 																) : (
 																	<AvatarFallback>
 																		{result.username?.charAt(0).toUpperCase() ||
 																			result.display_name?.charAt(0).toUpperCase() ||
-																			'?'}
+																			"?"}
 																	</AvatarFallback>
 																)}
 															</Avatar>
 															<div>
-																<div className="text-xs text-gray-500">
-																	{result.username}
-																</div>
-																<div className="text-sm font-semibold">
-																	{result.display_name}
-																</div>
+																<div className="text-xs text-gray-500">{result.username}</div>
+																<div className="text-sm font-semibold">{result.display_name}</div>
 															</div>
 														</div>
 														<UserIcon className="h-4 w-4 text-gray-500" />
 													</li>
 												) : (
-													<li
-														key={result.id}
-														className="flex items-center justify-between"
-													>
+													<li key={result.id} className="flex items-center justify-between">
 														<div className="flex items-center gap-2">
 															<span className="text-sm font-semibold">
-																{result.name} {result.is_private && '🔒'}
+																{result.name} {result.is_private && "🔒"}
 															</span>
 														</div>
 														<Button
@@ -313,7 +333,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 								)}
 								{searchResults.length === 0 && searchQuery.length > 0 && (
 									<p className="text-sm text-muted-foreground mt-2">
-										No {searchType || 'results'} found matching your search.
+										No {searchType || "results"} found matching your search.
 									</p>
 								)}
 								{searchQuery.length === 0 && searchType && (

@@ -1,5 +1,7 @@
-import { create } from 'zustand';
-import { IRoom } from '@/lib/types/rooms';
+import { create } from "zustand";
+import { Database } from "@/lib/types/supabase";
+
+type IRoom = Database["public"]["Tables"]["rooms"]["Row"];
 
 interface RoomState {
      rooms: IRoom[];
@@ -17,8 +19,8 @@ export const useRoomStore = create<RoomState>((set, get) => ({
      initializeDefaultRoom: () => {
           const { rooms, selectedRoom } = get();
           if (rooms.length > 0 && !selectedRoom) {
-               const defaultRoom = rooms.find(r => r.name === 'General Chat') || rooms[0];
+               const defaultRoom = rooms.find((r) => r.name === "General") || rooms[0];
                set({ selectedRoom: defaultRoom });
           }
-     }
+     },
 }));
