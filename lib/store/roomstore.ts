@@ -17,7 +17,6 @@ export const useRoomStore = create<RoomState>((set, get) => ({
      initializeDefaultRoom: () => {
           const { rooms, selectedRoom } = get();
           if (rooms.length > 0 && !selectedRoom) {
-               // Try to find General Chat room first, fall back to first room
                const defaultRoom = rooms.find(r => r.name === 'General Chat') || rooms[0];
                set({ selectedRoom: defaultRoom });
           }
