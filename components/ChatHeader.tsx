@@ -6,12 +6,15 @@ import { User as SupabaseUser } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 import ChatPresence from "./ChatPresence";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Search, User as UserIcon, Settings } from "lucide-react"; // Import Settings icon
+import { Search, User as UserIcon, Settings, PlusCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { Database } from "@/lib/types/supabase"; // Import the generated Database type
+import { Database } from "@/lib/types/supabase";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { toast } from "sonner";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
-// Use the generated User type from supabase.ts for consistency
 type UserProfile = Database["public"]["Tables"]["users"]["Row"];
 
 export default function ChatHeader({ user }: { user: SupabaseUser | undefined }) {
@@ -21,7 +24,49 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 	const [users, setUsers] = useState<UserProfile[]>([]);
 	const [searchResults, setSearchResults] = useState<UserProfile[]>([]);
 	const supabase = supabaseBrowser();
-	const [isPopoverOpen, setIsPopoverOpen] = useState(false); // Control popover state
+	const [isPopoverOpen, setIsPopoverOpen] = useState(false);
+	const [isDialogOpen, setIsDialogOpen] = useState(false);
+	const [newRoomName, setNewRoomName] = useState("");
+	const [isPrivate, setIsPrivate] = useState(false);
+	const [isCreating, setIsCreating] = useState(false);
+
+	const handleCreateRoom = async () => {
+		if (!user) {
+			toast.error("You must be logged in to create a room");
+			return;
+		}
+
+		if (!newRoomName.trim()) {
+			toast.error("Room name cannot be empty");
+			return;
+		}
+
+		setIsCreating(true);
+		try {
+			const response = await fetch("/api/rooms", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					name: newRoomName.trim(),
+					is_private: isPrivate
+				}),
+			});
+
+			if (!response.ok) {
+				const error = await response.json();
+				throw new Error(error.error || "Failed to create room");
+			}
+
+			toast.success("Room created successfully!");
+			setNewRoomName("");
+			setIsPrivate(false);
+			setIsDialogOpen(false);
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : "Failed to create room");
+		} finally {
+			setIsCreating(false);
+		}
+	};
 
 	const handleLoginWithGithub = () => {
 		supabase.auth.signInWithOAuth({
@@ -44,12 +89,12 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 	const fetchUsers = async () => {
 		const { data, error } = await supabase
 			.from("users")
-			.select("id, avatar_url, username, display_name, created_at"); // Select the necessary fields
+			.select("id, avatar_url, username, display_name, created_at");
 
 		if (error) {
 			console.error("Error fetching users:", error);
 		} else if (data) {
-			setUsers(data); // 'data' is already correctly typed by Supabase
+			setUsers(data);
 		}
 	};
 
@@ -70,8 +115,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 			);
 			setSearchResults(filteredResults);
 		} else if (searchType === "rooms") {
-			// Implement room search logic here if needed
-			setSearchResults([]); // For now, clear results when not searching users
+			setSearchResults([]);
 		} else {
 			setSearchResults([]);
 		}
@@ -79,7 +123,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 
 	const handleSearchByType = (type: "rooms" | "users") => {
 		setSearchType(type);
-		setSearchQuery(""); // Clear previous search query
+		setSearchQuery("");
 	};
 
 	return (
@@ -91,6 +135,60 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 				</div>
 
 				<div className="flex items-center gap-2">
+					{user && (
+						<Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+							<DialogTrigger asChild>
+								<Button variant="outline" size="icon">
+									<PlusCircle className="h-4 w-4" />
+								</Button>
+							</DialogTrigger>
+							<DialogContent>
+								<DialogHeader>
+									<DialogTitle>Create New Room</DialogTitle>
+									<DialogDescription>
+										Create a new chat room. Private rooms require approval to join.
+									</DialogDescription>
+								</DialogHeader>
+								<div className="grid gap-4 py-4">
+									<div className="space-y-2">
+										<Label htmlFor="roomName">Room Name</Label>
+										<Input
+											id="roomName"
+											placeholder="Enter room name"
+											value={newRoomName}
+											onChange={(e) => setNewRoomName(e.target.value)}
+											disabled={isCreating}
+										/>
+									</div>
+									<div className="flex items-center space-x-2">
+										<Switch
+											id="private"
+											checked={isPrivate}
+											onCheckedChange={setIsPrivate}
+											disabled={isCreating}
+										/>
+										<Label htmlFor="private">Private Room</Label>
+									</div>
+								</div>
+								<DialogFooter>
+									<Button
+										variant="outline"
+										onClick={() => setIsDialogOpen(false)}
+										disabled={isCreating}
+									>
+										Cancel
+									</Button>
+									<Button
+										onClick={handleCreateRoom}
+										disabled={isCreating}
+									>
+										{isCreating ? "Creating..." : "Create Room"}
+									</Button>
+								</DialogFooter>
+							</DialogContent>
+						</Dialog>
+					)}
+
 					<Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
 						<PopoverTrigger asChild>
 							<Button variant="outline" size="icon">
