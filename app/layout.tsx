@@ -3,6 +3,7 @@ import { Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
+import RoomInitializer from "@/lib/store/RoomInitializer";
 
 const space_Grotesk = Space_Grotesk({ subsets: ["latin"] });
 
@@ -25,6 +26,7 @@ export default function RootLayout({
 					enableSystem
 					disableTransitionOnChange
 				>
+					<RoomInitializer/>
 					{children}
 					<Toaster position="top-center" />
 				</ThemeProvider>

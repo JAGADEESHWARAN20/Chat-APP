@@ -158,16 +158,19 @@ export type Database = {
         Row: {
           joined_at: string | null
           room_id: string
+          status: string | null
           user_id: string
         }
         Insert: {
           joined_at?: string | null
           room_id: string
+          status?: string | null
           user_id: string
         }
         Update: {
           joined_at?: string | null
           room_id?: string
+          status?: string | null
           user_id?: string
         }
         Relationships: [

@@ -2,20 +2,22 @@ import { User } from "@supabase/supabase-js";
 import { create } from "zustand";
 import { LIMIT_MESSAGE } from "../constant";
 
-export type Imessage = {
-	created_at: string;
+export interface Imessage {
 	id: string;
-	is_edit: boolean;
-	send_by: string;
 	text: string;
+	send_by: string;
+	room_id: string | null;
+	direct_chat_id?: string | null;
+	is_edit: boolean;
+	created_at: string;
 	users: {
+		id: string;
 		avatar_url: string;
-		created_at: string;
 		display_name: string;
 		username: string;
-		id: string;
+		created_at: string;
 	} | null;
-};
+}
 
 interface MessageState {
 	hasMore: boolean;
