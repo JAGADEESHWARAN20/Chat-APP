@@ -1,52 +1,64 @@
+"use client";
+
 import { useState, useEffect } from 'react';
 import { useRoomStore } from '@/lib/store/roomstore';
 import { supabaseBrowser } from '@/lib/supabase/browser';
 import { Button } from './ui/button';
 import { toast } from 'sonner';
-import { useUser } from '@/lib/store/user'; // Add this import
-
-export interface IRoom {
-     id: string;
-     name: string;
-     created_by: string | null; // Updated to allow null
-     created_at: string;
-     is_private: boolean;
-}
-
-interface IRoomParticipant {
-     room_id: string;
-     user_id: string;
-     status: 'pending' | 'accepted' | 'rejected'; // Strict union type
-     joined_at: string;
-}
+import { useUser } from '@/lib/store/user';
+import { IRoom, IRoomParticipant } from '@/lib/types/rooms';
 
 export default function RoomList() {
      const [userParticipations, setUserParticipations] = useState<IRoomParticipant[]>([]);
      const { rooms, setRooms, selectedRoom, setSelectedRoom } = useRoomStore();
      const supabase = supabaseBrowser();
-     const user = useUser((state) => state.user); // Add this line to get user from store
+     const user = useUser((state) => state.user);
 
      useEffect(() => {
-          // Fetch rooms and user's participation status
-          const fetchRoomsAndStatus = async () => {
-               if (!user) return; // Add check for user
+          if (!user) return;
 
-               const { data: roomsData } = await supabase
+          const fetchRooms = async () => {
+               // Get public rooms and rooms user is a member of
+               const { data: roomsData, error } = await supabase
                     .from('rooms')
-                    .select('*');
+                    .select('*, room_members(status, user_id)')
+                    .or(`is_private.eq.false,and(room_members.user_id.eq.${user.id})`);
 
+               if (error) {
+                    toast.error('Failed to fetch rooms');
+                    return;
+               }
+
+               if (roomsData) {
+                    // Filter out the room_members field before setting rooms
+                    const cleanedRooms = roomsData.map(({ room_members, ...room }) => room);
+                    setRooms(cleanedRooms as IRoom[]);
+               }
+          };
+
+          fetchRooms();
+
+          const roomChannel = supabase.channel('room_changes')
+               .on('postgres_changes',
+                    { event: '*', schema: 'public', table: 'rooms' },
+                    () => fetchRooms())
+               .subscribe();
+
+          return () => {
+               supabase.removeChannel(roomChannel);
+          };
+     }, [user, supabase, setRooms]);
+
+     useEffect(() => {
+          if (!user) return;
+
+          const fetchParticipations = async () => {
                const { data: participations } = await supabase
                     .from('room_participants')
                     .select('*')
                     .eq('user_id', user.id);
 
-               if (roomsData) {
-                    // Type assertion to match IRoom interface
-                    setRooms(roomsData as IRoom[]);
-               }
-
                if (participations) {
-                    // Type assertion and mapping to ensure correct status type
                     const typedParticipations = participations.map(p => ({
                          ...p,
                          status: p.status as 'pending' | 'accepted' | 'rejected'
@@ -55,22 +67,19 @@ export default function RoomList() {
                }
           };
 
-          fetchRoomsAndStatus();
+          fetchParticipations();
 
-          // Subscribe to room_participants changes
           const channel = supabase
                .channel('room_participants_changes')
                .on('postgres_changes',
                     { event: '*', schema: 'public', table: 'room_participants' },
-                    (payload) => {
-                         fetchRoomsAndStatus();
-                    })
+                    () => fetchParticipations())
                .subscribe();
 
           return () => {
                supabase.removeChannel(channel);
           };
-     }, [user]); // Add user to dependency array
+     }, [user, supabase]);
 
      const handleJoinRoom = async (roomId: string) => {
           if (!user) {

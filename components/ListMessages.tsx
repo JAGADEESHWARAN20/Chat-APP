@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { ArrowDown } from "lucide-react";
 import LoadMoreMessages from "./LoadMoreMessages";
 import { Database } from "@/lib/types/supabase"; // Import Database type
+import { useRoomStore } from '@/lib/store/roomstore';
 
 type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
 type UserRow = Database["public"]["Tables"]["users"]["Row"];
@@ -16,6 +17,31 @@ export default function ListMessages() {
 	const scrollRef = useRef() as React.MutableRefObject<HTMLDivElement>;
 	const [userScrolled, setUserScrolled] = useState(false);
 	const [notification, setNotification] = useState(0);
+	const selectedRoom = useRoomStore((state) => state.selectedRoom);
+	
+
+	useEffect(() => {
+		if (!selectedRoom) return;
+
+		// Subscribe to messages for the selected room
+		const channel = supabase
+			.channel(`room:${selectedRoom.id}`)
+			.on('postgres_changes',
+				{
+					event: '*',
+					schema: 'public',
+					table: 'messages',
+					filter: `room_id=eq.${selectedRoom.id}`
+				},
+				(payload) => {
+					// Handle message updates
+				})
+			.subscribe();
+
+		return () => {
+			supabase.removeChannel(channel);
+		};
+	}, [selectedRoom]);
 
 	const {
 		messages,
