@@ -1,76 +1,66 @@
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
-import { cookies } from "next/headers";
-import { NextRequest, NextResponse } from "next/server";
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
+import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(req: NextRequest, { params }: { params: { roomId: string } }) {
-     const supabase = createRouteHandlerClient({ cookies });
-     const { data: { session } } = await supabase.auth.getSession();
+  const supabase = createRouteHandlerClient({ cookies });
+  const { data: { session } } = await supabase.auth.getSession();
 
-     if (!session) {
-          console.error("Unauthorized access attempt");
-          return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-     }
+  if (!session) {
+    console.error('Unauthorized access attempt');
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
-     const { roomId } = params;
-     const userId = session.user.id;
+  const { roomId } = params;
+  const userId = session.user.id;
 
-     // Step 1: Log all accessible rooms
-     const { data: allRooms, error: allRoomsError } = await supabase
-          .from("rooms")
-          .select("id, name");
+  // Validate roomId
+  if (!roomId || roomId === 'undefined') {
+    console.error('Missing or invalid roomId:', roomId);
+    return NextResponse.json({ error: 'Invalid room ID' }, { status: 400 });
+  }
 
-     if (allRoomsError) {
-          console.error("Error fetching all rooms:", allRoomsError.message);
-     } else {
-          console.log("All accessible rooms:", allRooms);
-     }
+  // Log accessible rooms for debugging
+  const { data: allRooms, error: roomsError } = await supabase
+    .from('rooms')
+    .select('id, name');
+  if (roomsError) {
+    console.error('Error fetching rooms:', roomsError.message);
+  } else {
+    console.log('All accessible rooms:', allRooms);
+  }
 
-     let requestBody;
-     try {
-          requestBody = await req.json();
-     } catch (err) {
-          console.error("Failed to parse request body:", err);
-          requestBody = { status: "pending", joined_at: new Date().toISOString() };
-     }
-     const { status, joined_at } = requestBody;
-     console.log("Received request:", { roomId, userId, requestBody });
+  const requestBody = await req.json();
+  const { status, joined_at } = requestBody;
+  console.log('Received request:', { roomId, userId, requestBody });
 
-     if (!["pending", "accepted", "rejected"].includes(status)) {
-          console.error("Invalid status value:", status);
-          return NextResponse.json(
-               { error: "Invalid status value. Use 'pending', 'accepted', or 'rejected'" },
-               { status: 400 }
-          );
-     }
+  // Check if room exists
+  const { data: roomExists, error: roomError } = await supabase
+    .from('rooms')
+    .select('id')
+    .eq('id', roomId)
+    .single();
 
-     const { data: roomExists, error: roomError } = await supabase
-          .from("rooms")
-          .select("id")
-          .eq("id", roomId)
-          .single();
+  if (roomError || !roomExists) {
+    console.error('Room lookup failed:', { roomId, error: roomError?.message });
+    return NextResponse.json({ error: 'Room not found' }, { status: 404 });
+  }
 
-     if (roomError || !roomExists) {
-          console.error("Room lookup failed:", { roomId, error: roomError?.message });
-          return NextResponse.json({ error: "Room not found" }, { status: 404 });
-     }
+  // Insert participant
+  const { error: insertError } = await supabase
+    .from('room_participants')
+    .insert({
+      room_id: roomId,
+      user_id: userId,
+      status,
+      joined_at: joined_at || new Date().toISOString(),
+    });
 
-     const { error: insertError } = await supabase
-          .from("room_participants")
-          .insert({
-               room_id: roomId,
-               user_id: userId,
-               status,
-               joined_at: joined_at || new Date().toISOString(),
-          });
+  if (insertError) {
+    console.error('Insert error:', insertError.message);
+    return NextResponse.json({ error: 'Failed to join room' }, { status: 500 });
+  }
 
-     if (insertError) {
-          console.error("Insert error:", { message: insertError.message, details: insertError.details });
-          return NextResponse.json(
-               { error: "Failed to join room", details: insertError.message },
-               { status: 500 }
-          );
-     }
-
-     console.log("Successfully joined room:", { roomId, userId, status });
-     return NextResponse.json({ success: true, status, message: "Joined room successfully" });
+  console.log('Successfully joined room:', { roomId, userId, status });
+  return NextResponse.json({ success: true, message: 'Joined room successfully' });
 }
