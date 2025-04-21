@@ -14,7 +14,9 @@ export async function POST(
      }
 
      const { roomId } = params;
+     console.log(roomId)
      const userId = session.user.id;
+     console.log(userId)
 
      // Check if room exists and if it's private
      const { data: room, error: roomError } = await supabase
