@@ -195,6 +195,8 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 		}
 
 		const requestBody = {
+			roomId:roomId,
+			userId: user.id,
 			status: "pending",
 			joined_at: new Date().toISOString(),
 		};
