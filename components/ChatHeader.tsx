@@ -197,6 +197,13 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 			toast.error("You must be logged in to join a room");
 			return;
 		}
+		// Log the values before posting
+		console.log("Posting to /join with values:", {
+			roomId: roomId,
+			userId: user ? user.id : "Not logged in",
+			requestBody: {}, // No body is currently sent
+		});
+
 		fetch(`/api/rooms/${roomId}/join`, { method: "POST" })
 			.then((response) => {
 				if (!response.ok) throw new Error("Failed to join room");
