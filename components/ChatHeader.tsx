@@ -34,12 +34,10 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 	const [isPrivate, setIsPrivate] = useState(false);
 	const [isCreating, setIsCreating] = useState(false);
 	const selectedRoom = useRoomStore((state) => state.selectedRoom);
-	const isMounted = useRef(true); // Moved to top level
+	const isMounted = useRef(true);
 	const [isLoading, setIsLoading] = useState(false);
 
 	const [debouncedCallback] = useDebounce((value: string) => setSearchQuery(value), 300);
-
-	// Debounce the search input change handler
 	const [debouncedSearchQuery] = useDebounce(searchQuery, 300);
 
 	const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -48,10 +46,9 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 	};
 
 	const fetchSearchResults = useCallback(async () => {
-		// Do not search if query is empty or searchType is not selected
 		if (!debouncedSearchQuery.trim() || !searchType) {
 			setSearchResults([]);
-			setIsLoading(false); // Ensure loading is off when clearing results or no type selected
+			setIsLoading(false);
 			return;
 		}
 
@@ -60,26 +57,22 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 			const response = await fetch(`/api/${searchType}/search?query=${encodeURIComponent(debouncedSearchQuery)}`);
 			const data = await response.json();
 
-			// Only update state if component is mounted
 			if (isMounted.current) {
 				if (response.ok) {
 					let results: SearchResult[] = [];
 					if (searchType === "users") {
-						// Assuming /api/users/search returns the array directly
 						results = Array.isArray(data) ? (data as UserProfile[]) : [];
 					} else if (searchType === "rooms") {
-						// Assuming /api/rooms/search returns { rooms: [...], total: ..., ... }
 						results = data.rooms && Array.isArray(data.rooms) ? (data.rooms as Room[]) : [];
 					}
 					setSearchResults(results);
 				} else {
-					// Handle API errors
 					toast.error(data.error || `Failed to search ${searchType}`);
 					setSearchResults([]);
 				}
 			}
 		} catch (error) {
-			console.error("Search error:", error); // Log the actual error for debugging
+			console.error("Search error:", error);
 			if (isMounted.current) {
 				toast.error("An error occurred while searching");
 				setSearchResults([]);
@@ -89,19 +82,17 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 				setIsLoading(false);
 			}
 		}
-	}, [debouncedSearchQuery, searchType]); // Dependencies for useCallback updated to debouncedQuery
+	}, [debouncedSearchQuery, searchType]);
 
-	// Trigger search whenever the debounced query or search type changes
 	useEffect(() => {
 		fetchSearchResults();
 	}, [debouncedSearchQuery, searchType, fetchSearchResults]);
 
-	// Effect to clean up the mounted ref
 	useEffect(() => {
 		return () => {
 			isMounted.current = false;
 		};
-	}, []); // Runs only on unmount
+	}, []);
 
 	useEffect(() => {
 		const channel = supabase
@@ -122,7 +113,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 			isMounted.current = false;
 			supabase.removeChannel(channel);
 		};
-	}, [supabase]); // Added supabase to dependencies
+	}, [supabase]);
 
 	const handleCreateRoom = async () => {
 		if (!user) {
@@ -190,27 +181,32 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 		setSearchQuery("");
 	};
 
-	const handleJoinRoom = async (roomId: string) => {
+	const handleJoinRoom = async (roomId?: string) => {
 		if (!user) {
 			toast.error("You must be logged in to join a room");
 			return;
 		}
 
-		// Prepare request body
+		// Automatically use selectedRoom.id if no roomId is provided
+		const targetRoomId = roomId || selectedRoom?.id;
+		if (!targetRoomId) {
+			toast.error("No room selected or invalid room ID");
+			return;
+		}
+
 		const requestBody = {
 			status: "pending",
 			joined_at: new Date().toISOString(),
 		};
 
-		// Log the values before posting
 		console.log("Posting to /join with values:", {
-			roomId: roomId,
+			roomId: targetRoomId,
 			userId: user.id,
 			requestBody: requestBody,
 		});
 
 		try {
-			const response = await fetch(`/api/rooms/${roomId}/join`, {
+			const response = await fetch(`/api/rooms/${targetRoomId}/join`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify(requestBody),
@@ -225,7 +221,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 			toast.success(data.status === "pending" ? "Join request sent" : "Joined room successfully");
 		} catch (error) {
 			console.error("Join room error:", error);
-			toast.error((error instanceof Error ? error.message : "Failed to join room") || "Failed to join room");
+			toast.error(error instanceof Error ? error.message : "Failed to join room");
 		}
 	};
 
@@ -389,7 +385,10 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 					</Popover>
 
 					{user ? (
-						<Button onClick={handleLogout}>Logout</Button>
+						<>
+							<Button onClick={() => handleJoinRoom()}>Join Current Room</Button>
+							<Button onClick={handleLogout}>Logout</Button>
+						</>
 					) : (
 						<Button onClick={handleLoginWithGithub}>Login</Button>
 					)}
