@@ -14,6 +14,17 @@ export async function POST(req: NextRequest, { params }: { params: { roomId: str
      const { roomId } = params;
      const userId = session.user.id;
 
+     // Step 1: Log all accessible rooms
+     const { data: allRooms, error: allRoomsError } = await supabase
+          .from("rooms")
+          .select("id, name");
+
+     if (allRoomsError) {
+          console.error("Error fetching all rooms:", allRoomsError.message);
+     } else {
+          console.log("All accessible rooms:", allRooms);
+     }
+
      let requestBody;
      try {
           requestBody = await req.json();
