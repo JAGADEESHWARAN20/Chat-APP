@@ -38,12 +38,10 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 	const [isLoading, setIsLoading] = useState(false);
 
 	const [debouncedCallback] = useDebounce((value: string) => setSearchQuery(value), 300);
-	
-	
-	
+
 	// Debounce the search input change handler
 	const [debouncedSearchQuery] = useDebounce(searchQuery, 300);
-	
+
 	const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		debouncedCallback(e.target.value);
 		setSearchQuery(e.target.value);
@@ -192,29 +190,43 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 		setSearchQuery("");
 	};
 
-	const handleJoinRoom = (roomId: string) => {
+	const handleJoinRoom = async (roomId: string) => {
 		if (!user) {
 			toast.error("You must be logged in to join a room");
 			return;
 		}
+
+		// Prepare request body
+		const requestBody = {
+			status: "pending",
+			joined_at: new Date().toISOString(),
+		};
+
 		// Log the values before posting
 		console.log("Posting to /join with values:", {
 			roomId: roomId,
-			userId: user ? user.id : "Not logged in",
-			requestBody: {}, // No body is currently sent
+			userId: user.id,
+			requestBody: requestBody,
 		});
 
-		fetch(`/api/rooms/${roomId}/join`, { method: "POST" })
-			.then((response) => {
-				if (!response.ok) throw new Error("Failed to join room");
-				return response.json();
-			})
-			.then((data) => {
-				toast.success(data.status === "pending" ? "Join request sent" : "Joined room successfully");
-			})
-			.catch((error) => {
-				toast.error(error.message || "Failed to join room");
+		try {
+			const response = await fetch(`/api/rooms/${roomId}/join`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(requestBody),
 			});
+
+			if (!response.ok) {
+				const errorData = await response.json();
+				throw new Error(errorData.error || "Failed to join room");
+			}
+
+			const data = await response.json();
+			toast.success(data.status === "pending" ? "Join request sent" : "Joined room successfully");
+		} catch (error) {
+			console.error("Join room error:", error);
+			toast.error((error instanceof Error ? error.message : "Failed to join room") || "Failed to join room");
+		}
 	};
 
 	return (
@@ -327,10 +339,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 														<div className="flex items-center gap-2">
 															<Avatar>
 																{result.avatar_url ? (
-																	<AvatarImage
-																		src={result.avatar_url}
-																		alt={result.username || "Avatar"}
-																	/>
+																	<AvatarImage src={result.avatar_url} alt={result.username || "Avatar"} />
 																) : (
 																	<AvatarFallback>
 																		{result.username?.charAt(0).toUpperCase() ||
