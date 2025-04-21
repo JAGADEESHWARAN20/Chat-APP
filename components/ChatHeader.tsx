@@ -187,9 +187,11 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 			return;
 		}
 
+		// Ensure targetRoomId is always defined
 		const targetRoomId = roomId || selectedRoom?.id;
 		if (!targetRoomId) {
 			toast.error("No room selected or invalid room ID");
+			console.error("No valid roomId available:", { roomId, selectedRoom });
 			return;
 		}
 
@@ -383,14 +385,13 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 						</PopoverContent>
 					</Popover>
 
-					{user ? (
+					{user && (
 						<>
-							<Button onClick={() => handleJoinRoom()}>Join Current Room</Button>
+							<Button onClick={() => handleJoinRoom(selectedRoom?.id)}>Join Current Room</Button>
 							<Button onClick={handleLogout}>Logout</Button>
 						</>
-					) : (
-						<Button onClick={handleLoginWithGithub}>Login</Button>
 					)}
+					{!user && <Button onClick={handleLoginWithGithub}>Login</Button>}
 				</div>
 			</div>
 		</div>
