@@ -109,7 +109,13 @@ export default function RoomList() {
                toast.error('You must be logged in to join a room');
                return;
           }
-
+          // Log the values before posting
+          console.log("Posting to /join with values:", {
+               roomId: roomId,
+               userId: user ? user.id : "Not logged in",
+               requestBody: {}, // No body is currently sent
+          });
+          
           try {
                const response = await fetch(`/api/rooms/${roomId}/join`, {
                     method: 'POST',
