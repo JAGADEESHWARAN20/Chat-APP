@@ -187,7 +187,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 			return;
 		}
 
-		// Automatically use selectedRoom.id if no roomId is provided
 		const targetRoomId = roomId || selectedRoom?.id;
 		if (!targetRoomId) {
 			toast.error("No room selected or invalid room ID");
@@ -195,8 +194,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 		}
 
 		const requestBody = {
-			roomId:roomId,
-			userId: user.id,
 			status: "pending",
 			joined_at: new Date().toISOString(),
 		};
@@ -204,7 +201,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 		console.log("Posting to /join with values:", {
 			roomId: targetRoomId,
 			userId: user.id,
-			requestBody: requestBody,
+			requestBody,
 		});
 
 		try {
