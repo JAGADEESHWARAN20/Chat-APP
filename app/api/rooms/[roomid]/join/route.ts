@@ -9,6 +9,7 @@ export async function POST(
      const supabase = createRouteHandlerClient({ cookies });
      const { data: { session } } = await supabase.auth.getSession();
 
+     // Check if the user is authenticated
      if (!session) {
           console.error("Unauthorized access attempt");
           return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -17,7 +18,7 @@ export async function POST(
      const { roomId } = params;
      const userId = session.user.id;
 
-     // Log the incoming request details
+     // Parse and log the incoming request details
      const requestBody = await req.json().catch((err) => {
           console.error("Failed to parse request body:", err);
           return { status: "pending", joined_at: new Date().toISOString() };
@@ -28,7 +29,8 @@ export async function POST(
           requestBody,
      });
 
-     const { status, joined_at } = requestBody; // Only destructure status and joined_at
+     const { status, joined_at } = requestBody;
+     // Validate the status field
      if (!["pending", "accepted", "rejected"].includes(status)) {
           console.error("Invalid status value:", status);
           return NextResponse.json(
@@ -46,6 +48,16 @@ export async function POST(
      if (!roomExists) {
           console.error("Room not found:", roomId);
           return NextResponse.json({ error: "Room not found" }, { status: 404 });
+     }
+
+     // Fetch and log all rooms before inserting into room_participants
+     const { data: allRooms, error: fetchError } = await supabase
+          .from("rooms")
+          .select("*");
+     if (fetchError) {
+          console.error("Error fetching rooms:", fetchError);
+     } else {
+          console.log("All rooms before joining:", allRooms);
      }
 
      // Insert into room_participants
