@@ -46,14 +46,29 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   };
 
   const fetchSearchResults = useCallback(async () => {
-    if (!debouncedSearchQuery.trim() || !searchType) {
-      setSearchResults([]);
-      setIsLoading(false);
-      return;
-    }
+       if (!debouncedSearchQuery.trim() || !searchType) {
+        setSearchResults([]);
+        setIsLoading(false);
+        
+        try {
+          const response = await fetch('/api/rooms/all');
+          const data = await response.json();
+          if (response.ok) {
+            setSearchResults(data.rooms || []);
+          } else {
+            console.error(data.error || "Failed to fetch all rooms");
+          }
+        } catch (error) {
+          console.error("Error fetching all rooms:", error);
+        }
+        
+        return; // Ensure return happens after the fetch logic
+      }
+    
 
     setIsLoading(true);
     try {
+
       const response = await fetch(`/api/${searchType}/search?query=${encodeURIComponent(debouncedSearchQuery)}`);
       const data = await response.json();
 
