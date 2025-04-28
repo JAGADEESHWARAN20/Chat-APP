@@ -851,7 +851,7 @@ const handleLeaveRoom = async () => {
                 </DialogContent>
               </Dialog>
 
-              {selectedRoom && (
+                  {selectedRoom && (
                 <>
                   {isMember ? (
                     <>
@@ -864,26 +864,26 @@ const handleLeaveRoom = async () => {
                         <RefreshCw className="h-4 w-4" />
                         Switch Room
                       </Button>
-                    <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={handleLeaveRoom}
-                          className="bg-red-600 hover:bg-red-700 flex items-center gap-1"
-                          disabled={isLeaving}
-                        >
-                          {isLeaving ? (
-                            <>
-                              <RefreshCw className="h-4 w-4 animate-spin" />
-                              Leaving...
-                            </>
-                          ) : (
-                            <>
-                              <LogOut className="h-4 w-4" />
-                              Leave
-                            </>
-                          )}
-                        </Button>
-                                            </>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={handleLeaveRoom}
+                        className="bg-red-600 hover:bg-red-700 flex items-center gap-1"
+                        disabled={isLeaving}
+                      >
+                        {isLeaving ? (
+                          <>
+                            <RefreshCw className="h-4 w-4 animate-spin" />
+                            Leaving...
+                          </>
+                        ) : (
+                          <>
+                            <LogOut className="h-4 w-4" />
+                            Leave
+                          </>
+                        )}
+                      </Button>
+                    </>
                   ) : (
                     <div className="flex items-center gap-2">
                       <Button 
@@ -893,7 +893,119 @@ const handleLeaveRoom = async () => {
                       >
                         Join Room
                       </Button>
+                    </div>
+                  )}
+                </>
+              )}
+            </>
+          )}
+           <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
+             <PopoverTrigger asChild>
+               <Button variant="outline" size="icon">
+                 <Search className="h-4 w-4" />
+               </Button>
+             </PopoverTrigger>
+             <PopoverContent className="w-80">
+               <div className="p-4">
+                 <div className="flex justify-end mb-2">
+                   <Button
+                     variant="ghost"
+                     size="icon"
+                     onClick={() => {
+                       setIsPopoverOpen(false);
+                       router.push("/profile");
+                     }}
+                   >
+                     <Settings className="h-4 w-4" />
+                   </Button>
+                 </div>
+                 <h3 className="font-semibold text-lg mb-2">Search</h3>
+                 <Input
+                   type="text"
+                   placeholder="Search..."
+                   value={searchQuery}
+                   onChange={handleSearchInputChange}
+                   className="mb-4"
+                 />
+                 <div className="flex gap-2 mb-4">
+                   <Button
+                     variant={searchType === "rooms" ? "default" : "outline"}
+                     onClick={() => handleSearchByType("rooms")}
+                   >
+                     Rooms
+                   </Button>
+                   <Button
+                     variant={searchType === "users" ? "default" : "outline"}
+                     onClick={() => handleSearchByType("users")}
+                   >
+                     Users
+                   </Button>
+                 </div>
+                 {searchResults.length > 0 && (
+                   <div className="mt-4">
+                     <h4 className="font-semibold text-sm mb-2">
+                       {searchType === "users" ? "User Profiles" : "Rooms"}
+                     </h4>
+                     <ul className="space-y-2">
+                       {searchResults.map((result) =>
+                         "username" in result ? (
+                           <li key={result.id} className="flex items-center justify-between">
+                             <div className="flex items-center gap-2">
+                               <Avatar>
+                                 {result.avatar_url ? (
+                                   <AvatarImage src={result.avatar_url} alt={result.username || "Avatar"} />
+                                 ) : (
+                                   <AvatarFallback>
+                                     {result.username?.charAt(0).toUpperCase() ||
+                                       result.display_name?.charAt(0).toUpperCase() ||
+                                       "?"}
+                                   </AvatarFallback>
+                                 )}
+                               </Avatar>
+                               <div>
+                                 <div className="text-xs text-gray-500">{result.username}</div>
+                                 <div className="text-sm font-semibold">{result.display_name}</div>
+                               </div>
+                             </div>
+                             <UserIcon className="h-4 w-4 text-gray-500" />
+                           </li>
+                         ) : (
+                           <li key={result.id} className="flex items-center justify-between">
+                             <div className="flex items-center gap-2">
+                               <span className="text-sm font-semibold">
+                                 {result.name} {result.is_private && "🔒"}
+                               </span>
+                             </div>
+                             <Button
+                               size="sm"
+                               onClick={() => handleJoinRoom(result.id)}
+                               disabled={!user}
+                             >
+                               Join
+                             </Button>
+                           </li>
+                         )
+                       )}
+                     </ul>
+                   </div>
+                 )}
+                 {searchResults.length === 0 && searchQuery.length > 0 && (
+                   <p className="text-sm text-muted-foreground mt-2">
+                     No {searchType || "results"} found matching your search.
+                   </p>
+                 )}
+                 {searchQuery.length === 0 && searchType && (
+                   <p className="text-sm text-muted-foreground mt-2">Start typing to search...</p>
+                 )}
+                 {isLoading && <p className="text-sm text-muted-foreground mt-2">Loading...</p>}
+               </div>
+             </PopoverContent>
+           </Popover>
+
+         {user && <Button onClick={handleLogout}>Logout</Button>}
+          {!user && <Button onClick={handleLoginWithGithub}>Login</Button>}
+        </div>
       </div>
-    )}
-  </>
-)}
+    </div>
+  );
+}
