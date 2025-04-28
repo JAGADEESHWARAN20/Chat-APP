@@ -135,9 +135,9 @@ export default function RoomList() {
           throw new Error("Failed to fetch rooms");
         }
 
-        const { success, rooms } = await response.json();
-        if (success && rooms) {
-          setRooms(rooms as IRoom[]);
+        const { success, rooms: fetchedRooms } = await response.json();
+        if (success && fetchedRooms) {
+          setRooms(fetchedRooms as IRoom[]);
         }
       } catch (err) {
         toast.error("Unexpected error fetching rooms");
@@ -174,6 +174,7 @@ export default function RoomList() {
     return () => {
       supabase.removeChannel(roomChannel);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, supabase, setRooms, setSelectedRoom]);
 
   useEffect(() => {
