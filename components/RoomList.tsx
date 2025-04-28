@@ -21,18 +21,13 @@ export default function RoomList() {
          }
 
          try {
-             const { data: roomsData, error } = await supabase
-                 .from('rooms')
-                 .select('id, name, is_private, created_by')
-                 .or(`is_private.eq.false, created_by.eq.${user.id}, id.in((
-                     SELECT room_id FROM room_members 
-                     WHERE user_id = '${user.id}' AND status = 'accepted'
-                 ))`)
-                 .order('created_at', { ascending: false });
-     
-             if (error) throw error;
-             
-             if (roomsData) {
+             const response = await fetch('/api/rooms/all');
+             if (!response.ok) {
+                 throw new Error('Failed to fetch rooms');
+             }
+
+             const { success, data: roomsData } = await response.json();
+             if (success && roomsData) {
                  setRooms(roomsData as IRoom[]);
                  toast.success('Rooms refreshed');
              }
@@ -47,23 +42,14 @@ export default function RoomList() {
 
           const fetchRooms = async () => {
                try {
-                    const { data: roomsData, error } = await supabase
-                        .from('rooms')
-                        .select('id, name, is_private, created_by')
-                        .or(`is_private.eq.false, created_by.eq.${user.id}, id.in((
-                            SELECT room_id FROM room_members 
-                            WHERE user_id = '${user.id}' AND status = 'accepted'
-                        ))`)
-                        .order('created_at', { ascending: false });
-
-                    if (error) {
-                         toast.error('Failed to fetch rooms');
-                         console.error('Error fetching rooms:', error);
-                         return;
+                    const response = await fetch('/api/rooms/all');
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch rooms');
                     }
 
-                    if (roomsData) {
-                         setRooms(roomsData as IRoom[]);
+                    const { success, data: roomsData } = await response.json();
+                    if (success && roomsData) {
+                        setRooms(roomsData as IRoom[]);
                     }
                } catch (err) {
                     toast.error('Unexpected error fetching rooms');
@@ -86,8 +72,6 @@ export default function RoomList() {
                supabase.removeChannel(roomChannel);
           };
      }, [user, supabase, setRooms]);
-
-
 
      useEffect(() => {
           if (!user) return;
@@ -139,12 +123,6 @@ export default function RoomList() {
                toast.error('You must be logged in to join a room');
                return;
           }
-          // Log the values before posting
-          console.log("Posting to /join with values:", {
-               roomId: roomId,
-               userId: user ? user.id : "Not logged in",
-               requestBody: {}, // No body is currently sent
-          });
           
           try {
                const response = await fetch(`/api/rooms/${roomId}/join`, {
@@ -180,7 +158,6 @@ export default function RoomList() {
           );
      }
 
- 
      return (
           <div className="w-64 border-r p-4">
                <div className="flex justify-between items-center mb-4">
