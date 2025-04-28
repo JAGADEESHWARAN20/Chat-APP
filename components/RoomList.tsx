@@ -15,6 +15,11 @@ export default function RoomList() {
      const user = useUser((state) => state.user);
      
      const refreshRooms = async () => {
+         if (!user) {
+             toast.error('You must be logged in to refresh rooms');
+             return;
+         }
+
          try {
              const { data: roomsData, error } = await supabase
                  .from('rooms')
@@ -22,7 +27,8 @@ export default function RoomList() {
                  .or(`is_private.eq.false, created_by.eq.${user.id}, id.in((
                      SELECT room_id FROM room_members 
                      WHERE user_id = '${user.id}' AND status = 'accepted'
-                 ))`);
+                 ))`)
+                 .order('created_at', { ascending: false });
      
              if (error) throw error;
              
@@ -35,20 +41,20 @@ export default function RoomList() {
              console.error(err);
          }
      };
+
      useEffect(() => {
           if (!user) return;
 
           const fetchRooms = async () => {
                try {
-                    // Fetch rooms where the user is a member or public rooms
-                   // Modified query to include rooms created by the user
                     const { data: roomsData, error } = await supabase
                         .from('rooms')
                         .select('id, name, is_private, created_by')
                         .or(`is_private.eq.false, created_by.eq.${user.id}, id.in((
                             SELECT room_id FROM room_members 
                             WHERE user_id = '${user.id}' AND status = 'accepted'
-                        ))`);
+                        ))`)
+                        .order('created_at', { ascending: false });
 
                     if (error) {
                          toast.error('Failed to fetch rooms');
@@ -80,6 +86,8 @@ export default function RoomList() {
                supabase.removeChannel(roomChannel);
           };
      }, [user, supabase, setRooms]);
+
+
 
      useEffect(() => {
           if (!user) return;
@@ -172,9 +180,15 @@ export default function RoomList() {
           );
      }
 
+ 
      return (
           <div className="w-64 border-r p-4">
-               <h2 className="text-xl font-bold mb-4">Rooms</h2>
+               <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-xl font-bold">Rooms</h2>
+                    <Button size="sm" onClick={refreshRooms}>
+                         Refresh
+                    </Button>
+               </div>
                <div className="space-y-2">
                     {rooms.map(room => {
                          const participation = userParticipations.find(
@@ -198,9 +212,6 @@ export default function RoomList() {
                                              {room.is_private && ' 🔒'}
                                         </span>
                                    </Button>
-                                    <Button size="sm" onClick={refreshRooms}>
-                                           Refresh
-                                       </Button>
 
                                    {canJoinRoom(room) && (
                                         <Button
