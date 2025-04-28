@@ -2,81 +2,103 @@ import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
-export async function POST(req: NextRequest, { params }: { params: { roomId: string } }) {
-  const supabase = createRouteHandlerClient({ cookies });
-  const { data: { session } } = await supabase.auth.getSession();
+export async function POST(
+  req: NextRequest,
+  { params }: { params: { roomId: string } }
+) {
+  try {
+    const supabase = createRouteHandlerClient({ cookies });
+    const roomId = params.roomId;
 
-  if (!session) {
-    console.error("Unauthorized access attempt");
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+    // Check if user is authenticated
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
-  const { roomId } = params; // Current room ID from URL
-  const requestBody = await req.json();
-  const { userId, status, joined_at } = requestBody;
+    if (sessionError || !session) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
 
-  // Validate inputs
-  if (!roomId || roomId === "undefined") {
-    console.error("Missing or invalid roomId:", roomId);
-    return NextResponse.json({ error: "Invalid room ID" }, { status: 400 });
-  }
-  if (!userId || userId === "undefined") {
-    console.error("Missing or invalid userId:", userId);
-    return NextResponse.json({ error: "Invalid user ID" }, { status: 400 });
-  }
-  if (!["pending", "accepted", "rejected"].includes(status)) {
-    console.error("Invalid status value:", status);
-    return NextResponse.json(
-      { error: "Invalid status value. Use 'pending', 'accepted', or 'rejected'" },
-      { status: 400 }
-    );
-  }
+    // Check if room exists
+    const { data: room, error: roomError } = await supabase
+      .from("rooms")
+      .select("*")
+      .eq("id", roomId)
+      .single();
 
-  // Check if user is already a participant
-  const { data: existingParticipation } = await supabase
-    .from("room_participants")
-    .select("status")
-    .eq("room_id", roomId)
-    .eq("user_id", userId)
-    .single();
+    if (roomError || !room) {
+      return NextResponse.json(
+        { error: "Room not found" },
+        { status: 404 }
+      );
+    }
 
-  if (existingParticipation && existingParticipation.status === "accepted") {
-    return NextResponse.json({ error: "You are already a member of this room" }, { status: 400 });
-  }
+    // Check if user is already a member
+    const { data: existingMember, error: memberError } = await supabase
+      .from("room_participants")
+      .select("*")
+      .eq("room_id", roomId)
+      .eq("user_id", session.user.id)
+      .single();
 
-  // Log for debugging
-  console.log("Received request:", { roomId, userId, status, joined_at });
+    if (existingMember) {
+      return NextResponse.json(
+        { error: "Already a member of this room", status: existingMember.status },
+        { status: 400 }
+      );
+    }
 
-  // Check if room exists (subject to RLS)
-  const { data: roomExists, error: roomError } = await supabase
-    .from("rooms")
-    .select("id")
-    .eq("id", roomId)
-    .single();
+    // Add user to room_participants
+    const { data: participant, error: participantError } = await supabase
+      .from("room_participants")
+      .insert([
+        {
+          room_id: roomId,
+          user_id: session.user.id,
+          status: room.is_private ? "pending" : "accepted",
+          joined_at: new Date().toISOString(),
+        },
+      ])
+      .select()
+      .single();
 
-  if (roomError || !roomExists) {
-    console.error("Room lookup failed:", { roomId, error: roomError?.message });
-    return NextResponse.json({ error: "Room not found" }, { status: 404 });
-  }
+    if (participantError) {
+      console.error("Error joining room:", participantError);
+      return NextResponse.json(
+        { error: "Failed to join room" },
+        { status: 500 }
+      );
+    }
 
-  // Insert participant record
-  const { error: insertError } = await supabase
-    .from("room_participants")
-    .insert({
-      room_id: roomId,
-      user_id: userId,
-      status,
-      joined_at: joined_at || new Date().toISOString(),
+    // If room is not private, also add to room_members
+    if (!room.is_private) {
+      const { error: membershipError } = await supabase
+        .from("room_members")
+        .insert([
+          {
+            room_id: roomId,
+            user_id: session.user.id,
+            active: false,
+          },
+        ]);
+
+      if (membershipError) {
+        console.error("Error adding to room_members:", membershipError);
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      status: participant.status,
+      message: room.is_private ? "Join request sent" : "Joined room successfully",
     });
 
-  if (insertError) {
-    console.error("Insert error:", { message: insertError.message, details: insertError.details });
+  } catch (error) {
+    console.error("Server error:", error);
     return NextResponse.json(
-      { error: "Failed to join room", details: insertError.message },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }
-
-  console.log("Successfully joined room:", { roomId, userId, status });
-  return NextResponse.json({ success: true, status, message: "Joined room successfully" });
 }
