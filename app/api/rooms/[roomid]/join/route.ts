@@ -12,12 +12,8 @@ export async function POST(
 
     // Check if user is authenticated
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-
     if (sessionError || !session) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     // Check if room exists
@@ -26,12 +22,8 @@ export async function POST(
       .select("*")
       .eq("id", roomId)
       .single();
-
     if (roomError || !room) {
-      return NextResponse.json(
-        { error: "Room not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Room not found" }, { status: 404 });
     }
 
     // Check if user is already a member
@@ -41,10 +33,9 @@ export async function POST(
       .eq("room_id", roomId)
       .eq("user_id", session.user.id)
       .single();
-
     if (existingMember) {
       return NextResponse.json(
-        { error: "Already a member of this room", status: existingMember.status },
+        { error: "Already a member or request pending", status: existingMember.status },
         { status: 400 }
       );
     }
@@ -62,16 +53,41 @@ export async function POST(
       ])
       .select()
       .single();
-
     if (participantError) {
       console.error("Error joining room:", participantError);
-      return NextResponse.json(
-        { error: "Failed to join room" },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: "Failed to join room" }, { status: 500 });
     }
 
-    // If room is not private, also add to room_members
+    // If private room, send notification to creator
+    if (room.is_private) {
+      const { data: creator, error: creatorError } = await supabase
+        .from("users")
+        .select("username")
+        .eq("id", session.user.id)
+        .single();
+      if (creatorError) {
+        console.error("Error fetching creator:", creatorError);
+      }
+
+      const message = `${creator?.username || "A user"} requested to join ${room.name}`;
+      const { error: notificationError } = await supabase
+        .from("notifications")
+        .insert([
+          {
+            user_id: room.created_by,
+            type: "join_request",
+            room_id: roomId,
+            sender_id: session.user.id,
+            message,
+            status: "unread",
+          },
+        ]);
+      if (notificationError) {
+        console.error("Error sending notification:", notificationError);
+      }
+    }
+
+    // If room is not private, add to room_members and switch to the room
     if (!room.is_private) {
       const { error: membershipError } = await supabase
         .from("room_members")
@@ -79,13 +95,19 @@ export async function POST(
           {
             room_id: roomId,
             user_id: session.user.id,
-            active: false,
+            active: true,
           },
         ]);
-
       if (membershipError) {
         console.error("Error adding to room_members:", membershipError);
       }
+
+      // Set other rooms as inactive
+      await supabase
+        .from("room_members")
+        .update({ active: false })
+        .eq("user_id", session.user.id)
+        .neq("room_id", roomId);
     }
 
     return NextResponse.json({
@@ -93,12 +115,8 @@ export async function POST(
       status: participant.status,
       message: room.is_private ? "Join request sent" : "Joined room successfully",
     });
-
   } catch (error) {
     console.error("Server error:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
