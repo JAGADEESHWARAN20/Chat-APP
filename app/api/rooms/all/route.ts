@@ -3,6 +3,11 @@ import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
+interface RoomParticipant {
+  user_id: string;
+  status: 'pending' | 'accepted' | 'rejected';
+}
+
 export async function GET(req: NextRequest) {
   const supabase = createRouteHandlerClient({ cookies });
 
@@ -42,10 +47,10 @@ export async function GET(req: NextRequest) {
 
     // Process the rooms data to include additional information
     const processedRooms = rooms.map(room => {
-      const participants = room.room_participants || [];
+     const participants: RoomParticipant[] = room.room_participants || [];
       const messageCount = room.messages?.[0]?.count || 0;
       const isUserMember = participants.some(
-        participant => 
+        (participant: RoomParticipant) => 
           participant.user_id === session.user.id && 
           participant.status === 'accepted'
       );
