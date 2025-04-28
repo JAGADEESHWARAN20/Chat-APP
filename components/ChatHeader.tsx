@@ -91,7 +91,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         .select(`
           *,
           rooms (name),
-          users:users!notifications_sender_id_fkey (username)
+          users!notifications_sender_id_fkey (username)
         `)
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
@@ -101,7 +101,8 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         return;
       }
       if (isMounted.current) {
-        setNotifications(data as Notification[]);
+        // Safer type assertion
+        setNotifications(data as unknown as Notification[]);
         data?.forEach((notif) => {
           if (notif.status === "unread") {
             toast.info(notif.message);
