@@ -88,7 +88,11 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     try {
       const { data, error } = await supabase
         .from("notifications")
-        .select("*, rooms(name), users!sender_id(username)")
+        .select(`
+          *,
+          rooms (name),
+          users:users!notifications_sender_id_fkey (username)
+        `)
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
       if (error) {
@@ -97,7 +101,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         return;
       }
       if (isMounted.current) {
-        setNotifications(data as Notification[]); // Type assertion to match Database type
+        setNotifications(data as Notification[]);
         data?.forEach((notif) => {
           if (notif.status === "unread") {
             toast.info(notif.message);
