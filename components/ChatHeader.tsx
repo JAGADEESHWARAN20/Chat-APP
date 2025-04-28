@@ -42,15 +42,7 @@ import { useDebounce } from "use-debounce";
 type UserProfile = Database["public"]["Tables"]["users"]["Row"];
 type Room = Database["public"]["Tables"]["rooms"]["Row"];
 type SearchResult = UserProfile | Room;
-type Notification = {
-  id: string;
-  user_id: string;
-  type: "join_request" | "user_joined" | "user_left";
-  room_id: string;
-  sender_id: string;
-  message: string;
-  status: "unread" | "read";
-  created_at: string;
+type Notification = Database["public"]["Tables"]["notifications"]["Row"] & {
   rooms?: { name: string };
   users?: { username: string };
 };
@@ -105,7 +97,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         return;
       }
       if (isMounted.current) {
-        setNotifications(data || []);
+        setNotifications(data as Notification[]); // Type assertion to match Database type
         data?.forEach((notif) => {
           if (notif.status === "unread") {
             toast.info(notif.message);
@@ -116,7 +108,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       console.error("Error fetching notifications:", error);
       toast.error("Failed to fetch notifications");
     }
-  }, [user]);
+  }, [user, supabase]);
 
   const handleRoomSwitch = async (room: Room) => {
     if (!user) {
@@ -207,7 +199,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
           const results: Room[] = debouncedSearchQuery.trim()
             ? data.rooms || []
             : data.rooms || [];
-          // Check membership for each room
           const resultsWithMembership = await Promise.all(
             results.map(async (room) => ({
               ...room,
