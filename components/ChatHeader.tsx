@@ -84,36 +84,59 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   );
 
   const fetchNotifications = useCallback(async () => {
-    if (!user) return;
-    try {
-      const { data, error } = await supabase
-        .from("notifications")
-        .select(`
-          *,
-          rooms (name),
-          users!notifications_sender_id_fkey (username)
-        `)
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
-      if (error) {
-        console.error("Error fetching notifications:", error);
-        toast.error("Failed to fetch notifications");
-        return;
-      }
-      if (isMounted.current) {
-        // Safer type assertion
-        setNotifications(data as unknown as Notification[]);
-        data?.forEach((notif) => {
-          if (notif.status === "unread") {
-            toast.info(notif.message);
+      if (!user) return;
+      try {
+        const { data: notificationsData, error: notificationsError } = await supabase
+          .from("notifications")
+          .select(`
+            *,
+            rooms (name)
+          `)
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false });
+        if (notificationsError) {
+          console.error("Error fetching notifications:", notificationsError);
+          toast.error("Failed to fetch notifications");
+          return;
+        }
+    
+        // Fetch usernames for sender_id
+        const senderIds = notificationsData
+          ?.filter((notif) => notif.sender_id)
+          .map((notif) => notif.sender_id) as string[];
+        let usersMap: Record<string, { username: string }> = {};
+        if (senderIds?.length) {
+          const { data: usersData, error: usersError } = await supabase
+            .from("users")
+            .select("id, username")
+            .in("id", senderIds);
+          if (usersError) {
+            console.error("Error fetching users:", usersError);
+          } else {
+            usersMap = usersData.reduce(
+              (acc, user) => ({ ...acc, [user.id]: { username: user.username } }),
+              {}
+            );
           }
-        });
-      }
-    } catch (error) {
-      console.error("Error fetching notifications:", error);
-      toast.error("Failed to fetch notifications");
+        }
+
+    if (isMounted.current) {
+      const enrichedNotifications = notificationsData.map((notif) => ({
+        ...notif,
+        users: notif.sender_id ? usersMap[notif.sender_id] : undefined,
+      }));
+      setNotifications(enrichedNotifications as Notification[]);
+      enrichedNotifications.forEach((notif) => {
+        if (notif.status === "unread") {
+          toast.info(notif.message);
+        }
+      });
     }
-  }, [user, supabase]);
+  } catch (error) {
+    console.error("Error fetching notifications:", error);
+    toast.error("Failed to fetch notifications");
+  }
+}, [user, supabase]);
 
   const handleRoomSwitch = async (room: Room) => {
     if (!user) {
