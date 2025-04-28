@@ -13,20 +13,42 @@ export default function RoomList() {
      const { rooms, setRooms, selectedRoom, setSelectedRoom } = useRoomStore();
      const supabase = supabaseBrowser();
      const user = useUser((state) => state.user);
-
+     
+     const refreshRooms = async () => {
+         try {
+             const { data: roomsData, error } = await supabase
+                 .from('rooms')
+                 .select('id, name, is_private, created_by')
+                 .or(`is_private.eq.false, created_by.eq.${user.id}, id.in((
+                     SELECT room_id FROM room_members 
+                     WHERE user_id = '${user.id}' AND status = 'accepted'
+                 ))`);
+     
+             if (error) throw error;
+             
+             if (roomsData) {
+                 setRooms(roomsData as IRoom[]);
+                 toast.success('Rooms refreshed');
+             }
+         } catch (err) {
+             toast.error('Failed to refresh rooms');
+             console.error(err);
+         }
+     };
      useEffect(() => {
           if (!user) return;
 
           const fetchRooms = async () => {
                try {
                     // Fetch rooms where the user is a member or public rooms
+                   // Modified query to include rooms created by the user
                     const { data: roomsData, error } = await supabase
-                         .from('rooms')
-                         .select('id, name, is_private, created_by')
-                         .or(`is_private.eq.false, id.in((
-                        SELECT room_id FROM room_members 
-                        WHERE user_id = '${user.id}' AND status = 'accepted'
-                    ))`);
+                        .from('rooms')
+                        .select('id, name, is_private, created_by')
+                        .or(`is_private.eq.false, created_by.eq.${user.id}, id.in((
+                            SELECT room_id FROM room_members 
+                            WHERE user_id = '${user.id}' AND status = 'accepted'
+                        ))`);
 
                     if (error) {
                          toast.error('Failed to fetch rooms');
@@ -176,6 +198,9 @@ export default function RoomList() {
                                              {room.is_private && ' 🔒'}
                                         </span>
                                    </Button>
+                                    <Button size="sm" onClick={refreshRooms}>
+                                           Refresh
+                                       </Button>
 
                                    {canJoinRoom(room) && (
                                         <Button
