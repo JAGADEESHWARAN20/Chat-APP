@@ -7,12 +7,69 @@ import { Button } from './ui/button';
 import { toast } from 'sonner';
 import { useUser } from '@/lib/store/user';
 import { IRoom, IRoomParticipant } from '@/lib/types/rooms';
+import { ArrowRight, LogOut } from 'lucide-react';
 
 export default function RoomList() {
      const [userParticipations, setUserParticipations] = useState<IRoomParticipant[]>([]);
      const { rooms, setRooms, selectedRoom, setSelectedRoom } = useRoomStore();
      const supabase = supabaseBrowser();
      const user = useUser((state) => state.user);
+     
+     const handleRoomSwitch = async (room: IRoom) => {
+          if (!user) {
+               toast.error('You must be logged in to switch rooms');
+               return;
+          }
+
+          try {
+               // First, set the selected room in UI to give immediate feedback
+               setSelectedRoom(room);
+
+               // Then update the active room in room_members table
+               const { error } = await supabase
+                    .from('room_members')
+                    .update({ active: true })
+                    .eq('user_id', user.id)
+                    .eq('room_id', room.id);
+
+               if (error) throw error;
+
+               // Set other rooms as inactive
+               await supabase
+                    .from('room_members')
+                    .update({ active: false })
+                    .eq('user_id', user.id)
+                    .neq('room_id', room.id);
+
+               toast.success(`Switched to ${room.name}`);
+          } catch (err) {
+               toast.error('Failed to switch room');
+               console.error(err);
+          }
+     };
+
+     const handleLeaveRoom = async (roomId: string) => {
+          if (!user) {
+               toast.error('You must be logged in to leave a room');
+               return;
+          }
+          
+          try {
+               const response = await fetch(`/api/rooms/${roomId}/leave`, {
+                    method: 'POST',
+               });
+
+               if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to leave room');
+               }
+
+               toast.success('Left room successfully');
+               refreshRooms(); // Refresh the room list after leaving
+          } catch (error) {
+               toast.error(error instanceof Error ? error.message : 'Failed to leave room');
+          }
+     };
      
      const refreshRooms = async () => {
          if (!user) {
@@ -57,7 +114,27 @@ export default function RoomList() {
                }
           };
 
-          fetchRooms();
+          // Add this function to set initial active room
+          const initializeActiveRoom = async () => {
+               const { data, error } = await supabase
+                    .from('room_members')
+                    .select('room_id')
+                    .eq('user_id', user.id)
+                    .eq('active', true)
+                    .single();
+
+               if (data) {
+                    const activeRoom = rooms.find(r => r.id === data.room_id);
+                    if (activeRoom) {
+                         setSelectedRoom(activeRoom);
+                    }
+               }
+          };
+
+          // Call it after fetching rooms
+          fetchRooms().then(() => {
+               initializeActiveRoom();
+          });
 
           const roomChannel = supabase
                .channel('room_changes')
@@ -71,7 +148,7 @@ export default function RoomList() {
           return () => {
                supabase.removeChannel(roomChannel);
           };
-     }, [user, supabase, setRooms]);
+     }, [user, supabase, setRooms, rooms]);
 
      useEffect(() => {
           if (!user) return;
@@ -171,31 +248,46 @@ export default function RoomList() {
                          const participation = userParticipations.find(
                               p => p.room_id === room.id
                          );
+                         const isMember = participation?.status === 'accepted';
 
                          return (
-                              <div key={room.id} className="flex justify-between items-center">
+                              <div key={room.id} className="flex justify-between items-center gap-2">
                                    <Button
                                         variant={selectedRoom?.id === room.id ? 'secondary' : 'ghost'}
                                         className="w-full justify-start"
                                         onClick={() => {
-                                             if (participation?.status === 'accepted') {
-                                                  setSelectedRoom(room);
+                                             if (isMember) {
+                                                  handleRoomSwitch(room);
                                              }
                                         }}
-                                        disabled={!participation || participation.status !== 'accepted'}
+                                        disabled={!isMember}
                                    >
-                                        <span className="truncate">
+                                        <span className="truncate flex items-center gap-2">
                                              {room.name}
                                              {room.is_private && ' 🔒'}
+                                             {isMember && (
+                                                  <ArrowRight className="h-4 w-4" />
+                                             )}
                                         </span>
                                    </Button>
 
-                                   {canJoinRoom(room) && (
+                                   {!isMember && !participation?.status && (
                                         <Button
                                              size="sm"
                                              onClick={() => handleJoinRoom(room.id)}
                                         >
                                              Join
+                                        </Button>
+                                   )}
+
+                                   {isMember && (
+                                        <Button
+                                             size="sm"
+                                             variant="destructive"
+                                             onClick={() => handleLeaveRoom(room.id)}
+                                             className="bg-red-600 hover:bg-red-700"
+                                        >
+                                             <LogOut className="h-4 w-4" />
                                         </Button>
                                    )}
 
