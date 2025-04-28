@@ -7,6 +7,31 @@ export type Json =
   | Json[]
 
 export type Database = {
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          operationName?: string
+          query?: string
+          variables?: Json
+          extensions?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       direct_chats: {
@@ -156,18 +181,21 @@ export type Database = {
       }
       room_members: {
         Row: {
+          active: boolean | null
           joined_at: string | null
           room_id: string
           status: string | null
           user_id: string
         }
         Insert: {
+          active?: boolean | null
           joined_at?: string | null
           room_id: string
           status?: string | null
           user_id: string
         }
         Update: {
+          active?: boolean | null
           joined_at?: string | null
           room_id?: string
           status?: string | null
@@ -389,6 +417,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },
