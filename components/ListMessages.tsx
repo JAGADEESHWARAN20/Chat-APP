@@ -55,15 +55,15 @@ export default function ListMessages() {
 				const { data: messagesData, error } = await supabase
 					.from("messages")
 					.select(`
-                        *,
-                        users (
-                            id,
-                            username,
-                            avatar_url,
-                            display_name,
-                            created_at
-                        )
-                    `)
+						*,
+						users (
+						    id,
+						    username,
+						    avatar_url,
+						    display_name,
+						    created_at
+						)
+					    `)
 					.eq('room_id', selectedRoom.id)
 					.order('created_at', { ascending: false })
 					.limit(LIMIT_MESSAGE);
