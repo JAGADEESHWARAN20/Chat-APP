@@ -212,9 +212,15 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         throw new Error(error.error || "Failed to leave room");
       }
 
+      const { hasOtherRooms } = await response.json();
       toast.success("Left room successfully");
-      setSelectedRoom(null);
-      await fetchAvailableRooms();
+      if (!hasOtherRooms) {
+        setSelectedRoom(null); // No rooms left, show ChatAbout
+      } else {
+        // Fetch available rooms to update selectedRoom
+        await fetchAvailableRooms();
+        // The WebSocket in useEffect will set the new active room
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to leave room");
     } finally {
@@ -319,6 +325,14 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
               setSelectedRoom(room);
             }
           }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "room_members", filter: `user_id=eq.${user?.id}` },
+        async () => {
+          // Re-fetch available rooms after a deletion
+          await fetchAvailableRooms();
         }
       )
       .subscribe((status) => {
@@ -775,8 +789,8 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
           ) : (
             <Button onClick={handleLoginWithGithub}>Login</Button>
           )}
+        </div>
       </div>
     </div>
-    </div >
   );
 }

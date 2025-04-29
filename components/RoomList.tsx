@@ -45,20 +45,17 @@ export default function RoomList() {
     }
 
     try {
+      const response = await fetch("/api/rooms/switch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roomId: room.id }),
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to switch room");
+      }
+
       setSelectedRoom(room);
-      const { error } = await supabase
-        .from("room_members")
-        .update({ active: true })
-        .eq("user_id", user.id)
-        .eq("room_id", room.id);
-      if (error) throw error;
-
-      await supabase
-        .from("room_members")
-        .update({ active: false })
-        .eq("user_id", user.id)
-        .neq("room_id", room.id);
-
       toast.success(`Switched to ${room.name}`);
     } catch (err) {
       toast.error("Failed to switch room");
@@ -81,7 +78,11 @@ export default function RoomList() {
         throw new Error(errorData.error || "Failed to leave room");
       }
 
+      const { hasOtherRooms } = await response.json();
       toast.success("Left room successfully");
+      if (!hasOtherRooms) {
+        setSelectedRoom(null); // No rooms left, show ChatAbout
+      }
       await refreshRooms();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to leave room");
@@ -174,7 +175,6 @@ export default function RoomList() {
     return () => {
       supabase.removeChannel(roomChannel);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, supabase, setRooms, setSelectedRoom]);
 
   useEffect(() => {
