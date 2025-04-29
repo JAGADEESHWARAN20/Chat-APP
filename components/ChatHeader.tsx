@@ -190,6 +190,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       setSelectedRoom(room);
       setIsSwitchRoomPopoverOpen(false);
       toast.success(`Switched to ${room.name}`);
+      await fetchAvailableRooms(); // Refresh room list
     } catch (err) {
       toast.error("Failed to switch room");
       console.error(err);
@@ -215,11 +216,9 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       const { hasOtherRooms } = await response.json();
       toast.success("Left room successfully");
       if (!hasOtherRooms) {
-        setSelectedRoom(null); // No rooms left, show ChatAbout
+        setSelectedRoom(null); // Show ChatAbout if no rooms left
       } else {
-        // Fetch available rooms to update selectedRoom
-        await fetchAvailableRooms();
-        // The WebSocket in useEffect will set the new active room
+        await fetchAvailableRooms(); // Refresh to update active room
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to leave room");
@@ -331,7 +330,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         "postgres_changes",
         { event: "DELETE", schema: "public", table: "room_members", filter: `user_id=eq.${user?.id}` },
         async () => {
-          // Re-fetch available rooms after a deletion
           await fetchAvailableRooms();
         }
       )
@@ -498,15 +496,15 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 
   return (
     <div className="h-20">
-      <div className="p-5 border-b flex items-center justify-between h-full">
-        <div>
-          <h1 className="text-xl font-bold">
+      <div className="p-5 border-b flex items-center justify-between h-full flex-row">
+        <div className="flex items-center">
+          <h1 className="text-xl font-bold mr-4">
             {selectedRoom ? selectedRoom.name : "Daily Chat"}
           </h1>
           <ChatPresence />
         </div>
 
-        <div>
+        <div className="flex items-center space-x-2">
           {user && (
             <>
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
