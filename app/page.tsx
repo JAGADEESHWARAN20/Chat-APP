@@ -3,9 +3,9 @@ import ChatHeader from "@/components/ChatHeader";
 import { supabaseServer } from "@/lib/supabase/server";
 import InitUser from "@/lib/store/InitUser";
 import ChatInput from "@/components/ChatInput";
-import ListMessages from "@/components/ListMessages";
 import ChatMessages from "@/components/ChatMessages";
 import ChatAbout from "@/components/ChatAbout";
+import { useRoomStore } from "@/lib/store/roomstore";
 
 export default async function Page() {
 	const supabase = supabaseServer();
@@ -14,14 +14,21 @@ export default async function Page() {
 	return (
 		<>
 			<div className="max-w-3xl mx-auto md:py-10 h-screen">
-				<div className=" h-full border rounded-md flex flex-col relative">
+				<div className="h-full border rounded-md flex flex-col relative">
 					<ChatHeader user={data.session?.user} />
-
 					{data.session?.user ? (
-						<>
-							<ChatMessages />
-							<ChatInput />
-						</>
+						<RoomStoreWrapper>
+							{(selectedRoom) =>
+								selectedRoom ? (
+									<>
+										<ChatMessages />
+										<ChatInput />
+									</>
+								) : (
+									<ChatAbout />
+								)
+							}
+						</RoomStoreWrapper>
 					) : (
 						<ChatAbout />
 					)}
@@ -30,4 +37,9 @@ export default async function Page() {
 			<InitUser user={data.session?.user} />
 		</>
 	);
+}
+
+function RoomStoreWrapper({ children }: { children: (selectedRoom: any) => React.ReactNode }) {
+	const selectedRoom = useRoomStore((state) => state.selectedRoom);
+	return <>{children(selectedRoom)}</>;
 }
