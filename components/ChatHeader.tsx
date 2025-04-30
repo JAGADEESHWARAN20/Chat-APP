@@ -245,25 +245,18 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     }
 
     try {
-      // Mark notification as read via API
-      const response = await fetch(`/api/notifications/${notification.id}/read`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to mark notification as read");
-      }
+      // Mark notification as read
+      const { error: updateError } = await supabase
+        .from("notifications")
+        .update({ status: "read" })
+        .eq("id", notification.id);
+      if (updateError) throw updateError;
 
-      // Fetch the room details, handle null room_id
-      if (!notification.room_id) {
-        throw new Error("No room associated with this notification");
-      }
-
+      // Fetch the room details
       const { data: room, error: roomError } = await supabase
         .from("rooms")
         .select("*")
-        .eq("id", notification.room_id) // Safe to use since we checked for null
+        .eq("id", notification.room_id)
         .single();
       if (roomError || !room) throw new Error("Room not found");
 
@@ -473,51 +466,44 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     }
   };
 
-  const renderRoomSearchResult = (result: Room & { isMember: boolean }) => {
-    if (!result.id || !result.name) {
-      console.error("Invalid room object in search results:", result);
-      return null; // Skip rendering invalid results
-    }
-
-    return (
-      <li key={result.id} className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold">
-            {result.name} {result.is_private && "🔒"}
-          </span>
-        </div>
-        {selectedRoom?.id === result.id && result.isMember ? (
-          <Button
-            size="sm"
-            variant="destructive"
-            onClick={handleLeaveRoom}
-            className="bg-red-600 hover:bg-red-700"
-            disabled={isLeaving}
-          >
-            <LogOut className="h-4 w-4" />
-          </Button>
-        ) : result.isMember ? (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => handleRoomSwitch({ ...result, id: result.id } as Room)} // Explicitly pass as Room
-            className="flex items-center gap-1"
-          >
-            <ArrowRight className="h-4 w-4" />
-            Switch
-          </Button>
-        ) : (
-          <Button
-            size="sm"
-            onClick={() => handleJoinRoom(result.id)}
-            disabled={!user}
-          >
-            Join
-          </Button>
-        )}
-      </li>
-    );
-  };
+  const renderRoomSearchResult = (result: Room & { isMember: boolean }) => (
+    <li key={result.id} className="flex items-center justify-between">
+      <div className="flex items-center gap-2">
+        <span className="text-sm font-semibold">
+          {result.name} {result.is_private && "🔒"}
+        </span>
+      </div>
+      {selectedRoom?.id === result.id && result.isMember ? (
+        <Button
+          size="sm"
+          variant="destructive"
+          onClick={handleLeaveRoom}
+          className="bg-red-600 hover:bg-red-700"
+          disabled={isLeaving}
+        >
+          <LogOut className="h-4 w-4" />
+        </Button>
+      ) : result.isMember ? (
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => handleRoomSwitch(result)}
+          className="flex items-center gap-1"
+        >
+          <ArrowRight className="h-4 w-4" />
+          Switch
+        </Button>
+      ) : (
+        <Button
+          size="sm"
+          onClick={() => handleJoinRoom(result.id)}
+          disabled={!user}
+        >
+          Join
+        </Button>
+      )}
+    </li>
+  );
 
   return (
     <div className="h-20">
