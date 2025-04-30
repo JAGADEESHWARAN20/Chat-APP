@@ -74,13 +74,17 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const checkRoomMembership = useCallback(
     async (roomId: string) => {
       if (!user) return false;
-      const { data } = await supabase
-        .from("room_participants")
-        .select("status")
+      const { data, error } = await supabase
+        .from("room_members")
+        .select("*")
         .eq("room_id", roomId)
         .eq("user_id", user.id)
         .single();
-      return data?.status === "accepted";
+      if (error) {
+        console.error("Error checking room membership:", error);
+        return false;
+      }
+      return !!data;
     },
     [user, supabase]
   );
@@ -185,7 +189,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       setSelectedRoom(room);
       setIsSwitchRoomPopoverOpen(false);
       toast.success(`Switched to ${room.name}`);
-      await fetchAvailableRooms(); // Refresh room list
+      await fetchAvailableRooms();
     } catch (err) {
       toast.error("Failed to switch room");
       console.error(err);
@@ -211,9 +215,9 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       const { hasOtherRooms } = await response.json();
       toast.success("Left room successfully");
       if (!hasOtherRooms) {
-        setSelectedRoom(null); // Show ChatAbout if no rooms left
+        setSelectedRoom(null);
       } else {
-        await fetchAvailableRooms(); // Refresh to update active room
+        await fetchAvailableRooms();
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to leave room");
@@ -245,14 +249,16 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     }
 
     try {
-      // Mark notification as read
       const { error: updateError } = await supabase
         .from("notifications")
         .update({ status: "read" })
         .eq("id", notification.id);
       if (updateError) throw updateError;
 
-      // Fetch the room details
+      if (!notification.room_id) {
+        throw new Error("Notification is missing room_id");
+      }
+
       const { data: room, error: roomError } = await supabase
         .from("rooms")
         .select("*")
@@ -260,7 +266,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         .single();
       if (roomError || !room) throw new Error("Room not found");
 
-      // Switch to the room
       await handleRoomSwitch(room);
       setNotifications((prev) => prev.filter((n) => n.id !== notification.id));
       setIsNotificationsOpen(false);
@@ -321,11 +326,9 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   useEffect(() => {
     if (!user) return;
 
-    // Fetch initial data
     fetchNotifications();
     fetchAvailableRooms();
 
-    // Real-time subscription for new notifications
     const notificationChannel = supabase
       .channel("notifications")
       .on(
@@ -338,7 +341,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         },
         (payload) => {
           const newNotification = payload.new as Notification;
-          setNotifications((prev) => [newNotification, ...prev].slice(0, 10)); // Limit to 10 notifications
+          setNotifications((prev) => [newNotification, ...prev].slice(0, 10));
           if (newNotification.status === "unread") {
             toast.info(newNotification.message);
           }
@@ -350,7 +353,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         }
       });
 
-    // Cleanup subscription
     return () => {
       supabase.removeChannel(notificationChannel);
     };
@@ -365,6 +367,8 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   useEffect(() => {
     if (selectedRoom && user) {
       checkRoomMembership(selectedRoom.id).then(setIsMember);
+    } else {
+      setIsMember(false);
     }
   }, [selectedRoom, user, checkRoomMembership]);
 
@@ -452,14 +456,16 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       const data = await response.json();
       toast.success(data.message);
       if (!data.status || data.status === "accepted") {
-        const { data: room } = await supabase
+        const { data: room, error: roomError } = await supabase
           .from("rooms")
           .select("*")
           .eq("id", currentRoomId)
           .single();
-        if (room) {
-          await handleRoomSwitch(room);
+        if (roomError || !room) {
+          throw new Error("Failed to fetch room details");
         }
+        setSelectedRoom(room);
+        await fetchAvailableRooms();
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to join room");
