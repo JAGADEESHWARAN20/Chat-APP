@@ -74,12 +74,16 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const checkRoomMembership = useCallback(
     async (roomId: string) => {
       if (!user) return false;
-      const { data } = await supabase
-        .from("room_members")
+      const { data, error } = await supabase
+        .from("room_members") // Use room_members instead of room_participants
         .select("*")
         .eq("room_id", roomId)
         .eq("user_id", user.id)
         .single();
+      if (error) {
+        console.error("Error checking room membership:", error);
+        return false; // Return false if the query fails
+      }
       return !!data; // Return true if an entry exists in room_members
     },
     [user, supabase]
