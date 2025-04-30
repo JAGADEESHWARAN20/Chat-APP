@@ -75,16 +75,16 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     async (roomId: string) => {
       if (!user) return false;
       const { data, error } = await supabase
-        .from("room_participents")
+        .from("room_participants")
         .select("status")
         .eq("room_id", roomId)
         .eq("user_id", user.id)
         .single();
-      if (error) {
+      if (error && error.code !== "PGRST116") {
         console.error("Error checking room membership:", error);
         return false;
       }
-      return !!data;
+      return data?.status === "accepted";
     },
     [user, supabase]
   );
@@ -93,9 +93,10 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     if (!user) return;
     try {
       const { data: roomsData, error } = await supabase
-        .from("room_members")
+        .from("room_participants")
         .select("rooms(*)")
-        .eq("user_id", user.id);
+        .eq("user_id", user.id)
+        .eq("status", "accepted");
       if (error) {
         console.error("Error fetching rooms:", error);
         toast.error("Failed to fetch rooms");
@@ -330,7 +331,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     fetchAvailableRooms();
 
     const notificationChannel = supabase
-      .channel("notifications")
+      .channel(`notifications:${user.id}`)
       .on(
         "postgres_changes",
         {
@@ -341,15 +342,55 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         },
         (payload) => {
           const newNotification = payload.new as Notification;
-          setNotifications((prev) => [newNotification, ...prev].slice(0, 10));
+          setNotifications((prev) => {
+            const updated = [newNotification, ...prev].slice(0, 10);
+            return updated;
+          });
           if (newNotification.status === "unread") {
             toast.info(newNotification.message);
           }
         }
       )
-      .subscribe((status) => {
-        if (status === "CLOSED") {
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          const updatedNotification = payload.new as Notification;
+          setNotifications((prev) =>
+            prev.map((notif) =>
+              notif.id === updatedNotification.id ? updatedNotification : notif
+            )
+          );
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          const deletedNotification = payload.old as Notification;
+          setNotifications((prev) =>
+            prev.filter((notif) => notif.id !== deletedNotification.id)
+          );
+        }
+      )
+      .subscribe((status, err) => {
+        if (status === "SUBSCRIBED") {
+          console.log("Subscribed to notifications channel");
+        } else if (status === "CLOSED") {
           toast.error("Notification subscription closed");
+        } else if (status === "CHANNEL_ERROR") {
+          console.error("Notification channel error:", err);
+          toast.error("Error in notification subscription");
         }
       });
 
