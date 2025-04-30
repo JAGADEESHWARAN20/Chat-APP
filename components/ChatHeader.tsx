@@ -75,8 +75,8 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     async (roomId: string) => {
       if (!user) return false;
       const { data, error } = await supabase
-        .from("room_members")
-        .select("*")
+        .from("room_participents")
+        .select("status")
         .eq("room_id", roomId)
         .eq("user_id", user.id)
         .single();
