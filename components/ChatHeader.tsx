@@ -255,11 +255,15 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         throw new Error(error.error || "Failed to mark notification as read");
       }
 
-      // Fetch the room details
+      // Fetch the room details, handle null room_id
+      if (!notification.room_id) {
+        throw new Error("No room associated with this notification");
+      }
+
       const { data: room, error: roomError } = await supabase
         .from("rooms")
         .select("*")
-        .eq("id", notification.room_id)
+        .eq("id", notification.room_id) // Safe to use since we checked for null
         .single();
       if (roomError || !room) throw new Error("Room not found");
 
