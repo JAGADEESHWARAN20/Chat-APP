@@ -180,20 +180,22 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       const response = await fetch("/api/rooms/switch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roomId: room.id }),
+        body: JSON.stringify({ roomId: room.id }), // Ensure roomId is sent
       });
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.error || "Failed to switch room");
       }
 
+      const data = await response.json(); // Capture the response data
       setSelectedRoom(room);
       setIsSwitchRoomPopoverOpen(false);
       toast.success(`Switched to ${room.name}`);
-      await fetchAvailableRooms();
+      await fetchAvailableRooms(); // Refresh room list
     } catch (err) {
-      toast.error("Failed to switch room");
-      console.error(err);
+      const errorMessage = err instanceof Error ? err.message : "Failed to switch room";
+      toast.error(errorMessage);
+      console.error("Switch room error:", err);
     }
   };
 

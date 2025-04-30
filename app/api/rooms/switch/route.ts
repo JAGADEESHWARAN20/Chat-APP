@@ -14,21 +14,77 @@ export async function POST(req: NextRequest) {
                return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
           }
 
-          // Check membership
+          // Check membership in room_members
           const { data: membership, error: membershipError } = await supabase
                .from("room_members")
                .select("*")
                .eq("room_id", roomId)
                .eq("user_id", session.user.id)
                .single();
-          if (membershipError || !membership) {
-               console.error("Membership error:", membershipError?.message || "No membership found");
-               return NextResponse.json({ error: "You are not a member of this room" }, { status: 404 });
+          if (membershipError && membershipError.code !== "PGRST116") {
+               console.error("Membership error:", membershipError?.message);
+               return NextResponse.json({ error: "Failed to check membership" }, { status: 500 });
+          }
+
+          // If not in room_members, check room_participants and sync if necessary
+          if (!membership) {
+               const { data: participant, error: participantError } = await supabase
+                    .from("room_participants")
+                    .select("status")
+                    .eq("room_id", roomId)
+                    .eq("user_id", session.user.id)
+                    .single();
+               if (participantError && participantError.code !== "PGRST116") {
+                    console.error("Participant error:", participantError?.message);
+                    return NextResponse.json({ error: "Failed to check participant status" }, { status: 500 });
+               }
+               if (!participant || participant.status !== "accepted") {
+                    return NextResponse.json({ error: "You are not a member of this room" }, { status: 404 });
+               }
+
+               // Sync with room_members for public rooms
+               const { data: room, error: roomError } = await supabase
+                    .from("rooms")
+                    .select("is_private")
+                    .eq("id", roomId)
+                    .single();
+               if (roomError || !room) {
+                    return NextResponse.json({ error: "Room not found" }, { status: 404 });
+               }
+
+               if (!room.is_private) {
+                    // Deactivate all other rooms
+                    const { error: deactivateError } = await supabase
+                         .from("room_members")
+                         .update({ active: false })
+                         .eq("user_id", session.user.id);
+                    if (deactivateError) {
+                         console.error("Error deactivating other rooms:", deactivateError.message);
+                    }
+
+                    // Add to room_members
+                    const { error: membershipError } = await supabase
+                         .from("room_members")
+                         .upsert(
+                              [
+                                   {
+                                        room_id: roomId,
+                                        user_id: session.user.id,
+                                        active: true,
+                                   },
+                              ],
+                              { onConflict: "room_id,user_id" }
+                         );
+                    if (membershipError) {
+                         console.error("Error adding to room_members:", membershipError.message);
+                         return NextResponse.json({ error: "Failed to sync membership" }, { status: 500 });
+                    }
+               }
           }
 
           // Transaction to manage active room
           const transaction = async () => {
-               // Step 1: Deactivate all other rooms for the user
+               // Deactivate all other rooms for the user
                const { error: deactivateError } = await supabase
                     .from("room_members")
                     .update({ active: false })
@@ -39,7 +95,7 @@ export async function POST(req: NextRequest) {
                     throw new Error(`Failed to deactivate other rooms: ${deactivateError.message}`);
                }
 
-               // Step 2: Activate the selected room
+               // Activate the selected room
                const { error: activateError } = await supabase
                     .from("room_members")
                     .update({ active: true })
@@ -50,7 +106,7 @@ export async function POST(req: NextRequest) {
                     throw new Error(`Failed to activate room: ${activateError.message}`);
                }
 
-               // Step 3: Fetch the currently active room
+               // Fetch the currently active room
                const { data: currentRoom, error: currentRoomError } = await supabase
                     .from("room_members")
                     .select("room_id")
@@ -62,7 +118,7 @@ export async function POST(req: NextRequest) {
                     throw new Error("No active room found after switch");
                }
 
-               // Step 4: Fetch room details
+               // Fetch room details
                const { data: room, error: roomError } = await supabase
                     .from("rooms")
                     .select("name, created_by")
@@ -73,7 +129,7 @@ export async function POST(req: NextRequest) {
                     throw new Error("Room not found");
                }
 
-               // Step 5: Send notification to room creator
+               // Send notification to room creator
                const { data: user, error: userError } = await supabase
                     .from("users")
                     .select("username")
