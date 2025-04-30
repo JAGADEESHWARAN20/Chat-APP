@@ -75,12 +75,12 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     async (roomId: string) => {
       if (!user) return false;
       const { data } = await supabase
-        .from("room_participants")
-        .select("status")
+        .from("room_members")
+        .select("*")
         .eq("room_id", roomId)
         .eq("user_id", user.id)
         .single();
-      return data?.status === "accepted";
+      return !!data; // Return true if an entry exists in room_members
     },
     [user, supabase]
   );
