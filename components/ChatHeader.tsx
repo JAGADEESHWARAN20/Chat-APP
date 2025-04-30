@@ -291,11 +291,16 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
           : "/api/rooms/all"
       );
       const data = await response.json();
+      console.log("Search response data:", data);
       if (isMounted.current) {
         if (response.ok) {
-          const results: Room[] = debouncedSearchQuery.trim()
-            ? data.rooms || []
-            : data.rooms || [];
+          const rawResults = Array.isArray(data.rooms) ? data.rooms : [];
+          const results: Room[] = rawResults.map((r: any) => ({
+            id: r.id || "",
+            name: r.name || "Unnamed Room",
+            is_private: r.is_private || false,
+            // Add other required Room properties with defaults if missing
+          }));
           const resultsWithMembership = await Promise.all(
             results.map(async (room) => ({
               ...room,
@@ -473,44 +478,51 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     }
   };
 
-  const renderRoomSearchResult = (result: Room & { isMember: boolean }) => (
-    <li key={result.id} className="flex items-center justify-between">
-      <div className="flex items-center gap-2">
-        <span className="text-sm font-semibold">
-          {result.name} {result.is_private && "🔒"}
-        </span>
-      </div>
-      {selectedRoom?.id === result.id && result.isMember ? (
-        <Button
-          size="sm"
-          variant="destructive"
-          onClick={handleLeaveRoom}
-          className="bg-red-600 hover:bg-red-700"
-          disabled={isLeaving}
-        >
-          <LogOut className="h-4 w-4" />
-        </Button>
-      ) : result.isMember ? (
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => handleRoomSwitch(result)}
-          className="flex items-center gap-1"
-        >
-          <ArrowRight className="h-4 w-4" />
-          Switch
-        </Button>
-      ) : (
-        <Button
-          size="sm"
-          onClick={() => handleJoinRoom(result.id)}
-          disabled={!user}
-        >
-          Join
-        </Button>
-      )}
-    </li>
-  );
+  const renderRoomSearchResult = (result: Room & { isMember: boolean }) => {
+    if (!result.id || !result.name) {
+      console.error("Invalid room object in search results:", result);
+      return null; // Skip rendering invalid results
+    }
+
+    return (
+      <li key={result.id} className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold">
+            {result.name} {result.is_private && "🔒"}
+          </span>
+        </div>
+        {selectedRoom?.id === result.id && result.isMember ? (
+          <Button
+            size="sm"
+            variant="destructive"
+            onClick={handleLeaveRoom}
+            className="bg-red-600 hover:bg-red-700"
+            disabled={isLeaving}
+          >
+            <LogOut className="h-4 w-4" />
+          </Button>
+        ) : result.isMember ? (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => handleRoomSwitch({ ...result, id: result.id } as Room)} // Explicitly pass as Room
+            className="flex items-center gap-1"
+          >
+            <ArrowRight className="h-4 w-4" />
+            Switch
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            onClick={() => handleJoinRoom(result.id)}
+            disabled={!user}
+          >
+            Join
+          </Button>
+        )}
+      </li>
+    );
+  };
 
   return (
     <div className="h-20">
