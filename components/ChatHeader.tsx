@@ -158,11 +158,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
           users: notif.sender_id ? usersMap[notif.sender_id] : undefined,
         }));
         setNotifications(enrichedNotifications as Notification[]);
-        enrichedNotifications.forEach((notif) => {
-          if (notif.status === "unread") {
-            toast.info(notif.message);
-          }
-        });
       }
     } catch (error) {
       console.error("Error fetching notifications:", error);
@@ -243,6 +238,42 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     }
   };
 
+  const handleNotificationClick = async (notification: Notification) => {
+    if (!user) {
+      toast.error("You must be logged in to switch rooms");
+      return;
+    }
+
+    try {
+      // Mark notification as read via API
+      const response = await fetch(`/api/notifications/${notification.id}/read`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to mark notification as read");
+      }
+
+      // Fetch the room details
+      const { data: room, error: roomError } = await supabase
+        .from("rooms")
+        .select("*")
+        .eq("id", notification.room_id)
+        .single();
+      if (roomError || !room) throw new Error("Room not found");
+
+      // Switch to the room
+      await handleRoomSwitch(room);
+      setNotifications((prev) => prev.filter((n) => n.id !== notification.id));
+      setIsNotificationsOpen(false);
+      toast.success(`Switched to ${room.name}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to switch room");
+      console.error("Error switching room:", error);
+    }
+  };
+
   const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     debouncedCallback(e.target.value);
   };
@@ -291,16 +322,30 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   }, [debouncedSearchQuery, fetchSearchResults]);
 
   useEffect(() => {
-    if (user) {
-      fetchNotifications();
-      fetchAvailableRooms();
-    }
+    if (!user) return;
+
+    // Fetch initial data
+    fetchNotifications();
+    fetchAvailableRooms();
+
+    // Real-time subscription for new notifications
     const notificationChannel = supabase
       .channel("notifications")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "notifications", filter: `user_id=eq.${user?.id}` },
-        () => fetchNotifications()
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          const newNotification = payload.new as Notification;
+          setNotifications((prev) => [newNotification, ...prev].slice(0, 10)); // Limit to 10 notifications
+          if (newNotification.status === "unread") {
+            toast.info(newNotification.message);
+          }
+        }
       )
       .subscribe((status) => {
         if (status === "CLOSED") {
@@ -308,42 +353,11 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         }
       });
 
-    const roomMemberChannel = supabase
-      .channel("room_members")
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "room_members", filter: `user_id=eq.${user?.id}` },
-        async (payload) => {
-          if (payload.new.active) {
-            const { data: room } = await supabase
-              .from("rooms")
-              .select("*")
-              .eq("id", payload.new.room_id)
-              .single();
-            if (room && isMounted.current) {
-              setSelectedRoom(room);
-            }
-          }
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "DELETE", schema: "public", table: "room_members", filter: `user_id=eq.${user?.id}` },
-        async () => {
-          await fetchAvailableRooms();
-        }
-      )
-      .subscribe((status) => {
-        if (status === "CLOSED") {
-          toast.error("Room member subscription closed");
-        }
-      });
-
+    // Cleanup subscription
     return () => {
       supabase.removeChannel(notificationChannel);
-      supabase.removeChannel(roomMemberChannel);
     };
-  }, [user, fetchNotifications, fetchAvailableRooms, supabase, setSelectedRoom]);
+  }, [user, fetchNotifications, fetchAvailableRooms, supabase]);
 
   useEffect(() => {
     return () => {
@@ -653,7 +667,8 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                         {notifications.map((notif) => (
                           <li
                             key={notif.id}
-                            className="flex items-center justify-between gap-2"
+                            className="flex items-center justify-between gap-2 cursor-pointer hover:bg-gray-700 p-2 rounded"
+                            onClick={() => handleNotificationClick(notif)}
                           >
                             <div>
                               <p className="text-sm">{notif.message}</p>
@@ -664,7 +679,10 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                             {notif.type === "join_request" && notif.status === "unread" && (
                               <Button
                                 size="sm"
-                                onClick={() => handleAcceptJoinRequest(notif.id)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleAcceptJoinRequest(notif.id);
+                                }}
                               >
                                 Accept
                               </Button>
