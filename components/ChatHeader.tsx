@@ -74,17 +74,13 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const checkRoomMembership = useCallback(
     async (roomId: string) => {
       if (!user) return false;
-      const { data, error } = await supabase
-        .from("room_members") // Use room_members instead of room_participants
-        .select("*")
+      const { data } = await supabase
+        .from("room_participants")
+        .select("status")
         .eq("room_id", roomId)
         .eq("user_id", user.id)
         .single();
-      if (error) {
-        console.error("Error checking room membership:", error);
-        return false; // Return false if the query fails
-      }
-      return !!data; // Return true if an entry exists in room_members
+      return data?.status === "accepted";
     },
     [user, supabase]
   );
@@ -295,16 +291,11 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
           : "/api/rooms/all"
       );
       const data = await response.json();
-      console.log("Search response data:", data);
       if (isMounted.current) {
         if (response.ok) {
-          const rawResults = Array.isArray(data.rooms) ? data.rooms : [];
-          const results: Room[] = rawResults.map((r: any) => ({
-            id: r.id || "",
-            name: r.name || "Unnamed Room",
-            is_private: r.is_private || false,
-            // Add other required Room properties with defaults if missing
-          }));
+          const results: Room[] = debouncedSearchQuery.trim()
+            ? data.rooms || []
+            : data.rooms || [];
           const resultsWithMembership = await Promise.all(
             results.map(async (room) => ({
               ...room,
