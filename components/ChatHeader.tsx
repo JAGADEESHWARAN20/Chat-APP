@@ -180,18 +180,18 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       const response = await fetch("/api/rooms/switch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roomId: room.id }), // Ensure roomId is sent
+        body: JSON.stringify({ roomId: room.id }),
       });
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.error || "Failed to switch room");
       }
 
-      const data = await response.json(); // Capture the response data
+      const data = await response.json();
       setSelectedRoom(room);
       setIsSwitchRoomPopoverOpen(false);
       toast.success(`Switched to ${room.name}`);
-      await fetchAvailableRooms(); // Refresh room list
+      await fetchAvailableRooms();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Failed to switch room";
       toast.error(errorMessage);
@@ -333,61 +333,23 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     fetchAvailableRooms();
 
     const notificationChannel = supabase
-      .channel(`notifications:${user.id}`)
+      .channel("global-notifications")
       .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "notifications",
-          filter: `user_id=eq.${user.id}`,
-        },
+        "broadcast",
+        { event: "new-message" },
         (payload) => {
-          const newNotification = payload.new as Notification;
-          setNotifications((prev) => {
-            const updated = [newNotification, ...prev].slice(0, 10);
-            return updated;
-          });
-          if (newNotification.status === "unread") {
-            toast.info(newNotification.message);
+          const newNotification = payload.payload as Notification;
+          if (isMounted.current) {
+            setNotifications((prev) => [newNotification, ...prev].slice(0, 10));
+            if (newNotification.status === "unread") {
+              toast.info(newNotification.message);
+            }
           }
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "notifications",
-          filter: `user_id=eq.${user.id}`,
-        },
-        (payload) => {
-          const updatedNotification = payload.new as Notification;
-          setNotifications((prev) =>
-            prev.map((notif) =>
-              notif.id === updatedNotification.id ? updatedNotification : notif
-            )
-          );
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "DELETE",
-          schema: "public",
-          table: "notifications",
-          filter: `user_id=eq.${user.id}`,
-        },
-        (payload) => {
-          const deletedNotification = payload.old as Notification;
-          setNotifications((prev) =>
-            prev.filter((notif) => notif.id !== deletedNotification.id)
-          );
         }
       )
       .subscribe((status, err) => {
         if (status === "SUBSCRIBED") {
-          console.log("Subscribed to notifications channel");
+          console.log("Subscribed to global notifications channel");
         } else if (status === "CLOSED") {
           toast.error("Notification subscription closed");
         } else if (status === "CHANNEL_ERROR") {

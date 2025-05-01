@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { ArrowDown } from "lucide-react";
 import LoadMoreMessages from "./LoadMoreMessages";
 import { Database } from "@/lib/types/supabase";
-import { useRoomStore } from '@/lib/store/roomstore';
+import { useRoomStore } from "@/lib/store/roomstore";
 import { LIMIT_MESSAGE } from "@/lib/constant";
 
 type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
@@ -18,7 +18,7 @@ export default function ListMessages() {
 	const scrollRef = useRef<HTMLDivElement>(null);
 	const [userScrolled, setUserScrolled] = useState(false);
 	const [notification, setNotification] = useState(0);
-	const [isInitialLoad, setIsInitialLoad] = useState(true);
+	const [isLoading, setIsLoading] = useState(false);
 	const selectedRoom = useRoomStore((state) => state.selectedRoom);
 	const {
 		messages,
@@ -51,30 +51,32 @@ export default function ListMessages() {
 		if (!selectedRoom) return;
 
 		const loadInitialMessages = async () => {
+			setIsLoading(true); // Show skeleton loader
 			try {
+				setMessages([]); // Clear existing messages to avoid duplicates
 				const { data: messagesData, error } = await supabase
 					.from("messages")
 					.select(`
-						*,
-						users (
-						    id,
-						    username,
-						    avatar_url,
-						    display_name,
-						    created_at
-						)
-					    `)
-					.eq('room_id', selectedRoom.id)
-					.order('created_at', { ascending: false })
+            *,
+            users (
+              id,
+              username,
+              avatar_url,
+              display_name,
+              created_at
+            )
+          `)
+					.eq("room_id", selectedRoom.id)
+					.order("created_at", { ascending: false })
 					.limit(LIMIT_MESSAGE);
 
 				if (error) {
-					toast.error('Failed to load messages');
+					toast.error("Failed to load messages");
 					return;
 				}
 
 				if (messagesData) {
-					const formattedMessages: Imessage[] = messagesData.reverse().map(msg => ({
+					const formattedMessages: Imessage[] = messagesData.reverse().map((msg) => ({
 						id: msg.id,
 						created_at: msg.created_at,
 						is_edit: msg.is_edit,
@@ -83,21 +85,24 @@ export default function ListMessages() {
 						room_id: msg.room_id,
 						direct_chat_id: msg.direct_chat_id,
 						dm_thread_id: msg.dm_thread_id,
-						status: msg.status, // Now accepts string | null
-						users: msg.users ? {
-							id: msg.users.id,
-							avatar_url: msg.users.avatar_url || '',
-							display_name: msg.users.display_name || '',
-							username: msg.users.username || '',
-							created_at: msg.users.created_at
-						} : null
+						status: msg.status,
+						users: msg.users
+							? {
+								id: msg.users.id,
+								avatar_url: msg.users.avatar_url || "",
+								display_name: msg.users.display_name || "",
+								username: msg.users.username || "",
+								created_at: msg.users.created_at,
+							}
+							: null,
 					}));
 					setMessages(formattedMessages);
-					setIsInitialLoad(false);
 				}
 			} catch (err) {
-				toast.error('Unexpected error loading messages');
+				toast.error("Unexpected error loading messages");
 				console.error(err);
+			} finally {
+				setIsLoading(false); // Hide skeleton loader
 			}
 		};
 
@@ -109,18 +114,20 @@ export default function ListMessages() {
 
 		const channel = supabase
 			.channel(`room_messages_${selectedRoom.id}`)
-			.on('postgres_changes',
+			.on(
+				"postgres_changes",
 				{
-					event: '*',
-					schema: 'public',
-					table: 'messages',
-					filter: `room_id=eq.${selectedRoom.id}`
+					event: "*",
+					schema: "public",
+					table: "messages",
+					filter: `room_id=eq.${selectedRoom.id}`,
 				},
 				(payload) => {
 					try {
 						const messagePayload = payload.new as MessageRow;
-						if (payload.eventType === 'INSERT' && !optimisticIds.includes(messagePayload.id)) {
-							supabase.from("users")
+						if (payload.eventType === "INSERT" && !optimisticIds.includes(messagePayload.id)) {
+							supabase
+								.from("users")
 								.select("*")
 								.eq("id", messagePayload.send_by)
 								.single<UserRow>()
@@ -138,24 +145,24 @@ export default function ListMessages() {
 											room_id: messagePayload.room_id,
 											direct_chat_id: messagePayload.direct_chat_id,
 											dm_thread_id: messagePayload.dm_thread_id,
-											status: messagePayload.status, // Now accepts string | null
+											status: messagePayload.status,
 											text: messagePayload.text,
 											users: {
 												id: user.id,
-												avatar_url: user.avatar_url || '',
-												display_name: user.display_name || '',
-												username: user.username || '',
-												created_at: user.created_at
-											}
+												avatar_url: user.avatar_url || "",
+												display_name: user.display_name || "",
+												username: user.username || "",
+												created_at: user.created_at,
+											},
 										};
 										addMessage(newMessage);
 
 										if (scrollRef.current && scrollRef.current.scrollTop < scrollRef.current.scrollHeight - scrollRef.current.clientHeight - 10) {
-											setNotification(prev => prev + 1);
+											setNotification((prev) => prev + 1);
 										}
 									}
 								});
-						} else if (payload.eventType === 'UPDATE') {
+						} else if (payload.eventType === "UPDATE") {
 							const updatedMessage = payload.new as MessageRow;
 							optimisticUpdateMessage(updatedMessage.id, {
 								id: updatedMessage.id,
@@ -166,16 +173,17 @@ export default function ListMessages() {
 								room_id: updatedMessage.room_id,
 								direct_chat_id: updatedMessage.direct_chat_id,
 								dm_thread_id: updatedMessage.dm_thread_id,
-								status: updatedMessage.status // Now accepts string | null
+								status: updatedMessage.status,
 							});
-						} else if (payload.eventType === 'DELETE') {
+						} else if (payload.eventType === "DELETE") {
 							optimisticDeleteMessage(payload.old.id);
 						}
 					} catch (err) {
-						toast.error('Error processing real-time message update');
+						toast.error("Error processing real-time message update");
 						console.error(err);
 					}
-				})
+				}
+			)
 			.subscribe();
 
 		return () => {
@@ -189,6 +197,17 @@ export default function ListMessages() {
 		}
 	}, [messages, userScrolled]);
 
+	// Skeleton Loader Component
+	const SkeletonMessage = () => (
+		<div className="flex gap-2 animate-pulse">
+			<div className="w-10 h-10 rounded-full bg-gray-700" />
+			<div className="flex-1 space-y-2">
+				<div className="h-4 bg-gray-700 rounded w-1/4" />
+				<div className="h-3 bg-gray-700 rounded w-3/4" />
+			</div>
+		</div>
+	);
+
 	return (
 		<>
 			<div
@@ -196,10 +215,8 @@ export default function ListMessages() {
 				ref={scrollRef}
 				onScroll={handleOnScroll}
 			>
-				{isInitialLoad ? (
-					<div className="flex-1 flex items-center justify-center">
-						<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-					</div>
+				{isLoading ? (
+					Array.from({ length: 3 }).map((_, index) => <SkeletonMessage key={index} />)
 				) : (
 					<>
 						<div className="flex-1 pb-5">
