@@ -347,6 +347,19 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
           }
         }
       )
+      .on(
+        "broadcast",
+        { event: "user_joined" }, // Example of another event type
+        (payload) => {
+          const newNotification = payload.payload as Notification;
+          if (isMounted.current) {
+            setNotifications((prev) => [newNotification, ...prev].slice(0, 10));
+            if (newNotification.status === "unread") {
+              toast.info(newNotification.message);
+            }
+          }
+        }
+      )
       .subscribe((status, err) => {
         if (status === "SUBSCRIBED") {
           console.log("Subscribed to global notifications channel");
@@ -471,6 +484,26 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         }
         setSelectedRoom(room);
         await fetchAvailableRooms();
+
+        // Broadcast a user_joined event
+        const notification = {
+          id: crypto.randomUUID(),
+          user_id: user.id,
+          type: "user_joined",
+          room_id: currentRoomId,
+          sender_id: user.id,
+          message: `${user.email} joined the room ${room.name}`,
+          status: "unread",
+          created_at: new Date().toISOString(),
+        };
+
+        await supabase
+          .channel("global-notifications")
+          .send({
+            type: "broadcast",
+            event: "user_joined",
+            payload: notification,
+          });
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to join room");
