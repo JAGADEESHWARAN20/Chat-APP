@@ -11,10 +11,16 @@ import { Imessage } from "@/lib/store/messages";
 export default function ChatMessages() {
 	const selectedRoom = useRoomStore((state) => state.selectedRoom);
 	const selectedDirectChat = useDirectChatStore((state) => state.selectedChat);
-	const setMessages = useMessage((state) => state.setMessages);
+	const { setMessages, clearMessages } = useMessage((state) => ({
+		setMessages: state.setMessages,
+		clearMessages: state.clearMessages,
+	}));
 
 	const fetchMessages = async () => {
 		try {
+			// Clear existing messages before fetching new ones
+			clearMessages();
+
 			if (selectedRoom) {
 				const response = await fetch(`/api/messages/${selectedRoom.id}`);
 				if (!response.ok) throw new Error("Failed to fetch messages");
@@ -33,9 +39,8 @@ export default function ChatMessages() {
 					users: msg.users || null,
 				})) || [];
 
-				setMessages(formattedMessages.reverse()); // Reverse to show latest messages first
+				setMessages(formattedMessages.reverse());
 			} else if (selectedDirectChat) {
-				// Note: You would need a separate API endpoint for direct chats, e.g., /api/direct-messages/[directChatId]
 				const response = await fetch(`/api/direct-messages/${selectedDirectChat.id}`);
 				if (!response.ok) throw new Error("Failed to fetch direct messages");
 				const { messages } = await response.json();
@@ -58,14 +63,16 @@ export default function ChatMessages() {
 				setMessages([]);
 			}
 		} catch (error) {
-			toast.error("Failed to fetch messages");
-			console.error("Error fetching messages:", error);
+			if (error instanceof Error) {
+				toast.error("Failed to fetch messages");
+				console.error("Error fetching messages:", error.message);
+			}
 		}
 	};
 
 	useEffect(() => {
 		fetchMessages();
-	}, [selectedRoom, selectedDirectChat]);
+	}, [selectedRoom, selectedDirectChat, clearMessages]);
 
 	return (
 		<Suspense fallback={"loading..."}>
