@@ -643,7 +643,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
               {notifications.length === 0 ? (
                 <p className="text-sm text-gray-400">No notifications</p>
               ) : (
-                <ul className="space-y-2">
+                <ul className="space-x-2">
                   {notifications.map((notif) => (
                     <li
                       key={notif.id}
@@ -779,6 +779,15 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
             </div>
           </PopoverContent>
         </Popover>
+        {user ? (
+          <Button onClick={handleLogout} variant="ghost" size="sm">
+            <LogOut className="h-4 w-4 mr-2" /> Logout
+          </Button>
+        ) : (
+          <Button onClick={handleLoginWithGithub} variant="ghost" size="sm">
+            Login
+          </Button>
+        )}
       </div>
     </header>
   );
