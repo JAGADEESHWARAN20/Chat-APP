@@ -33,6 +33,7 @@ interface MessageState {
 	optimisticUpdateMessage: (messageId: string, updates: Partial<Imessage>) => void;
 	setOptimisticIds: (id: string) => void;
 	setMessages: (messages: Imessage[]) => void;
+	clearMessages: () => void; // Added clearMessages function
 }
 
 export const useMessage = create<MessageState>()((set) => ({
@@ -64,4 +65,5 @@ export const useMessage = create<MessageState>()((set) => ({
 				message.id === messageId ? { ...message, ...updates } : message
 			),
 		})),
+	clearMessages: () => set({ messages: [], page: 1, hasMore: true }), // Added clearMessages implementation
 }));
