@@ -51,7 +51,7 @@ export default function ListMessages() {
 		if (!selectedRoom) return;
 
 		const loadInitialMessages = async () => {
-			setIsLoading(true); // Show skeleton loader
+			setIsLoading(true);
 			try {
 				setMessages([]); // Clear existing messages to avoid duplicates
 				const { data: messagesData, error } = await supabase
@@ -102,7 +102,7 @@ export default function ListMessages() {
 				toast.error("Unexpected error loading messages");
 				console.error(err);
 			} finally {
-				setIsLoading(false); // Hide skeleton loader
+				setIsLoading(false);
 			}
 		};
 
@@ -126,6 +126,9 @@ export default function ListMessages() {
 					try {
 						const messagePayload = payload.new as MessageRow;
 						if (payload.eventType === "INSERT" && !optimisticIds.includes(messagePayload.id)) {
+							// Double-check the room_id matches the current room
+							if (messagePayload.room_id !== selectedRoom.id) return;
+
 							supabase
 								.from("users")
 								.select("*")
@@ -164,6 +167,8 @@ export default function ListMessages() {
 								});
 						} else if (payload.eventType === "UPDATE") {
 							const updatedMessage = payload.new as MessageRow;
+							if (updatedMessage.room_id !== selectedRoom.id) return;
+
 							optimisticUpdateMessage(updatedMessage.id, {
 								id: updatedMessage.id,
 								text: updatedMessage.text,
@@ -176,6 +181,9 @@ export default function ListMessages() {
 								status: updatedMessage.status,
 							});
 						} else if (payload.eventType === "DELETE") {
+							const deletedMessage = payload.old as MessageRow;
+							if (deletedMessage.room_id !== selectedRoom.id) return;
+
 							optimisticDeleteMessage(payload.old.id);
 						}
 					} catch (err) {
@@ -196,6 +204,9 @@ export default function ListMessages() {
 			scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
 		}
 	}, [messages, userScrolled]);
+
+	// Filter messages to only show those for the current room
+	const filteredMessages = messages.filter((msg) => msg.room_id === selectedRoom?.id);
 
 	// Skeleton Loader Component
 	const SkeletonMessage = () => (
@@ -223,7 +234,7 @@ export default function ListMessages() {
 							<LoadMoreMessages />
 						</div>
 						<div className="space-y-7">
-							{messages.map((value) => (
+							{filteredMessages.map((value) => (
 								<Message key={value.id} message={value} />
 							))}
 						</div>
