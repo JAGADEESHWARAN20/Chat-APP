@@ -46,7 +46,7 @@ export const useNotification = create<NotificationState>((set) => ({
      subscribeToNotifications: (userId) => {
           const supabase = supabaseBrowser();
           const channel = supabase
-               .channel("notifications")
+               .channel(`notifications:${userId}`)
                .on(
                     "postgres_changes",
                     {
@@ -55,13 +55,54 @@ export const useNotification = create<NotificationState>((set) => ({
                          table: "notifications",
                          filter: `user_id=eq.${userId}`,
                     },
-                    (payload) => {
+                    async (payload) => {
+                         const newNotification = payload.new as any;
+
+                         // Fetch additional data for users and rooms
+                         const { data: userData, error: userError } = await supabase
+                              .from("users")
+                              .select("id, username, display_name, avatar_url")
+                              .eq("id", newNotification.sender_id)
+                              .single();
+                         if (userError) {
+                              console.error("Error fetching user for notification:", userError);
+                         }
+
+                         const { data: roomData, error: roomError } = await supabase
+                              .from("rooms")
+                              .select("id, name")
+                              .eq("id", newNotification.room_id)
+                              .single();
+                         if (roomError) {
+                              console.error("Error fetching room for notification:", roomError);
+                         }
+
+                         const formattedNotification: Inotification = {
+                              id: newNotification.id,
+                              content: newNotification.message,
+                              created_at: newNotification.created_at,
+                              is_read: newNotification.status === "read",
+                              type: newNotification.type,
+                              sender_id: newNotification.sender_id,
+                              room_id: newNotification.room_id,
+                              users: userData || null,
+                              rooms: roomData || null,
+                         };
+
                          set((state) => ({
-                              notifications: [payload.new as Inotification, ...state.notifications],
+                              notifications: [formattedNotification, ...state.notifications],
                          }));
                     }
                )
-               .subscribe();
+               .subscribe((status, err) => {
+                    if (status === "SUBSCRIBED") {
+                         console.log("Subscribed to notifications channel");
+                    } else if (status === "CLOSED") {
+                         console.error("Notification channel closed");
+                    } else if (status === "CHANNEL_ERROR") {
+                         console.error("Notification channel error:", err);
+                    }
+               });
      },
      unsubscribeFromNotifications: () => {
           const supabase = supabaseBrowser();

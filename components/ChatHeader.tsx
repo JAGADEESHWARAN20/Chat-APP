@@ -322,6 +322,8 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     if (!user) return;
     fetchNotifications();
     fetchAvailableRooms();
+
+    // Existing broadcast subscription for new-message and user_joined events
     const notificationChannel = supabase
       .channel("global-notifications")
       .on(
@@ -330,7 +332,13 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         (payload) => {
           const newNotification = payload.payload as Notification;
           if (isMounted.current) {
-            setNotifications((prev) => [newNotification, ...prev].slice(0, 10));
+            setNotifications((prev) => {
+              // Avoid duplicates by checking if the notification already exists
+              if (prev.some((n) => n.id === newNotification.id)) {
+                return prev;
+              }
+              return [newNotification, ...prev].slice(0, 10);
+            });
             if (newNotification.status === "unread") {
               toast.info(newNotification.message);
             }
@@ -343,7 +351,12 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         (payload) => {
           const newNotification = payload.payload as Notification;
           if (isMounted.current) {
-            setNotifications((prev) => [newNotification, ...prev].slice(0, 10));
+            setNotifications((prev) => {
+              if (prev.some((n) => n.id === newNotification.id)) {
+                return prev;
+              }
+              return [newNotification, ...prev].slice(0, 10);
+            });
             if (newNotification.status === "unread") {
               toast.info(newNotification.message);
             }
@@ -360,8 +373,87 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
           toast.error("Error in notification subscription");
         }
       });
+
+    // New postgres_changes subscription for real-time notifications
+    // New postgres_changes subscription for real-time notifications
+    const postgresChannel = supabase
+      .channel(`notifications:${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${user.id}`,
+        },
+        async (payload) => {
+          const newNotification = payload.new as Notification;
+          if (isMounted.current) {
+            // Fetch additional data for users and rooms to match the Notification type
+            let usersMap: Record<string, { username: string }> = {};
+            if (newNotification.sender_id) {
+              const { data: userData, error: userError } = await supabase
+                .from("users")
+                .select("id, username")
+                .eq("id", newNotification.sender_id)
+                .single();
+              if (userError) {
+                console.error("Error fetching user for notification:", userError);
+              } else {
+                usersMap[newNotification.sender_id] = { username: userData.username };
+              }
+            }
+
+            // Initialize rooms as undefined by default
+            let roomsData: { name: string } | undefined = undefined;
+            // Only fetch room data if room_id is not null
+            if (newNotification.room_id) {
+              const { data: roomData, error: roomError } = await supabase
+                .from("rooms")
+                .select("name")
+                .eq("id", newNotification.room_id) // Now safe because we checked for null
+                .single();
+              if (roomError) {
+                console.error("Error fetching room for notification:", roomError);
+              } else {
+                roomsData = roomData ? { name: roomData.name } : undefined;
+              }
+            }
+
+            const enrichedNotification: Notification = {
+              ...newNotification,
+              users: newNotification.sender_id ? usersMap[newNotification.sender_id] : undefined,
+              rooms: roomsData,
+            };
+
+            setNotifications((prev) => {
+              // Avoid duplicates by checking if the notification already exists
+              if (prev.some((n) => n.id === enrichedNotification.id)) {
+                return prev;
+              }
+              return [enrichedNotification, ...prev].slice(0, 10);
+            });
+
+            if (newNotification.status === "unread") {
+              toast.info(newNotification.message);
+            }
+          }
+        }
+      )
+      .subscribe((status, err) => {
+        if (status === "SUBSCRIBED") {
+          console.log("Subscribed to postgres_changes notifications channel");
+        } else if (status === "CLOSED") {
+          console.error("Postgres notifications channel closed");
+          toast.error("Postgres notification subscription closed");
+        } else if (status === "CHANNEL_ERROR") {
+          console.error("Postgres notifications channel error:", err);
+          toast.error("Error in postgres notification subscription");
+        }
+      });
     return () => {
       supabase.removeChannel(notificationChannel);
+      supabase.removeChannel(postgresChannel);
     };
   }, [user, fetchNotifications, fetchAvailableRooms, supabase]);
 
