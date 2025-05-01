@@ -117,46 +117,6 @@ export async function POST(req: NextRequest) {
                     console.error("Error fetching current room:", currentRoomError?.message || "No active room found");
                     throw new Error("No active room found after switch");
                }
-
-               // Fetch room details
-               const { data: room, error: roomError } = await supabase
-                    .from("rooms")
-                    .select("name, created_by")
-                    .eq("id", currentRoom.room_id)
-                    .single();
-               if (roomError || !room) {
-                    console.error("Error fetching room details:", roomError?.message || "Room not found");
-                    throw new Error("Room not found");
-               }
-
-               // Send notification to room creator
-               const { data: user, error: userError } = await supabase
-                    .from("users")
-                    .select("username")
-                    .eq("id", session.user.id)
-                    .single();
-               if (userError || !user) {
-                    console.error("Error fetching user:", userError?.message || "User not found");
-                    throw new Error("User not found");
-               }
-
-               const message = `${user.username || "A user"} switched to ${room.name}`;
-               const { error: notificationError } = await supabase
-                    .from("notifications")
-                    .insert([
-                         {
-                              user_id: room.created_by,
-                              type: "room_switch",
-                              room_id: roomId,
-                              sender_id: session.user.id,
-                              message,
-                              status: "unread",
-                         },
-                    ]);
-               if (notificationError) {
-                    console.error("Error sending notification:", notificationError.message);
-                    // Log the error but don't fail the transaction
-               }
           };
 
           await transaction();
