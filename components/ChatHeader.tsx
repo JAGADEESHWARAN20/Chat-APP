@@ -19,7 +19,7 @@ import {
   Settings,
   ArrowRight,
   LogOut,
-  UserIcon,
+  UserIcon
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -38,12 +38,14 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useRoomStore } from "@/lib/store/roomstore";
 import { useDebounce } from "use-debounce";
-import { useNotification } from "@/lib/store/notifications";
-import Notifications from "./Notifications";
 
 type UserProfile = Database["public"]["Tables"]["users"]["Row"];
 type Room = Database["public"]["Tables"]["rooms"]["Row"];
 type SearchResult = UserProfile | Room;
+type Notification = Database["public"]["Tables"]["notifications"]["Row"] & {
+  rooms?: { name: string };
+  users?: { username: string };
+};
 
 export default function ChatHeader({ user }: { user: SupabaseUser | undefined }) {
   const router = useRouter();
@@ -51,6 +53,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const [searchType, setSearchType] = useState<"rooms" | "users" | null>(null);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [availableRooms, setAvailableRooms] = useState<(Room & { isMember: boolean })[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const supabase = supabaseBrowser();
   const [isSearchPopoverOpen, setIsSearchPopoverOpen] = useState(false);
   const [isSwitchRoomPopoverOpen, setIsSwitchRoomPopoverOpen] = useState(false);
@@ -64,10 +67,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const [isLoading, setIsLoading] = useState(false);
   const [isMember, setIsMember] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
-
-  // Notification state from store
-  const notificationState = useNotification((state) => state.notifications);
-  const unreadCount = notificationState.filter((notif) => !notif.is_read).length;
 
   const [debouncedCallback] = useDebounce((value: string) => setSearchQuery(value), 300);
   const [debouncedSearchQuery] = useDebounce(searchQuery, 300);
@@ -121,6 +120,55 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       toast.error("Failed to fetch rooms");
     }
   }, [user, supabase, checkRoomMembership, setRooms]);
+
+  const fetchNotifications = useCallback(async () => {
+    if (!user) return;
+    try {
+      const { data: notificationsData, error: notificationsError } = await supabase
+        .from("notifications")
+        .select(`
+          *,
+          rooms (name)
+        `)
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+      if (notificationsError) {
+        console.error("Error fetching notifications:", notificationsError);
+        toast.error("Failed to fetch notifications");
+        return;
+      }
+
+      const senderIds = notificationsData
+        ?.filter((notif) => notif.sender_id)
+        .map((notif) => notif.sender_id) as string[];
+      let usersMap: Record<string, { username: string }> = {};
+      if (senderIds?.length) {
+        const { data: usersData, error: usersError } = await supabase
+          .from("users")
+          .select("id, username")
+          .in("id", senderIds);
+        if (usersError) {
+          console.error("Error fetching users:", usersError);
+        } else {
+          usersMap = usersData.reduce(
+            (acc, user) => ({ ...acc, [user.id]: { username: user.username } }),
+            {}
+          );
+        }
+      }
+
+      if (isMounted.current) {
+        const enrichedNotifications = notificationsData.map((notif) => ({
+          ...notif,
+          users: notif.sender_id ? usersMap[notif.sender_id] : undefined,
+        }));
+        setNotifications(enrichedNotifications as Notification[]);
+      }
+    } catch (error) {
+      console.error("Error fetching notifications:", error);
+      toast.error("Failed to fetch notifications");
+    }
+  }, [user, supabase]);
 
   const handleRoomSwitch = async (room: Room) => {
     if (!user) {
@@ -177,6 +225,52 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     }
   };
 
+  const handleAcceptJoinRequest = async (notificationId: string) => {
+    try {
+      const response = await fetch(`/api/notifications/${notificationId}/accept`, {
+        method: "POST",
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to accept join request");
+      }
+      toast.success("Join request accepted");
+      await fetchNotifications();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to accept join request");
+    }
+  };
+
+  const handleNotificationClick = async (notification: Notification) => {
+    if (!user) {
+      toast.error("You must be logged in to switch rooms");
+      return;
+    }
+    try {
+      const { error: updateError } = await supabase
+        .from("notifications")
+        .update({ status: "read" })
+        .eq("id", notification.id);
+      if (updateError) throw updateError;
+      if (!notification.room_id) {
+        throw new Error("Notification is missing room_id");
+      }
+      const { data: room, error: roomError } = await supabase
+        .from("rooms")
+        .select("*")
+        .eq("id", notification.room_id)
+        .single();
+      if (roomError || !room) throw new Error("Room not found");
+      await handleRoomSwitch(room);
+      setNotifications((prev) => prev.filter((n) => n.id !== notification.id));
+      setIsNotificationsOpen(false);
+      toast.success(`Switched to ${room.name}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to switch room");
+      console.error("Error switching room:", error);
+    }
+  };
+
   const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     debouncedCallback(e.target.value);
   };
@@ -226,8 +320,50 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 
   useEffect(() => {
     if (!user) return;
+    fetchNotifications();
     fetchAvailableRooms();
-  }, [user, fetchAvailableRooms]);
+    const notificationChannel = supabase
+      .channel("global-notifications")
+      .on(
+        "broadcast",
+        { event: "new-message" },
+        (payload) => {
+          const newNotification = payload.payload as Notification;
+          if (isMounted.current) {
+            setNotifications((prev) => [newNotification, ...prev].slice(0, 10));
+            if (newNotification.status === "unread") {
+              toast.info(newNotification.message);
+            }
+          }
+        }
+      )
+      .on(
+        "broadcast",
+        { event: "user_joined" },
+        (payload) => {
+          const newNotification = payload.payload as Notification;
+          if (isMounted.current) {
+            setNotifications((prev) => [newNotification, ...prev].slice(0, 10));
+            if (newNotification.status === "unread") {
+              toast.info(newNotification.message);
+            }
+          }
+        }
+      )
+      .subscribe((status, err) => {
+        if (status === "SUBSCRIBED") {
+          console.log("Subscribed to global notifications channel");
+        } else if (status === "CLOSED") {
+          toast.error("Notification subscription closed");
+        } else if (status === "CHANNEL_ERROR") {
+          console.error("Notification channel error:", err);
+          toast.error("Error in notification subscription");
+        }
+      });
+    return () => {
+      supabase.removeChannel(notificationChannel);
+    };
+  }, [user, fetchNotifications, fetchAvailableRooms, supabase]);
 
   useEffect(() => {
     return () => {
@@ -492,13 +628,52 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
             </PopoverContent>
           </Popover>
         )}
-        <Button variant="ghost" size="icon" onClick={() => setIsNotificationsOpen(true)} className="relative">
-          <Bell className="h-5 w-5" />
-          {unreadCount > 0 && (
-            <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full"></span>
-          )}
-        </Button>
-        <Notifications isOpen={isNotificationsOpen} onClose={() => setIsNotificationsOpen(false)} />
+        <Popover open={isNotificationsOpen} onOpenChange={setIsNotificationsOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="ghost" size="icon" className="relative">
+              <Bell className="h-5 w-5" />
+              {notifications.filter((n) => n.status === "unread").length > 0 && (
+                <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full"></span>
+              )}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-80 bg-gray-800 text-white">
+            <div className="p-4">
+              <h3 className="font-semibold text-lg mb-2">Notifications</h3>
+              {notifications.length === 0 ? (
+                <p className="text-sm text-gray-400">No notifications</p>
+              ) : (
+                <ul className="space-y-2">
+                  {notifications.map((notif) => (
+                    <li
+                      key={notif.id}
+                      className="flex items-center justify-between gap-2 cursor-pointer hover:bg-gray-700 p-2 rounded"
+                      onClick={() => handleNotificationClick(notif)}
+                    >
+                      <div>
+                        <p className="text-sm">{notif.message}</p>
+                        <p className="text-xs text-gray-400">
+                          {notif.created_at ? new Date(notif.created_at).toLocaleString() : "Unknown time"}
+                        </p>
+                      </div>
+                      {notif.type === "join_request" && notif.status === "unread" && (
+                        <Button
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleAcceptJoinRequest(notif.id);
+                          }}
+                        >
+                          Accept
+                        </Button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </PopoverContent>
+        </Popover>
         <Popover open={isSearchPopoverOpen} onOpenChange={setIsSearchPopoverOpen}>
           <PopoverTrigger asChild>
             <Button variant="ghost" size="icon">
