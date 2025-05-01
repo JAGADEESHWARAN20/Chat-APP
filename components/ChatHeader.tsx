@@ -534,7 +534,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   );
 
   return (
-    <header className="h-20 border-b flex items-center justify-between p-4 bg-white shadow-sm">
+    <header className="h-20 border-b flex items-center justify-between p-4 bg-transparent shadow-sm">
       <div className="flex items-center">
         <h1 className="text-xl font-bold mr-4">
           {selectedRoom ? selectedRoom.name : "Daily Chat"}
@@ -873,21 +873,11 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
             <Button size="icon" className="md:hidden" onClick={handleLogout}>
               <LogOut className="h-4 w-4" />
             </Button>
-            <Button size="sm" className="hidden md:flex" onClick={handleLogout}>
-              <span className="flex items-center gap-1">
-                <LogOut className="h-4 w-4 mr-2" /> Logout
-              </span>
-            </Button>
           </div>
         ) : (
           <div>
             <Button size="icon" className="md:hidden" onClick={handleLoginWithGithub}>
               <UserIcon className="h-4 w-4" />
-            </Button>
-            <Button size="sm" className="hidden md:flex" onClick={handleLoginWithGithub}>
-              <span className="flex items-center gap-1">
-                <UserIcon className="h-4 w-4 mr-2" /> Login
-              </span>
             </Button>
           </div>
         )}
