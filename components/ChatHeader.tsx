@@ -13,13 +13,13 @@ import {
 } from "@/components/ui/popover";
 import {
   Search,
-  User as UserIcon,
-  Settings,
   PlusCircle,
+  Bell,
+  Reply,
+  Settings,
   ArrowRight,
   LogOut,
-  RefreshCw,
-  Bell,
+  UserIcon
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -31,7 +31,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogFooter
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
@@ -495,7 +495,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const renderRoomSearchResult = (result: Room & { isMember: boolean }) => (
     <li key={result.id} className="flex items-center justify-between">
       <div className="flex items-center gap-2">
-        <span className="text-sm font-semibold">
+        <span className="text-sm font-semibold text-white">
           {result.name} {result.is_private && "🔒"}
         </span>
       </div>
@@ -514,7 +514,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
           size="sm"
           variant="outline"
           onClick={() => handleRoomSwitch(result)}
-          className="flex items-center gap-1"
+          className="flex items-center gap-1 text-white border-gray-600"
         >
           <span className="flex items-center gap-1">
             <ArrowRight className="h-4 w-4" />
@@ -534,353 +534,251 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   );
 
   return (
-    <header className="h-20 border-b flex items-center justify-between p-4 bg-transparent shadow-sm">
-      <div className="flex items-center  sm:flex-col gap-1">
-        <h1 className="text-xl font-bold mr-4">
-          {selectedRoom ? selectedRoom.name : "Daily Chat"}
-        </h1>
+    <header className="h-14 border-b flex items-center justify-between px-4 bg-gray-900 text-white shadow-sm">
+      <h1 className="text-lg font-semibold">
+        {selectedRoom ? `#${selectedRoom.name}` : "Daily Chat"}
+      </h1>
+      <div className="flex items-center space-x-4">
         <ChatPresence />
-      </div>
-      <div className="flex items-center space-x-2">
-        {user && (
-          <>
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-              <DialogTrigger asChild>
-                <div>
-                  <Button variant="outline" size="icon" className="md:hidden">
-                    <PlusCircle className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="sm" className="hidden md:flex">
-                    <span className="flex items-center gap-1">
-                      <PlusCircle className="h-4 w-4 mr-2" /> Create Room
-                    </span>
-                  </Button>
-                </div>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Create New Room</DialogTitle>
-                  <DialogDescription>
-                    Create a new chat room. Private rooms require approval to join.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="roomName">Room Name</Label>
-                    <Input
-                      id="roomName"
-                      placeholder="Enter room name"
-                      value={newRoomName}
-                      onChange={(e) => setNewRoomName(e.target.value)}
-                      disabled={isCreating}
-                    />
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      id="private"
-                      checked={isPrivate}
-                      onCheckedChange={setIsPrivate}
-                      disabled={isCreating}
-                    />
-                    <Label htmlFor="private">Private Room</Label>
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button
-                    variant="outline"
-                    onClick={() => setIsDialogOpen(false)}
-                    disabled={isCreating}
-                  >
-                    Cancel
-                  </Button>
-                  <Button onClick={handleCreateRoom} disabled={isCreating}>
-                    {isCreating ? "Creating..." : "Create Room"}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-
-            {selectedRoom && (
-              <>
-                {isMember ? (
-                  <>
-                    <Popover open={isSwitchRoomPopoverOpen} onOpenChange={setIsSwitchRoomPopoverOpen}>
-                      <PopoverTrigger asChild>
-                        <div>
-                          <Button variant="ghost" size="icon" className="md:hidden">
-                            <RefreshCw className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="sm" className="hidden md:flex">
-                            <span className="flex items-center gap-1">
-                              <RefreshCw className="h-4 w-4 mr-2" /> Switch Room
-                            </span>
-                          </Button>
-                        </div>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-80">
-                        <div className="p-4">
-                          <h3 className="font-semibold text-lg mb-2">Switch Room</h3>
-                          {availableRooms.length === 0 ? (
-                            <p className="text-sm text-muted-foreground">No rooms available</p>
-                          ) : (
-                            <ul className="space-y-2">
-                              {availableRooms.map((room) => (
-                                <li
-                                  key={room.id}
-                                  className="flex items-center justify-between"
-                                >
-                                  <span className="text-sm font-semibold">
-                                    {room.name} {room.is_private && "🔒"}
-                                  </span>
-                                  <Button
-                                    size="sm"
-                                    variant={selectedRoom?.id === room.id ? "secondary" : "outline"}
-                                    onClick={() => handleRoomSwitch(room)}
-                                    className="flex items-center gap-1"
-                                  >
-                                    <span className="flex items-center gap-1">
-                                      <ArrowRight className="h-4 w-4" />
-                                      Switch
-                                    </span>
-                                  </Button>
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                    <div>
-                      <Button
-                        variant="destructive"
-                        size="icon"
-                        className="md:hidden bg-red-600 hover:bg-red-700"
-                        onClick={handleLeaveRoom}
-                        disabled={isLeaving}
-                      >
-                        {isLeaving ? (
-                          <RefreshCw className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <LogOut className="h-4 w-4" />
-                        )}
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        className="hidden md:flex bg-red-600 hover:bg-red-700"
-                        onClick={handleLeaveRoom}
-                        disabled={isLeaving}
-                      >
-                        {isLeaving ? (
-                          <span className="flex items-center gap-1">
-                            <RefreshCw className="h-4 w-4 animate-spin" />
-                            Leaving...
-                          </span>
-                        ) : (
-                          <span className="flex items-center gap-1">
-                            <LogOut className="h-4 w-4" />
-                            Leave
-                          </span>
-                        )}
-                      </Button>
-                    </div>
-                  </>
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogTrigger asChild>
+            <Button variant="ghost" size="icon">
+              <PlusCircle className="h-5 w-5" />
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="bg-gray-800 text-white">
+            <DialogHeader>
+              <DialogTitle>Create New Room</DialogTitle>
+              <DialogDescription className="text-gray-300">
+                Create a new chat room. Private rooms require approval to join.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="roomName">Room Name</Label>
+                <Input
+                  id="roomName"
+                  placeholder="Enter room name"
+                  value={newRoomName}
+                  onChange={(e) => setNewRoomName(e.target.value)}
+                  disabled={isCreating}
+                  className="bg-gray-700 border-gray-600"
+                />
+              </div>
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="private"
+                  checked={isPrivate}
+                  onCheckedChange={setIsPrivate}
+                  disabled={isCreating}
+                />
+                <Label htmlFor="private">Private Room</Label>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setIsDialogOpen(false)}
+                disabled={isCreating}
+                className="text-white border-gray-600"
+              >
+                Cancel
+              </Button>
+              <Button onClick={handleCreateRoom} disabled={isCreating}>
+                {isCreating ? "Creating..." : "Create Room"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        {selectedRoom && (
+          <Popover open={isSwitchRoomPopoverOpen} onOpenChange={setIsSwitchRoomPopoverOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="ghost" size="icon">
+                <Reply className="h-5 w-5" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80 bg-gray-800 text-white">
+              <div className="p-4">
+                <h3 className="font-semibold text-lg mb-2">Switch Room</h3>
+                {availableRooms.length === 0 ? (
+                  <p className="text-sm text-gray-400">No rooms available</p>
                 ) : (
-                  <div>
-                    <Button
-                      onClick={() => handleJoinRoom(selectedRoom.id)}
-                      size="icon"
-                      className="md:hidden"
-                    >
-                      <ArrowRight className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      onClick={() => handleJoinRoom(selectedRoom.id)}
-                      size="sm"
-                      className="hidden md:flex"
-                    >
-                      <span className="flex items-center gap-1">
-                        <ArrowRight className="h-4 w-4" />
-                        Join Room
-                      </span>
-                    </Button>
-                  </div>
-                )}
-              </>
-            )}
-
-            <Popover open={isNotificationsOpen} onOpenChange={setIsNotificationsOpen}>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="icon" className="relative">
-                  <Bell className="h-4 w-4" />
-                  {notifications.filter((n) => n.status === "unread").length > 0 && (
-                    <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full"></span>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-80">
-                <div className="p-4">
-                  <h3 className="font-semibold text-lg mb-2">Notifications</h3>
-                  {notifications.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No notifications</p>
-                  ) : (
-                    <ul className="space-y-2">
-                      {notifications.map((notif) => (
-                        <li
-                          key={notif.id}
-                          className="flex items-center justify-between gap-2 cursor-pointer hover:bg-gray-700 p-2 rounded"
-                          onClick={() => handleNotificationClick(notif)}
+                  <ul className="space-y-2">
+                    {availableRooms.map((room) => (
+                      <li key={room.id} className="flex items-center justify-between">
+                        <span className="text-sm font-semibold text-white">
+                          {room.name} {room.is_private && "🔒"}
+                        </span>
+                        <Button
+                          size="sm"
+                          variant={selectedRoom?.id === room.id ? "secondary" : "outline"}
+                          onClick={() => handleRoomSwitch(room)}
+                          className="text-white border-gray-600"
                         >
-                          <div>
-                            <p className="text-sm">{notif.message}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {notif.created_at ? new Date(notif.created_at).toLocaleString() : "Unknown time"}
-                            </p>
-                          </div>
-                          {notif.type === "join_request" && notif.status === "unread" && (
-                            <Button
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleAcceptJoinRequest(notif.id);
-                              }}
-                            >
-                              Accept
-                            </Button>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              </PopoverContent>
-            </Popover>
-
-            <Popover open={isSearchPopoverOpen} onOpenChange={setIsSearchPopoverOpen}>
-              <PopoverTrigger asChild>
-                <div>
-                  <Button variant="outline" size="icon" className="md:hidden">
-                    <Search className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="sm" className="hidden md:flex">
-                    <span className="flex items-center gap-1">
-                      <Search className="h-4 w-4 mr-2" /> Search
-                    </span>
-                  </Button>
-                </div>
-              </PopoverTrigger>
-              <PopoverContent className="w-80">
-                <div className="p-4">
-                  <div className="flex justify-end mb-2">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => {
-                        setIsSearchPopoverOpen(false);
-                        router.push("/profile");
-                      }}
+                          <span className="flex items-center gap-1">
+                            <ArrowRight className="h-4 w-4" />
+                            Switch
+                          </span>
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </PopoverContent>
+          </Popover>
+        )}
+        <Popover open={isNotificationsOpen} onOpenChange={setIsNotificationsOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="ghost" size="icon" className="relative">
+              <Bell className="h-5 w-5" />
+              {notifications.filter((n) => n.status === "unread").length > 0 && (
+                <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full"></span>
+              )}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-80 bg-gray-800 text-white">
+            <div className="p-4">
+              <h3 className="font-semibold text-lg mb-2">Notifications</h3>
+              {notifications.length === 0 ? (
+                <p className="text-sm text-gray-400">No notifications</p>
+              ) : (
+                <ul className="space-y-2">
+                  {notifications.map((notif) => (
+                    <li
+                      key={notif.id}
+                      className="flex items-center justify-between gap-2 cursor-pointer hover:bg-gray-700 p-2 rounded"
+                      onClick={() => handleNotificationClick(notif)}
                     >
-                      <Settings className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <h3 className="font-semibold text-lg mb-2">Search</h3>
-                  <Input
-                    type="text"
-                    placeholder="Search rooms..."
-                    value={searchQuery}
-                    onChange={handleSearchInputChange}
-                    className="mb-4"
-                  />
-                  <div className="flex gap-2 mb-4">
-                    <Button
-                      variant={searchType === "rooms" ? "default" : "outline"}
-                      onClick={() => handleSearchByType("rooms")}
-                    >
-                      Rooms
-                    </Button>
-                    <Button
-                      variant={searchType === "users" ? "default" : "outline"}
-                      onClick={() => handleSearchByType("users")}
-                    >
-                      Users
-                    </Button>
-                  </div>
-                  {searchResults.length > 0 && (
-                    <div className="mt-4">
-                      <h4 className="font-semibold text-sm mb-2">
-                        {searchType === "users" ? "User Profiles" : "Rooms"}
-                      </h4>
-                      <ul className="space-y-2">
-                        {searchResults.map((result) =>
-                          "username" in result ? (
-                            <li
-                              key={result.id}
-                              className="flex items-center justify-between"
-                            >
-                              <div className="flex items-center gap-2">
-                                <Avatar>
-                                  {result.avatar_url ? (
-                                    <AvatarImage
-                                      src={result.avatar_url}
-                                      alt={result.username || "Avatar"}
-                                    />
-                                  ) : (
-                                    <AvatarFallback>
-                                      {result.username?.charAt(0).toUpperCase() ||
-                                        result.display_name?.charAt(0).toUpperCase() ||
-                                        "?"}
-                                    </AvatarFallback>
-                                  )}
-                                </Avatar>
-                                <div>
-                                  <div className="text-xs text-gray-500">
-                                    {result.username}
-                                  </div>
-                                  <div className="text-sm font-semibold">
-                                    {result.display_name}
-                                  </div>
-                                </div>
+                      <div>
+                        <p className="text-sm">{notif.message}</p>
+                        <p className="text-xs text-gray-400">
+                          {notif.created_at ? new Date(notif.created_at).toLocaleString() : "Unknown time"}
+                        </p>
+                      </div>
+                      {notif.type === "join_request" && notif.status === "unread" && (
+                        <Button
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleAcceptJoinRequest(notif.id);
+                          }}
+                        >
+                          Accept
+                        </Button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </PopoverContent>
+        </Popover>
+        <Popover open={isSearchPopoverOpen} onOpenChange={setIsSearchPopoverOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="ghost" size="icon">
+              <Search className="h-5 w-5" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-80 bg-gray-800 text-white">
+            <div className="p-4">
+              <div className="flex justify-end mb-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => {
+                    setIsSearchPopoverOpen(false);
+                    router.push("/profile");
+                  }}
+                >
+                  <Settings className="h-4 w-4" />
+                </Button>
+              </div>
+              <h3 className="font-semibold text-lg mb-2">Search</h3>
+              <Input
+                type="text"
+                placeholder="Search rooms..."
+                value={searchQuery}
+                onChange={handleSearchInputChange}
+                className="mb-4 bg-gray-700 border-gray-600"
+              />
+              <div className="flex gap-2 mb-4">
+                <Button
+                  variant={searchType === "rooms" ? "default" : "outline"}
+                  onClick={() => handleSearchByType("rooms")}
+                  className="text-white border-gray-600"
+                >
+                  Rooms
+                </Button>
+                <Button
+                  variant={searchType === "users" ? "default" : "outline"}
+                  onClick={() => handleSearchByType("users")}
+                  className="text-white border-gray-600"
+                >
+                  Users
+                </Button>
+              </div>
+              {searchResults.length > 0 && (
+                <div className="mt-4">
+                  <h4 className="font-semibold text-sm mb-2">
+                    {searchType === "users" ? "User Profiles" : "Rooms"}
+                  </h4>
+                  <ul className="space-y-2">
+                    {searchResults.map((result) =>
+                      "username" in result ? (
+                        <li
+                          key={result.id}
+                          className="flex items-center justify-between"
+                        >
+                          <div className="flex items-center gap-2">
+                            <Avatar>
+                              {result.avatar_url ? (
+                                <AvatarImage
+                                  src={result.avatar_url}
+                                  alt={result.username || "Avatar"}
+                                />
+                              ) : (
+                                <AvatarFallback>
+                                  {result.username?.charAt(0).toUpperCase() ||
+                                    result.display_name?.charAt(0).toUpperCase() ||
+                                    "?"}
+                                </AvatarFallback>
+                              )}
+                            </Avatar>
+                            <div>
+                              <div className="text-xs text-gray-400">
+                                {result.username}
                               </div>
-                              <UserIcon className="h-4 w-4 text-gray-500" />
-                            </li>
-                          ) : (
-                            renderRoomSearchResult(result as Room & { isMember: boolean })
-                          )
-                        )}
-                      </ul>
-                    </div>
-                  )}
-                  {searchResults.length === 0 && searchQuery.length > 0 && (
-                    <p className="text-sm text-muted-foreground mt-2">
-                      No {searchType || "results"} found.
-                    </p>
-                  )}
-                  {searchQuery.length === 0 && searchType && (
-                    <p className="text-sm text-muted-foreground mt-2">
-                      Showing all {searchType}...
-                    </p>
-                  )}
-                  {isLoading && (
-                    <p className="text-sm text-muted-foreground mt-2">Loading...</p>
-                  )}
+                              <div className="text-sm font-semibold text-white">
+                                {result.display_name}
+                              </div>
+                            </div>
+                          </div>
+                          <UserIcon className="h-4 w-4 text-gray-400" />
+                        </li>
+                      ) : (
+                        renderRoomSearchResult(result as Room & { isMember: boolean })
+                      )
+                    )}
+                  </ul>
                 </div>
-              </PopoverContent>
-            </Popover>
-          </>
-        )}
-        {user ? (
-          <div>
-            <Button size="icon" className="md:hidden" onClick={handleLogout}>
-              <LogOut className="h-4 w-4" />
-            </Button>
-          </div>
-        ) : (
-          <div>
-            <Button size="icon" className="md:hidden" onClick={handleLoginWithGithub}>
-              <UserIcon className="h-4 w-4" />
-            </Button>
-          </div>
-        )}
+              )}
+              {searchResults.length === 0 && searchQuery.length > 0 && (
+                <p className="text-sm text-gray-400 mt-2">
+                  No {searchType || "results"} found.
+                </p>
+              )}
+              {searchQuery.length === 0 && searchType && (
+                <p className="text-sm text-gray-400 mt-2">
+                  Showing all {searchType}...
+                </p>
+              )}
+              {isLoading && (
+                <p className="text-sm text-gray-400 mt-2">Loading...</p>
+              )}
+            </div>
+          </PopoverContent>
+        </Popover>
       </div>
     </header>
   );
