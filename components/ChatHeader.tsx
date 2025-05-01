@@ -38,6 +38,8 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useRoomStore } from "@/lib/store/roomstore";
 import { useDebounce } from "use-debounce";
+import { useNotification } from "@/lib/store/notifications"; // Added for notifications
+import Notifications from "./Notifications"; // Added for notifications component
 
 type UserProfile = Database["public"]["Tables"]["users"]["Row"];
 type Room = Database["public"]["Tables"]["rooms"]["Row"];
@@ -53,7 +55,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const [searchType, setSearchType] = useState<"rooms" | "users" | null>(null);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [availableRooms, setAvailableRooms] = useState<(Room & { isMember: boolean })[]>([]);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]); // Will be replaced by store
   const supabase = supabaseBrowser();
   const [isSearchPopoverOpen, setIsSearchPopoverOpen] = useState(false);
   const [isSwitchRoomPopoverOpen, setIsSwitchRoomPopoverOpen] = useState(false);
@@ -67,6 +69,10 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const [isLoading, setIsLoading] = useState(false);
   const [isMember, setIsMember] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
+
+  // Added: Notification state from store
+  const notificationState = useNotification((state) => state.notifications);
+  const unreadCount = notificationState.filter((notif) => !notif.is_read).length;
 
   const [debouncedCallback] = useDebounce((value: string) => setSearchQuery(value), 300);
   const [debouncedSearchQuery] = useDebounce(searchQuery, 300);
@@ -628,52 +634,15 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
             </PopoverContent>
           </Popover>
         )}
-        <Popover open={isNotificationsOpen} onOpenChange={setIsNotificationsOpen}>
-          <PopoverTrigger asChild>
-            <Button variant="ghost" size="icon" className="relative">
-              <Bell className="h-5 w-5" />
-              {notifications.filter((n) => n.status === "unread").length > 0 && (
-                <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full"></span>
-              )}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-80 bg-gray-800 text-white">
-            <div className="p-4">
-              <h3 className="font-semibold text-lg mb-2">Notifications</h3>
-              {notifications.length === 0 ? (
-                <p className="text-sm text-gray-400">No notifications</p>
-              ) : (
-                <ul className="space-y-2">
-                  {notifications.map((notif) => (
-                    <li
-                      key={notif.id}
-                      className="flex items-center justify-between gap-2 cursor-pointer hover:bg-gray-700 p-2 rounded"
-                      onClick={() => handleNotificationClick(notif)}
-                    >
-                      <div>
-                        <p className="text-sm">{notif.message}</p>
-                        <p className="text-xs text-gray-400">
-                          {notif.created_at ? new Date(notif.created_at).toLocaleString() : "Unknown time"}
-                        </p>
-                      </div>
-                      {notif.type === "join_request" && notif.status === "unread" && (
-                        <Button
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleAcceptJoinRequest(notif.id);
-                          }}
-                        >
-                          Accept
-                        </Button>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </PopoverContent>
-        </Popover>
+        {/* Updated: Notification Bell with Unread Count */}
+        <Button variant="ghost" size="icon" onClick={() => setIsNotificationsOpen(true)} className="relative">
+          <Bell className="h-5 w-5" />
+          {unreadCount > 0 && (
+            <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full"></span>
+          )}
+        </Button>
+        {/* Added: Notifications Component */}
+        <Notifications isOpen={isNotificationsOpen} onClose={() => setIsNotificationsOpen(false)} />
         <Popover open={isSearchPopoverOpen} onOpenChange={setIsSearchPopoverOpen}>
           <PopoverTrigger asChild>
             <Button variant="ghost" size="icon">
