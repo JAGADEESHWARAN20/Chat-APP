@@ -535,7 +535,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 
   return (
     <header className="h-20 border-b flex items-center justify-between p-4 bg-transparent shadow-sm">
-      <div className="flex items-center">
+      <div className="flex items-center  sm:flex-col gap-1">
         <h1 className="text-xl font-bold mr-4">
           {selectedRoom ? selectedRoom.name : "Daily Chat"}
         </h1>
