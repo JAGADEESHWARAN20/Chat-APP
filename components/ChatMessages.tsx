@@ -2,8 +2,6 @@
 
 import { Suspense, useEffect } from "react";
 import ListMessages from "./ListMessages";
-import { supabaseBrowser } from "@/lib/supabase/browser";
-import { LIMIT_MESSAGE } from "@/lib/constant";
 import { useRoomStore } from "@/lib/store/roomstore";
 import { useDirectChatStore } from "@/lib/store/directChatStore";
 import { useMessage } from "@/lib/store/messages";
@@ -11,7 +9,6 @@ import { toast } from "sonner";
 import { Imessage } from "@/lib/store/messages";
 
 export default function ChatMessages() {
-	const supabase = supabaseBrowser();
 	const selectedRoom = useRoomStore((state) => state.selectedRoom);
 	const selectedDirectChat = useDirectChatStore((state) => state.selectedChat);
 	const setMessages = useMessage((state) => state.setMessages);
@@ -19,16 +16,11 @@ export default function ChatMessages() {
 	const fetchMessages = async () => {
 		try {
 			if (selectedRoom) {
-				const { data, error } = await supabase
-					.from("messages")
-					.select("*, users(*)")
-					.eq("room_id", selectedRoom.id)
-					.range(0, LIMIT_MESSAGE)
-					.order("created_at", { ascending: false });
+				const response = await fetch(`/api/messages/${selectedRoom.id}`);
+				if (!response.ok) throw new Error("Failed to fetch messages");
+				const { messages } = await response.json();
 
-				if (error) throw error;
-
-				const formattedMessages: Imessage[] = data?.reverse().map((msg) => ({
+				const formattedMessages: Imessage[] = messages.map((msg: any) => ({
 					id: msg.id,
 					created_at: msg.created_at,
 					is_edit: msg.is_edit,
@@ -41,18 +33,14 @@ export default function ChatMessages() {
 					users: msg.users || null,
 				})) || [];
 
-				setMessages(formattedMessages);
+				setMessages(formattedMessages.reverse()); // Reverse to show latest messages first
 			} else if (selectedDirectChat) {
-				const { data, error } = await supabase
-					.from("messages")
-					.select("*, users(*)")
-					.eq("direct_bs", selectedDirectChat.id)
-					.range(0, LIMIT_MESSAGE)
-					.order("created_at", { ascending: false });
+				// Note: You would need a separate API endpoint for direct chats, e.g., /api/direct-messages/[directChatId]
+				const response = await fetch(`/api/direct-messages/${selectedDirectChat.id}`);
+				if (!response.ok) throw new Error("Failed to fetch direct messages");
+				const { messages } = await response.json();
 
-				if (error) throw error;
-
-				const formattedMessages: Imessage[] = data?.reverse().map((msg) => ({
+				const formattedMessages: Imessage[] = messages.map((msg: any) => ({
 					id: msg.id,
 					created_at: msg.created_at,
 					is_edit: msg.is_edit,
@@ -65,7 +53,7 @@ export default function ChatMessages() {
 					users: msg.users || null,
 				})) || [];
 
-				setMessages(formattedMessages);
+				setMessages(formattedMessages.reverse());
 			} else {
 				setMessages([]);
 			}
