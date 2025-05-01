@@ -516,8 +516,10 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
           onClick={() => handleRoomSwitch(result)}
           className="flex items-center gap-1"
         >
-          <ArrowRight className="h-4 w-4" />
-          Switch
+          <span className="flex items-center gap-1">
+            <ArrowRight className="h-4 w-4" />
+            Switch
+          </span>
         </Button>
       ) : (
         <Button
@@ -544,12 +546,16 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
           <>
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline" size="icon" className="md:hidden">
-                  <PlusCircle className="h-4 w-4" />
-                </Button>
-                <Button variant="outline" size="sm" className="hidden md:flex">
-                  <PlusCircle className="h-4 w-4 mr-2" /> Create Room
-                </Button>
+                <div>
+                  <Button variant="outline" size="icon" className="md:hidden">
+                    <PlusCircle className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="sm" className="hidden md:flex">
+                    <span className="flex items-center gap-1">
+                      <PlusCircle className="h-4 w-4 mr-2" /> Create Room
+                    </span>
+                  </Button>
+                </div>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
@@ -600,12 +606,16 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                   <>
                     <Popover open={isSwitchRoomPopoverOpen} onOpenChange={setIsSwitchRoomPopoverOpen}>
                       <PopoverTrigger asChild>
-                        <Button variant="ghost" size="icon" className="md:hidden">
-                          <RefreshCw className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm" className="hidden md:flex">
-                          <RefreshCw className="h-4 w-4 mr-2" /> Switch Room
-                        </Button>
+                        <div>
+                          <Button variant="ghost" size="icon" className="md:hidden">
+                            <RefreshCw className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="sm" className="hidden md:flex">
+                            <span className="flex items-center gap-1">
+                              <RefreshCw className="h-4 w-4 mr-2" /> Switch Room
+                            </span>
+                          </Button>
+                        </div>
                       </PopoverTrigger>
                       <PopoverContent className="w-80">
                         <div className="p-4">
@@ -628,8 +638,10 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                                     onClick={() => handleRoomSwitch(room)}
                                     className="flex items-center gap-1"
                                   >
-                                    <ArrowRight className="h-4 w-4" />
-                                    Switch
+                                    <span className="flex items-center gap-1">
+                                      <ArrowRight className="h-4 w-4" />
+                                      Switch
+                                    </span>
                                   </Button>
                                 </li>
                               ))}
@@ -638,33 +650,61 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                         </div>
                       </PopoverContent>
                     </Popover>
-                    <Button
-                      variant="destructive"
-                      size="icon" className="md:hidden bg-red-600 hover:bg-red-700"
-                      
-                      onClick={handleLeaveRoom}
-                      disabled={isLeaving}
-                    >
-                      {isLeaving ? (
-                        <>
-                          <RefreshCw size="sm" className="hidden md:flex bg-red-600 hover:bg-red-700 h-4 w-4 animate-spin" />
-                        </>
-                      ) : (
-                        <>
+                    <div>
+                      <Button
+                        variant="destructive"
+                        size="icon"
+                        className="md:hidden bg-red-600 hover:bg-red-700"
+                        onClick={handleLeaveRoom}
+                        disabled={isLeaving}
+                      >
+                        {isLeaving ? (
+                          <RefreshCw className="h-4 w-4 animate-spin" />
+                        ) : (
                           <LogOut className="h-4 w-4" />
-                        </>
-                      )}
-                      <span className="hidden md:inline ml-2">Leave</span>
-                    </Button>
+                        )}
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        className="hidden md:flex bg-red-600 hover:bg-red-700"
+                        onClick={handleLeaveRoom}
+                        disabled={isLeaving}
+                      >
+                        {isLeaving ? (
+                          <span className="flex items-center gap-1">
+                            <RefreshCw className="h-4 w-4 animate-spin" />
+                            Leaving...
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1">
+                            <LogOut className="h-4 w-4" />
+                            Leave
+                          </span>
+                        )}
+                      </Button>
+                    </div>
                   </>
                 ) : (
-                  <Button
-                    onClick={() => handleJoinRoom(selectedRoom.id)}
-                    size="sm" className="hidden md:flex"
-                  >
-                    <ArrowRight className="h-4 w-4 md:hidden" />
-                    <span className="hidden md:inline ml-2">Join Room</span>
-                  </Button>
+                  <div>
+                    <Button
+                      onClick={() => handleJoinRoom(selectedRoom.id)}
+                      size="icon"
+                      className="md:hidden"
+                    >
+                      <ArrowRight className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      onClick={() => handleJoinRoom(selectedRoom.id)}
+                      size="sm"
+                      className="hidden md:flex"
+                    >
+                      <span className="flex items-center gap-1">
+                        <ArrowRight className="h-4 w-4" />
+                        Join Room
+                      </span>
+                    </Button>
+                  </div>
                 )}
               </>
             )}
@@ -718,12 +758,16 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 
             <Popover open={isSearchPopoverOpen} onOpenChange={setIsSearchPopoverOpen}>
               <PopoverTrigger asChild>
-                <Button variant="outline" size="icon" className="md:hidden">
-                  <Search className="h-4 w-4" />
-                </Button>
-                <Button variant="outline" size="sm" className="hidden md:flex">
-                  <Search className="h-4 w-4 mr-2" /> Search
-                </Button>
+                <div>
+                  <Button variant="outline" size="icon" className="md:hidden">
+                    <Search className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="sm" className="hidden md:flex">
+                    <span className="flex items-center gap-1">
+                      <Search className="h-4 w-4 mr-2" /> Search
+                    </span>
+                  </Button>
+                </div>
               </PopoverTrigger>
               <PopoverContent className="w-80">
                 <div className="p-4">
@@ -825,23 +869,27 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
           </>
         )}
         {user ? (
-          <>
-          <Button size="icon" className="md:hidden" onClick={handleLogout}>
-            <LogOut className="h-4 w-4" />
-          </Button>
-          <Button size="sm" className="hidden md:flex" onClick={handleLogout}>
-            <LogOut className="h-4 w-4 mr-2" /> Logout
-          </Button>
-          </>
+          <div>
+            <Button size="icon" className="md:hidden" onClick={handleLogout}>
+              <LogOut className="h-4 w-4" />
+            </Button>
+            <Button size="sm" className="hidden md:flex" onClick={handleLogout}>
+              <span className="flex items-center gap-1">
+                <LogOut className="h-4 w-4 mr-2" /> Logout
+              </span>
+            </Button>
+          </div>
         ) : (
-            <>
-          <Button size="icon" className="md:hidden" onClick={handleLoginWithGithub}>
-            <UserIcon className="h-4 w-4" />
-          </Button>
-          <Button size="sm" className="hidden md:flex" onClick={handleLoginWithGithub}>
-            <UserIcon className="h-4 w-4 mr-2" /> Login
-          </Button>
-            </>
+          <div>
+            <Button size="icon" className="md:hidden" onClick={handleLoginWithGithub}>
+              <UserIcon className="h-4 w-4" />
+            </Button>
+            <Button size="sm" className="hidden md:flex" onClick={handleLoginWithGithub}>
+              <span className="flex items-center gap-1">
+                <UserIcon className="h-4 w-4 mr-2" /> Login
+              </span>
+            </Button>
+          </div>
         )}
       </div>
     </header>
