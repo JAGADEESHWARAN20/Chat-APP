@@ -17,9 +17,9 @@ interface RawNotification {
   sender_id: string;
   user_id: string;
   room_id: string | null;
-  users: { id: string; username: string; display_name: string; avatar_url: string | null; }[] | null;
-  recipient: { id: string; username: string; display_name: string; avatar_url: string | null; }[] | null;
-  rooms: { id: string; name: string; }[] | null;
+  users: { id: any; username: any; display_name: any; avatar_url: any; }[] | null;
+  recipient: { id: any; username: any; display_name: any; avatar_url: any; }[] | null;
+  rooms: { id: any; name: any; }[] | null;
 }
 
 export async function GET(request: Request) {
@@ -68,24 +68,24 @@ export async function GET(request: Request) {
       room_id: notif.room_id,
       users: notif.users && notif.users.length > 0
         ? {
-            id: notif.users[0].id,
-            username: notif.users[0].username,
-            display_name: notif.users[0].display_name,
-            avatar_url: notif.users[0].avatar_url,
+            id: String(notif.users[0].id),
+            username: String(notif.users[0].username),
+            display_name: String(notif.users[0].display_name),
+            avatar_url: notif.users[0].avatar_url != null ? String(notif.users[0].avatar_url) : null,
           }
         : null,
       recipient: notif.recipient && notif.recipient.length > 0
         ? {
-            id: notif.recipient[0].id,
-            username: notif.recipient[0].username,
-            display_name: notif.recipient[0].display_name,
-            avatar_url: notif.recipient[0].avatar_url,
+            id: String(notif.recipient[0].id),
+            username: String(notif.recipient[0].username),
+            display_name: String(notif.recipient[0].display_name),
+            avatar_url: notif.recipient[0].avatar_url != null ? String(notif.recipient[0].avatar_url) : null,
           }
         : null,
       rooms: notif.rooms && notif.rooms.length > 0
         ? {
-            id: notif.rooms[0].id,
-            name: notif.rooms[0].name,
+            id: String(notif.rooms[0].id),
+            name: String(notif.rooms[0].name),
           }
         : null,
     }));
