@@ -126,57 +126,57 @@ export default function RoomList() {
     return !participation || participation.status === "rejected";
   };
 
-  useEffect(() => {
-    if (!user) return;
+useEffect(() => {
+  if (!user) return;
 
-    const fetchRooms = async () => {
-      try {
-        const response = await fetch("/api/rooms/all");
-        if (!response.ok) {
-          throw new Error("Failed to fetch rooms");
-        }
-
-        const { success, rooms: fetchedRooms } = await response.json();
-        if (success && fetchedRooms) {
-          setRooms(fetchedRooms as IRoom[]);
-        }
-      } catch (err) {
-        toast.error("Unexpected error fetching rooms");
-        console.error("Unexpected error:", err);
+  const fetchRooms = async () => {
+    try {
+      const response = await fetch("/api/rooms/all");
+      if (!response.ok) {
+        throw new Error("Failed to fetch rooms");
       }
-    };
 
-    const initializeActiveRoom = async () => {
-      const { data, error } = await supabase
-        .from("room_members")
-        .select("room_id")
-        .eq("user_id", user.id)
-        .eq("active", true)
-        .single();
-      if (data) {
-        const activeRoom = rooms.find((r) => r.id === data.room_id);
-        if (activeRoom) {
-          setSelectedRoom(activeRoom);
-        }
+      const { success, rooms: fetchedRooms } = await response.json();
+      if (success && fetchedRooms) {
+        setRooms(fetchedRooms as IRoom[]);
       }
-    };
+    } catch (err) {
+      toast.error("Unexpected error fetching rooms");
+      console.error("Unexpected error:", err);
+    }
+  };
 
-    fetchRooms().then(() => initializeActiveRoom());
+  const initializeActiveRoom = async () => {
+    const { data, error } = await supabase
+      .from("room_members")
+      .select("room_id")
+      .eq("user_id", user.id)
+      .eq("active", true)
+      .single();
+    if (data) {
+      const activeRoom = rooms.find((r) => r.id === data.room_id);
+      if (activeRoom) {
+        setSelectedRoom(activeRoom);
+      }
+    }
+  };
 
-    const roomChannel = supabase
-      .channel("room_changes")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "rooms" },
-        () => fetchRooms()
-      )
-      .subscribe();
+  fetchRooms().then(() => initializeActiveRoom());
 
-    return () => {
-      supabase.removeChannel(roomChannel);
-    };
-  }, [user, supabase, setRooms, setSelectedRoom]);
+  const roomChannel = supabase
+    .channel("room_changes")
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "rooms" },
+      () => fetchRooms()
+    )
+    .subscribe();
 
+  return () => {
+    supabase.removeChannel(roomChannel);
+  };
+}, [user, supabase, setRooms, setSelectedRoom, rooms]);
+  
   useEffect(() => {
     if (!user) return;
 
