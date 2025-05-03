@@ -65,14 +65,14 @@ const transformedNotifications: Inotification[] = notifications.map((notif: RawN
   sender_id: notif.sender_id,
   user_id: notif.user_id, // Ensure this exists in the raw data
   room_id: notif.room_id,
-  users: notif.users
-    ? {
-        id: notif.users.id,
-        username: notif.users.username,
-        display_name: notif.users.display_name,
-        avatar_url: notif.users.avatar_url,
-      }
-    : null,
+ users: notif.users && notif.users.length > 0
+  ? {
+      id: notif.users[0].id,
+      username: notif.users[0].username,
+      display_name: notif.users[0].display_name,
+      avatar_url: notif.users[0].avatar_url,
+    }
+  : null,
   recipient: notif.recipient // Ensure this exists in the raw data
     ? {
         id: notif.recipient.id,
