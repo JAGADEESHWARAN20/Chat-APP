@@ -55,38 +55,39 @@ export async function GET(request: NextRequest) {
     }
 
     // Transform the raw data to match the Inotification interface
-    const transformedNotifications: Inotification[] = notifications.map((notif: RawNotification) => ({
-      id: notif.id,
-      content: notif.message,
-      created_at: notif.created_at,
-      is_read: notif.status === "read",
-      type: notif.type,
-      sender_id: notif.sender_id,
-      user_id: notif.user_id, // Added user_id as required by Inotification
-      room_id: notif.room_id,
-      users: notif.users && notif.users.length > 0
-        ? {
-            id: String(notif.users[0].id),
-            username: String(notif.users[0].username),
-            display_name: String(notif.users[0].display_name),
-            avatar_url: notif.users[0].avatar_url != null ? String(notif.users[0].avatar_url) : null,
-          }
-        : null,
-      recipient: notif.recipient && notif.recipient.length > 0
-        ? {
-            id: String(notif.recipient[0].id),
-            username: String(notif.recipient[0].username),
-            display_name: String(notif.recipient[0].display_name),
-            avatar_url: notif.recipient[0].avatar_url != null ? String(notif.recipient[0].avatar_url) : null,
-          }
-        : null,
-      rooms: notif.rooms && notif.rooms.length > 0
-        ? {
-            id: String(notif.rooms[0].id),
-            name: String(notif.rooms[0].name),
-          }
-        : null,
-    }));
+ // Assuming the raw data structure is defined as RawNotification
+const transformedNotifications: Inotification[] = notifications.map((notif: RawNotification) => ({
+  id: notif.id,
+  content: notif.message,
+  created_at: notif.created_at,
+  is_read: notif.status === "read", // Convert status to boolean
+  type: notif.type,
+  sender_id: notif.sender_id,
+  user_id: notif.user_id, // Ensure this exists in the raw data
+  room_id: notif.room_id,
+  users: notif.users
+    ? {
+        id: notif.users.id,
+        username: notif.users.username,
+        display_name: notif.users.display_name,
+        avatar_url: notif.users.avatar_url,
+      }
+    : null,
+  recipient: notif.recipient // Ensure this exists in the raw data
+    ? {
+        id: notif.recipient.id,
+        username: notif.recipient.username,
+        display_name: notif.recipient.display_name,
+        avatar_url: notif.recipient.avatar_url,
+      }
+    : null,
+  rooms: notif.rooms
+    ? {
+        id: notif.rooms.id,
+        name: notif.rooms.name,
+      }
+    : null,
+}));
 
     return NextResponse.json(transformedNotifications);
   } catch (error) {
