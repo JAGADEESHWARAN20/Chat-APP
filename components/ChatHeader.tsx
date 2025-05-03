@@ -45,7 +45,8 @@ import { useIsMounted } from '@/hooks/useIsMounted';
 type UserProfile = Database['public']['Tables']['users']['Row'];
 type Room = Database['public']['Tables']['rooms']['Row'];
 type SearchResult = UserProfile | Room;
-type Notification = Database['public']['Tables']['notifications']['Row'] & {
+type Notification = Omit<Database['public']['Tables']['notifications']['Row'], 'user_id'> & {
+  user_id?: string; // Make optional
   rooms?: { name: string };
   users?: { username: string };
 };
@@ -76,23 +77,24 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const [debouncedSearchQuery] = useDebounce(searchQuery, 300);
 
   // Sync store notifications with local state
-  useEffect(() => {
-    if (isMounted()) {
-      setNotifications(
-        storeNotifications.map((notif: Inotification) => ({
-          id: notif.id,
-          message: notif.content,
-          created_at: notif.created_at,
-          status: notif.is_read ? 'read' : 'unread',
-          type: notif.type,
-          sender_id: notif.sender_id,
-          room_id: notif.room_id,
-          users: notif.users ? { username: notif.users.username } : undefined,
-          rooms: notif.rooms ? { name: notif.rooms.name } : undefined,
-        }))
-      );
-    }
-  }, [storeNotifications, isMounted]);
+useEffect(() => {
+  if (isMounted()) {
+    setNotifications(
+      storeNotifications.map((notif: Inotification) => ({
+        id: notif.id,
+        message: notif.content,
+        created_at: notif.created_at,
+        status: notif.is_read ? "read" : "unread",
+        type: notif.type,
+        sender_id: notif.sender_id,
+        room_id: notif.room_id,
+        user_id: user?.id || "", // Add user_id
+        users: notif.users ? { username: notif.users.username } : undefined,
+        rooms: notif.rooms ? { name: notif.rooms.name } : undefined,
+      }))
+    );
+  }
+}, [storeNotifications, isMounted, user?.id]);
 
   useEffect(() => {
     if (!user?.id) return;
