@@ -13,9 +13,9 @@ interface RawNotification {
   sender_id: string;
   user_id: string;
   room_id: string | null;
-  users: { id: any; username: any; display_name: any; avatar_url: any; }[] | null;
-  recipient: { id: any; username: any; display_name: any; avatar_url: any; }[] | null;
-  rooms: { id: any; name: any; }[] | null;
+  users: { id: string; username: string; display_name: string; avatar_url: string | null }[] | null; // Allow array or null
+  recipient: { id: string; username: string; display_name: string; avatar_url: string | null }[] | null; // Allow array or null
+  rooms: { id: string; name: string }[] | null; // Allow array or null
 }
 
 export async function GET(request: NextRequest) {
@@ -55,39 +55,38 @@ export async function GET(request: NextRequest) {
     }
 
     // Transform the raw data to match the Inotification interface
- // Assuming the raw data structure is defined as RawNotification
-const transformedNotifications: Inotification[] = notifications.map((notif: RawNotification) => ({
-  id: notif.id,
-  content: notif.message,
-  created_at: notif.created_at,
-  is_read: notif.status === "read", // Convert status to boolean
-  type: notif.type,
-  sender_id: notif.sender_id,
-  user_id: notif.user_id, // Ensure this exists in the raw data
-  room_id: notif.room_id,
- users: notif.users && notif.users.length > 0
-  ? {
-      id: notif.users[0].id,
-      username: notif.users[0].username,
-      display_name: notif.users[0].display_name,
-      avatar_url: notif.users[0].avatar_url,
-    }
-  : null,
-  recipient: notif.recipient // Ensure this exists in the raw data
-    ? {
-        id: notif.recipient.id,
-        username: notif.recipient.username,
-        display_name: notif.recipient.display_name,
-        avatar_url: notif.recipient.avatar_url,
-      }
-    : null,
-  rooms: notif.rooms
-    ? {
-        id: notif.rooms.id,
-        name: notif.rooms.name,
-      }
-    : null,
-}));
+    const transformedNotifications: Inotification[] = notifications.map((notif: RawNotification) => ({
+      id: notif.id,
+      content: notif.message,
+      created_at: notif.created_at,
+      is_read: notif.status === "read",
+      type: notif.type,
+      sender_id: notif.sender_id,
+      user_id: notif.user_id,
+      room_id: notif.room_id,
+      users: notif.users && notif.users.length > 0
+        ? {
+          id: notif.users[0].id,
+          username: notif.users[0].username,
+          display_name: notif.users[0].display_name,
+          avatar_url: notif.users[0].avatar_url,
+        }
+        : null,
+      recipient: notif.recipient && notif.recipient.length > 0
+        ? {
+          id: notif.recipient[0].id,
+          username: notif.recipient[0].username,
+          display_name: notif.recipient[0].display_name,
+          avatar_url: notif.recipient[0].avatar_url,
+        }
+        : null,
+      rooms: notif.rooms && notif.rooms.length > 0
+        ? {
+          id: notif.rooms[0].id,
+          name: notif.rooms[0].name,
+        }
+        : null,
+    }));
 
     return NextResponse.json(transformedNotifications);
   } catch (error) {
