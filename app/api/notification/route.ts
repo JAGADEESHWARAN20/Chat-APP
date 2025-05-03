@@ -17,22 +17,9 @@ interface RawNotification {
   sender_id: string;
   user_id: string;
   room_id: string | null;
-  users: {
-    id: string;
-    username: string;
-    display_name: string;
-    avatar_url: string | null;
-  } | null;
-  recipient: {
-    id: string;
-    username: string;
-    display_name: string;
-    avatar_url: string | null;
-  } | null;
-  rooms: {
-    id: string;
-    name: string;
-  } | null;
+  users: { id: string; username: string; display_name: string; avatar_url: string | null; }[] | null;
+  recipient: { id: string; username: string; display_name: string; avatar_url: string | null; }[] | null;
+  rooms: { id: string; name: string; }[] | null;
 }
 
 export async function GET(request: Request) {
@@ -79,23 +66,28 @@ export async function GET(request: Request) {
       sender_id: notif.sender_id,
       user_id: notif.user_id,
       room_id: notif.room_id,
-      users: notif.users
+      users: notif.users && notif.users.length > 0
         ? {
-            id: notif.users.id,
-            username: notif.users.username,
-            display_name: notif.users.display_name,
-            avatar_url: notif.users.avatar_url,
+            id: notif.users[0].id,
+            username: notif.users[0].username,
+            display_name: notif.users[0].display_name,
+            avatar_url: notif.users[0].avatar_url,
           }
         : null,
-      recipient: notif.recipient
+      recipient: notif.recipient && notif.recipient.length > 0
         ? {
-            id: notif.recipient.id,
-            username: notif.recipient.username,
-            display_name: notif.recipient.display_name,
-            avatar_url: notif.recipient.avatar_url,
+            id: notif.recipient[0].id,
+            username: notif.recipient[0].username,
+            display_name: notif.recipient[0].display_name,
+            avatar_url: notif.recipient[0].avatar_url,
           }
         : null,
-      rooms: notif.rooms ? { id: notif.rooms.id, name: notif.rooms.name } : null,
+      rooms: notif.rooms && notif.rooms.length > 0
+        ? {
+            id: notif.rooms[0].id,
+            name: notif.rooms[0].name,
+          }
+        : null,
     }));
 
     return NextResponse.json(transformedNotifications);
