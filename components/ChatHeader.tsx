@@ -37,7 +37,7 @@ import { toast } from 'sonner';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { useRoomStore } from '@/lib/store/roomstore';
-import { useNotification } from '@/lib/store/notifications';
+import { useNotification, Inotification } from '@/lib/store/notifications';
 import { useDebounce } from 'use-debounce';
 import { API_ROUTES } from '@/lib/apiConfig';
 import { useIsMounted } from '@/hooks/useIsMounted';
@@ -66,7 +66,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const [isPrivate, setIsPrivate] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const { selectedRoom, setSelectedRoom, setRooms } = useRoomStore();
-  const { fetchNotifications: fetchNotificationsStore, subscribeToNotifications } = useNotification();
+  const { notifications: storeNotifications, fetchNotifications, subscribeToNotifications } = useNotification();
   const isMounted = useIsMounted();
   const [isLoading, setIsLoading] = useState(false);
   const [isMember, setIsMember] = useState(false);
@@ -74,6 +74,57 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 
   const [debouncedCallback] = useDebounce((value: string) => setSearchQuery(value), 300);
   const [debouncedSearchQuery] = useDebounce(searchQuery, 300);
+
+  // Sync store notifications with local state
+  useEffect(() => {
+    if (isMounted()) {
+      setNotifications(
+        storeNotifications.map((notif: Inotification) => ({
+          id: notif.id,
+          message: notif.content,
+          created_at: notif.created_at,
+          status: notif.is_read ? 'read' : 'unread',
+          type: notif.type,
+          sender_id: notif.sender_id,
+          room_id: notif.room_id,
+          users: notif.users ? { username: notif.users.username } : undefined,
+          rooms: notif.rooms ? { name: notif.rooms.name } : undefined,
+        }))
+      );
+    }
+  }, [storeNotifications, isMounted]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    let initialFetchComplete = false;
+    const handleInitialFetch = async () => {
+      try {
+        await fetchNotifications(user.id);
+        if (isMounted()) {
+          initialFetchComplete = true;
+        }
+      } catch (error) {
+        if (isMounted()) {
+          toast.error('Failed to fetch initial notifications');
+        }
+      }
+    };
+
+    handleInitialFetch();
+
+    const unsubscribe = subscribeToNotifications(user.id, () => {
+      if (!initialFetchComplete && isMounted()) {
+        fetchNotifications(user.id);
+      }
+    });
+
+    return () => {
+      if (typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
+    };
+  }, [user?.id, fetchNotifications, subscribeToNotifications, isMounted]);
 
   const checkRoomMembership = useCallback(
     async (roomId: string) => {
@@ -95,77 +146,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       }
     },
     [user, supabase]
-  );
-
-  useEffect(() => {
-    if (!user?.id) return;
-
-    let initialFetchComplete = false;
-    const handleInitialFetch = async () => {
-      try {
-        await fetchNotificationsStore();
-        if (isMounted()) {
-          initialFetchComplete = true;
-        }
-      } catch (error) {
-        if (isMounted()) {
-          toast.error('Failed to fetch initial notifications');
-        }
-      }
-    };
-
-    handleInitialFetch();
-
-    const unsubscribe = subscribeToNotifications(user.id, () => {
-      if (!initialFetchComplete && isMounted()) {
-        fetchNotificationsStore();
-      }
-    });
-
-    return () => {
-      if (typeof unsubscribe === 'function') {
-        unsubscribe();
-      }
-    };
-  }, [user?.id, fetchNotificationsStore, subscribeToNotifications, isMounted]);
-
-  const fetchNotifications = useCallback(
-    async (page: number = 1, limit: number = 20) => {
-      if (!user) return;
-      try {
-        const { data: notificationsData, error: notificationsError } = await supabase
-          .from('notifications')
-          .select(`
-            *,
-            rooms (name),
-            users!notifications_sender_id_fkey (username)
-          `)
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false })
-          .range((page - 1) * limit, page * limit - 1);
-
-        if (notificationsError) {
-          throw new Error(notificationsError.message);
-        }
-
-        if (isMounted()) {
-          const enrichedNotifications = notificationsData.map((notif) => ({
-            ...notif,
-            rooms: notif.rooms ? { name: notif.rooms.name } : undefined,
-            users: notif.users ? { username: notif.users.username } : undefined,
-          }));
-          setNotifications((prev) =>
-            page === 1 ? enrichedNotifications : [...prev, ...enrichedNotifications]
-          );
-        }
-      } catch (error) {
-        if (isMounted()) {
-          console.error('Error fetching notifications:', error);
-          toast.error('Failed to fetch notifications');
-        }
-      }
-    },
-    [user, supabase, isMounted]
   );
 
   const fetchAvailableRooms = useCallback(async () => {
@@ -286,7 +266,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       }
       if (isMounted()) {
         toast.success('Join request accepted');
-        await fetchNotifications();
+        await fetchNotifications(user!.id);
       }
     } catch (error) {
       if (isMounted()) {
@@ -700,11 +680,11 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                       </li>
                     ))}
                   </ul>
-                  {notifications.length >= 20 && (
+                  {notifications.length >= 20 && user && (
                     <Button
                       variant="outline"
                       className="mt-4 w-full text-white border-gray-600"
-                      onClick={() => fetchNotifications(Math.ceil(notifications.length / 20) + 1)}
+                      onClick={() => fetchNotifications(user.id, Math.ceil(notifications.length / 20) + 1)}
                     >
                       Load More
                     </Button>
