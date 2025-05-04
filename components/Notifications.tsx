@@ -104,18 +104,17 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
             notifications.map((notif) => (
               <div
                 key={notif.id}
-                className={`p-2 rounded flex items-center gap-3 ${
-                  notif.is_read ? "bg-gray-800" : "bg-gray-700"
-                }`}
+                className={`p-2 rounded flex items-center gap-3 ${notif.is_read ? "bg-gray-800" : "bg-gray-700"
+                  }`}
               >
                 <Avatar>
-                  <AvatarImage src={notif.users?.avatar_url || ""} alt={notif.users?.display_name || "User"} />
+                  <AvatarImage src={notif.users?.avatar_url ?? ""} alt={notif.users?.display_name || "User"} />
                   <AvatarFallback>{notif.users?.display_name?.[0] || "?"}</AvatarFallback>
                 </Avatar>
                 <div className="flex-1">
                   <p>{notif.content}</p>
                   <p className="text-sm text-gray-400">
-                    {new Date(notif.created_at).toLocaleString()}
+                    {notif.created_at ? new Date(notif.created_at).toLocaleString() : "Unknown time"}
                   </p>
                 </div>
                 {notif.type === "room_invite" && !notif.is_read && (
