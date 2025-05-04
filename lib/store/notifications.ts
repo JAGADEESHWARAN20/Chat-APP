@@ -15,7 +15,7 @@ export interface Inotification {
   is_read: boolean;
   type: string;
   sender_id: string;
-  user_id: string;        // Required property (missing in your map)
+  user_id: string;
   room_id: string | null;
   users: {
     id: string;
@@ -23,7 +23,7 @@ export interface Inotification {
     display_name: string;
     avatar_url: string | null;
   } | null;
-  recipient: {            // Required property (missing in your map)
+  recipient: {
     id: string;
     username: string;
     display_name: string;
