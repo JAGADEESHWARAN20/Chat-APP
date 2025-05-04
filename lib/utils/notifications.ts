@@ -37,7 +37,7 @@ export const transformNotification = (
           is_read: notif.status === "read",
           type: notif.type,
           sender_id: notif.sender_id ?? "",
-          user_id: notif.user_id,           // Added user_id
+          user_id: notif.user_id,           // Ensures user_id is included
           room_id: notif.room_id,
           users: users
                ? {
@@ -47,7 +47,7 @@ export const transformNotification = (
                     avatar_url: users.avatar_url,
                }
                : null,
-          recipient: recipient              // Added recipient
+          recipient: recipient              // Ensures recipient is included
                ? {
                     id: recipient.id,
                     username: recipient.username,
