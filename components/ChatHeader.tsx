@@ -511,7 +511,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     if (type === 'rooms') {
       fetchSearchResults();
     } else {
-      setSearchResults([]); // Clear results when switching to users
+      setSearchResults([]); 
     }
   };
 
