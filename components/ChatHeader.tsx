@@ -55,7 +55,7 @@ type Notification = Omit<Database['public']['Tables']['notifications']['Row'], '
 export default function ChatHeader({ user }: { user: SupabaseUser | undefined }) {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchType, setSearchType] = useState<'rooms' | 'users' | null>('rooms'); // Default to rooms
+  const [searchType, setSearchType] = useState<'rooms' | 'users' | null>('rooms');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [availableRooms, setAvailableRooms] = useState<(Room & { isMember: boolean })[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -77,7 +77,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const [debouncedCallback] = useDebounce((value: string) => setSearchQuery(value), 300);
   const [debouncedSearchQuery] = useDebounce(searchQuery, 300);
 
-  // Safer sync of store notifications with local state
   useEffect(() => {
     if (isMounted() && storeNotifications?.length > 0) {
       try {
@@ -101,7 +100,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     }
   }, [storeNotifications, isMounted, user?.id]);
 
-  // Fetch notifications safely
   useEffect(() => {
     if (!user?.id) return;
 
@@ -117,7 +115,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       } catch (error) {
         if (isMounted()) {
           console.error('Failed to fetch initial notifications:', error);
-          // Don't show toast here to avoid excessive error messages
         }
       }
     };
@@ -141,7 +138,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     };
   }, [user?.id, fetchNotifications, subscribeToNotifications, isMounted]);
 
-  // Safer room membership check
   const checkRoomMembership = useCallback(
     async (roomId: string) => {
       if (!user?.id || !roomId) return false;
@@ -168,7 +164,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     [user, supabase]
   );
 
-  // Fetch rooms with better error handling
   const fetchAvailableRooms = useCallback(async () => {
     if (!user?.id) return;
     try {
@@ -192,7 +187,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       const rooms = roomsData
         .map((item) => item.rooms)
         .filter((room): room is Room => room !== null);
-      
+
       const roomsWithMembership = await Promise.all(
         rooms.map(async (room) => ({
           ...room,
@@ -207,25 +202,22 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     } catch (error) {
       if (isMounted()) {
         console.error('Error fetching rooms:', error);
-        // Don't toast here to avoid excessive error messages
       }
     }
   }, [user, supabase, checkRoomMembership, setRooms, isMounted]);
 
-  // Load rooms on component mount
   useEffect(() => {
     if (user?.id) {
       fetchAvailableRooms();
     }
   }, [user?.id, fetchAvailableRooms]);
 
-  // Improved room switching with better error handling
   const handleRoomSwitch = async (room: Room) => {
     if (!user) {
       toast.error('You must be logged in to switch rooms');
       return;
     }
-    
+
     if (!room?.id) {
       toast.error('Invalid room selected');
       return;
@@ -258,7 +250,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     }
   };
 
-  // Safer room leaving
   const handleLeaveRoom = async () => {
     if (!user) {
       toast.error('You must be logged in to leave a room');
@@ -301,23 +292,22 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     }
   };
 
-  // Accept join requests more safely
   const handleAcceptJoinRequest = async (notificationId: string) => {
     if (!notificationId || !user?.id) {
       toast.error('Invalid notification or not logged in');
       return;
     }
-    
+
     try {
       const response = await fetch(API_ROUTES.NOTIFICATIONS.ACCEPT(notificationId), {
         method: 'POST',
       });
-      
+
       if (!response.ok) {
         const error = await response.json().catch(() => ({ error: 'Failed to accept join request' }));
         throw new Error(error.error || 'Failed to accept join request');
       }
-      
+
       if (isMounted()) {
         toast.success('Join request accepted');
         await fetchNotifications(user.id);
@@ -330,7 +320,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     }
   };
 
-  // Handle notification clicks with better error handling
   const handleNotificationClick = async (notification: Notification) => {
     if (!user) {
       toast.error('You must be logged in to access notifications');
@@ -346,7 +335,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         .from('notifications')
         .update({ status: 'read' })
         .eq('id', notification.id);
-        
+
       if (updateError) {
         console.error('Failed to update notification status:', updateError);
       }
@@ -356,7 +345,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         .select('*')
         .eq('id', notification.room_id)
         .single();
-        
+
       if (roomError || !room) {
         console.error('Room not found:', roomError);
         toast.error('Room not found');
@@ -381,25 +370,24 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     debouncedCallback(e.target.value);
   };
 
-  // Improved search with better error handling
   const fetchSearchResults = useCallback(async () => {
     if (!user) return;
-    
+
     setIsLoading(true);
     try {
       const endpoint = debouncedSearchQuery.trim()
         ? `${API_ROUTES.ROOMS.SEARCH}?query=${encodeURIComponent(debouncedSearchQuery)}`
         : API_ROUTES.ROOMS.ALL;
-        
+
       const response = await fetch(endpoint);
-      
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Search failed' }));
         throw new Error(errorData.error || 'Failed to search');
       }
-      
+
       const data = await response.json().catch(() => ({ rooms: [] }));
-      
+
       if (isMounted()) {
         const results: Room[] = data.rooms || [];
         const resultsWithMembership = await Promise.all(
@@ -428,7 +416,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     }
   }, [debouncedSearchQuery, fetchSearchResults, searchType]);
 
-  // Check room membership status with better error handling
   useEffect(() => {
     if (selectedRoom?.id && user?.id) {
       checkRoomMembership(selectedRoom.id)
@@ -450,7 +437,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     }
   }, [selectedRoom, user, checkRoomMembership, isMounted]);
 
-  // Create room with better validation
   const handleCreateRoom = async () => {
     if (!user) {
       toast.error('You must be logged in to create a room');
@@ -460,7 +446,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       toast.error('Room name cannot be empty');
       return;
     }
-    
+
     setIsCreating(true);
     try {
       const response = await fetch(API_ROUTES.ROOMS.CREATE, {
@@ -471,18 +457,18 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
           is_private: isPrivate,
         }),
       });
-      
+
       if (!response.ok) {
         const error = await response.json().catch(() => ({ error: 'Failed to create room' }));
         throw new Error(error.error || 'Failed to create room');
       }
-      
+
       const newRoom = await response.json().catch(() => ({}));
-      
+
       if (!newRoom.id) {
         throw new Error('Invalid response from server');
       }
-      
+
       if (isMounted()) {
         toast.success('Room created successfully!');
         setNewRoomName('');
@@ -531,49 +517,48 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     }
   };
 
-  // Join room with better error handling
   const handleJoinRoom = async (roomId?: string) => {
     if (!user) {
       toast.error('You must be logged in to join a room');
       return;
     }
-    
+
     const currentRoomId = roomId || selectedRoom?.id;
     if (!currentRoomId) {
       toast.error('No room selected');
       return;
     }
-    
+
     try {
       const response = await fetch(API_ROUTES.ROOMS.JOIN(currentRoomId), {
         method: 'POST',
       });
-      
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Failed to join room' }));
         throw new Error(errorData.error || 'Failed to join room');
       }
-      
+
       const data = await response.json().catch(() => ({}));
-      
+
       if (isMounted()) {
         toast.success(data.message || 'Joined room successfully');
-        
+
         if (!data.status || data.status === 'accepted') {
           const { data: room, error: roomError } = await supabase
             .from('rooms')
             .select('*')
             .eq('id', currentRoomId)
             .single();
-            
+
           if (roomError || !room) {
             console.error('Failed to fetch room details:', roomError);
             return;
           }
-          
+
           setSelectedRoom(room);
           await fetchAvailableRooms();
-          
+
           // Only send notification if we successfully joined
           try {
             const notification = {
@@ -586,7 +571,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
               status: 'unread',
               created_at: new Date().toISOString(),
             };
-            
+
             await supabase
               .channel('global-notifications')
               .send({
@@ -743,16 +728,15 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
             </PopoverContent>
           </Popover>
         )}
-        
-        {/* Use the standalone Notifications component instead */}
-        <Notifications 
-          isOpen={isNotificationsOpen} 
-          onClose={() => setIsNotificationsOpen(false)} 
+
+        <Notifications
+          isOpen={isNotificationsOpen}
+          onClose={() => setIsNotificationsOpen(false)}
         />
-        
-        <Button 
-          variant="ghost" 
-          size="icon" 
+
+        <Button
+          variant="ghost"
+          size="icon"
           className="relative"
           onClick={() => setIsNotificationsOpen(true)}
         >
@@ -761,7 +745,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
             <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full"></span>
           )}
         </Button>
-        
+
         <Popover open={isSearchPopoverOpen} onOpenChange={setIsSearchPopoverOpen}>
           <PopoverTrigger asChild>
             <Button variant="ghost" size="icon">
