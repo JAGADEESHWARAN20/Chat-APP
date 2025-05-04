@@ -1,3 +1,4 @@
+"use client"
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from './ui/button';
 import { supabaseBrowser } from '@/lib/supabase/browser';
