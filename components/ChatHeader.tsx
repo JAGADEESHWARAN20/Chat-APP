@@ -41,12 +41,13 @@ import { useNotification, Inotification } from '@/lib/store/notifications';
 import { useDebounce } from 'use-debounce';
 import { API_ROUTES } from '@/lib/apiConfig';
 import { useIsMounted } from '@/hooks/useIsMounted';
+import Notifications from './Notifications';
 
 type UserProfile = Database['public']['Tables']['users']['Row'];
 type Room = Database['public']['Tables']['rooms']['Row'];
 type SearchResult = UserProfile | Room;
 type Notification = Omit<Database['public']['Tables']['notifications']['Row'], 'user_id'> & {
-  user_id?: string; // Make optional
+  user_id?: string;
   rooms?: { name: string };
   users?: { username: string };
 };
@@ -54,7 +55,7 @@ type Notification = Omit<Database['public']['Tables']['notifications']['Row'], '
 export default function ChatHeader({ user }: { user: SupabaseUser | undefined }) {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchType, setSearchType] = useState<'rooms' | 'users' | null>(null);
+  const [searchType, setSearchType] = useState<'rooms' | 'users' | null>('rooms'); // Default to rooms
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [availableRooms, setAvailableRooms] = useState<(Room & { isMember: boolean })[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -76,30 +77,37 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const [debouncedCallback] = useDebounce((value: string) => setSearchQuery(value), 300);
   const [debouncedSearchQuery] = useDebounce(searchQuery, 300);
 
-  // Sync store notifications with local state
-useEffect(() => {
-  if (isMounted()) {
-    setNotifications(
-      storeNotifications.map((notif: Inotification) => ({
-        id: notif.id,
-        message: notif.content,
-        created_at: notif.created_at,
-        status: notif.is_read ? "read" : "unread",
-        type: notif.type,
-        sender_id: notif.sender_id,
-        room_id: notif.room_id,
-        user_id: user?.id || "", // Add user_id
-        users: notif.users ? { username: notif.users.username } : undefined,
-        rooms: notif.rooms ? { name: notif.rooms.name } : undefined,
-      }))
-    );
-  }
-}, [storeNotifications, isMounted, user?.id]);
+  // Safer sync of store notifications with local state
+  useEffect(() => {
+    if (isMounted() && storeNotifications?.length > 0) {
+      try {
+        setNotifications(
+          storeNotifications.map((notif: Inotification) => ({
+            id: notif.id,
+            message: notif.content,
+            created_at: notif.created_at,
+            status: notif.is_read ? "read" : "unread",
+            type: notif.type,
+            sender_id: notif.sender_id,
+            room_id: notif.room_id,
+            user_id: user?.id || "",
+            users: notif.users ? { username: notif.users.username } : undefined,
+            rooms: notif.rooms ? { name: notif.rooms.name } : undefined,
+          }))
+        );
+      } catch (error) {
+        console.error("Failed to process notifications:", error);
+      }
+    }
+  }, [storeNotifications, isMounted, user?.id]);
 
+  // Fetch notifications safely
   useEffect(() => {
     if (!user?.id) return;
 
     let initialFetchComplete = false;
+    let unsubscribe: (() => void) | undefined;
+
     const handleInitialFetch = async () => {
       try {
         await fetchNotifications(user.id);
@@ -108,18 +116,23 @@ useEffect(() => {
         }
       } catch (error) {
         if (isMounted()) {
-          toast.error('Failed to fetch initial notifications');
+          console.error('Failed to fetch initial notifications:', error);
+          // Don't show toast here to avoid excessive error messages
         }
       }
     };
 
     handleInitialFetch();
 
-    const unsubscribe = subscribeToNotifications(user.id, () => {
-      if (!initialFetchComplete && isMounted()) {
-        fetchNotifications(user.id);
-      }
-    });
+    try {
+      unsubscribe = subscribeToNotifications(user.id, () => {
+        if (!initialFetchComplete && isMounted()) {
+          fetchNotifications(user.id).catch(console.error);
+        }
+      });
+    } catch (error) {
+      console.error("Failed to subscribe to notifications:", error);
+    }
 
     return () => {
       if (typeof unsubscribe === 'function') {
@@ -128,9 +141,10 @@ useEffect(() => {
     };
   }, [user?.id, fetchNotifications, subscribeToNotifications, isMounted]);
 
+  // Safer room membership check
   const checkRoomMembership = useCallback(
     async (roomId: string) => {
-      if (!user) return false;
+      if (!user?.id || !roomId) return false;
       try {
         const { data, error } = await supabase
           .from('room_participants')
@@ -138,8 +152,12 @@ useEffect(() => {
           .eq('room_id', roomId)
           .eq('user_id', user.id)
           .single();
-        if (error && error.code !== 'PGRST116') {
-          throw new Error('Error checking room membership');
+
+        if (error) {
+          if (error.code !== 'PGRST116') {
+            console.error('Error checking room membership:', error);
+          }
+          return false;
         }
         return data?.status === 'accepted';
       } catch (error) {
@@ -150,26 +168,38 @@ useEffect(() => {
     [user, supabase]
   );
 
+  // Fetch rooms with better error handling
   const fetchAvailableRooms = useCallback(async () => {
-    if (!user) return;
+    if (!user?.id) return;
     try {
       const { data: roomsData, error } = await supabase
         .from('room_participants')
         .select('rooms(*)')
         .eq('user_id', user.id)
         .eq('status', 'accepted');
+
       if (error) {
-        throw new Error('Failed to fetch rooms');
+        console.error('Failed to fetch rooms:', error);
+        return;
       }
+
+      if (!roomsData) {
+        setAvailableRooms([]);
+        setRooms([]);
+        return;
+      }
+
       const rooms = roomsData
         .map((item) => item.rooms)
         .filter((room): room is Room => room !== null);
+      
       const roomsWithMembership = await Promise.all(
         rooms.map(async (room) => ({
           ...room,
           isMember: await checkRoomMembership(room.id),
         }))
       );
+
       if (isMounted()) {
         setAvailableRooms(roomsWithMembership);
         setRooms(rooms);
@@ -177,14 +207,27 @@ useEffect(() => {
     } catch (error) {
       if (isMounted()) {
         console.error('Error fetching rooms:', error);
-        toast.error('Failed to fetch rooms');
+        // Don't toast here to avoid excessive error messages
       }
     }
   }, [user, supabase, checkRoomMembership, setRooms, isMounted]);
 
+  // Load rooms on component mount
+  useEffect(() => {
+    if (user?.id) {
+      fetchAvailableRooms();
+    }
+  }, [user?.id, fetchAvailableRooms]);
+
+  // Improved room switching with better error handling
   const handleRoomSwitch = async (room: Room) => {
     if (!user) {
       toast.error('You must be logged in to switch rooms');
+      return;
+    }
+    
+    if (!room?.id) {
+      toast.error('Invalid room selected');
       return;
     }
 
@@ -196,11 +239,11 @@ useEffect(() => {
       });
 
       if (!response.ok) {
-        const error = await response.json();
+        const error = await response.json().catch(() => ({ error: 'Failed to switch room' }));
         throw new Error(error.error || 'Failed to switch room');
       }
 
-      const data = await response.json();
+      await response.json();
       if (isMounted()) {
         setSelectedRoom(room);
         setIsSwitchRoomPopoverOpen(false);
@@ -209,18 +252,19 @@ useEffect(() => {
       }
     } catch (error) {
       if (isMounted()) {
-        toast.error(error instanceof Error ? error.message : 'Failed to switch room');
         console.error('Switch room error:', error);
+        toast.error(error instanceof Error ? error.message : 'Failed to switch room');
       }
     }
   };
 
+  // Safer room leaving
   const handleLeaveRoom = async () => {
     if (!user) {
       toast.error('You must be logged in to leave a room');
       return;
     }
-    if (!selectedRoom) {
+    if (!selectedRoom?.id) {
       toast.error('No room selected');
       return;
     }
@@ -232,11 +276,11 @@ useEffect(() => {
       });
 
       if (!response.ok) {
-        const error = await response.json();
+        const error = await response.json().catch(() => ({ error: 'Failed to leave room' }));
         throw new Error(error.error || 'Failed to leave room');
       }
 
-      const { hasOtherRooms } = await response.json();
+      const { hasOtherRooms } = await response.json().catch(() => ({ hasOtherRooms: false }));
       if (isMounted()) {
         toast.success('Left room successfully');
         if (!hasOtherRooms) {
@@ -247,8 +291,8 @@ useEffect(() => {
       }
     } catch (error) {
       if (isMounted()) {
-        toast.error(error instanceof Error ? error.message : 'Failed to leave room');
         console.error('Error leaving room:', error);
+        toast.error(error instanceof Error ? error.message : 'Failed to leave room');
       }
     } finally {
       if (isMounted()) {
@@ -257,33 +301,43 @@ useEffect(() => {
     }
   };
 
+  // Accept join requests more safely
   const handleAcceptJoinRequest = async (notificationId: string) => {
+    if (!notificationId || !user?.id) {
+      toast.error('Invalid notification or not logged in');
+      return;
+    }
+    
     try {
       const response = await fetch(API_ROUTES.NOTIFICATIONS.ACCEPT(notificationId), {
         method: 'POST',
       });
+      
       if (!response.ok) {
-        const error = await response.json();
+        const error = await response.json().catch(() => ({ error: 'Failed to accept join request' }));
         throw new Error(error.error || 'Failed to accept join request');
       }
+      
       if (isMounted()) {
         toast.success('Join request accepted');
-        await fetchNotifications(user!.id);
+        await fetchNotifications(user.id);
       }
     } catch (error) {
       if (isMounted()) {
+        console.error('Error accepting join request:', error);
         toast.error(error instanceof Error ? error.message : 'Failed to accept join request');
       }
     }
   };
 
+  // Handle notification clicks with better error handling
   const handleNotificationClick = async (notification: Notification) => {
     if (!user) {
-      toast.error('You must be logged in to switch rooms');
+      toast.error('You must be logged in to access notifications');
       return;
     }
-    if (!notification.room_id) {
-      toast.error('Invalid notification: missing room ID');
+    if (!notification?.id || !notification.room_id) {
+      toast.error('Invalid notification');
       return;
     }
 
@@ -292,26 +346,33 @@ useEffect(() => {
         .from('notifications')
         .update({ status: 'read' })
         .eq('id', notification.id);
-      if (updateError) throw new Error('Failed to update notification status');
+        
+      if (updateError) {
+        console.error('Failed to update notification status:', updateError);
+      }
 
       const { data: room, error: roomError } = await supabase
         .from('rooms')
         .select('*')
         .eq('id', notification.room_id)
         .single();
-      if (roomError || !room) throw new Error('Room not found');
+        
+      if (roomError || !room) {
+        console.error('Room not found:', roomError);
+        toast.error('Room not found');
+        return;
+      }
 
       await handleRoomSwitch(room);
 
       if (isMounted()) {
         setNotifications((prev) => prev.filter((n) => n.id !== notification.id));
         setIsNotificationsOpen(false);
-        toast.success(`Switched to ${room.name}`);
       }
     } catch (error) {
       if (isMounted()) {
-        toast.error(error instanceof Error ? error.message : 'Failed to switch room');
-        console.error('Error switching room:', error);
+        console.error('Error handling notification:', error);
+        toast.error(error instanceof Error ? error.message : 'Failed to process notification');
       }
     }
   };
@@ -320,37 +381,38 @@ useEffect(() => {
     debouncedCallback(e.target.value);
   };
 
+  // Improved search with better error handling
   const fetchSearchResults = useCallback(async () => {
     if (!user) return;
+    
     setIsLoading(true);
     try {
-      const response = await fetch(
-        debouncedSearchQuery.trim()
-          ? `${API_ROUTES.ROOMS.SEARCH}?query=${encodeURIComponent(debouncedSearchQuery)}`
-          : API_ROUTES.ROOMS.ALL
-      );
-      const data = await response.json();
+      const endpoint = debouncedSearchQuery.trim()
+        ? `${API_ROUTES.ROOMS.SEARCH}?query=${encodeURIComponent(debouncedSearchQuery)}`
+        : API_ROUTES.ROOMS.ALL;
+        
+      const response = await fetch(endpoint);
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Search failed' }));
+        throw new Error(errorData.error || 'Failed to search');
+      }
+      
+      const data = await response.json().catch(() => ({ rooms: [] }));
+      
       if (isMounted()) {
-        if (response.ok) {
-          const results: Room[] = debouncedSearchQuery.trim()
-            ? data.rooms || []
-            : data.rooms || [];
-          const resultsWithMembership = await Promise.all(
-            results.map(async (room) => ({
-              ...room,
-              isMember: await checkRoomMembership(room.id),
-            }))
-          );
-          setSearchResults(resultsWithMembership);
-        } else {
-          toast.error(data.error || 'Failed to search rooms');
-          setSearchResults([]);
-        }
+        const results: Room[] = data.rooms || [];
+        const resultsWithMembership = await Promise.all(
+          results.map(async (room) => ({
+            ...room,
+            isMember: await checkRoomMembership(room.id),
+          }))
+        );
+        setSearchResults(resultsWithMembership);
       }
     } catch (error) {
       if (isMounted()) {
         console.error('Search error:', error);
-        toast.error('An error occurred while searching');
         setSearchResults([]);
       }
     } finally {
@@ -361,16 +423,26 @@ useEffect(() => {
   }, [debouncedSearchQuery, checkRoomMembership, user, isMounted]);
 
   useEffect(() => {
-    fetchSearchResults();
-  }, [debouncedSearchQuery, fetchSearchResults]);
+    if (debouncedSearchQuery !== undefined && searchType === 'rooms') {
+      fetchSearchResults();
+    }
+  }, [debouncedSearchQuery, fetchSearchResults, searchType]);
 
+  // Check room membership status with better error handling
   useEffect(() => {
-    if (selectedRoom && user) {
-      checkRoomMembership(selectedRoom.id).then((isMember) => {
-        if (isMounted()) {
-          setIsMember(isMember);
-        }
-      });
+    if (selectedRoom?.id && user?.id) {
+      checkRoomMembership(selectedRoom.id)
+        .then((isMember) => {
+          if (isMounted()) {
+            setIsMember(isMember);
+          }
+        })
+        .catch((error) => {
+          console.error('Error checking membership:', error);
+          if (isMounted()) {
+            setIsMember(false);
+          }
+        });
     } else {
       if (isMounted()) {
         setIsMember(false);
@@ -378,6 +450,7 @@ useEffect(() => {
     }
   }, [selectedRoom, user, checkRoomMembership, isMounted]);
 
+  // Create room with better validation
   const handleCreateRoom = async () => {
     if (!user) {
       toast.error('You must be logged in to create a room');
@@ -387,6 +460,7 @@ useEffect(() => {
       toast.error('Room name cannot be empty');
       return;
     }
+    
     setIsCreating(true);
     try {
       const response = await fetch(API_ROUTES.ROOMS.CREATE, {
@@ -397,11 +471,18 @@ useEffect(() => {
           is_private: isPrivate,
         }),
       });
+      
       if (!response.ok) {
-        const error = await response.json();
+        const error = await response.json().catch(() => ({ error: 'Failed to create room' }));
         throw new Error(error.error || 'Failed to create room');
       }
-      const newRoom = await response.json();
+      
+      const newRoom = await response.json().catch(() => ({}));
+      
+      if (!newRoom.id) {
+        throw new Error('Invalid response from server');
+      }
+      
       if (isMounted()) {
         toast.success('Room created successfully!');
         setNewRoomName('');
@@ -411,6 +492,7 @@ useEffect(() => {
       }
     } catch (error) {
       if (isMounted()) {
+        console.error('Error creating room:', error);
         toast.error(error instanceof Error ? error.message : 'Failed to create room');
       }
     } finally {
@@ -434,6 +516,7 @@ useEffect(() => {
       await supabase.auth.signOut();
       router.refresh();
     } catch (error) {
+      console.error('Logout error:', error);
       toast.error('Failed to log out');
     }
   };
@@ -441,61 +524,84 @@ useEffect(() => {
   const handleSearchByType = (type: 'rooms' | 'users') => {
     setSearchType(type);
     setSearchQuery('');
+    if (type === 'rooms') {
+      fetchSearchResults();
+    } else {
+      setSearchResults([]); // Clear results when switching to users
+    }
   };
 
+  // Join room with better error handling
   const handleJoinRoom = async (roomId?: string) => {
     if (!user) {
       toast.error('You must be logged in to join a room');
       return;
     }
+    
     const currentRoomId = roomId || selectedRoom?.id;
     if (!currentRoomId) {
       toast.error('No room selected');
       return;
     }
+    
     try {
       const response = await fetch(API_ROUTES.ROOMS.JOIN(currentRoomId), {
         method: 'POST',
       });
+      
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({ error: 'Failed to join room' }));
         throw new Error(errorData.error || 'Failed to join room');
       }
-      const data = await response.json();
+      
+      const data = await response.json().catch(() => ({}));
+      
       if (isMounted()) {
-        toast.success(data.message);
+        toast.success(data.message || 'Joined room successfully');
+        
         if (!data.status || data.status === 'accepted') {
           const { data: room, error: roomError } = await supabase
             .from('rooms')
             .select('*')
             .eq('id', currentRoomId)
             .single();
+            
           if (roomError || !room) {
-            throw new Error('Failed to fetch room details');
+            console.error('Failed to fetch room details:', roomError);
+            return;
           }
+          
           setSelectedRoom(room);
           await fetchAvailableRooms();
-          const notification = {
-            id: crypto.randomUUID(),
-            user_id: user.id,
-            type: 'user_joined',
-            room_id: currentRoomId,
-            sender_id: user.id,
-            message: `${user.email} joined the room ${room.name}`,
-            status: 'unread',
-            created_at: new Date().toISOString(),
-          };
-          await supabase
-            .channel('global-notifications')
-            .send({
-              type: 'broadcast',
-              event: 'user_joined',
-              payload: notification,
-            });
+          
+          // Only send notification if we successfully joined
+          try {
+            const notification = {
+              id: crypto.randomUUID(),
+              user_id: user.id,
+              type: 'user_joined',
+              room_id: currentRoomId,
+              sender_id: user.id,
+              message: `${user.email || 'A user'} joined the room ${room.name}`,
+              status: 'unread',
+              created_at: new Date().toISOString(),
+            };
+            
+            await supabase
+              .channel('global-notifications')
+              .send({
+                type: 'broadcast',
+                event: 'user_joined',
+                payload: notification,
+              });
+          } catch (notifError) {
+            console.error('Failed to send join notification:', notifError);
+          }
         }
       }
     } catch (error) {
       if (isMounted()) {
+        console.error('Error joining room:', error);
         toast.error(error instanceof Error ? error.message : 'Failed to join room');
       }
     }
@@ -637,65 +743,25 @@ useEffect(() => {
             </PopoverContent>
           </Popover>
         )}
-        <Popover open={isNotificationsOpen} onOpenChange={setIsNotificationsOpen}>
-          <PopoverTrigger asChild>
-            <Button variant="ghost" size="icon" className="relative">
-              <Bell className="h-5 w-5" />
-              {notifications.filter((n) => n.status === 'unread').length > 0 && (
-                <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full"></span>
-              )}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-80 bg-gray-800 text-white">
-            <div className="p-4">
-              <h3 className="font-semibold text-lg mb-2">Notifications</h3>
-              {notifications.length === 0 ? (
-                <p className="text-sm text-gray-400">No notifications</p>
-              ) : (
-                <>
-                  <ul className="space-x-2">
-                    {notifications.map((notif) => (
-                      <li
-                        key={notif.id}
-                        className="flex items-center justify-between gap-2 cursor-pointer hover:bg-gray-700 p-2 rounded"
-                        onClick={() => handleNotificationClick(notif)}
-                      >
-                        <div>
-                          <p className="text-sm">{notif.message || 'No message'}</p>
-                          <p className="text-xs text-gray-400">
-                            {notif.created_at
-                              ? new Date(notif.created_at).toLocaleString()
-                              : 'Unknown time'}
-                          </p>
-                        </div>
-                        {notif.type === 'join_request' && notif.status === 'unread' && (
-                          <Button
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleAcceptJoinRequest(notif.id);
-                            }}
-                          >
-                            Accept
-                          </Button>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                  {notifications.length >= 20 && user && (
-                    <Button
-                      variant="outline"
-                      className="mt-4 w-full text-white border-gray-600"
-                      onClick={() => fetchNotifications(user.id, Math.ceil(notifications.length / 20) + 1)}
-                    >
-                      Load More
-                    </Button>
-                  )}
-                </>
-              )}
-            </div>
-          </PopoverContent>
-        </Popover>
+        
+        {/* Use the standalone Notifications component instead */}
+        <Notifications 
+          isOpen={isNotificationsOpen} 
+          onClose={() => setIsNotificationsOpen(false)} 
+        />
+        
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          className="relative"
+          onClick={() => setIsNotificationsOpen(true)}
+        >
+          <Bell className="h-5 w-5" />
+          {storeNotifications.filter((n) => !n.is_read).length > 0 && (
+            <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full"></span>
+          )}
+        </Button>
+        
         <Popover open={isSearchPopoverOpen} onOpenChange={setIsSearchPopoverOpen}>
           <PopoverTrigger asChild>
             <Button variant="ghost" size="icon">
@@ -789,11 +855,6 @@ useEffect(() => {
                 </div>
               )}
               {!isLoading && searchResults.length === 0 && searchQuery.length > 0 && (
-                <p className="text-sm text-gray-400 mt-2">
-                  No {searchType || 'results'} found.
-                </p>
-              )}
-              {!isLoading && searchQuery.length === 0 && searchType && (
                 <p className="text-sm text-gray-400 mt-2">
                   Showing all {searchType}...
                 </p>
