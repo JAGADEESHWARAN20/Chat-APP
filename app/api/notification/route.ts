@@ -2,8 +2,6 @@ import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { Inotification } from "@/lib/store/notifications";
-import { RawNotification } from "@/lib/types/notification";
-import { transformNotification } from "@/lib/utils/notifications";
 import { Database } from "@/lib/types/supabase";
 
 export async function GET(req: NextRequest) {
@@ -18,7 +16,7 @@ export async function GET(req: NextRequest) {
 
     const userId = session.user.id;
 
-    // Fetch notifications with joins for users (sender), recipient (user_id), and rooms
+    // Fetch notifications with joins
     const { data: notifications, error: notificationError } = await supabase
       .from("notifications")
       .select(`
@@ -30,9 +28,9 @@ export async function GET(req: NextRequest) {
         sender_id,
         user_id,
         room_id,
-        users:users!notifications_sender_id_fkey(id, username, display_name, avatar_url, created_at),
-        recipient:users!notifications_user_id_fkey(id, username, display_name, avatar_url, created_at),
-        rooms:rooms!notifications_room_id_fkey(id, name, created_at, created_by, is_private)
+        users:users!notifications_sender_id_fkey(id, username, display_name, avatar_url),
+        recipient:users!notifications_user_id_fkey(id, username, display_name, avatar_url),
+        rooms:rooms!notifications_room_id_fkey(id, name)
       `)
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
@@ -47,31 +45,33 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ notifications: [] });
     }
 
-    // Transform raw notifications to Inotification format using transformNotification
-    const transformedNotifications: Inotification[] = notifications.map((notif: RawNotification) => {
-      // Ensure all required fields are present
-      const transformed = transformNotification({
-        ...notif,
-        users: notif.users || null,
-        recipient: notif.recipient || null,
-        rooms: notif.rooms || null,
-        user_id: notif.user_id, // Make sure user_id is included
-      });
-
-      // Double-check required fields
-      if (!transformed.user_id) {
-        transformed.user_id = notif.user_id;
-      }
-      if (!transformed.recipient && notif.recipient) {
-        transformed.recipient = {
-          id: notif.recipient.id,
-          username: notif.recipient.username,
-          display_name: notif.recipient.display_name,
-          avatar_url: notif.recipient.avatar_url
-        };
-      }
-      return transformed;
-    });
+    // Transform to match Inotification interface
+    const transformedNotifications: Inotification[] = notifications.map((notif) => ({
+      id: notif.id,
+      content: notif.message,
+      created_at: notif.created_at,
+      is_read: notif.status === "read",
+      type: notif.type,
+      sender_id: notif.sender_id || "",
+      user_id: notif.user_id, // This was missing
+      room_id: notif.room_id,
+      users: notif.users ? {
+        id: notif.users.id,
+        username: notif.users.username,
+        display_name: notif.users.display_name,
+        avatar_url: notif.users.avatar_url
+      } : null,
+      recipient: notif.recipient ? { // This was missing
+        id: notif.recipient.id,
+        username: notif.recipient.username,
+        display_name: notif.recipient.display_name,
+        avatar_url: notif.recipient.avatar_url
+      } : null,
+      rooms: notif.rooms ? {
+        id: notif.rooms.id,
+        name: notif.rooms.name
+      } : null
+    }));
 
     return NextResponse.json({ success: true, notifications: transformedNotifications });
   } catch (error) {
