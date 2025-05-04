@@ -58,3 +58,17 @@ export const transformNotification = (
           rooms: rooms ? { id: rooms.id, name: rooms.name } : null,
      };
 };
+
+
+
+export function transformUser(user: User | null) {
+     if (!user) return null;
+
+     return {
+          id: user.id,
+          username: user.username,
+          display_name: user.display_name,
+          avatar_url: user.avatar_url,
+          created_at: user.created_at,
+     };
+}

@@ -1,7 +1,6 @@
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
-import { Inotification } from "@/lib/store/notifications";
 import { Database } from "@/lib/types/supabase";
 import { transformNotification } from "@/lib/utils/notifications";
 

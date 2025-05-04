@@ -2,25 +2,14 @@ import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { Inotification } from "@/lib/store/notifications";
+import { RawNotification } from "@/lib/types/notification";
+import { transformNotification } from "@/lib/utils/notifications";
+import { Database } from "@/lib/types/supabase";
 
-// Define the raw notification type returned by Supabase
-interface RawNotification {
-  id: string;
-  message: string;
-  created_at: string;
-  status: string;
-  type: string;
-  sender_id: string;
-  user_id: string;
-  room_id: string | null;
-  users: { id: string; username: string; display_name: string; avatar_url: string | null }[] | null; // Allow array or null
-  recipient: { id: string; username: string; display_name: string; avatar_url: string | null }[] | null; // Allow array or null
-  rooms: { id: string; name: string }[] | null; // Allow array or null
-}
 
-export async function GET(request: NextRequest) {
+export async function GET(req: NextRequest) {
   try {
-    const supabase = createRouteHandlerClient({ cookies });
+    const supabase = createRouteHandlerClient<Database>({ cookies });
 
     // Check if user is authenticated
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
@@ -31,7 +20,7 @@ export async function GET(request: NextRequest) {
     const userId = session.user.id;
 
     // Fetch notifications with joins for users (sender), recipient (user_id), and rooms
-    const { data: notifications, error } = await supabase
+    const { data: notifications, error: notificationError } = await supabase
       .from("notifications")
       .select(`
         id,
@@ -42,53 +31,34 @@ export async function GET(request: NextRequest) {
         sender_id,
         user_id,
         room_id,
-        users!notifications_sender_id_fkey (id, username, display_name, avatar_url),
-        recipient:users!notifications_user_id_fkey (id, username, display_name, avatar_url),
-        rooms!notifications_room_id_fkey (id, name)
+        users:users!notifications_sender_id_fkey(id, username, display_name, avatar_url, created_at),
+        recipient:users!notifications_user_id_fkey(id, username, display_name, avatar_url, created_at),
+        rooms:rooms!notifications_room_id_fkey(id, name, created_at, created_by, is_private)
       `)
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(20);
 
-    if (error) {
-      throw new Error(error.message || "Failed to fetch notifications");
+    if (notificationError) {
+      console.error("Error fetching notifications:", notificationError);
+      throw new Error(notificationError.message || "Failed to fetch notifications");
     }
 
-    // Transform the raw data to match the Inotification interface
-    const transformedNotifications: Inotification[] = notifications.map((notif: RawNotification) => ({
-      id: notif.id,
-      content: notif.message,
-      created_at: notif.created_at,
-      is_read: notif.status === "read",
-      type: notif.type,
-      sender_id: notif.sender_id,
-      user_id: notif.user_id,
-      room_id: notif.room_id,
-      users: notif.users && notif.users.length > 0
-        ? {
-          id: notif.users[0].id,
-          username: notif.users[0].username,
-          display_name: notif.users[0].display_name,
-          avatar_url: notif.users[0].avatar_url,
-        }
-        : null,
-      recipient: notif.recipient && notif.recipient.length > 0
-        ? {
-          id: notif.recipient[0].id,
-          username: notif.recipient[0].username,
-          display_name: notif.recipient[0].display_name,
-          avatar_url: notif.recipient[0].avatar_url,
-        }
-        : null,
-      rooms: notif.rooms && notif.rooms.length > 0
-        ? {
-          id: notif.rooms[0].id,
-          name: notif.rooms[0].name,
-        }
-        : null,
-    }));
+    if (!notifications) {
+      return NextResponse.json({ notifications: [] });
+    }
 
-    return NextResponse.json(transformedNotifications);
+    // Transform raw notifications to Inotification format
+    const transformedNotifications: Inotification[] = notifications.map((notif: RawNotification) =>
+      transformNotification({
+        ...notif,
+        users: notif.users || null,
+        recipient: notif.recipient || null,
+        rooms: notif.rooms || null,
+      })
+    );
+
+    return NextResponse.json({ success: true, notifications: transformedNotifications });
   } catch (error) {
     console.error("Error fetching notifications:", error);
     return NextResponse.json(
