@@ -51,8 +51,8 @@ export async function GET(req: NextRequest) {
     const transformedNotifications: Inotification[] = notifications.map((notif: RawNotification) =>
       transformNotification({
         ...notif,
-        users: notif.users || null,
-        recipient: notif.recipient || null,
+        users: notif.users ,
+        recipient: notif.recipient ,
         rooms: notif.rooms || null,
       })
     );
