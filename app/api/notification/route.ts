@@ -48,14 +48,30 @@ export async function GET(req: NextRequest) {
     }
 
     // Transform raw notifications to Inotification format using transformNotification
-    const transformedNotifications: Inotification[] = notifications.map((notif: RawNotification) =>
-      transformNotification({
+    const transformedNotifications: Inotification[] = notifications.map((notif: RawNotification) => {
+      // Ensure all required fields are present
+      const transformed = transformNotification({
         ...notif,
         users: notif.users || null,
         recipient: notif.recipient || null,
         rooms: notif.rooms || null,
-      })
-    );
+        user_id: notif.user_id, // Make sure user_id is included
+      });
+
+      // Double-check required fields
+      if (!transformed.user_id) {
+        transformed.user_id = notif.user_id;
+      }
+      if (!transformed.recipient && notif.recipient) {
+        transformed.recipient = {
+          id: notif.recipient.id,
+          username: notif.recipient.username,
+          display_name: notif.recipient.display_name,
+          avatar_url: notif.recipient.avatar_url
+        };
+      }
+      return transformed;
+    });
 
     return NextResponse.json({ success: true, notifications: transformedNotifications });
   } catch (error) {
