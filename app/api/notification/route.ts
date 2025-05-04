@@ -6,7 +6,6 @@ import { RawNotification } from "@/lib/types/notification";
 import { transformNotification } from "@/lib/utils/notifications";
 import { Database } from "@/lib/types/supabase";
 
-
 export async function GET(req: NextRequest) {
   try {
     const supabase = createRouteHandlerClient<Database>({ cookies });
@@ -48,7 +47,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ notifications: [] });
     }
 
-    // Transform raw notifications to Inotification format
+    // Transform raw notifications to Inotification format using transformNotification
     const transformedNotifications: Inotification[] = notifications.map((notif: RawNotification) =>
       transformNotification({
         ...notif,
