@@ -92,7 +92,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const fetchAvailableRooms = useCallback(async () => {
     if (!user) return;
     try {
-      // Fetch all rooms the user is a participant of (status: accepted)
       const { data: roomsData, error } = await supabase
         .from("room_participants")
         .select("rooms(*)")
@@ -366,7 +365,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         if (status === "SUBSCRIBED") {
           console.log("Subscribed to global notifications channel");
         } else if (status === "CLOSED") {
-          toast.error("Notification subscription closed");
+          console.log("Global notifications channel closed");
         } else if (status === "CHANNEL_ERROR") {
           console.error("Notification channel error:", err);
           toast.error("Error in notification subscription");
@@ -437,8 +436,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         if (status === "SUBSCRIBED") {
           console.log("Subscribed to postgres_changes notifications channel");
         } else if (status === "CLOSED") {
-          console.error("Postgres notifications channel closed");
-          toast.error("Postgres notification subscription closed");
+          console.log("Postgres notifications channel closed");
         } else if (status === "CHANNEL_ERROR") {
           console.error("Postgres notifications channel error:", err);
           toast.error("Error in postgres notification subscription");

@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Avatar, AvatarImage, AvatarFallback } from "./ui/avatar";
 import { useRouter } from "next/navigation";
 import { User as SupabaseUser } from "@supabase/supabase-js";
+import { Trash2 } from "lucide-react";
 
 interface NotificationsProps {
   isOpen: boolean;
@@ -18,7 +19,7 @@ interface NotificationsProps {
 
 export default function Notifications({ isOpen, onClose }: NotificationsProps) {
   const user = useUser((state) => state.user) as SupabaseUser | undefined;
-  const { notifications, markAsRead, fetchNotifications, subscribeToNotifications } = useNotification();
+  const { notifications, markAsRead, fetchNotifications, subscribeToNotifications, setNotifications } = useNotification();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const supabase = supabaseBrowser();
@@ -63,6 +64,44 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
     }
   };
 
+  const handleDeleteNotification = async (notificationId: string) => {
+    try {
+      const { error } = await supabase
+        .from("notifications")
+        .delete()
+        .eq("id", notificationId);
+      if (error) {
+        throw new Error(error.message || "Failed to delete notification");
+      }
+      setNotifications(notifications.filter((notif) => notif.id !== notificationId));
+      toast.success("Notification deleted");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to delete notification");
+      console.error("Error deleting notification:", error);
+    }
+  };
+
+  const handleClearAllNotifications = async () => {
+    if (!user?.id) {
+      toast.error("User not logged in");
+      return;
+    }
+    try {
+      const { error } = await supabase
+        .from("notifications")
+        .delete()
+        .eq("user_id", user.id);
+      if (error) {
+        throw new Error(error.message || "Failed to clear notifications");
+      }
+      setNotifications([]);
+      toast.success("All notifications cleared");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to clear notifications");
+      console.error("Error clearing notifications:", error);
+    }
+  };
+
   useEffect(() => {
     if (!user?.id) return;
 
@@ -85,8 +124,18 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="bg-gray-800 text-white" aria-labelledby="notifications-title">
-        <DialogHeader>
+        <DialogHeader className="flex flex-row items-center justify-between">
           <DialogTitle id="notifications-title">Notifications</DialogTitle>
+          {notifications.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleClearAllNotifications}
+              className="text-white hover:bg-gray-700"
+            >
+              Clear All
+            </Button>
+          )}
         </DialogHeader>
         <div className="space-y-4">
           {isLoading ? (
@@ -109,24 +158,35 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
                     {notif.created_at ? new Date(notif.created_at).toLocaleString() : "Unknown time"}
                   </p>
                 </div>
-                {notif.type === "room_invite" && !notif.is_read && (
+                <div className="flex items-center gap-2">
+                  {notif.type === "room_invite" && !notif.is_read && (
+                    <Button
+                      onClick={() => handleAccept(notif.id, notif.room_id)}
+                      aria-label={`Accept invitation for notification ${notif.id}`}
+                    >
+                      Accept
+                    </Button>
+                  )}
+                  {!notif.is_read && (
+                    <Button
+                      variant="outline"
+                      onClick={() => handleMarkAsRead(notif.id)}
+                      aria-label={`Mark notification ${notif.id} as read`}
+                      className="text-white border-gray-600"
+                    >
+                      Mark as Read
+                    </Button>
+                  )}
                   <Button
-                    onClick={() => handleAccept(notif.id, notif.room_id)}
-                    aria-label={`Accept invitation for notification ${notif.id}`}
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleDeleteNotification(notif.id)}
+                    aria-label={`Delete notification ${notif.id}`}
+                    className="text-white hover:bg-gray-700"
                   >
-                    Accept
+                    <Trash2 className="h-4 w-4" />
                   </Button>
-                )}
-                {!notif.is_read && (
-                  <Button
-                    variant="outline"
-                    onClick={() => handleMarkAsRead(notif.id)}
-                    aria-label={`Mark notification ${notif.id} as read`}
-                    className="text-white border-gray-600"
-                  >
-                    Mark as Read
-                  </Button>
-                )}
+                </div>
               </div>
             ))
           )}
