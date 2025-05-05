@@ -48,6 +48,7 @@ export async function POST(
 
     // Add user to room_participants
     const status = room.is_private ? "pending" : "accepted";
+    const joinedAt = room.is_private ? null : new Date().toISOString(); // Set joined_at only for accepted status
     const { data: participant, error: insertParticipantError } = await supabase
       .from("room_participants")
       .insert([
@@ -55,7 +56,7 @@ export async function POST(
           room_id: roomId,
           user_id: userId,
           status,
-          joined_at: new Date().toISOString(),
+          joined_at: joinedAt,
         },
       ])
       .select()
@@ -99,6 +100,7 @@ export async function POST(
       .single();
     if (creatorError) {
       console.error("Error fetching user:", creatorError);
+      return NextResponse.json({ error: "Failed to fetch user data" }, { status: 500 });
     }
 
     const message = `${creator?.username || "A user"} requested to join ${room.name}`;
@@ -117,6 +119,13 @@ export async function POST(
       ]);
     if (notificationError) {
       console.error("Error sending notification:", notificationError);
+      // Roll back the room_participants entry since the notification failed
+      await supabase
+        .from("room_participants")
+        .delete()
+        .eq("room_id", roomId)
+        .eq("user_id", userId);
+      return NextResponse.json({ error: "Failed to send join request notification" }, { status: 500 });
     }
 
     return NextResponse.json({
