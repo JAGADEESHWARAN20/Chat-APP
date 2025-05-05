@@ -92,18 +92,39 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
 
   const handleMarkAsRead = async (notificationId: string) => {
     try {
-      const { error } = await supabase
-        .from("notifications")
-        .update({ status: "read" })
-        .eq("id", notificationId);
-      if (error) {
-        throw new Error(error.message || "Failed to mark as read");
+      const response = await fetch(`/api/notifications/${notificationId}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to delete notification");
       }
-      markAsRead(notificationId);
+      setNotifications(notifications.filter((notif) => notif.id !== notificationId));
       toast.success("Marked as read");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to mark as read");
       console.error("Error marking as read:", error);
+    }
+  };
+
+  const handleMarkAsUnread = async (notificationId: string) => {
+    try {
+      const response = await fetch(`/api/notifications/${notificationId}/unread`, {
+        method: "POST",
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to mark as unread");
+      }
+      setNotifications(
+        notifications.map((notif) =>
+          notif.id === notificationId ? { ...notif, is_read: false } : notif
+        )
+      );
+      toast.success("Marked as unread");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to mark as unread");
+      console.error("Error marking as unread:", error);
     }
   };
 
@@ -166,7 +187,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="bg-gray-800 text-white" aria-labelledby="notifications-title">
+      <DialogContent className="bg-gray-800 text-white max-w-[90vw] sm:max-w-md" aria-labelledby="notifications-title">
         <DialogHeader className="flex flex-row items-center justify-between">
           <DialogTitle id="notifications-title">Notifications</DialogTitle>
           {notifications.length > 0 && (
@@ -180,29 +201,29 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
             </Button>
           )}
         </DialogHeader>
-        <div className="space-y-4">
+        <div className="space-y-4 max-h-[300px] overflow-y-auto">
           {isLoading ? (
             <p className="text-gray-400">Loading notifications...</p>
           ) : notifications.length === 0 ? (
             <p className="text-gray-400">No notifications</p>
           ) : (
-            notifications.map((notif) => (
+            notifications.slice(0, 5).map((notif) => (
               <div
                 key={notif.id}
                 className={`p-2 rounded flex items-center gap-3 ${notif.is_read ? "bg-gray-800" : "bg-gray-700"} cursor-pointer`}
                 onClick={() => handleNotificationClick(notif.id, notif.room_id)}
               >
-                <Avatar>
+                <Avatar className="flex-shrink-0">
                   <AvatarImage src={notif.users?.avatar_url ?? ""} alt={notif.users?.display_name || "User"} />
                   <AvatarFallback>{notif.users?.display_name?.[0] || "?"}</AvatarFallback>
                 </Avatar>
-                <div className="flex-1">
-                  <p>{notif.content}</p>
-                  <p className="text-sm text-gray-400">
+                <div className="flex-1 min-w-0">
+                  <p className="truncate">{notif.content}</p>
+                  <p className="text-sm text-gray-400 truncate">
                     {notif.created_at ? new Date(notif.created_at).toLocaleString() : "Unknown time"}
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-shrink-0">
                   {notif.type === "room_invite" && !notif.is_read && (
                     <Button
                       onClick={(e) => {
@@ -210,11 +231,24 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
                         handleAccept(notif.id, notif.room_id);
                       }}
                       aria-label={`Accept invitation for notification ${notif.id}`}
+                      className="text-sm px-2 py-1"
                     >
                       Accept
                     </Button>
                   )}
-                  {!notif.is_read && (
+                  {notif.is_read ? (
+                    <Button
+                      variant="outline"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleMarkAsUnread(notif.id);
+                      }}
+                      aria-label={`Mark notification ${notif.id} as unread`}
+                      className="text-white border-gray-600 text-sm px-2 py-1"
+                    >
+                      Mark as Unread
+                    </Button>
+                  ) : (
                     <Button
                       variant="outline"
                       onClick={(e) => {
@@ -222,7 +256,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
                         handleMarkAsRead(notif.id);
                       }}
                       aria-label={`Mark notification ${notif.id} as read`}
-                      className="text-white border-gray-600"
+                      className="text-white border-gray-600 text-sm px-2 py-1"
                     >
                       Mark as Read
                     </Button>
