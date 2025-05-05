@@ -79,7 +79,7 @@ export const useNotification = create<NotificationState>((set) => {
 
     addNotification: (notification) =>
       set((state) => ({
-        notifications: [notification, ...state.notifications],
+        notifications: [notification, ...state.notifications].slice(0, 20),
       })),
 
     markAsRead: (notificationId) =>
@@ -237,9 +237,13 @@ export const useNotification = create<NotificationState>((set) => {
               rooms,
             });
 
-            set((state) => ({
-              notifications: [formattedNotification, ...state.notifications],
-            }));
+            set((state) => {
+              const newNotifications = [formattedNotification, ...state.notifications].slice(0, 20);
+              if (!formattedNotification.is_read) {
+                toast.info(formattedNotification.content);
+              }
+              return { notifications: newNotifications };
+            });
           }
         )
         .subscribe((status, err) => {

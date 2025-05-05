@@ -47,6 +47,49 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
     }
   };
 
+  const handleNotificationClick = async (notificationId: string, roomId: string | null) => {
+    if (!user) {
+      toast.error("You must be logged in to switch rooms");
+      return;
+    }
+    if (!roomId) {
+      toast.error("Notification is missing room ID");
+      return;
+    }
+    try {
+      const { error: updateError } = await supabase
+        .from("notifications")
+        .update({ status: "read" })
+        .eq("id", notificationId);
+      if (updateError) throw updateError;
+
+      const { data: room, error: roomError } = await supabase
+        .from("rooms")
+        .select("*")
+        .eq("id", roomId)
+        .single();
+      if (roomError || !room) throw new Error("Room not found");
+
+      const response = await fetch("/api/rooms/switch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roomId: room.id }),
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to switch room");
+      }
+
+      markAsRead(notificationId);
+      router.push(`/rooms/${roomId}`);
+      onClose();
+      toast.success(`Switched to ${room.name}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to switch room");
+      console.error("Error switching room:", error);
+    }
+  };
+
   const handleMarkAsRead = async (notificationId: string) => {
     try {
       const { error } = await supabase
@@ -66,12 +109,12 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
 
   const handleDeleteNotification = async (notificationId: string) => {
     try {
-      const { error } = await supabase
-        .from("notifications")
-        .delete()
-        .eq("id", notificationId);
-      if (error) {
-        throw new Error(error.message || "Failed to delete notification");
+      const response = await fetch(`/api/notifications/${notificationId}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to delete notification");
       }
       setNotifications(notifications.filter((notif) => notif.id !== notificationId));
       toast.success("Notification deleted");
@@ -87,12 +130,12 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
       return;
     }
     try {
-      const { error } = await supabase
-        .from("notifications")
-        .delete()
-        .eq("user_id", user.id);
-      if (error) {
-        throw new Error(error.message || "Failed to clear notifications");
+      const response = await fetch(`/api/notifications`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to clear notifications");
       }
       setNotifications([]);
       toast.success("All notifications cleared");
@@ -146,7 +189,8 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
             notifications.map((notif) => (
               <div
                 key={notif.id}
-                className={`p-2 rounded flex items-center gap-3 ${notif.is_read ? "bg-gray-800" : "bg-gray-700"}`}
+                className={`p-2 rounded flex items-center gap-3 ${notif.is_read ? "bg-gray-800" : "bg-gray-700"} cursor-pointer`}
+                onClick={() => handleNotificationClick(notif.id, notif.room_id)}
               >
                 <Avatar>
                   <AvatarImage src={notif.users?.avatar_url ?? ""} alt={notif.users?.display_name || "User"} />
@@ -161,7 +205,10 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
                 <div className="flex items-center gap-2">
                   {notif.type === "room_invite" && !notif.is_read && (
                     <Button
-                      onClick={() => handleAccept(notif.id, notif.room_id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleAccept(notif.id, notif.room_id);
+                      }}
                       aria-label={`Accept invitation for notification ${notif.id}`}
                     >
                       Accept
@@ -170,7 +217,10 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
                   {!notif.is_read && (
                     <Button
                       variant="outline"
-                      onClick={() => handleMarkAsRead(notif.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleMarkAsRead(notif.id);
+                      }}
                       aria-label={`Mark notification ${notif.id} as read`}
                       className="text-white border-gray-600"
                     >
@@ -180,7 +230,10 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => handleDeleteNotification(notif.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteNotification(notif.id);
+                    }}
                     aria-label={`Delete notification ${notif.id}`}
                     className="text-white hover:bg-gray-700"
                   >
