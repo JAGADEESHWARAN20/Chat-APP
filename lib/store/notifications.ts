@@ -84,9 +84,7 @@ export const useNotification = create<NotificationState>((set) => {
 
     markAsRead: (notificationId) =>
       set((state) => ({
-        notifications: state.notifications.map((notif) =>
-          notif.id === notificationId ? { ...notif, is_read: true } : notif
-        ),
+        notifications: state.notifications.filter((notif) => notif.id !== notificationId),
       })),
 
     fetchNotifications: async (userId, page = 1, limit = 20, retries = 3) => {
@@ -244,6 +242,21 @@ export const useNotification = create<NotificationState>((set) => {
               }
               return { notifications: newNotifications };
             });
+          }
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "DELETE",
+            schema: "public",
+            table: "notifications",
+            filter: `user_id=eq.${userId}`,
+          },
+          (payload) => {
+            const deletedId = payload.old.id;
+            set((state) => ({
+              notifications: state.notifications.filter((notif) => notif.id !== deletedId),
+            }));
           }
         )
         .subscribe((status, err) => {
