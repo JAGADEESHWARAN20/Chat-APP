@@ -41,12 +41,14 @@ interface NotificationState {
   addNotification: (notification: Inotification) => void;
   markAsRead: (notificationId: string) => void;
   fetchNotifications: (userId: string, page?: number, limit?: number, retries?: number) => Promise<void>;
-  subscribeToNotifications: (userId: string, callback?: () => void) => () => void;
+  subscribeToNotifications: (userId: string) => void;
+  unsubscribeFromNotifications: () => void;
 }
 
 export const useNotification = create<NotificationState>((set) => {
   const supabase = supabaseBrowser();
   const usersCache = new Map<string, User>();
+  let channel: ReturnType<typeof supabase.channel> | null = null;
 
   const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -193,8 +195,12 @@ export const useNotification = create<NotificationState>((set) => {
       }
     },
 
-    subscribeToNotifications: (userId: string, callback?: () => void) => {
-      const channel = supabase
+    subscribeToNotifications: (userId: string) => {
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+
+      channel = supabase
         .channel(`notifications:${userId}`)
         .on(
           "postgres_changes",
@@ -234,14 +240,27 @@ export const useNotification = create<NotificationState>((set) => {
             set((state) => ({
               notifications: [formattedNotification, ...state.notifications],
             }));
-            callback?.();
           }
         )
-        .subscribe();
+        .subscribe((status, err) => {
+          if (status === "SUBSCRIBED") {
+            console.log(`Subscribed to notifications:${userId}`);
+          } else if (status === "CLOSED") {
+            console.log(`Channel notifications:${userId} closed`);
+            channel = null;
+          } else if (status === "CHANNEL_ERROR") {
+            console.error(`Channel notifications:${userId} error:`, err);
+            toast.error("Error in notification subscription");
+          }
+        });
+    },
 
-      return () => {
+    unsubscribeFromNotifications: () => {
+      if (channel) {
         supabase.removeChannel(channel);
-      };
+        channel = null;
+        console.log("Unsubscribed from notifications channel");
+      }
     },
   };
 });

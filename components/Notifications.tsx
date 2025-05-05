@@ -66,12 +66,11 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
   useEffect(() => {
     if (!user?.id) return;
 
-    let unsubscribe: (() => void) | undefined;
     const fetchAndSubscribe = async () => {
       setIsLoading(true);
       try {
         await fetchNotifications(user.id);
-        unsubscribe = subscribeToNotifications(user.id);
+        subscribeToNotifications(user.id);
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Failed to load notifications");
         console.error("Error in fetchAndSubscribe:", error);
@@ -81,12 +80,6 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
     };
 
     fetchAndSubscribe();
-
-    return () => {
-      if (unsubscribe && typeof unsubscribe === "function") {
-        unsubscribe();
-      }
-    };
   }, [user?.id, fetchNotifications, subscribeToNotifications]);
 
   return (
@@ -104,8 +97,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
             notifications.map((notif) => (
               <div
                 key={notif.id}
-                className={`p-2 rounded flex items-center gap-3 ${notif.is_read ? "bg-gray-800" : "bg-gray-700"
-                  }`}
+                className={`p-2 rounded flex items-center gap-3 ${notif.is_read ? "bg-gray-800" : "bg-gray-700"}`}
               >
                 <Avatar>
                   <AvatarImage src={notif.users?.avatar_url ?? ""} alt={notif.users?.display_name || "User"} />
