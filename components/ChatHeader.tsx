@@ -92,6 +92,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const fetchAvailableRooms = useCallback(async () => {
     if (!user) return;
     try {
+      // Fetch all rooms the user is a participant of (status: accepted)
       const { data: roomsData, error } = await supabase
         .from("room_participants")
         .select("rooms(*)")
@@ -323,7 +324,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     fetchNotifications();
     fetchAvailableRooms();
 
-    // Existing broadcast subscription for new-message and user_joined events
     const notificationChannel = supabase
       .channel("global-notifications")
       .on(
@@ -333,7 +333,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
           const newNotification = payload.payload as Notification;
           if (isMounted.current) {
             setNotifications((prev) => {
-              // Avoid duplicates by checking if the notification already exists
               if (prev.some((n) => n.id === newNotification.id)) {
                 return prev;
               }
@@ -374,8 +373,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         }
       });
 
-    // New postgres_changes subscription for real-time notifications
-    // New postgres_changes subscription for real-time notifications
     const postgresChannel = supabase
       .channel(`notifications:${user.id}`)
       .on(
@@ -389,7 +386,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         async (payload) => {
           const newNotification = payload.new as Notification;
           if (isMounted.current) {
-            // Fetch additional data for users and rooms to match the Notification type
             let usersMap: Record<string, { username: string }> = {};
             if (newNotification.sender_id) {
               const { data: userData, error: userError } = await supabase
@@ -404,14 +400,12 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
               }
             }
 
-            // Initialize rooms as undefined by default
             let roomsData: { name: string } | undefined = undefined;
-            // Only fetch room data if room_id is not null
             if (newNotification.room_id) {
               const { data: roomData, error: roomError } = await supabase
                 .from("rooms")
                 .select("name")
-                .eq("id", newNotification.room_id) // Now safe because we checked for null
+                .eq("id", newNotification.room_id)
                 .single();
               if (roomError) {
                 console.error("Error fetching room for notification:", roomError);
@@ -427,7 +421,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
             };
 
             setNotifications((prev) => {
-              // Avoid duplicates by checking if the notification already exists
               if (prev.some((n) => n.id === enrichedNotification.id)) {
                 return prev;
               }
@@ -451,6 +444,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
           toast.error("Error in postgres notification subscription");
         }
       });
+
     return () => {
       supabase.removeChannel(notificationChannel);
       supabase.removeChannel(postgresChannel);

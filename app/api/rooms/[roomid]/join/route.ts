@@ -16,10 +16,12 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const userId = session.user.id;
+
     // Check if room exists
     const { data: room, error: roomError } = await supabase
       .from("rooms")
-      .select("*")
+      .select("*, created_by")
       .eq("id", roomId)
       .single();
     if (roomError || !room) {
@@ -31,7 +33,7 @@ export async function POST(
       .from("room_participants")
       .select("status")
       .eq("room_id", roomId)
-      .eq("user_id", session.user.id)
+      .eq("user_id", userId)
       .single();
     if (participantError && participantError.code !== "PGRST116") {
       console.error("Error checking participant status:", participantError);
@@ -45,13 +47,14 @@ export async function POST(
     }
 
     // Add user to room_participants
+    const status = room.is_private ? "pending" : "accepted";
     const { data: participant, error: insertParticipantError } = await supabase
       .from("room_participants")
       .insert([
         {
           room_id: roomId,
-          user_id: session.user.id,
-          status: room.is_private ? "pending" : "accepted",
+          user_id: userId,
+          status,
           joined_at: new Date().toISOString(),
         },
       ])
@@ -62,26 +65,15 @@ export async function POST(
       return NextResponse.json({ error: "Failed to join room" }, { status: 500 });
     }
 
-    // If the user is immediately accepted (public room), add to room_members and set as active
+    // If the room is public, add to room_members immediately
     if (!room.is_private) {
-      // Deactivate all other rooms for the user
-      const { error: deactivateError } = await supabase
-        .from("room_members")
-        .update({ active: false })
-        .eq("user_id", session.user.id);
-      if (deactivateError) {
-        console.error("Error deactivating other rooms:", deactivateError);
-        // Continue, but log the error (non-critical for this operation)
-      }
-
-      // Add to room_members with active = true
       const { error: membershipError } = await supabase
         .from("room_members")
         .upsert(
           [
             {
               room_id: roomId,
-              user_id: session.user.id,
+              user_id: userId,
               active: true,
             },
           ],
@@ -91,43 +83,46 @@ export async function POST(
         console.error("Error adding to room_members:", membershipError);
         return NextResponse.json({ error: "Failed to add to room_members" }, { status: 500 });
       }
+
+      return NextResponse.json({
+        success: true,
+        status: "accepted",
+        message: "Joined room successfully",
+      });
     }
 
-    // If private room, send notification to creator
-    if (room.is_private) {
-      const { data: creator, error: creatorError } = await supabase
-        .from("users")
-        .select("username")
-        .eq("id", session.user.id)
-        .single();
-      if (creatorError) {
-        console.error("Error fetching creator:", creatorError);
-        // Continue, but log the error (non-critical for notification)
-      }
+    // If the room is private, send a notification to the creator
+    const { data: creator, error: creatorError } = await supabase
+      .from("users")
+      .select("username")
+      .eq("id", userId)
+      .single();
+    if (creatorError) {
+      console.error("Error fetching user:", creatorError);
+    }
 
-      const message = `${creator?.username || "A user"} requested to join ${room.name}`;
-      const { error: notificationError } = await supabase
-        .from("notifications")
-        .insert([
-          {
-            user_id: room.created_by,
-            type: "join_request",
-            room_id: roomId,
-            sender_id: session.user.id,
-            message,
-            status: "unread",
-          },
-        ]);
-      if (notificationError) {
-        console.error("Error sending notification:", notificationError);
-        // Continue, but log the error (non-critical for this operation)
-      }
+    const message = `${creator?.username || "A user"} requested to join ${room.name}`;
+    const { error: notificationError } = await supabase
+      .from("notifications")
+      .insert([
+        {
+          user_id: room.created_by,
+          type: "join_request",
+          room_id: roomId,
+          sender_id: userId,
+          message,
+          status: "unread",
+          created_at: new Date().toISOString(),
+        },
+      ]);
+    if (notificationError) {
+      console.error("Error sending notification:", notificationError);
     }
 
     return NextResponse.json({
       success: true,
-      status: participant.status,
-      message: room.is_private ? "Join request sent" : "Joined room successfully",
+      status: "pending",
+      message: "Join request sent",
     });
   } catch (error) {
     console.error("Server error in join route:", error);

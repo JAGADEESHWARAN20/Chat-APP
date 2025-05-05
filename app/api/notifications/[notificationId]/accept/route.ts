@@ -59,21 +59,26 @@ export async function POST(
                .eq("room_id", notification.room_id)
                .eq("user_id", notification.sender_id);
           if (participantError) {
-               console.error("Error updating participant:", participantError);
+               console.error("Error updating room_participants:", participantError);
                return NextResponse.json({ error: "Failed to accept join request" }, { status: 500 });
           }
 
-          // Add to room_members
+          // Add to room_members with upsert to avoid duplicates
           const { error: membershipError } = await supabase
                .from("room_members")
-               .insert({
-                    room_id: notification.room_id,
-                    user_id: notification.sender_id,
-                    active: false,
-               });
+               .upsert(
+                    [
+                         {
+                              room_id: notification.room_id,
+                              user_id: notification.sender_id,
+                              active: true,
+                         },
+                    ],
+                    { onConflict: "room_id,user_id" }
+               );
           if (membershipError) {
                console.error("Error adding to room_members:", membershipError);
-               return NextResponse.json({ error: "Failed to add to room members" }, { status: 500 });
+               return NextResponse.json({ error: "Failed to add to room_members" }, { status: 500 });
           }
 
           // Mark notification as read
@@ -83,7 +88,6 @@ export async function POST(
                .eq("id", notificationId);
           if (updateError) {
                console.error("Error updating notification:", updateError);
-               return NextResponse.json({ error: "Failed to update notification status" }, { status: 500 });
           }
 
           // Notify the requester that they were accepted
@@ -121,7 +125,6 @@ export async function POST(
                });
           if (acceptNotificationError) {
                console.error("Error sending accept notification:", acceptNotificationError);
-               return NextResponse.json({ error: "Failed to send acceptance notification" }, { status: 500 });
           }
 
           // Transform the updated notification
@@ -134,7 +137,10 @@ export async function POST(
 
           return NextResponse.json({ success: true, message: "Join request accepted", notification: transformedNotification });
      } catch (error) {
-          console.error("Server error:", error);
-          return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+          console.error("Server error in accept route:", error);
+          return NextResponse.json(
+               { error: "Internal server error", details: error instanceof Error ? error.message : "Unknown error" },
+               { status: 500 }
+          );
      }
 }

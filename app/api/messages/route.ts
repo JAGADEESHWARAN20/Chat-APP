@@ -13,14 +13,28 @@ export async function POST(req: NextRequest) {
                return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
           }
 
+          const userId = session.user.id;
+
+          // Check if the user is a member of the room
+          const { data: membership, error: membershipError } = await supabase
+               .from("room_members")
+               .select("*")
+               .eq("room_id", roomId)
+               .eq("user_id", userId)
+               .single();
+          if (membershipError || !membership) {
+               return NextResponse.json({ error: "You are not a member of this room" }, { status: 403 });
+          }
+
           // Insert the message into the messages table
           const { data: message, error: messageError } = await supabase
                .from("messages")
                .insert({
                     content,
                     room_id: roomId,
-                    user_id: session.user.id,
+                    user_id: userId,
                     created_at: new Date().toISOString(),
+                    status: "sent",
                })
                .select()
                .single();
@@ -43,7 +57,7 @@ export async function POST(req: NextRequest) {
           const { data: user, error: userError } = await supabase
                .from("users")
                .select("username")
-               .eq("id", session.user.id)
+               .eq("id", userId)
                .single();
           if (userError || !user) {
                return NextResponse.json({ error: "User not found" }, { status: 404 });
@@ -54,7 +68,7 @@ export async function POST(req: NextRequest) {
                .from("room_members")
                .select("user_id")
                .eq("room_id", roomId)
-               .neq("user_id", session.user.id);
+               .neq("user_id", userId);
           if (membersError) {
                console.error("Error fetching room members:", membersError);
                return NextResponse.json({ error: "Failed to fetch room members" }, { status: 500 });
@@ -65,7 +79,7 @@ export async function POST(req: NextRequest) {
                user_id: member.user_id,
                type: "new_message",
                room_id: roomId,
-               sender_id: session.user.id,
+               sender_id: userId,
                message: `sent a message in ${room.name}: "${content}"`,
                status: "unread",
                created_at: new Date().toISOString(),
