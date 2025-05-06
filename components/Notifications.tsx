@@ -213,16 +213,20 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
                 className={`p-2 rounded flex items-center gap-3 ${notif.is_read ? "bg-gray-800" : "bg-gray-700"} cursor-pointer`}
                 onClick={() => handleNotificationClick(notif.id, notif.room_id)}
               >
-                <Avatar className="flex-shrink-0">
-                  <AvatarImage src={notif.users?.avatar_url ?? ""} alt={notif.users?.display_name || "User"} />
-                  <AvatarFallback>{notif.users?.display_name?.[0] || "?"}</AvatarFallback>
-                </Avatar>
-                <div className="flex-1 min-w-0">
-                  <p className="truncate">{notif.content}</p>
-                  <p className="text-sm text-gray-400 truncate">
-                    {notif.created_at ? new Date(notif.created_at).toLocaleString() : "Unknown time"}
-                  </p>
+                <div className="flex gap-2">
+                  <Avatar className="flex-shrink-0">
+                    <AvatarImage src={notif.users?.avatar_url ?? ""} alt={notif.users?.display_name || "User"} />
+                    <AvatarFallback>{notif.users?.display_name?.[0] || "?"}</AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <p className="truncate">{notif.content}</p>
+                    <p className="text-sm text-gray-400 truncate">
+                      {notif.created_at ? new Date(notif.created_at).toLocaleString() : "Unknown time"}
+                    </p>
+                  </div>
                 </div>
+               
+                
                 <div className="flex items-center gap-2 flex-shrink-0">
                   {notif.type === "room_invite" && !notif.is_read && (
                     <Button
