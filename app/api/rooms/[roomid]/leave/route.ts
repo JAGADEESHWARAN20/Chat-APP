@@ -18,6 +18,7 @@ export async function POST(
     }
 
     const userId = session.user.id;
+    console.log(userId)
 
     // Check if the user is a member of the room
     const { data: membership, error: membershipError } = await supabase
