@@ -77,6 +77,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         .select("status")
         .eq("room_id", roomId)
         .eq("user_id", user.id)
+        .eq("status", "accepted") // Only consider "accepted" status
         .single();
       if (error && error.code !== "PGRST116") {
         console.error("Error checking room membership:", error);
@@ -94,7 +95,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         .from("room_participants")
         .select("rooms(*)")
         .eq("user_id", user.id)
-        .eq("status", "accepted");
+        .eq("status", "accepted"); // Fetch rooms where status is "accepted"
       if (error) {
         console.error("Error fetching rooms:", error);
         toast.error("Failed to fetch rooms");
@@ -111,7 +112,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       );
       if (isMounted.current) {
         setAvailableRooms(roomsWithMembership);
-        setRooms(rooms);
+        setRooms(roomsWithMembership);
       }
     } catch (error) {
       console.error("Error fetching rooms:", error);
@@ -162,10 +163,13 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       }
       const { hasOtherRooms } = await response.json();
       toast.success("Left room successfully");
+      // Update membership status
+      setIsMember(false);
+      // Refresh available rooms
+      await fetchAvailableRooms();
+      // If no other rooms, clear selected room
       if (!hasOtherRooms) {
         setSelectedRoom(null);
-      } else {
-        await fetchAvailableRooms();
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to leave room");
@@ -353,6 +357,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
           throw new Error("Failed to fetch room details");
         }
         setSelectedRoom(room);
+        setIsMember(true); // Update membership status
         await fetchAvailableRooms();
         const notification = {
           id: crypto.randomUUID(),
@@ -434,9 +439,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
           <DialogContent className="bg-gray-800 text-white">
             <DialogHeader>
               <DialogTitle>Create New Room</DialogTitle>
-              <DialogDescription className="text-gray-300">
-                Create a new chat room. Private rooms require approval to join.
-              </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
