@@ -201,7 +201,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
             </Button>
           )}
         </DialogHeader>
-        <div className="space-y-4 max-h-[300px] overflow-y-auto">
+        <div className="space-y-4 max-h-[300px] overflow-y-auto overflow-x-hidden">
           {isLoading ? (
             <p className="text-gray-400">Loading notifications...</p>
           ) : notifications.length === 0 ? (
@@ -219,11 +219,23 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
                     <AvatarFallback>{notif.users?.display_name?.[0] || "?"}</AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
-                    <p className="truncate">{notif.content}</p>
-                    <p className="text-sm text-gray-400 text-wrap truncate">
+                    <p className="truncate text-wrap">{notif.content}</p>
+                    <p className="text-sm text-gray-400  truncate">
                       {notif.created_at ? new Date(notif.created_at).toLocaleString() : "Unknown time"}
                     </p>
                   </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteNotification(notif.id);
+                    }}
+                    aria-label={`Delete notification ${notif.id}`}
+                    className="text-white hover:bg-gray-700"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
                
                 
@@ -265,18 +277,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
                       Mark as Read
                     </Button>
                   )}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteNotification(notif.id);
-                    }}
-                    aria-label={`Delete notification ${notif.id}`}
-                    className="text-white hover:bg-gray-700"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                 
                 </div>
               </div>
             ))
