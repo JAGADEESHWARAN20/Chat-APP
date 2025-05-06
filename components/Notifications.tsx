@@ -210,7 +210,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
             notifications.slice(0, 5).map((notif) => (
               <div
                 key={notif.id}
-                className={`p-2 rounded flex items-center gap-3 ${notif.is_read ? "bg-gray-800" : "bg-gray-700"} cursor-pointer`}
+                className={`p-2 rounded flex flex-col items-center gap-3 ${notif.is_read ? "bg-gray-800" : "bg-gray-700"} cursor-pointer`}
                 onClick={() => handleNotificationClick(notif.id, notif.room_id)}
               >
                 <div className="flex gap-2">
