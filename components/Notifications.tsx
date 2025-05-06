@@ -224,22 +224,11 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
                       {notif.created_at ? new Date(notif.created_at).toLocaleString() : "Unknown time"}
                     </p>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteNotification(notif.id);
-                    }}
-                    aria-label={`Delete notification ${notif.id}`}
-                    className="text-white hover:bg-gray-700"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                 
                 </div>
                
                 
-                <div className="flex items-center gap-2 flex-shrink-0">
+                <div className="flex items-center justify-between gap-2 flex-shrink-0">
                   {notif.type === "room_invite" && !notif.is_read && (
                     <Button
                       onClick={(e) => {
@@ -277,7 +266,18 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
                       Mark as Read
                     </Button>
                   )}
-                 
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteNotification(notif.id);
+                    }}
+                    aria-label={`Delete notification ${notif.id}`}
+                    className="text-white bg-red-600 hover:bg-red-700"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
               </div>
             ))
