@@ -210,7 +210,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
             notifications.slice(0, 5).map((notif) => (
               <div
                 key={notif.id}
-                className={`p-2 rounded flex flex-col items-center gap-3 ${notif.is_read ? "bg-gray-800" : "bg-gray-700"} cursor-pointer`}
+                className={`p-2 rounded flex flex-col items-start justify-center gap-3 ${notif.is_read ? "bg-gray-800" : "bg-gray-700"} cursor-pointer`}
                 onClick={() => handleNotificationClick(notif.id, notif.room_id)}
               >
                 <div className="flex gap-2">
@@ -220,7 +220,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
                   </Avatar>
                   <div className="flex-1 min-w-0">
                     <p className="truncate">{notif.content}</p>
-                    <p className="text-sm text-gray-400 truncate">
+                    <p className="text-sm text-gray-400 text-wrap truncate">
                       {notif.created_at ? new Date(notif.created_at).toLocaleString() : "Unknown time"}
                     </p>
                   </div>
