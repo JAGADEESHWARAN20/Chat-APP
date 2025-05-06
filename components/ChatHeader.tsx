@@ -77,7 +77,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         .select("status")
         .eq("room_id", roomId)
         .eq("user_id", user.id)
-        .eq("status", "accepted") // Only consider "accepted" status
+        .eq("status", "accepted")
         .single();
       if (error && error.code !== "PGRST116") {
         console.error("Error checking room membership:", error);
@@ -95,7 +95,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         .from("room_participants")
         .select("rooms(*)")
         .eq("user_id", user.id)
-        .eq("status", "accepted"); // Fetch rooms where status is "accepted"
+        .eq("status", "accepted");
       if (error) {
         console.error("Error fetching rooms:", error);
         toast.error("Failed to fetch rooms");
@@ -155,7 +155,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     setIsLeaving(true);
     try {
       const response = await fetch(`/api/rooms/${selectedRoom.id}/leave`, {
-        method: "POST",
+        method: "PATCH", // Changed from POST to PATCH
       });
       if (!response.ok) {
         const error = await response.json();
@@ -163,11 +163,8 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       }
       const { hasOtherRooms } = await response.json();
       toast.success("Left room successfully");
-      // Update membership status
       setIsMember(false);
-      // Refresh available rooms
       await fetchAvailableRooms();
-      // If no other rooms, clear selected room
       if (!hasOtherRooms) {
         setSelectedRoom(null);
       }
@@ -357,7 +354,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
           throw new Error("Failed to fetch room details");
         }
         setSelectedRoom(room);
-        setIsMember(true); // Update membership status
+        setIsMember(true);
         await fetchAvailableRooms();
         const notification = {
           id: crypto.randomUUID(),

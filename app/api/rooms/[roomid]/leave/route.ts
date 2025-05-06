@@ -2,7 +2,7 @@ import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
-export async function POST(
+export async function PATCH(
   req: NextRequest,
   { params }: { params: { roomId: string } }
 ) {
@@ -18,7 +18,6 @@ export async function POST(
     }
 
     const userId = session.user.id;
-    console.log(userId)
 
     // Check if the user is a member of the room
     const { data: membership, error: membershipError } = await supabase
