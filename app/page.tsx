@@ -11,14 +11,16 @@ export default async function Page() {
 
 	return (
 		<>
+			<div className="h-screen px-2 py-1">
 				<LoginLogoutButton user={data.session?.user} />
-			<div className="max-w-3xl mx-auto h-screen">
+			<div className="max-w-3xl mx-auto">
 					<ChatHeader user={data.session?.user} />
 				<div className="h-[85dvh] border rounded-md flex flex-col relative">
 					<ClientChatContent user={data.session?.user} />
 				</div>
 			</div>
 			<InitUser user={data.session?.user} />
+			</div>
 		</>
 	);
 }

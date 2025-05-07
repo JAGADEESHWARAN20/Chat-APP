@@ -187,47 +187,46 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="bg-gray-800 text-white max-w-[90vw] sm:max-w-md" aria-labelledby="notifications-title">
+      <DialogContent aria-labelledby="notifications-title">
         <DialogHeader className="flex flex-row items-center justify-between">
-          <DialogTitle id="notifications-title">Notifications</DialogTitle>
+          <DialogTitle id="notifications-title" className="text-2xl font-bold">Notifications</DialogTitle>
           {notifications.length > 0 && (
             <Button
               variant="ghost"
               size="sm"
               onClick={handleClearAllNotifications}
-              className="text-white hover:bg-gray-700"
+              className="text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
             >
               Clear All
             </Button>
           )}
         </DialogHeader>
-        <div className="space-y-4 max-h-[300px] overflow-y-auto overflow-x-hidden">
+        <div className="space-y-4 max-h-[300px] overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-indigo-600 scrollbar-track-gray-800 scrollbar-thumb-rounded-full">
           {isLoading ? (
-            <p className="text-gray-400">Loading notifications...</p>
+            <p className="text-gray-400 text-sm">Loading notifications...</p>
           ) : notifications.length === 0 ? (
-            <p className="text-gray-400">No notifications</p>
+            <p className="text-gray-400 text-sm">No notifications</p>
           ) : (
             notifications.slice(0, 5).map((notif) => (
               <div
                 key={notif.id}
-                className={`p-2 rounded flex flex-col items-start justify-center gap-3 ${notif.is_read ? "bg-gray-800" : "bg-gray-700"} cursor-pointer`}
+                className={`p-3 rounded-lg flex flex-col items-start justify-center gap-3 ${notif.is_read ? "bg-gray-800/50" : "bg-gray-700/50"} hover:bg-gray-700/70 cursor-pointer transition-colors`}
                 onClick={() => handleNotificationClick(notif.id, notif.room_id)}
               >
-                <div className="flex gap-2">
-                  <Avatar className="flex-shrink-0">
-                    <AvatarImage src={notif.users?.avatar_url ?? ""} alt={notif.users?.display_name || "User"} />
-                    <AvatarFallback>{notif.users?.display_name?.[0] || "?"}</AvatarFallback>
+                <div className="flex gap-3 w-full">
+                  <Avatar className="h-10 w-10 flex-shrink-0">
+                    <AvatarImage src={notif.users?.avatar_url ?? ""} alt={notif.users?.display_name || "User"} className="rounded-full" />
+                    <AvatarFallback className="bg-indigo-500 text-white rounded-full">
+                      {notif.users?.display_name?.[0] || "?"}
+                    </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
-                    <p className="truncate text-wrap">{notif.content}</p>
-                    <p className="text-sm text-gray-400  truncate">
+                    <p className="text-sm text-white truncate text-wrap">{notif.content}</p>
+                    <p className="text-xs text-gray-400 truncate">
                       {notif.created_at ? new Date(notif.created_at).toLocaleString() : "Unknown time"}
                     </p>
                   </div>
-                 
                 </div>
-               
-                
                 <div className="flex items-center justify-between gap-2 flex-shrink-0">
                   {notif.type === "room_invite" && !notif.is_read && (
                     <Button
@@ -236,7 +235,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
                         handleAccept(notif.id, notif.room_id);
                       }}
                       aria-label={`Accept invitation for notification ${notif.id}`}
-                      className="text-sm px-2 py-1"
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm px-3 py-1 rounded-lg transition-colors"
                     >
                       Accept
                     </Button>
@@ -249,7 +248,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
                         handleMarkAsUnread(notif.id);
                       }}
                       aria-label={`Mark notification ${notif.id} as unread`}
-                      className="text-white border-gray-600 text-sm px-2 py-1"
+                      className="bg-transparent border-gray-600 text-gray-300 hover:bg-gray-700 hover:text-white text-sm px-3 py-1 rounded-lg transition-colors"
                     >
                       Mark as Unread
                     </Button>
@@ -261,7 +260,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
                         handleMarkAsRead(notif.id);
                       }}
                       aria-label={`Mark notification ${notif.id} as read`}
-                      className="text-white border-gray-600 text-sm px-2 py-1"
+                      className="bg-transparent border-gray-600 text-gray-300 hover:bg-gray-700 hover:text-white text-sm px-3 py-1 rounded-lg transition-colors"
                     >
                       Mark as Read
                     </Button>
@@ -274,7 +273,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
                       handleDeleteNotification(notif.id);
                     }}
                     aria-label={`Delete notification ${notif.id}`}
-                    className="text-white bg-red-600 hover:bg-red-700"
+                    className="text-gray-300 hover:text-white hover:bg-red-600/50 rounded-full transition-colors"
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>

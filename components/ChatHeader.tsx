@@ -433,33 +433,34 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button variant="ghost" size="icon">
-              <PlusCircle className="h-5 w-5" />
+              <PlusCircle className="h-5 w-5 text-gray-300 hover:text-white transition-colors" />
             </Button>
           </DialogTrigger>
-          <DialogContent className="bg-gray-800 text-white">
+          <DialogContent>
             <DialogHeader>
-              <DialogTitle>Create New Room</DialogTitle>
+              <DialogTitle className="text-2xl font-bold">Create New Room</DialogTitle>
             </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="roomName">Room Name</Label>
+            <div className="grid gap-5 py-5">
+              <div className="space-y-3">
+                <Label htmlFor="roomName" className="text-sm font-medium text-gray-300">Room Name</Label>
                 <Input
                   id="roomName"
                   placeholder="Enter room name"
                   value={newRoomName}
                   onChange={(e) => setNewRoomName(e.target.value)}
                   disabled={isCreating}
-                  className="bg-gray-700 border-gray-600"
+                  className="bg-gray-700/50 border-gray-600/50 text-white placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
                 />
               </div>
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-3">
                 <Switch
                   id="private"
                   checked={isPrivate}
                   onCheckedChange={setIsPrivate}
                   disabled={isCreating}
+                  className="data-[state=checked]:bg-indigo-600 data-[state=unchecked]:bg-gray-600"
                 />
-                <Label htmlFor="private">Private Room</Label>
+                <Label htmlFor="private" className="text-sm font-medium text-gray-300">Private Room</Label>
               </div>
             </div>
             <DialogFooter>
@@ -467,11 +468,15 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                 variant="outline"
                 onClick={() => setIsDialogOpen(false)}
                 disabled={isCreating}
-                className="text-white border-gray-600"
+                className="bg-transparent border-gray-600 text-gray-300 hover:bg-gray-700 hover:text-white rounded-lg transition-colors"
               >
                 Cancel
               </Button>
-              <Button onClick={handleCreateRoom} disabled={isCreating}>
+              <Button
+                onClick={handleCreateRoom}
+                disabled={isCreating}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors"
+              >
                 {isCreating ? "Creating..." : "Create Room"}
               </Button>
             </DialogFooter>
