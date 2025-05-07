@@ -536,8 +536,8 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
             </Button>
           </PopoverTrigger>
           <PopoverContent
-            side="left"
-            align="start"
+            side="bottom"
+            align="end"
             sideOffset={8}
             collisionPadding={{ left: 16 }}
             className="mr-2 sm:mr-4 md:mr-0"
