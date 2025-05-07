@@ -174,23 +174,23 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     }
   };
 
-  const handleAcceptJoinRequest = async (notificationId: string) => {
-    try {
-      const response = await fetch(`/api/notifications/${notificationId}/accept`, {
-        method: "POST",
-      });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to accept join request");
-      }
-      toast.success("Join request accepted");
-      if (user?.id) {
-        await fetchNotifications(user.id);
-      }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to accept join request");
-    }
-  };
+  // const handleAcceptJoinRequest = async (notificationId: string) => {
+  //   try {
+  //     const response = await fetch(`/api/notifications/${notificationId}/accept`, {
+  //       method: "POST",
+  //     });
+  //     if (!response.ok) {
+  //       const error = await response.json();
+  //       throw new Error(error.error || "Failed to accept join request");
+  //     }
+  //     toast.success("Join request accepted");
+  //     if (user?.id) {
+  //       await fetchNotifications(user.id);
+  //     }
+  //   } catch (error) {
+  //     toast.error(error instanceof Error ? error.message : "Failed to accept join request");
+  //   }
+  // };
 
   const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     debouncedCallback(e.target.value);
@@ -319,19 +319,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     }
   };
 
-  const handleLoginWithGithub = () => {
-    supabase.auth.signInWithOAuth({
-      provider: "github",
-      options: {
-        redirectTo: location.origin + "/auth/callback",
-      },
-    });
-  };
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.refresh();
-  };
 
   const handleSearchByType = (type: "rooms" | "users") => {
     setSearchType(type);
@@ -648,7 +636,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
             </div>
           </PopoverContent>
         </Popover>
-     
+       
       </div>
     </header>
   );
