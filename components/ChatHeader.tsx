@@ -536,14 +536,15 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
             </Button>
           </PopoverTrigger>
           <PopoverContent
-            side="right"
+            side="left"
             align="start"
             sideOffset={8}
-            collisionPadding={{ right: 16 }}
-            className="w-64 sm:w-80 bg-gray-800 text-white"
+            collisionPadding={{ left: 16 }}
+            className="w-64 sm:w-80 bg-gradient-to-br from-gray-800 to-gray-900 text-white rounded-xl shadow-lg border border-gray-700/50 mr-2 sm:mr-4 md:mr-0"
           >
-            <div className="p-4">
-              <div className="flex justify-end mb-2">
+            <div className="p-5">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-bold text-xl text-white">Search</h3>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -551,11 +552,11 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                     setIsSearchPopoverOpen(false);
                     router.push("/profile");
                   }}
+                  className="text-gray-300 hover:text-white transition-colors"
                 >
                   <Settings className="h-4 w-4" />
                 </Button>
               </div>
-              <h3 className="font-semibold text-lg mb-2">Search</h3>
               <Input
                 type="text"
                 placeholder={
@@ -563,45 +564,52 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                 }
                 value={searchQuery}
                 onChange={handleSearchInputChange}
-                className="mb-4 bg-gray-700 border-gray-600"
+                className="mb-4 bg-gray-700/50 border-gray-600/50 text-white placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
               />
-              <div className="flex gap-2 mb-4">
+              <div className="flex gap-3 mb-5">
                 <Button
                   variant={searchType === "rooms" ? "default" : "outline"}
                   onClick={() => handleSearchByType("rooms")}
-                  className="text-white border-gray-600"
+                  className={`${searchType === "rooms"
+                      ? "bg-indigo-600 hover:bg-indigo-700"
+                      : "bg-transparent border-gray-600 hover:bg-gray-700"
+                    } text-white rounded-lg transition-colors`}
                 >
                   Rooms
                 </Button>
                 <Button
                   variant={searchType === "users" ? "default" : "outline"}
                   onClick={() => handleSearchByType("users")}
-                  className="text-white border-gray-600"
+                  className={`${searchType === "users"
+                      ? "bg-indigo-600 hover:bg-indigo-700"
+                      : "bg-transparent border-gray-600 hover:bg-gray-700"
+                    } text-white rounded-lg transition-colors`}
                 >
                   Users
                 </Button>
               </div>
               {searchResults.length > 0 && (
                 <div className="mt-4">
-                  <h4 className="font-semibold text-sm mb-2">
+                  <h4 className="font-semibold text-sm text-gray-300 mb-3">
                     {searchType === "users" ? "User Profiles" : "Rooms"}
                   </h4>
-                  <ul className="space-y-2">
+                  <ul className="space-y-3">
                     {searchResults.map((result) =>
                       "display_name" in result ? (
                         <li
                           key={result.id}
-                          className="flex items-center justify-between"
+                          className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-700/50 transition-colors"
                         >
-                          <div className="flex items-center gap-2">
-                            <Avatar>
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-10 w-10">
                               {result.avatar_url ? (
                                 <AvatarImage
                                   src={result.avatar_url}
                                   alt={result.username || "Avatar"}
+                                  className="rounded-full"
                                 />
                               ) : (
-                                <AvatarFallback>
+                                <AvatarFallback className="bg-indigo-500 text-white rounded-full">
                                   {result.username?.charAt(0).toUpperCase() ||
                                     result.display_name?.charAt(0).toUpperCase() ||
                                     "?"}
@@ -612,7 +620,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                               <div className="text-xs text-gray-400">
                                 {result.username}
                               </div>
-                              <div className="text-sm font-semibold text-white">
+                              <div className="text-sm font-medium text-white">
                                 {result.display_name}
                               </div>
                             </div>
@@ -627,17 +635,17 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                 </div>
               )}
               {searchResults.length === 0 && searchQuery.length > 0 && (
-                <p className="text-sm text-gray-400 mt-2">
+                <p className="text-sm text-gray-400 mt-3">
                   No {searchType || "results"} found.
                 </p>
               )}
               {searchQuery.length === 0 && searchType && (
-                <p className="text-sm text-gray-400 mt-2">
+                <p className="text-sm text-gray-400 mt-3">
                   Showing all {searchType}...
                 </p>
               )}
               {isLoading && (
-                <p className="text-sm text-gray-400 mt-2">Loading...</p>
+                <p className="text-sm text-gray-400 mt-3">Loading...</p>
               )}
             </div>
           </PopoverContent>
