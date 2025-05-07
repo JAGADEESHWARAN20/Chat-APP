@@ -27,7 +27,6 @@ import { Database } from "@/lib/types/supabase";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -155,7 +154,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     setIsLeaving(true);
     try {
       const response = await fetch(`/api/rooms/${selectedRoom.id}/leave`, {
-        method: "PATCH", // Changed from POST to PATCH
+        method: "PATCH",
       });
       if (!response.ok) {
         const error = await response.json();
@@ -198,28 +197,39 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   };
 
   const fetchSearchResults = useCallback(async () => {
+    if (!searchType) return; // Don't fetch if no search type is selected
     setIsLoading(true);
     try {
-      const response = await fetch(
-        debouncedSearchQuery.trim()
+      let url = "";
+      if (searchType === "rooms") {
+        url = debouncedSearchQuery.trim()
           ? `/api/rooms/search?query=${encodeURIComponent(debouncedSearchQuery)}`
-          : "/api/rooms/all"
-      );
+          : "/api/rooms/all";
+      } else if (searchType === "users") {
+        url = debouncedSearchQuery.trim()
+          ? `/api/users/search?query=${encodeURIComponent(debouncedSearchQuery)}`
+          : "/api/users/search?query="; // Fetch all users if query is empty
+      }
+
+      const response = await fetch(url);
       const data = await response.json();
       if (isMounted.current) {
         if (response.ok) {
-          const results: Room[] = debouncedSearchQuery.trim()
-            ? data.rooms || []
-            : data.rooms || [];
-          const resultsWithMembership = await Promise.all(
-            results.map(async (room) => ({
-              ...room,
-              isMember: await checkRoomMembership(room.id),
-            }))
-          );
-          setSearchResults(resultsWithMembership);
+          if (searchType === "rooms") {
+            const results: Room[] = data.rooms || data;
+            const resultsWithMembership = await Promise.all(
+              results.map(async (room) => ({
+                ...room,
+                isMember: await checkRoomMembership(room.id),
+              }))
+            );
+            setSearchResults(resultsWithMembership);
+          } else if (searchType === "users") {
+            const results: UserProfile[] = data || [];
+            setSearchResults(results);
+          }
         } else {
-          toast.error(data.error || "Failed to search rooms");
+          toast.error(data.error || `Failed to search ${searchType}`);
           setSearchResults([]);
         }
       }
@@ -234,11 +244,15 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         setIsLoading(false);
       }
     }
-  }, [debouncedSearchQuery, checkRoomMembership]);
+  }, [debouncedSearchQuery, searchType, checkRoomMembership]);
 
   useEffect(() => {
-    fetchSearchResults();
-  }, [debouncedSearchQuery, fetchSearchResults]);
+    if (searchType) {
+      fetchSearchResults();
+    } else {
+      setSearchResults([]);
+    }
+  }, [debouncedSearchQuery, searchType, fetchSearchResults]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -322,6 +336,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const handleSearchByType = (type: "rooms" | "users") => {
     setSearchType(type);
     setSearchQuery("");
+    setSearchResults([]); // Clear previous results
   };
 
   const handleJoinRoom = async (roomId?: string) => {
@@ -549,7 +564,9 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
               <h3 className="font-semibold text-lg mb-2">Search</h3>
               <Input
                 type="text"
-                placeholder="Search rooms..."
+                placeholder={
+                  searchType === "users" ? "Search users..." : "Search rooms..."
+                }
                 value={searchQuery}
                 onChange={handleSearchInputChange}
                 className="mb-4 bg-gray-700 border-gray-600"
