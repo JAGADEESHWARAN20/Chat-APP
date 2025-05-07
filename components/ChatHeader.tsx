@@ -6,17 +6,39 @@ import { supabaseBrowser } from "@/lib/supabase/browser";
 import { User as SupabaseUser } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 import ChatPresence from "./ChatPresence";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Search, User as UserIcon, Settings, PlusCircle } from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Search,
+  PlusCircle,
+  Bell,
+  Settings,
+  ArrowRight,
+  LogOut,
+  UserIcon,
+  ArrowRightLeft,
+} from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Database } from "@/lib/types/supabase";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useRoomStore } from "@/lib/store/roomstore";
 import { useDebounce } from "use-debounce";
+import Notifications from "./Notifications";
+import { useNotification, Inotification } from "@/lib/store/notifications";
 
 type UserProfile = Database["public"]["Tables"]["users"]["Row"];
 type Room = Database["public"]["Tables"]["rooms"]["Row"];
@@ -27,60 +49,185 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const [searchQuery, setSearchQuery] = useState("");
   const [searchType, setSearchType] = useState<"rooms" | "users" | null>(null);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [availableRooms, setAvailableRooms] = useState<(Room & { isMember: boolean })[]>([]);
   const supabase = supabaseBrowser();
-  const [isPopoverOpen, setIsPopoverOpen] = useState(false);
+  const [isSearchPopoverOpen, setIsSearchPopoverOpen] = useState(false);
+  const [isSwitchRoomPopoverOpen, setIsSwitchRoomPopoverOpen] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [newRoomName, setNewRoomName] = useState("");
   const [isPrivate, setIsPrivate] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
-  const selectedRoom = useRoomStore((state) => state.selectedRoom);
+  const { selectedRoom, setSelectedRoom, setRooms } = useRoomStore();
+  const { notifications, fetchNotifications, subscribeToNotifications } = useNotification();
   const isMounted = useRef(true);
   const [isLoading, setIsLoading] = useState(false);
+  const [isMember, setIsMember] = useState(false);
+  const [isLeaving, setIsLeaving] = useState(false);
 
   const [debouncedCallback] = useDebounce((value: string) => setSearchQuery(value), 300);
   const [debouncedSearchQuery] = useDebounce(searchQuery, 300);
 
+  const checkRoomMembership = useCallback(
+    async (roomId: string) => {
+      if (!user) return false;
+      const { data, error } = await supabase
+        .from("room_participants")
+        .select("status")
+        .eq("room_id", roomId)
+        .eq("user_id", user.id)
+        .eq("status", "accepted")
+        .single();
+      if (error && error.code !== "PGRST116") {
+        console.error("Error checking room membership:", error);
+        return false;
+      }
+      return data?.status === "accepted";
+    },
+    [user, supabase]
+  );
+
+  const fetchAvailableRooms = useCallback(async () => {
+    if (!user) return;
+    try {
+      const { data: roomsData, error } = await supabase
+        .from("room_participants")
+        .select("rooms(*)")
+        .eq("user_id", user.id)
+        .eq("status", "accepted");
+      if (error) {
+        console.error("Error fetching rooms:", error);
+        toast.error("Failed to fetch rooms");
+        return;
+      }
+      const rooms = roomsData
+        .map((item) => item.rooms)
+        .filter((room): room is Room => room !== null);
+      const roomsWithMembership = await Promise.all(
+        rooms.map(async (room) => ({
+          ...room,
+          isMember: await checkRoomMembership(room.id),
+        }))
+      );
+      if (isMounted.current) {
+        setAvailableRooms(roomsWithMembership);
+        setRooms(roomsWithMembership);
+      }
+    } catch (error) {
+      console.error("Error fetching rooms:", error);
+      toast.error("Failed to fetch rooms");
+    }
+  }, [user, supabase, checkRoomMembership, setRooms]);
+
+  const handleRoomSwitch = async (room: Room) => {
+    if (!user) {
+      toast.error("You must be logged in to switch rooms");
+      return;
+    }
+    try {
+      const response = await fetch("/api/rooms/switch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roomId: room.id }),
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to switch room");
+      }
+      const data = await response.json();
+      setSelectedRoom(room);
+      setIsSwitchRoomPopoverOpen(false);
+      toast.success(`Switched to ${room.name}`);
+      await fetchAvailableRooms();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to switch room";
+      toast.error(errorMessage);
+      console.error("Switch room error:", err);
+    }
+  };
+
+  const handleLeaveRoom = async () => {
+    if (!user || !selectedRoom) {
+      toast.error("No room selected");
+      return;
+    }
+    setIsLeaving(true);
+    try {
+      const response = await fetch(`/api/rooms/${selectedRoom.id}/leave`, {
+        method: "PATCH",
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to leave room");
+      }
+      const { hasOtherRooms } = await response.json();
+      toast.success("Left room successfully");
+      setIsMember(false);
+      await fetchAvailableRooms();
+      if (!hasOtherRooms) {
+        setSelectedRoom(null);
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to leave room");
+    } finally {
+      setIsLeaving(false);
+    }
+  };
+
+  // const handleAcceptJoinRequest = async (notificationId: string) => {
+  //   try {
+  //     const response = await fetch(`/api/notifications/${notificationId}/accept`, {
+  //       method: "POST",
+  //     });
+  //     if (!response.ok) {
+  //       const error = await response.json();
+  //       throw new Error(error.error || "Failed to accept join request");
+  //     }
+  //     toast.success("Join request accepted");
+  //     if (user?.id) {
+  //       await fetchNotifications(user.id);
+  //     }
+  //   } catch (error) {
+  //     toast.error(error instanceof Error ? error.message : "Failed to accept join request");
+  //   }
+  // };
+
   const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     debouncedCallback(e.target.value);
-    setSearchQuery(e.target.value);
   };
 
   const fetchSearchResults = useCallback(async () => {
-       if (!debouncedSearchQuery.trim() || !searchType) {
-        setSearchResults([]);
-        setIsLoading(false);
-        
-        try {
-          const response = await fetch('/api/rooms/all');
-          const data = await response.json();
-          if (response.ok) {
-            setSearchResults(data.rooms || []);
-          } else {
-            console.error(data.error || "Failed to fetch all rooms");
-          }
-        } catch (error) {
-          console.error("Error fetching all rooms:", error);
-        }
-        
-        return; // Ensure return happens after the fetch logic
-      }
-    
-
+    if (!searchType) return; // Don't fetch if no search type is selected
     setIsLoading(true);
     try {
+      let url = "";
+      if (searchType === "rooms") {
+        url = debouncedSearchQuery.trim()
+          ? `/api/rooms/search?query=${encodeURIComponent(debouncedSearchQuery)}`
+          : "/api/rooms/all";
+      } else if (searchType === "users") {
+        url = debouncedSearchQuery.trim()
+          ? `/api/users/search?query=${encodeURIComponent(debouncedSearchQuery)}`
+          : "/api/users/search?query="; // Fetch all users if query is empty
+      }
 
-      const response = await fetch(`/api/${searchType}/search?query=${encodeURIComponent(debouncedSearchQuery)}`);
+      const response = await fetch(url);
       const data = await response.json();
-
       if (isMounted.current) {
         if (response.ok) {
-          let results: SearchResult[] = [];
-          if (searchType === "users") {
-            results = Array.isArray(data) ? (data as UserProfile[]) : [];
-          } else if (searchType === "rooms") {
-            results = data.rooms && Array.isArray(data.rooms) ? (data.rooms as Room[]) : [];
+          if (searchType === "rooms") {
+            const results: Room[] = data.rooms || data;
+            const resultsWithMembership = await Promise.all(
+              results.map(async (room) => ({
+                ...room,
+                isMember: await checkRoomMembership(room.id),
+              }))
+            );
+            setSearchResults(resultsWithMembership);
+          } else if (searchType === "users") {
+            const results: UserProfile[] = data || [];
+            setSearchResults(results);
           }
-          setSearchResults(results);
         } else {
           toast.error(data.error || `Failed to search ${searchType}`);
           setSearchResults([]);
@@ -97,11 +244,26 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         setIsLoading(false);
       }
     }
-  }, [debouncedSearchQuery, searchType]);
+  }, [debouncedSearchQuery, searchType, checkRoomMembership]);
 
   useEffect(() => {
-    fetchSearchResults();
+    if (searchType) {
+      fetchSearchResults();
+    } else {
+      setSearchResults([]);
+    }
   }, [debouncedSearchQuery, searchType, fetchSearchResults]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    fetchAvailableRooms();
+    fetchNotifications(user.id);
+    subscribeToNotifications(user.id);
+
+    return () => {
+      // Cleanup is handled by Notifications component
+    };
+  }, [user, fetchAvailableRooms, fetchNotifications, subscribeToNotifications]);
 
   useEffect(() => {
     return () => {
@@ -110,39 +272,23 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   }, []);
 
   useEffect(() => {
-    const channel = supabase
-      .channel("rooms")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "rooms" },
-        (payload) => {
-          if (isMounted.current && payload.new) useRoomStore.getState().setRooms(Array.isArray(payload.new) ? payload.new : [payload.new]);
-        }
-      )
-      .subscribe((status) => {
-        console.log("Subscription status:", status);
-        if (status === "CLOSED") toast.error("Room subscription closed");
-      });
-
-    return () => {
-      isMounted.current = false;
-      supabase.removeChannel(channel);
-    };
-  }, [supabase]);
+    if (selectedRoom && user) {
+      checkRoomMembership(selectedRoom.id).then(setIsMember);
+    } else {
+      setIsMember(false);
+    }
+  }, [selectedRoom, user, checkRoomMembership]);
 
   const handleCreateRoom = async () => {
     if (!user) {
       toast.error("You must be logged in to create a room");
       return;
     }
-
     if (!newRoomName.trim()) {
       toast.error("Room name cannot be empty");
       return;
     }
-
     setIsCreating(true);
-
     try {
       const response = await fetch("/api/rooms", {
         method: "POST",
@@ -152,25 +298,16 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
           is_private: isPrivate,
         }),
       });
-
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.error || "Failed to create room");
       }
-
-      if (isMounted.current) {
-        const { data: newRooms } = await supabase.from("rooms").select("*");
-        useRoomStore.getState().setRooms(newRooms || []);
-        const newRoom = newRooms?.find((room) => room.name === newRoomName.trim());
-        if (newRoom) {
-          // Automatically join the creator to the new room
-          await handleJoinRoom(newRoom.id);
-        }
-        toast.success("Room created successfully!");
-        setNewRoomName("");
-        setIsPrivate(false);
-        setIsDialogOpen(false);
-      }
+      const newRoom = await response.json();
+      toast.success("Room created successfully!");
+      setNewRoomName("");
+      setIsPrivate(false);
+      setIsDialogOpen(false);
+      await handleJoinRoom(newRoom.id);
     } catch (error) {
       if (isMounted.current) {
         toast.error(error instanceof Error ? error.message : "Failed to create room");
@@ -182,23 +319,12 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     }
   };
 
-  const handleLoginWithGithub = () => {
-    supabase.auth.signInWithOAuth({
-      provider: "github",
-      options: {
-        redirectTo: location.origin + "/auth/callback",
-      },
-    });
-  };
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.refresh();
-  };
 
   const handleSearchByType = (type: "rooms" | "users") => {
     setSearchType(type);
     setSearchQuery("");
+    setSearchResults([]); // Clear previous results
   };
 
   const handleJoinRoom = async (roomId?: string) => {
@@ -206,226 +332,318 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       toast.error("You must be logged in to join a room");
       return;
     }
-
     const currentRoomId = roomId || selectedRoom?.id;
     if (!currentRoomId) {
-      toast.error("No current room selected or invalid room ID");
-      console.error("No valid roomId available:", { roomId, selectedRoom });
+      toast.error("No room selected");
       return;
     }
-
-    // Check if already joined
-    const { data: existingParticipation } = await supabase
-      .from("room_participants")
-      .select("status")
-      .eq("room_id", currentRoomId)
-      .eq("user_id", user.id)
-      .single();
-
-    if (existingParticipation && existingParticipation.status === "accepted") {
-      toast.info("You are already a member of this room");
-      return;
-    }
-
-    const requestBody = {
-      userId: user.id,
-      status: "pending",
-      joined_at: new Date().toISOString(),
-    };
-
-    console.log("Posting to /join with values:", {
-      roomId: currentRoomId,
-      requestBody,
-    });
-
     try {
       const response = await fetch(`/api/rooms/${currentRoomId}/join`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody),
       });
-
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || "Failed to join room");
       }
-
       const data = await response.json();
-      toast.success(data.status === "pending" ? "Join request sent" : "Joined room successfully");
+      toast.success(data.message);
+      if (!data.status || data.status === "accepted") {
+        const { data: room, error: roomError } = await supabase
+          .from("rooms")
+          .select("*")
+          .eq("id", currentRoomId)
+          .single();
+        if (roomError || !room) {
+          throw new Error("Failed to fetch room details");
+        }
+        setSelectedRoom(room);
+        setIsMember(true);
+        await fetchAvailableRooms();
+        const notification = {
+          id: crypto.randomUUID(),
+          user_id: user.id,
+          type: "user_joined",
+          room_id: currentRoomId,
+          sender_id: user.id,
+          message: `${user.email} joined the room ${room.name}`,
+          status: "unread",
+          created_at: new Date().toISOString(),
+        };
+        await supabase
+          .channel("global-notifications")
+          .send({
+            type: "broadcast",
+            event: "user_joined",
+            payload: notification,
+          });
+      }
     } catch (error) {
-      console.error("Join room error:", error);
       toast.error(error instanceof Error ? error.message : "Failed to join room");
     }
   };
 
+  const renderRoomSearchResult = (result: Room & { isMember: boolean }) => (
+    <li key={result.id} className="flex items-center justify-between">
+      <div className="flex items-center gap-2">
+        <span className="text-sm font-semibold text-white">
+          {result.name} {result.is_private && "🔒"}
+        </span>
+      </div>
+      {selectedRoom?.id === result.id && result.isMember ? (
+        <Button
+          size="sm"
+          variant="destructive"
+          onClick={handleLeaveRoom}
+          className="bg-red-600 hover:bg-red-700"
+          disabled={isLeaving}
+        >
+          <LogOut className="h-4 w-4" />
+        </Button>
+      ) : result.isMember ? (
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => handleRoomSwitch(result)}
+          className="flex items-center gap-1 text-white border-gray-600"
+        >
+          <span className="flex items-center gap-1">
+            <ArrowRight className="h-4 w-4" />
+            Switch
+          </span>
+        </Button>
+      ) : (
+        <Button
+          size="sm"
+          onClick={() => handleJoinRoom(result.id)}
+          disabled={!user}
+        >
+          Join
+        </Button>
+      )}
+    </li>
+  );
+
   return (
-    <div className="h-20">
-      <div className="p-5 border-b flex items-center justify-between h-full">
-        <div>
-          <h1 className="text-xl font-bold">{selectedRoom ? selectedRoom.name : "Daily Chat"}</h1>
-          <ChatPresence />
-        </div>
-
-        <div className="flex items-center gap-2">
-          {user && (
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline" size="icon">
-                  <PlusCircle className="h-4 w-4" />
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Create New Room</DialogTitle>
-                  <DialogDescription>
-                    Create a new chat room. Private rooms require approval to join.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="roomName">Room Name</Label>
-                    <Input
-                      id="roomName"
-                      placeholder="Enter room name"
-                      value={newRoomName}
-                      onChange={(e) => setNewRoomName(e.target.value)}
-                      disabled={isCreating}
-                    />
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      id="private"
-                      checked={isPrivate}
-                      onCheckedChange={setIsPrivate}
-                      disabled={isCreating}
-                    />
-                    <Label htmlFor="private">Private Room</Label>
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isCreating}>
-                    Cancel
-                  </Button>
-                  <Button onClick={handleCreateRoom} disabled={isCreating}>
-                    {isCreating ? "Creating..." : "Create Room"}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          )}
-
-          <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
+    <header className="h-14 border-b flex items-center justify-between px-4 bg-gray-900 text-white shadow-sm">
+      <h1 className="text-lg flex flex-col font-semibold py-2 items-start">
+        {selectedRoom ? `#${selectedRoom.name}` : "Daily Chat"}
+        <ChatPresence />
+      </h1>
+      <div className="flex items-center space-x-4">
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogTrigger asChild>
+            <Button variant="ghost" size="icon">
+              <PlusCircle className="h-5 w-5" />
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="bg-gray-800 text-white">
+            <DialogHeader>
+              <DialogTitle>Create New Room</DialogTitle>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="roomName">Room Name</Label>
+                <Input
+                  id="roomName"
+                  placeholder="Enter room name"
+                  value={newRoomName}
+                  onChange={(e) => setNewRoomName(e.target.value)}
+                  disabled={isCreating}
+                  className="bg-gray-700 border-gray-600"
+                />
+              </div>
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="private"
+                  checked={isPrivate}
+                  onCheckedChange={setIsPrivate}
+                  disabled={isCreating}
+                />
+                <Label htmlFor="private">Private Room</Label>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setIsDialogOpen(false)}
+                disabled={isCreating}
+                className="text-white border-gray-600"
+              >
+                Cancel
+              </Button>
+              <Button onClick={handleCreateRoom} disabled={isCreating}>
+                {isCreating ? "Creating..." : "Create Room"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        {selectedRoom && (
+          <Popover open={isSwitchRoomPopoverOpen} onOpenChange={setIsSwitchRoomPopoverOpen}>
             <PopoverTrigger asChild>
-              <Button variant="outline" size="icon">
-                <Search className="h-4 w-4" />
+              <Button variant="ghost" size="icon">
+                <ArrowRightLeft className="h-5 w-5" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-80">
+            <PopoverContent className="w-80 bg-gray-800 text-white">
               <div className="p-4">
-                <div className="flex justify-end mb-2">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => {
-                      setIsPopoverOpen(false);
-                      router.push("/profile");
-                    }}
-                  >
-                    <Settings className="h-4 w-4" />
-                  </Button>
-                </div>
-                <h3 className="font-semibold text-lg mb-2">Search</h3>
-                <Input
-                  type="text"
-                  placeholder="Search..."
-                  value={searchQuery}
-                  onChange={handleSearchInputChange}
-                  className="mb-4"
-                />
-                <div className="flex gap-2 mb-4">
-                  <Button
-                    variant={searchType === "rooms" ? "default" : "outline"}
-                    onClick={() => handleSearchByType("rooms")}
-                  >
-                    Rooms
-                  </Button>
-                  <Button
-                    variant={searchType === "users" ? "default" : "outline"}
-                    onClick={() => handleSearchByType("users")}
-                  >
-                    Users
-                  </Button>
-                </div>
-                {searchResults.length > 0 && (
-                  <div className="mt-4">
-                    <h4 className="font-semibold text-sm mb-2">
-                      {searchType === "users" ? "User Profiles" : "Rooms"}
-                    </h4>
-                    <ul className="space-y-2">
-                      {searchResults.map((result) =>
-                        "username" in result ? (
-                          <li key={result.id} className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <Avatar>
-                                {result.avatar_url ? (
-                                  <AvatarImage src={result.avatar_url} alt={result.username || "Avatar"} />
-                                ) : (
-                                  <AvatarFallback>
-                                    {result.username?.charAt(0).toUpperCase() ||
-                                      result.display_name?.charAt(0).toUpperCase() ||
-                                      "?"}
-                                  </AvatarFallback>
-                                )}
-                              </Avatar>
-                              <div>
-                                <div className="text-xs text-gray-500">{result.username}</div>
-                                <div className="text-sm font-semibold">{result.display_name}</div>
-                              </div>
-                            </div>
-                            <UserIcon className="h-4 w-4 text-gray-500" />
-                          </li>
-                        ) : (
-                          <li key={result.id} className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-semibold">
-                                {result.name} {result.is_private && "🔒"}
-                              </span>
-                            </div>
-                            <Button
-                              size="sm"
-                              onClick={() => handleJoinRoom(result.id)}
-                              disabled={!user}
-                            >
-                              Join
-                            </Button>
-                          </li>
-                        )
-                      )}
-                    </ul>
-                  </div>
+                <h3 className="font-semibold text-lg mb-2">Switch Room</h3>
+                {availableRooms.length === 0 ? (
+                  <p className="text-sm text-gray-400">No rooms available</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {availableRooms.map((room) => (
+                      <li key={room.id} className="flex items-center justify-between">
+                        <span className="text-sm font-semibold text-white">
+                          {room.name} {room.is_private && "🔒"}
+                        </span>
+                        <Button
+                          size="sm"
+                          variant={selectedRoom?.id === room.id ? "secondary" : "outline"}
+                          onClick={() => handleRoomSwitch(room)}
+                          className="text-white border-gray-600"
+                        >
+                          <span className="flex items-center gap-1">
+                            <ArrowRight className="h-4 w-4" />
+                            Switch
+                          </span>
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
                 )}
-                {searchResults.length === 0 && searchQuery.length > 0 && (
-                  <p className="text-sm text-muted-foreground mt-2">
-                    No {searchType || "results"} found matching your search.
-                  </p>
-                )}
-                {searchQuery.length === 0 && searchType && (
-                  <p className="text-sm text-muted-foreground mt-2">Start typing to search...</p>
-                )}
-                {isLoading && <p className="text-sm text-muted-foreground mt-2">Loading...</p>}
               </div>
             </PopoverContent>
           </Popover>
-
-          {user && (
-            <>
-              <Button onClick={() => handleJoinRoom(selectedRoom?.id)}>Join Current Room</Button>
-              <Button onClick={handleLogout}>Logout</Button>
-            </>
-          )}
-          {!user && <Button onClick={handleLoginWithGithub}>Login</Button>}
+        )}
+        <div className="relative">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setIsNotificationsOpen(true)}
+            className="relative"
+          >
+            <Bell className="h-5 w-5" />
+            {notifications.filter((n) => !n.is_read).length > 0 && (
+              <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full"></span>
+            )}
+          </Button>
+          <Notifications isOpen={isNotificationsOpen} onClose={() => setIsNotificationsOpen(false)} />
         </div>
+        <Popover open={isSearchPopoverOpen} onOpenChange={setIsSearchPopoverOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="ghost" size="icon">
+              <Search className="h-5 w-5" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent
+            side="right"
+            align="start"
+            sideOffset={8}
+            collisionPadding={{ right: 16 }}
+            className="w-64 sm:w-80 bg-gray-800 text-white mr-2 sm:mr-4 md:mr-0"
+          >
+            <div className="p-4">
+              <div className="flex justify-end mb-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => {
+                    setIsSearchPopoverOpen(false);
+                    router.push("/profile");
+                  }}
+                >
+                  <Settings className="h-4 w-4" />
+                </Button>
+              </div>
+              <h3 className="font-semibold text-lg mb-2">Search</h3>
+              <Input
+                type="text"
+                placeholder={
+                  searchType === "users" ? "Search users..." : "Search rooms..."
+                }
+                value={searchQuery}
+                onChange={handleSearchInputChange}
+                className="mb-4 bg-gray-700 border-gray-600"
+              />
+              <div className="flex gap-2 mb-4">
+                <Button
+                  variant={searchType === "rooms" ? "default" : "outline"}
+                  onClick={() => handleSearchByType("rooms")}
+                  className="text-white border-gray-600"
+                >
+                  Rooms
+                </Button>
+                <Button
+                  variant={searchType === "users" ? "default" : "outline"}
+                  onClick={() => handleSearchByType("users")}
+                  className="text-white border-gray-600"
+                >
+                  Users
+                </Button>
+              </div>
+              {searchResults.length > 0 && (
+                <div className="mt-4">
+                  <h4 className="font-semibold text-sm mb-2">
+                    {searchType === "users" ? "User Profiles" : "Rooms"}
+                  </h4>
+                  <ul className="space-y-2">
+                    {searchResults.map((result) =>
+                      "display_name" in result ? (
+                        <li
+                          key={result.id}
+                          className="flex items-center justify-between"
+                        >
+                          <div className="flex items-center gap-2">
+                            <Avatar>
+                              {result.avatar_url ? (
+                                <AvatarImage
+                                  src={result.avatar_url}
+                                  alt={result.username || "Avatar"}
+                                />
+                              ) : (
+                                <AvatarFallback>
+                                  {result.username?.charAt(0).toUpperCase() ||
+                                    result.display_name?.charAt(0).toUpperCase() ||
+                                    "?"}
+                                </AvatarFallback>
+                              )}
+                            </Avatar>
+                            <div>
+                              <div className="text-xs text-gray-400">
+                                {result.username}
+                              </div>
+                              <div className="text-sm font-semibold text-white">
+                                {result.display_name}
+                              </div>
+                            </div>
+                          </div>
+                          <UserIcon className="h-4 w-4 text-gray-400" />
+                        </li>
+                      ) : (
+                        renderRoomSearchResult(result as Room & { isMember: boolean })
+                      )
+                    )}
+                  </ul>
+                </div>
+              )}
+              {searchResults.length === 0 && searchQuery.length > 0 && (
+                <p className="text-sm text-gray-400 mt-2">
+                  No {searchType || "results"} found.
+                </p>
+              )}
+              {searchQuery.length === 0 && searchType && (
+                <p className="text-sm text-gray-400 mt-2">
+                  Showing all {searchType}...
+                </p>
+              )}
+              {isLoading && (
+                <p className="text-sm text-gray-400 mt-2">Loading...</p>
+              )}
+            </div>
+          </PopoverContent>
+        </Popover>
+       
       </div>
-    </div>
+    </header>
   );
 }

@@ -1,6 +1,6 @@
-// app/api/rooms/all/route.ts
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
+<<<<<<< HEAD
 import { NextRequest, NextResponse } from "next/server";
 
 interface RoomParticipant {
@@ -20,22 +20,18 @@ export async function GET(req: NextRequest) {
       { status: 401 }
     );
   }
+=======
+import { NextResponse } from "next/server";
+>>>>>>> 6bd24b2ac8dc15ca5dcd1c42f14d20e12f8b9738
 
+export async function GET() {
   try {
-    // Fetch all rooms with additional information
+    const supabase = createRouteHandlerClient({ cookies });
+
     const { data: rooms, error } = await supabase
-      .from('rooms')
-      .select(`
-        *,
-        room_participants!inner (
-          user_id,
-          status
-        ),
-        messages (
-          count
-        )
-      `)
-      .order('created_at', { ascending: false });
+      .from("rooms")
+      .select("*")
+      .order("created_at", { ascending: false });
 
     if (error) {
       console.error("Error fetching rooms:", error);
@@ -45,6 +41,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
+<<<<<<< HEAD
     // Process the rooms data to include additional information
     const processedRooms = rooms.map(room => {
      const participants: RoomParticipant[] = room.room_participants || [];
@@ -66,15 +63,17 @@ export async function GET(req: NextRequest) {
       };
     });
 
+=======
+>>>>>>> 6bd24b2ac8dc15ca5dcd1c42f14d20e12f8b9738
     return NextResponse.json({
       success: true,
-      data: processedRooms
+      rooms
     });
 
   } catch (error) {
-    console.error("Server error:", error);
+    console.error("Unexpected error:", error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "An unexpected error occurred" },
       { status: 500 }
     );
   }

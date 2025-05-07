@@ -1,84 +1,82 @@
 "use client";
-import React, { Suspense, useEffect } from "react";
+
+import { Suspense, useEffect, useCallback } from "react";
 import ListMessages from "./ListMessages";
-import { supabaseBrowser } from "@/lib/supabase/browser";
-import { LIMIT_MESSAGE } from "@/lib/constant";
 import { useRoomStore } from "@/lib/store/roomstore";
 import { useDirectChatStore } from "@/lib/store/directChatStore";
 import { useMessage } from "@/lib/store/messages";
 import { toast } from "sonner";
-import { Imessage } from "@/lib/store/messages"; // Import Imessage for type checking
+import { Imessage } from "@/lib/store/messages";
 
 export default function ChatMessages() {
-	const supabase = supabaseBrowser();
-	const selectedRoom = useRoomStore((state) => state.selectedRoom);
-	const selectedDirectChat = useDirectChatStore((state) => state.selectedChat);
-	const setMessages = useMessage((state) => state.setMessages);
+  const selectedRoom = useRoomStore((state) => state.selectedRoom);
+  const selectedDirectChat = useDirectChatStore((state) => state.selectedChat);
+  const { setMessages, clearMessages } = useMessage((state) => ({
+    setMessages: state.setMessages,
+    clearMessages: state.clearMessages,
+  }));
 
-	useEffect(() => {
-		const fetchMessages = async () => {
-			try {
-				if (selectedRoom) {
-					const { data, error } = await supabase
-						.from("messages")
-						.select("*, users(*)")
-						.eq("room_id", selectedRoom.id)
-						.range(0, LIMIT_MESSAGE)
-						.order("created_at", { ascending: false });
+  const fetchMessages = useCallback(async () => {
+    try {
+      // Clear existing messages before fetching new ones
+      clearMessages();
 
-					if (error) throw error;
+      if (selectedRoom) {
+        const response = await fetch(`/api/messages/${selectedRoom.id}`);
+        if (!response.ok) throw new Error("Failed to fetch messages");
+        const { messages } = await response.json();
 
-					const formattedMessages: Imessage[] = data?.reverse().map(msg => ({
-						id: msg.id,
-						created_at: msg.created_at,
-						is_edit: msg.is_edit,
-						send_by: msg.send_by,
-						text: msg.text,
-						room_id: msg.room_id,
-						direct_chat_id: msg.direct_chat_id,
-						dm_thread_id: msg.dm_thread_id,
-						status: msg.status, // Now accepts string | null
-						users: msg.users || null
-					})) || [];
+        const formattedMessages: Imessage[] = messages.map((msg: any) => ({
+          id: msg.id,
+          created_at: msg.created_at,
+          is_edit: msg.is_edit,
+          send_by: msg.send_by,
+          text: msg.text,
+          room_id: msg.room_id,
+          direct_chat_id: msg.direct_chat_id,
+          dm_thread_id: msg.dm_thread_id,
+          status: msg.status,
+          users: msg.users || null,
+        })) || [];
 
-					setMessages(formattedMessages);
-				} else if (selectedDirectChat) {
-					const { data, error } = await supabase
-						.from("messages")
-						.select("*, users(*)")
-						.eq("direct_chat_id", selectedDirectChat.id)
-						.range(0, LIMIT_MESSAGE)
-						.order("created_at", { ascending: false });
+        setMessages(formattedMessages.reverse());
+      } else if (selectedDirectChat) {
+        const response = await fetch(`/api/direct-messages/${selectedDirectChat.id}`);
+        if (!response.ok) throw new Error("Failed to fetch direct messages");
+        const { messages } = await response.json();
 
-					if (error) throw error;
+        const formattedMessages: Imessage[] = messages.map((msg: any) => ({
+          id: msg.id,
+          created_at: msg.created_at,
+          is_edit: msg.is_edit,
+          send_by: msg.send_by,
+          text: msg.text,
+          room_id: msg.room_id,
+          direct_chat_id: msg.direct_chat_id,
+          dm_thread_id: msg.dm_thread_id,
+          status: msg.status,
+          users: msg.users || null,
+        })) || [];
 
-					const formattedMessages: Imessage[] = data?.reverse().map(msg => ({
-						id: msg.id,
-						created_at: msg.created_at,
-						is_edit: msg.is_edit,
-						send_by: msg.send_by,
-						text: msg.text,
-						room_id: msg.room_id,
-						direct_chat_id: msg.direct_chat_id,
-						dm_thread_id: msg.dm_thread_id,
-						status: msg.status, // Now accepts string | null
-						users: msg.users || null
-					})) || [];
+        setMessages(formattedMessages.reverse());
+      } else {
+        setMessages([]);
+      }
+    } catch (error) {
+      if (error instanceof Error) {
+        toast.error("Failed to fetch messages");
+        console.error("Error fetching messages:", error.message);
+      }
+    }
+  }, [selectedRoom, selectedDirectChat, clearMessages, setMessages]);
 
-					setMessages(formattedMessages);
-				}
-			} catch (error) {
-				toast.error('Failed to fetch messages');
-				console.error('Error fetching messages:', error);
-			}
-		};
+  useEffect(() => {
+    fetchMessages();
+  }, [fetchMessages, selectedRoom, selectedDirectChat]);
 
-		fetchMessages();
-	}, [selectedRoom, selectedDirectChat, setMessages, supabase]);
-
-	return (
-		<Suspense fallback={"loading.."}>
-			<ListMessages />
-		</Suspense>
-	);
+  return (
+    <Suspense fallback={"loading..."}>
+      <ListMessages />
+    </Suspense>
+  );
 }

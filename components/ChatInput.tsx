@@ -1,4 +1,5 @@
 "use client";
+
 import React from "react";
 import { Input } from "./ui/input";
 import { supabaseBrowser } from "@/lib/supabase/browser";
@@ -6,8 +7,8 @@ import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
 import { useUser } from "@/lib/store/user";
 import { Imessage, useMessage } from "@/lib/store/messages";
-import { useRoomStore } from '@/lib/store/roomstore';
-import { useDirectChatStore } from '@/lib/store/directChatStore';
+import { useRoomStore } from "@/lib/store/roomstore";
+import { useDirectChatStore } from "@/lib/store/directChatStore";
 
 export default function ChatInput() {
 	const user = useUser((state) => state.user);
@@ -71,17 +72,23 @@ export default function ChatInput() {
 					room_id: roomId,
 					direct_chat_id: directChatId,
 					send_by: user.id,
+					created_at: new Date().toISOString(), // Ensure created_at is included
 					status: "sent",
 				});
 
 			if (error) {
-				console.error("Supabase error:", error); // Log for debugging
+				console.error("Supabase error:", error);
 				throw error;
 			}
+
+			// Optionally, refresh notifications or messages if needed
+			// (This is handled by Supabase real-time subscriptions in ChatHeader)
 		} catch (error) {
 			if (error instanceof Error) {
+				console.error("Error sending message:", error);
 				toast.error(`Failed to send message: ${error.message}`);
 			} else {
+				console.error("Unknown error sending message:", error);
 				toast.error("Failed to send message due to an unknown error");
 			}
 			useMessage.getState().optimisticDeleteMessage(id);
