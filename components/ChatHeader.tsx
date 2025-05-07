@@ -540,7 +540,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
             align="start"
             sideOffset={8}
             collisionPadding={{ left: 16 }}
-            className="w-64 sm:w-80 bg-gradient-to-br from-gray-800 to-gray-900 text-white rounded-xl shadow-lg border border-gray-700/50 mr-2 sm:mr-4 md:mr-0"
+            className="mr-2 sm:mr-4 md:mr-0"
           >
             <div className="p-5">
               <div className="flex justify-between items-center mb-4">
