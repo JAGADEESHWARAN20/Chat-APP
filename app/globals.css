@@ -57,3 +57,31 @@
 		@apply bg-background text-foreground;
 	}
 }
+
+
+/* Custom Scrollbar Styling */
+.custom-scrollbar {
+  /* Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: #a855f7 transparent; /* Thumb color, transparent track */
+}
+
+/* Webkit (Chrome, Edge, Safari) */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px; /* Slim scrollbar */
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent; /* Hide the track */
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(45deg, #6366f1, #a855f7); /* Gradient from indigo to purple */
+  border-radius: 9999px; /* Fully rounded ends */
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); /* Subtle shadow for depth */
+  border: 1px solid rgba(255, 255, 255, 0.1); /* Subtle white border for elegance */
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(45deg, #4f46e5, #9333ea); /* Slightly darker gradient on hover */
+}

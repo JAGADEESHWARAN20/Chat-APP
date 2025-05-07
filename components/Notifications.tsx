@@ -201,7 +201,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
             </Button>
           )}
         </DialogHeader>
-        <div className="space-y-4 max-h-[300px] overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-indigo-600 scrollbar-track-gray-800 scrollbar-thumb-rounded-full">
+        <div className="space-y-4 max-h-[300px] overflow-y-auto overflow-x-hidden custom-scrollbar">
           {isLoading ? (
             <p className="text-gray-400 text-sm">Loading notifications...</p>
           ) : notifications.length === 0 ? (
