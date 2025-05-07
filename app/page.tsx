@@ -11,7 +11,7 @@ export default async function Page() {
 
 	return (
 		<>
-			<div className="max-w-3xl mx-auto md:py-10 h-screen">
+			<div className="max-w-3xl mx-auto h-screen">
 				<LoginLogoutButton user={data.session?.user} />
 				<div className="h-full border rounded-md flex flex-col relative">
 					<ChatHeader user={data.session?.user} />
