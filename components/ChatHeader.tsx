@@ -535,7 +535,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
               <Search className="h-5 w-5" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-80 bg-gray-800 text-white">
+          <PopoverContent className="w-80 sm:mr-5 md:mr-0 lg:mr-0 bg-gray-800 text-white">
             <div className="p-4">
               <div className="flex justify-end mb-2">
                 <Button
