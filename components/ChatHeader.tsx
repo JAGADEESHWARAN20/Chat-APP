@@ -536,11 +536,11 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
             </Button>
           </PopoverTrigger>
           <PopoverContent
-            side="left"
+            side="right"
             align="start"
             sideOffset={8}
             collisionPadding={{ right: 16 }}
-            className="w-64 sm:w-80 bg-gray-800 text-white mr-2 sm:mr-4 md:mr-0"
+            className="w-64 sm:w-80 bg-gray-800 text-white"
           >
             <div className="p-4">
               <div className="flex justify-end mb-2">
