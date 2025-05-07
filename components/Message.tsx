@@ -28,7 +28,7 @@ export default function Message({ message }: { message: Imessage }) {
 				/>
 			</div>
 			<div className="flex-1">
-				<div className="flex items-center justify-between">
+				<div className="flex items-start justify-between">
 					<div className="flex items-center gap-1">
 						<h1 className="font-bold">
 							{message.users?.display_name}
@@ -44,6 +44,7 @@ export default function Message({ message }: { message: Imessage }) {
 						<MessageMenu message={message} />
 					)}
 				</div>
+				
 				<p className="text-gray-300">{message.text}</p>
 			</div>
 		</div>
