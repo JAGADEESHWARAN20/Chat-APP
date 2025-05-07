@@ -577,7 +577,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                   </h4>
                   <ul className="space-y-2">
                     {searchResults.map((result) =>
-                      "username" in result ? (
+                      "display_name" in result ? (
                         <li
                           key={result.id}
                           className="flex items-center justify-between"
