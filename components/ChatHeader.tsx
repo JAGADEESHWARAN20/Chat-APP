@@ -15,11 +15,11 @@ import {
   Search,
   PlusCircle,
   Bell,
-  Reply,
   Settings,
   ArrowRight,
   LogOut,
   UserIcon,
+  ArrowRightLeft,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -493,7 +493,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
           <Popover open={isSwitchRoomPopoverOpen} onOpenChange={setIsSwitchRoomPopoverOpen}>
             <PopoverTrigger asChild>
               <Button variant="ghost" size="icon">
-                <Reply className="h-5 w-5" />
+                <ArrowRightLeft className="h-5 w-5" />
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-80 bg-gray-800 text-white">
