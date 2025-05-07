@@ -449,7 +449,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                   value={newRoomName}
                   onChange={(e) => setNewRoomName(e.target.value)}
                   disabled={isCreating}
-                  className="bg-gray-700/50 border-gray-600/50 text-white placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+                  className="bg-gray-700/50 border-gray-600/50 text-white placeholder-gray-400 rounded-lg focus:ring-0 focus:border-transparent transition-all"
                 />
               </div>
               <div className="flex items-center space-x-3">
