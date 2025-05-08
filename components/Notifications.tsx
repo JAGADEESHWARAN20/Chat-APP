@@ -259,7 +259,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
                           handleAccept(notif.id, notif.room_id);
                         }}
                         aria-label={`Accept invitation for notification ${notif.id}`}
-                        className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm px-3 py-1 rounded-lg transition-colors"
+                        className="bg-violet-600 hover:bg-violet-700 text-white text-sm px-3 py-1 rounded-lg transition-colors"
                       >
                         Accept
                       </Button>
