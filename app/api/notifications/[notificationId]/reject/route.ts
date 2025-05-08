@@ -4,16 +4,29 @@ import { NextRequest, NextResponse } from "next/server";
 import { Database } from "@/lib/types/supabase";
 import { transformNotification } from "@/lib/utils/notifications";
 
-export async function POST(
+export async function PATCH(
      req: NextRequest,
-     { params }: { params: { id: string } }
+     { params }: { params: { notificationId: string } }
 ) {
      try {
           const supabase = createRouteHandlerClient<Database>({ cookies });
-          const notificationId = params.id;
-          console.log(`Fetching notification with ID: ${notificationId}`);
+          const notificationId = params.notificationId;
+          console.log(`Processing reject for notification ID: ${notificationId}`);
 
-          // Step 1: Check if user is authenticated
+          // Validate notificationId
+          if (!notificationId || notificationId === "undefined") {
+               console.error("Invalid notification ID: notificationId is undefined or invalid");
+               return NextResponse.json({ error: "Invalid notification ID" }, { status: 400 });
+          }
+
+          // Validate UUID format
+          const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+          if (!uuidRegex.test(notificationId)) {
+               console.error(`Invalid notification ID format: ${notificationId}`);
+               return NextResponse.json({ error: "Invalid notification ID format" }, { status: 400 });
+          }
+
+          // Check if user is authenticated
           const { data: { session }, error: sessionError } = await supabase.auth.getSession();
           if (sessionError || !session) {
                console.error("Session error:", sessionError?.message);
@@ -21,20 +34,27 @@ export async function POST(
           }
           console.log(`Authenticated user ID: ${session.user.id}`);
 
-          // Step 2: Fetch the notification without joins to isolate RLS or existence issues
+          // Fetch the notification to verify it exists and is a join_request
           const { data: notificationCore, error: notificationCoreError } = await supabase
                .from("notifications")
-               .select("id, message, created_at, status, type, sender_id, user_id, room_id")
+               .select("id, message, created_at, status, type, sender_id, user_id, room_id, join_status")
                .eq("id", notificationId)
+               .eq("type", "join_request")
+               .eq("user_id", session.user.id)
                .single();
 
           if (notificationCoreError || !notificationCore) {
-               console.error("Notification core fetch error:", notificationCoreError?.message || "Notification not found");
-               return NextResponse.json({ error: "Notification not found" }, { status: 404 });
+               console.error("Notification fetch error:", notificationCoreError?.message || "Notification not found");
+               return NextResponse.json({ error: "Notification not found or not a join request" }, { status: 404 });
           }
-          console.log(`Notification found: ${JSON.stringify(notificationCore)}`);
 
-          // Step 3: Fetch related data separately to handle nullable fields safely
+          // Check if the join_status is still pending
+          if (notificationCore.join_status !== "pending") {
+               console.error(`Join request already processed: current status is ${notificationCore.join_status}`);
+               return NextResponse.json({ error: `Join request already ${notificationCore.join_status}` }, { status: 400 });
+          }
+
+          // Fetch related data for the response
           if (!notificationCore.sender_id) {
                console.error("Sender ID is null");
                return NextResponse.json({ error: "Invalid notification data: missing sender_id" }, { status: 400 });
@@ -77,104 +97,57 @@ export async function POST(
                return NextResponse.json({ error: "Room not found" }, { status: 404 });
           }
 
-          // Construct the full notification object
+          // Verify user is the room creator
+          if (roomData.created_by !== session.user.id) {
+               console.error(`Permission denied: User ${session.user.id} is not the room creator (${roomData.created_by})`);
+               return NextResponse.json({ error: "Only the room creator can reject join requests" }, { status: 403 });
+          }
+
+          // Update the notification's join_status to 'rejected' and status to 'read'
+          const { error: updateError } = await supabase
+               .from("notifications")
+               .update({ join_status: "rejected", status: "read" })
+               .eq("id", notificationId);
+          if (updateError) {
+               console.error("Error updating notification status:", updateError.message);
+               return NextResponse.json({ error: "Failed to update notification", details: updateError.message }, { status: 500 });
+          }
+          console.log(`Updated notification ${notificationId}: join_status to rejected, status to read`);
+
+          // Notify the requester that they were rejected
+          const message = `Your request to join ${roomData.name} was rejected`;
+          const { error: rejectNotificationError } = await supabase
+               .from("notifications")
+               .insert([
+                    {
+                         user_id: notificationCore.sender_id,
+                         type: "join_request_rejected",
+                         room_id: notificationCore.room_id,
+                         sender_id: session.user.id,
+                         message,
+                         status: "unread",
+                         created_at: new Date().toISOString(),
+                         join_status: null, // Explicitly set join_status to null for non-join_request notifications
+                    },
+               ]);
+          if (rejectNotificationError) {
+               console.error("Error sending reject notification:", rejectNotificationError.message);
+               return NextResponse.json({ error: "Failed to send reject notification", details: rejectNotificationError.message }, { status: 500 });
+          }
+          console.log(`Sent join_request_rejected notification to user ${notificationCore.sender_id}`);
+
+          // Construct the updated notification object for the response
           const notification = {
                ...notificationCore,
+               join_status: "rejected",
+               status: "read",
                users: senderData,
                recipient: recipientData,
                rooms: roomData,
           };
 
-          // Step 4: Verify user is the room creator
-          if (notification.rooms.created_by !== session.user.id) {
-               console.error(`Permission denied: User ${session.user.id} is not the room creator (${notification.rooms.created_by})`);
-               return NextResponse.json({ error: "Only the room creator can reject join requests" }, { status: 403 });
-          }
-
-          // Step 5: Verify the notification is intended for the room creator
-          if (notification.user_id !== session.user.id) {
-               console.error(`Permission denied: User ${session.user.id} is not the intended recipient (${notification.user_id})`);
-               return NextResponse.json({ error: "You are not the intended recipient of this notification" }, { status: 403 });
-          }
-
-          // Step 6: Update room_participants to rejected and clear joined_at
-          const { error: participantError } = await supabase
-               .from("room_participants")
-               .update({ status: "rejected", joined_at: undefined }) // Changed null to undefined
-               .eq("room_id", notification.room_id as string) // Type assertion after validation
-               .eq("user_id", notification.sender_id as string); // Type assertion after validation
-          if (participantError) {
-               console.error("Error updating room_participants:", participantError.message);
-               return NextResponse.json({ error: "Failed to reject join request", details: participantError.message }, { status: 500 });
-          }
-          console.log(`Updated room_participants: user ${notification.sender_id} rejected from room ${notification.room_id}`);
-
-          // Step 7: Ensure user is not active in room_members (if they were added previously)
-          const { data: membership, error: membershipError } = await supabase
-               .from("room_members")
-               .select("*")
-               .eq("room_id", notification.room_id as string) // Type assertion
-               .eq("user_id", notification.sender_id as string) // Type assertion
-               .eq("active", true)
-               .single();
-          if (membershipError && membershipError.code !== "PGRST116") { // PGRST116 means no rows found, which is fine
-               console.error("Error checking room_members:", membershipError.message);
-          }
-          if (membership) {
-               const { error: updateMembershipError } = await supabase
-                    .from("room_members")
-                    .update({ active: false })
-                    .eq("room_id", notification.room_id as string) // Type assertion
-                    .eq("user_id", notification.sender_id as string); // Type assertion
-               if (updateMembershipError) {
-                    console.error("Error updating room_members:", updateMembershipError.message);
-               } else {
-                    console.log(`Updated room_members: set active=false for user ${notification.sender_id} in room ${notification.room_id}`);
-               }
-          } else {
-               console.log(`User ${notification.sender_id} was not in room_members for room ${notification.room_id}`);
-          }
-
-          // Step 8: Mark notification as read
-          const { error: updateError } = await supabase
-               .from("notifications")
-               .update({ status: "read" })
-               .eq("id", notificationId);
-          if (updateError) {
-               console.error("Error updating notification status:", updateError.message);
-          } else {
-               console.log(`Marked notification ${notificationId} as read`);
-          }
-
-          // Step 9: Notify the requester that they were rejected
-          const message = `Your request to join ${notification.rooms.name} was rejected`;
-          const { error: rejectNotificationError } = await supabase
-               .from("notifications")
-               .insert([ // Pass as an array to match the correct overload
-                    {
-                         user_id: notification.sender_id as string, // Type assertion
-                         type: "join_request_rejected",
-                         room_id: notification.room_id as string, // Type assertion
-                         sender_id: session.user.id,
-                         message,
-                         status: "unread",
-                         created_at: new Date().toISOString(),
-                    },
-               ]);
-          if (rejectNotificationError) {
-               console.error("Error sending reject notification:", rejectNotificationError.message);
-          } else {
-               console.log(`Sent join_request_rejected notification to user ${notification.sender_id}`);
-          }
-
-          // Step 10: Transform the updated notification
-          const transformedNotification = transformNotification({
-               ...notification,
-               status: "read", // Reflect the updated status
-               users: notification.users,
-               recipient: notification.recipient,
-               rooms: notification.rooms,
-          });
+          // Transform the updated notification
+          const transformedNotification = transformNotification(notification);
 
           return NextResponse.json({ success: true, message: "Join request rejected", notification: transformedNotification });
      } catch (error) {

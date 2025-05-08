@@ -37,24 +37,35 @@ export const transformNotification = (
           is_read: notif.status === "read",
           type: notif.type,
           sender_id: notif.sender_id ?? "",
-          user_id: notif.user_id,           // Ensures user_id is included
-          room_id: notif.room_id,
+          user_id: notif.user_id,
+          room_id: notif.room_id ?? null,
+          join_status: notif.join_status ?? null,
           users: users
                ? {
                     id: users.id,
                     username: users.username,
                     display_name: users.display_name,
-                    avatar_url: users.avatar_url,
+                    avatar_url: users.avatar_url ?? null,
+                    created_at: users.created_at,
                }
                : null,
-          recipient: recipient              // Ensures recipient is included
+          recipient: recipient
                ? {
                     id: recipient.id,
                     username: recipient.username,
                     display_name: recipient.display_name,
-                    avatar_url: recipient.avatar_url,
+                    avatar_url: recipient.avatar_url ?? null,
+                    created_at: recipient.created_at,
                }
                : null,
-          rooms: rooms ? { id: rooms.id, name: rooms.name } : null,
+          rooms: rooms
+               ? {
+                    id: rooms.id,
+                    name: rooms.name,
+                    created_at: rooms.created_at,
+                    created_by: rooms.created_by ?? "", // Provide fallback for null
+                    is_private: rooms.is_private,
+               }
+               : null,
      };
 };

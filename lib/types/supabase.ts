@@ -158,6 +158,7 @@ export type Database = {
         Row: {
           created_at: string | null
           id: string
+          join_status: string | null
           message: string
           room_id: string | null
           sender_id: string | null
@@ -168,6 +169,7 @@ export type Database = {
         Insert: {
           created_at?: string | null
           id?: string
+          join_status?: string | null
           message: string
           room_id?: string | null
           sender_id?: string | null
@@ -178,6 +180,7 @@ export type Database = {
         Update: {
           created_at?: string | null
           id?: string
+          join_status?: string | null
           message?: string
           room_id?: string | null
           sender_id?: string | null
