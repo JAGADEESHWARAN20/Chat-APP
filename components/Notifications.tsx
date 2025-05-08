@@ -25,7 +25,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
   const supabase = supabaseBrowser();
 
   const handleAccept = async (notificationId: string, roomId: string | null) => {
-    console.log("Joining room:", roomId); // add before the call
+    console.log("Joining room:", roomId);
     if (!roomId) {
       toast.error("Invalid room ID");
       return;
@@ -45,6 +45,28 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to accept invitation");
       console.error("Error accepting invitation:", error);
+    }
+  };
+
+  const handleReject = async (notificationId: string, roomId: string | null) => {
+    if (!roomId) {
+      toast.error("Invalid room ID");
+      return;
+    }
+    try {
+      const response = await fetch(`/api/notifications/${notificationId}/reject`, {
+        method: "POST",
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to reject invitation");
+      }
+      markAsRead(notificationId);
+      onClose();
+      toast.success("Invitation rejected");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to reject invitation");
+      console.error("Error rejecting invitation:", error);
     }
   };
 
@@ -94,13 +116,13 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
   const handleMarkAsRead = async (notificationId: string) => {
     try {
       const response = await fetch(`/api/notifications/${notificationId}`, {
-        method: "DELETE",
+        method: "POST",
       });
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to delete notification");
+        throw new Error(errorData.error || "Failed to mark as read");
       }
-      setNotifications(notifications.filter((notif) => notif.id !== notificationId));
+      markAsRead(notificationId);
       toast.success("Marked as read");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to mark as read");
@@ -230,16 +252,28 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
                 </div>
                 <div className="flex items-center justify-between gap-2 flex-shrink-0">
                   {notif.type === "join_request" && !notif.is_read && (
-                    <Button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleAccept(notif.id, notif.room_id);
-                      }}
-                      aria-label={`Accept invitation for notification ${notif.id}`}
-                      className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm px-3 py-1 rounded-lg transition-colors"
-                    >
-                      Accept
-                    </Button>
+                    <>
+                      <Button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleAccept(notif.id, notif.room_id);
+                        }}
+                        aria-label={`Accept invitation for notification ${notif.id}`}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm px-3 py-1 rounded-lg transition-colors"
+                      >
+                        Accept
+                      </Button>
+                      <Button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleReject(notif.id, notif.room_id);
+                        }}
+                        aria-label={`Reject invitation for notification ${notif.id}`}
+                        className="bg-red-600 hover:bg-red-700 text-white text-sm px-3 py-1 rounded-lg transition-colors"
+                      >
+                        Reject
+                      </Button>
+                    </>
                   )}
                   {notif.is_read ? (
                     <Button

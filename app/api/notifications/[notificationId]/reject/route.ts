@@ -49,36 +49,18 @@ export async function POST(
 
           // Verify user is the room creator
           if (notification.rooms?.created_by !== session.user.id) {
-               return NextResponse.json({ error: "Only the room creator can accept join requests" }, { status: 403 });
+               return NextResponse.json({ error: "Only the room creator can reject join requests" }, { status: 403 });
           }
 
-          // Update room_participants to accepted
+          // Update room_participants to rejected
           const { error: participantError } = await supabase
                .from("room_participants")
-               .update({ status: "accepted", joined_at: new Date().toISOString() })
+               .update({ status: "rejected" })
                .eq("room_id", notification.room_id)
                .eq("user_id", notification.sender_id);
           if (participantError) {
                console.error("Error updating room_participants:", participantError);
-               return NextResponse.json({ error: "Failed to accept join request" }, { status: 500 });
-          }
-
-          // Add to room_members with upsert to avoid duplicates
-          const { error: membershipError } = await supabase
-               .from("room_members")
-               .upsert(
-                    [
-                         {
-                              room_id: notification.room_id,
-                              user_id: notification.sender_id,
-                              active: true,
-                         },
-                    ],
-                    { onConflict: "room_id,user_id" }
-               );
-          if (membershipError) {
-               console.error("Error adding to room_members:", membershipError);
-               return NextResponse.json({ error: "Failed to add to room_members" }, { status: 500 });
+               return NextResponse.json({ error: "Failed to reject join request" }, { status: 500 });
           }
 
           // Mark notification as read
@@ -90,7 +72,7 @@ export async function POST(
                console.error("Error updating notification:", updateError);
           }
 
-          // Notify the requester that they were accepted
+          // Notify the requester that they were rejected
           const { data: room, error: roomError } = await supabase
                .from("rooms")
                .select("name")
@@ -111,20 +93,20 @@ export async function POST(
                return NextResponse.json({ error: "Sender not found" }, { status: 404 });
           }
 
-          const message = `Your request to join ${room.name} was accepted`;
-          const { error: acceptNotificationError } = await supabase
+          const message = `Your request to join ${room.name} was rejected`;
+          const { error: rejectNotificationError } = await supabase
                .from("notifications")
                .insert({
                     user_id: notification.sender_id,
-                    type: "user_joined",
+                    type: "join_request_rejected",
                     room_id: notification.room_id,
                     sender_id: session.user.id,
                     message,
                     status: "unread",
                     created_at: new Date().toISOString(),
                });
-          if (acceptNotificationError) {
-               console.error("Error sending accept notification:", acceptNotificationError);
+          if (rejectNotificationError) {
+               console.error("Error sending reject notification:", rejectNotificationError);
           }
 
           // Transform the updated notification
@@ -135,13 +117,12 @@ export async function POST(
                rooms: notification.rooms || null,
           });
 
-          return NextResponse.json({ success: true, message: "Join request accepted", notification: transformedNotification });
+          return NextResponse.json({ success: true, message: "Join request rejected", notification: transformedNotification });
      } catch (error) {
-          console.error("Server error in accept route:", error);
+          console.error("Server error in reject route:", error);
           return NextResponse.json(
                { error: "Internal server error", details: error instanceof Error ? error.message : "Unknown error" },
                { status: 500 }
           );
      }
 }
-

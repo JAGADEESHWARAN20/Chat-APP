@@ -84,7 +84,9 @@ export const useNotification = create<NotificationState>((set) => {
 
     markAsRead: (notificationId) =>
       set((state) => ({
-        notifications: state.notifications.filter((notif) => notif.id !== notificationId),
+        notifications: state.notifications.map((notif) =>
+          notif.id === notificationId ? { ...notif, is_read: true } : notif
+        ),
       })),
 
     fetchNotifications: async (userId, page = 1, limit = 20, retries = 3) => {
@@ -242,6 +244,48 @@ export const useNotification = create<NotificationState>((set) => {
               }
               return { notifications: newNotifications };
             });
+          }
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "notifications",
+            filter: `user_id=eq.${userId}`,
+          },
+          async (payload) => {
+            const updatedData = payload.new as RawNotification;
+
+            const users = updatedData.sender_id ? await fetchUserData(updatedData.sender_id) : null;
+            const recipient = updatedData.user_id ? await fetchUserData(updatedData.user_id) : null;
+            let rooms: Room | null = null;
+            if (updatedData.room_id) {
+              const { data: roomData, error: roomError } = await supabase
+                .from("rooms")
+                .select("id, name, created_at, created_by, is_private")
+                .eq("id", updatedData.room_id)
+                .single();
+
+              if (roomError) {
+                console.warn(`Failed to fetch room ${updatedData.room_id}:`, roomError.message);
+              } else {
+                rooms = roomData;
+              }
+            }
+
+            const formattedNotification = transformNotification({
+              ...updatedData,
+              users,
+              recipient,
+              rooms,
+            });
+
+            set((state) => ({
+              notifications: state.notifications.map((notif) =>
+                notif.id === formattedNotification.id ? formattedNotification : notif
+              ),
+            }));
           }
         )
         .on(
