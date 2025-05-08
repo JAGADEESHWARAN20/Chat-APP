@@ -18,7 +18,7 @@ export async function POST(
                return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
           }
 
-          // Fetch notification with related data
+          // Fetch notification with related data (without filtering by user_id)
           const { data: notification, error: notificationError } = await supabase
                .from("notifications")
                .select(`
@@ -35,7 +35,6 @@ export async function POST(
         rooms:rooms!notifications_room_id_fkey(id, name, created_at, created_by, is_private)
       `)
                .eq("id", notificationId)
-               .eq("user_id", session.user.id)
                .single();
 
           if (notificationError || !notification) {
@@ -50,6 +49,11 @@ export async function POST(
           // Verify user is the room creator
           if (notification.rooms?.created_by !== session.user.id) {
                return NextResponse.json({ error: "Only the room creator can accept join requests" }, { status: 403 });
+          }
+
+          // Verify the notification is intended for the room creator (user_id should match the room creator)
+          if (notification.user_id !== session.user.id) {
+               return NextResponse.json({ error: "You are not the intended recipient of this notification" }, { status: 403 });
           }
 
           // Update room_participants to accepted
@@ -144,4 +148,3 @@ export async function POST(
           );
      }
 }
-
