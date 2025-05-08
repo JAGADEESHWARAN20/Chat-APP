@@ -253,21 +253,24 @@ export type Database = {
       }
       room_participants: {
         Row: {
-          joined_at: string
+          created_at: string // Added created_at (non-nullable, default now())
+          joined_at: string | null // Updated to allow null
           room_id: string
-          status: string
+          status: string | null // Updated to allow null
           user_id: string
         }
         Insert: {
-          joined_at?: string
+          created_at?: string | null // Optional, default set by database
+          joined_at?: string | null // Updated to allow null
           room_id: string
-          status?: string
+          status?: string | null // Updated to allow null
           user_id: string
         }
         Update: {
-          joined_at?: string
+          created_at?: string | null // Optional
+          joined_at?: string | null // Updated to allow null
           room_id?: string
-          status?: string
+          status?: string | null // Updated to allow null
           user_id?: string
         }
         Relationships: [

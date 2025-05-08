@@ -68,7 +68,6 @@ export async function POST(
             room_id: roomId,
             user_id: userId,
             status: status,
-            created_at: new Date().toISOString(),
             joined_at: joined_at,
           },
         ],
@@ -110,6 +109,11 @@ export async function POST(
     // Only send a notification if the user wasn't already "accepted"
     if (!existingParticipant || existingParticipant.status !== "accepted") {
       const recipientId = room.is_private ? room.created_by : userId;
+      if (!recipientId) {
+        console.error("Recipient ID is null");
+        return NextResponse.json({ error: "Invalid recipient ID" }, { status: 400 });
+      }
+
       const type = room.is_private ? "join_request" : "room_switch";
       const message = room.is_private
         ? `${session.user.email || "A user"} requested to join "${room.name}"`
