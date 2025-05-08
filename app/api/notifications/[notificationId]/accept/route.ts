@@ -6,11 +6,11 @@ import { transformNotification } from "@/lib/utils/notifications";
 
 export async function POST(
      req: NextRequest,
-     { params }: { params: { id: string } }
+     { params }: { params: { notificationId: string } }
 ) {
      try {
           const supabase = createRouteHandlerClient<Database>({ cookies });
-          const notificationId = params.id;
+          const notificationId = params.notificationId;
           console.log(`Fetching notification with ID: ${notificationId}`);
 
           // Check if user is authenticated
