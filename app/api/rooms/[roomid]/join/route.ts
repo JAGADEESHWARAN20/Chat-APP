@@ -1,13 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import { Database } from "@/lib/types/supabase";
 
-export async function POST(
-  request: Request,
-  { params }: { params: { roomId: string } }
-) {
-  // 1) init supabase + auth check
+export async function POST(request: NextRequest) {
   const supabase = createRouteHandlerClient<Database>({ cookies });
   const {
     data: { session },
@@ -17,11 +13,18 @@ export async function POST(
   if (sessionError || !session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
   const user = session.user;
-  const roomId = params.roomId;
+
+  // ✅ Extract roomId from the URL
+  const url = new URL(request.url);
+  const roomId = url.pathname.split("/")[3]; // Assuming: /api/rooms/[roomId]/join
   console.log("Joining room:", roomId);
 
-  // 2) fetch room
+  if (!roomId || roomId === "undefined") {
+    return NextResponse.json({ error: "Invalid room ID" }, { status: 400 });
+  }
+
   const { data: room, error: roomError } = await supabase
     .from("rooms")
     .select("created_by, name, is_private")
@@ -33,7 +36,6 @@ export async function POST(
     return NextResponse.json({ error: "Room not found" }, { status: 404 });
   }
 
-  // 3) insert into room_participants
   const status = room.is_private ? "pending" : "accepted";
   const joined_at = room.is_private ? undefined : new Date().toISOString();
 
@@ -51,7 +53,6 @@ export async function POST(
     return NextResponse.json({ error: "Failed to join room" }, { status: 500 });
   }
 
-  // 4) if public, upsert into room_members
   if (!room.is_private) {
     const { error: memberError } = await supabase
       .from("room_members")
@@ -65,13 +66,9 @@ export async function POST(
 
     if (memberError) {
       console.error("room_members upsert error:", memberError);
-      // we won’t block the request on this, but you can fail if you prefer
     }
   }
 
-  // 5) send a notification
-  //    - private: to room.created_by
-  //    - public: to the joining user themself
   const recipientId = room.is_private ? room.created_by! : user.id;
   const type = room.is_private ? "join_request" : "room_switch";
   const message = room.is_private
