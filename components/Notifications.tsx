@@ -32,7 +32,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
     }
     try {
       const response = await fetch(`/api/notifications/${notificationId}/accept`, {
-        method: "POST",
+        method: "PATCH", // Change from POST to PATCH
       });
       if (!response.ok) {
         const errorData = await response.json();
@@ -55,7 +55,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
     }
     try {
       const response = await fetch(`/api/notifications/${notificationId}/reject`, {
-        method: "POST",
+        method: "PATCH", // Change from POST to PATCH
       });
       if (!response.ok) {
         const errorData = await response.json();
