@@ -3,7 +3,6 @@ import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { Database } from "@/lib/types/supabase";
 import { transformNotification } from "@/lib/utils/notifications";
-
 export async function PATCH(
      req: NextRequest,
      { params }: { params: { notificationId: string } }
@@ -14,16 +13,10 @@ export async function PATCH(
           console.log(`Processing reject for notification ID: ${notificationId}`);
 
           // Validate notificationId
-          if (!notificationId || notificationId === "undefined") {
-               console.error("Invalid notification ID: notificationId is undefined or invalid");
-               return NextResponse.json({ error: "Invalid notification ID" }, { status: 400 });
-          }
-
-          // Validate UUID format
           const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-          if (!uuidRegex.test(notificationId)) {
-               console.error(`Invalid notification ID format: ${notificationId}`);
-               return NextResponse.json({ error: "Invalid notification ID format" }, { status: 400 });
+          if (!notificationId || !uuidRegex.test(notificationId)) {
+               console.error(`Invalid notification ID: ${notificationId}`);
+               return NextResponse.json({ error: "Invalid notification ID" }, { status: 400 });
           }
 
           // Check if user is authenticated
@@ -34,7 +27,7 @@ export async function PATCH(
           }
           console.log(`Authenticated user ID: ${session.user.id}`);
 
-          // Fetch the notification to verify it exists and is a join_request
+          // Fetch the notification to verify it exists, is a join_request, and is pending
           const { data: notificationCore, error: notificationCoreError } = await supabase
                .from("notifications")
                .select("id, message, created_at, status, type, sender_id, user_id, room_id, join_status")
@@ -54,7 +47,7 @@ export async function PATCH(
                return NextResponse.json({ error: `Join request already ${notificationCore.join_status}` }, { status: 400 });
           }
 
-          // Fetch related data for the response
+          // Fetch related data
           if (!notificationCore.sender_id) {
                console.error("Sender ID is null");
                return NextResponse.json({ error: "Invalid notification data: missing sender_id" }, { status: 400 });
@@ -103,6 +96,18 @@ export async function PATCH(
                return NextResponse.json({ error: "Only the room creator can reject join requests" }, { status: 403 });
           }
 
+          // Update room_participants to rejected
+          const { error: participantError } = await supabase
+               .from("room_participants")
+               .update({ status: "rejected" })
+               .eq("room_id", notificationCore.room_id)
+               .eq("user_id", notificationCore.sender_id);
+          if (participantError) {
+               console.error("Error updating room_participants:", participantError.message);
+               return NextResponse.json({ error: "Failed to reject join request", details: participantError.message }, { status: 500 });
+          }
+          console.log(`Updated room_participants: user ${notificationCore.sender_id} rejected from room ${notificationCore.room_id}`);
+
           // Update the notification's join_status to 'rejected' and status to 'read'
           const { error: updateError } = await supabase
                .from("notifications")
@@ -110,31 +115,29 @@ export async function PATCH(
                .eq("id", notificationId);
           if (updateError) {
                console.error("Error updating notification status:", updateError.message);
-               return NextResponse.json({ error: "Failed to update notification", details: updateError.message }, { status: 500 });
+          } else {
+               console.log(`Updated notification ${notificationId}: join_status to rejected, status to read`);
           }
-          console.log(`Updated notification ${notificationId}: join_status to rejected, status to read`);
 
-          // Notify the requester that they were rejected
+          // Notify the requester that their request was rejected
           const message = `Your request to join ${roomData.name} was rejected`;
           const { error: rejectNotificationError } = await supabase
                .from("notifications")
-               .insert([
-                    {
-                         user_id: notificationCore.sender_id,
-                         type: "join_request_rejected",
-                         room_id: notificationCore.room_id,
-                         sender_id: session.user.id,
-                         message,
-                         status: "unread",
-                         created_at: new Date().toISOString(),
-                         join_status: null, // Explicitly set join_status to null for non-join_request notifications
-                    },
-               ]);
+               .insert({
+                    user_id: notificationCore.sender_id,
+                    type: "join_request_rejected",
+                    room_id: notificationCore.room_id,
+                    sender_id: session.user.id,
+                    message,
+                    status: "unread",
+                    created_at: new Date().toISOString(),
+                    join_status: null,
+               });
           if (rejectNotificationError) {
                console.error("Error sending reject notification:", rejectNotificationError.message);
-               return NextResponse.json({ error: "Failed to send reject notification", details: rejectNotificationError.message }, { status: 500 });
+          } else {
+               console.log(`Sent join_request_rejected notification to user ${notificationCore.sender_id}`);
           }
-          console.log(`Sent join_request_rejected notification to user ${notificationCore.sender_id}`);
 
           // Construct the updated notification object for the response
           const notification = {
@@ -149,7 +152,7 @@ export async function PATCH(
           // Transform the updated notification
           const transformedNotification = transformNotification(notification);
 
-          return NextResponse.json({ success: true, message: "Join request rejected", notification: transformedNotification });
+          return NextResponse.json({ message: "Join request rejected", notification: transformedNotification }, { status: 200 });
      } catch (error) {
           console.error("Server error in reject route:", error);
           return NextResponse.json(
@@ -157,4 +160,50 @@ export async function PATCH(
                { status: 500 }
           );
      }
+}
+
+// Fallback handlers for unsupported methods
+export async function OPTIONS() {
+     return new NextResponse(null, {
+          status: 405,
+          headers: {
+               Allow: "PATCH",
+          },
+     });
+}
+
+export async function GET() {
+     return new NextResponse(null, {
+          status: 405,
+          headers: {
+               Allow: "PATCH",
+          },
+     });
+}
+
+export async function POST() {
+     return new NextResponse(null, {
+          status: 405,
+          headers: {
+               Allow: "PATCH",
+          },
+     });
+}
+
+export async function DELETE() {
+     return new NextResponse(null, {
+          status: 405,
+          headers: {
+               Allow: "PATCH",
+          },
+     });
+}
+
+export async function PUT() {
+     return new NextResponse(null, {
+          status: 405,
+          headers: {
+               Allow: "PATCH",
+          },
+     });
 }

@@ -7,11 +7,11 @@ import { transformNotification } from "@/lib/utils/notifications";
 // PATCH: Accept a join request notification
 export async function PATCH(
      req: NextRequest,
-     { params }: { params: { id: string } }
+     { params }: { params: { notificationId: string } }
 ) {
      try {
           const supabase = createRouteHandlerClient<Database>({ cookies });
-          const notificationId = params.id;
+          const notificationId = params.notificationId;
           console.log(`Processing accept for notification ID: ${notificationId}`);
 
           // Validate notificationId
