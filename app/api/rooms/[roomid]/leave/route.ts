@@ -57,7 +57,7 @@ export async function PATCH(
     const hasOtherRooms = remainingRooms && remainingRooms.length > 0;
     console.log(`User has other rooms: ${hasOtherRooms}`);
 
-    // Fetch room and user details for the notification
+    // Fetch room details for the notification
     const { data: room, error: roomError } = await supabase
       .from("rooms")
       .select("name")
@@ -69,73 +69,53 @@ export async function PATCH(
     }
     console.log(`Room ${roomId} found: ${room.name}`);
 
-    const { data: user, error: userError } = await supabase
-      .from("users")
-      .select("username")
-      .eq("id", userId)
-      .single();
-    if (userError) {
-      console.error("User fetch error:", userError.message);
-      return NextResponse.json({ error: "Failed to fetch user data" }, { status: 500 });
-    }
-    console.log(`User ${userId} username: ${user?.username}`);
-
-    // Update room_members: set active to false
-    const { error: updateMemberError } = await supabase
+    // Delete the user's record from room_members
+    const { error: deleteMemberError } = await supabase
       .from("room_members")
-      .update({ active: false })
+      .delete()
       .eq("room_id", roomId)
       .eq("user_id", userId);
-    if (updateMemberError) {
-      console.error("Error updating room_members:", updateMemberError.message);
-      return NextResponse.json({ error: "Failed to update room membership", details: updateMemberError.message }, { status: 500 });
+    if (deleteMemberError) {
+      console.error("Error deleting from room_members:", deleteMemberError.message);
+      return NextResponse.json(
+        { error: "Failed to remove from room members", details: deleteMemberError.message },
+        { status: 500 }
+      );
     }
-    console.log(`Updated room_members for user ${userId} in room ${roomId}`);
+    console.log(`Deleted user ${userId} from room_members for room ${roomId}`);
 
-    // Update room_participants: set status to "rejected"
-    const { error: updateParticipantError } = await supabase
+    // Delete the user's record from room_participants
+    const { error: deleteParticipantError } = await supabase
       .from("room_participants")
-      .update({ status: "rejected", joined_at: null })
+      .delete()
       .eq("room_id", roomId)
       .eq("user_id", userId);
-    if (updateParticipantError) {
-      console.error("Error updating room_participants:", updateParticipantError.message);
-      return NextResponse.json({ error: "Failed to update participant status", details: updateParticipantError.message }, { status: 500 });
+    if (deleteParticipantError) {
+      console.error("Error deleting from room_participants:", deleteParticipantError.message);
+      return NextResponse.json(
+        { error: "Failed to remove from room participants", details: deleteParticipantError.message },
+        { status: 500 }
+      );
     }
-    console.log(`Updated room_participants for user ${userId} in room ${roomId}`);
+    console.log(`Deleted user ${userId} from room_participants for room ${roomId}`);
 
-    // Broadcast user_left notification to all remaining active room members
-    const { data: roomMembers, error: membersError } = await supabase
-      .from("room_members")
-      .select("user_id")
-      .eq("room_id", roomId)
-      .eq("active", true);
-    if (membersError) {
-      console.error("Error fetching room members for notification:", membersError.message);
+    // Send a notification to the authenticated user (the user who left)
+    const notification = {
+      user_id: userId,
+      type: "room_left",
+      room_id: roomId,
+      sender_id: userId,
+      message: `You have left the room "${room.name}"`,
+      status: "unread",
+      created_at: new Date().toISOString(),
+    };
+    const { error: notificationError } = await supabase
+      .from("notifications")
+      .insert(notification);
+    if (notificationError) {
+      console.error("Error sending room_left notification:", notificationError.message);
     } else {
-      const memberIds = roomMembers.map((member: { user_id: string }) => member.user_id);
-      console.log(`Remaining active members in room ${roomId}:`, memberIds);
-      const notificationsToInsert = memberIds
-        .filter((memberId: string) => memberId !== userId)
-        .map((memberId: string) => ({
-          user_id: memberId,
-          type: "user_left",
-          room_id: roomId,
-          sender_id: userId,
-          message: `${user?.username || "A user"} left ${room.name}`,
-          status: "unread",
-          created_at: new Date().toISOString(),
-        }));
-      if (notificationsToInsert.length > 0) {
-        const { error: notificationError } = await supabase
-          .from("notifications")
-          .insert(notificationsToInsert);
-        if (notificationError) {
-          console.error("Error sending user_left notifications:", notificationError.message);
-        } else {
-          console.log(`Sent user_left notifications to ${notificationsToInsert.length} members`);
-        }
-      }
+      console.log(`Sent room_left notification to user ${userId}`);
     }
 
     return NextResponse.json({
@@ -146,6 +126,9 @@ export async function PATCH(
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     console.error("Server error in leave route:", errorMessage, error);
-    return NextResponse.json({ error: "Failed to leave room", details: errorMessage }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to leave room", details: errorMessage },
+      { status: 500 }
+    );
   }
 }

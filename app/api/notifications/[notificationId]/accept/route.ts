@@ -152,7 +152,7 @@ export async function PATCH(
                     message,
                     status: "unread",
                     created_at: new Date().toISOString(),
-                    join_status: null, // Explicitly set for clarity
+                    join_status: 'accepted', // Explicitly set for clarity
                });
           if (acceptNotificationError) {
                console.error("Error sending accept notification:", acceptNotificationError.message);
