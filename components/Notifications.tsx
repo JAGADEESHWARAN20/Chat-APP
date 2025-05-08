@@ -25,12 +25,13 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
   const supabase = supabaseBrowser();
 
   const handleAccept = async (notificationId: string, roomId: string | null) => {
+    console.log("Joining room:", roomId); // add before the call
     if (!roomId) {
       toast.error("Invalid room ID");
       return;
     }
     try {
-      const response = await fetch(`/api/notifications/${notificationId}/accept`, {
+      const response = await fetch(`/api/notifications/${roomId}/accept`, {
         method: "POST",
       });
       if (!response.ok) {
@@ -38,7 +39,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
         throw new Error(errorData.error || "Failed to accept invitation");
       }
       markAsRead(notificationId);
-      router.push(`/rooms/${roomId}`);
+      router.push(`/`);
       onClose();
       toast.success("Invitation accepted");
     } catch (error) {
