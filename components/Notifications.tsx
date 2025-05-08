@@ -115,7 +115,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
 
   const handleMarkAsRead = async (notificationId: string) => {
     try {
-      const response = await fetch(`/api/notifications/${notificationId}`, {
+      const response = await fetch(`/api/notifications/${notificationId}/read`, {
         method: "POST",
       });
       if (!response.ok) {
