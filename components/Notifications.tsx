@@ -31,7 +31,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
       return;
     }
     try {
-      const response = await fetch(`/api/notifications/${roomId}/accept`, {
+      const response = await fetch(`/api/notifications/${notificationId}/accept`, {
         method: "POST",
       });
       if (!response.ok) {
