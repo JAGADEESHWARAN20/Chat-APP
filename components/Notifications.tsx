@@ -229,7 +229,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
                   </div>
                 </div>
                 <div className="flex items-center justify-between gap-2 flex-shrink-0">
-                  {notif.type === "room_invite" && !notif.is_read && (
+                  {notif.type === "join_request" && !notif.is_read && (
                     <Button
                       onClick={(e) => {
                         e.stopPropagation();
