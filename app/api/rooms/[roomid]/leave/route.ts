@@ -2,6 +2,9 @@ import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
+// UUID validation regex
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function PATCH(
   req: NextRequest,
   { params }: { params: { roomId: string } }
@@ -10,6 +13,12 @@ export async function PATCH(
     const supabase = createRouteHandlerClient({ cookies });
     const roomId = params.roomId;
     console.log(`Attempting to leave room ${roomId}`);
+
+    // Validate roomId
+    if (!roomId || roomId === "undefined" || !UUID_REGEX.test(roomId)) {
+      console.error("Invalid roomId:", roomId);
+      return NextResponse.json({ error: "Invalid room ID" }, { status: 400 });
+    }
 
     // Check if user is authenticated
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();

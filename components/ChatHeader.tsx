@@ -38,7 +38,7 @@ import { Label } from "@/components/ui/label";
 import { useRoomStore } from "@/lib/store/roomstore";
 import { useDebounce } from "use-debounce";
 import Notifications from "./Notifications";
-import { useNotification, Inotification } from "@/lib/store/notifications";
+import { useNotification } from "@/lib/store/notifications";
 
 type UserProfile = Database["public"]["Tables"]["users"]["Row"];
 type Room = Database["public"]["Tables"]["rooms"]["Row"];
@@ -134,7 +134,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         const error = await response.json();
         throw new Error(error.error || "Failed to switch room");
       }
-      const data = await response.json();
       setSelectedRoom(room);
       setIsSwitchRoomPopoverOpen(false);
       toast.success(`Switched to ${room.name}`);
@@ -147,8 +146,12 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   };
 
   const handleLeaveRoom = async () => {
-    if (!user || !selectedRoom) {
-      toast.error("No room selected");
+    if (!user) {
+      toast.error("User not authenticated");
+      return;
+    }
+    if (!selectedRoom || !selectedRoom.id) {
+      toast.error("No room selected to leave");
       return;
     }
     setIsLeaving(true);
@@ -166,6 +169,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       await fetchAvailableRooms();
       if (!hasOtherRooms) {
         setSelectedRoom(null);
+        router.push("/"); // Redirect to home if no other rooms
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to leave room");
@@ -174,30 +178,12 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     }
   };
 
-  // const handleAcceptJoinRequest = async (notificationId: string) => {
-  //   try {
-  //     const response = await fetch(`/api/notifications/${notificationId}/accept`, {
-  //       method: "POST",
-  //     });
-  //     if (!response.ok) {
-  //       const error = await response.json();
-  //       throw new Error(error.error || "Failed to accept join request");
-  //     }
-  //     toast.success("Join request accepted");
-  //     if (user?.id) {
-  //       await fetchNotifications(user.id);
-  //     }
-  //   } catch (error) {
-  //     toast.error(error instanceof Error ? error.message : "Failed to accept join request");
-  //   }
-  // };
-
   const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     debouncedCallback(e.target.value);
   };
 
   const fetchSearchResults = useCallback(async () => {
-    if (!searchType) return; // Don't fetch if no search type is selected
+    if (!searchType) return;
     setIsLoading(true);
     try {
       let url = "";
@@ -208,7 +194,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       } else if (searchType === "users") {
         url = debouncedSearchQuery.trim()
           ? `/api/users/search?query=${encodeURIComponent(debouncedSearchQuery)}`
-          : "/api/users/search?query="; // Fetch all users if query is empty
+          : "/api/users/search?query=";
       }
 
       const response = await fetch(url);
@@ -261,7 +247,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     subscribeToNotifications(user.id);
 
     return () => {
-      // Cleanup is handled by Notifications component
+      // Cleanup handled by Notifications component
     };
   }, [user, fetchAvailableRooms, fetchNotifications, subscribeToNotifications]);
 
@@ -319,12 +305,10 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     }
   };
 
-
-
   const handleSearchByType = (type: "rooms" | "users") => {
     setSearchType(type);
     setSearchQuery("");
-    setSearchResults([]); // Clear previous results
+    setSearchResults([]);
   };
 
   const handleJoinRoom = async (roomId?: string) => {
@@ -398,6 +382,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
           disabled={isLeaving}
         >
           <LogOut className="h-4 w-4" />
+          {isLeaving ? "Leaving..." : "Leave"}
         </Button>
       ) : result.isMember ? (
         <Button
@@ -576,8 +561,8 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                   variant={searchType === "rooms" ? "default" : "outline"}
                   onClick={() => handleSearchByType("rooms")}
                   className={`${searchType === "rooms"
-                      ? "bg-indigo-600 hover:bg-indigo-700"
-                      : "bg-transparent border-gray-600 hover:bg-gray-700"
+                    ? "bg-indigo-600 hover:bg-indigo-700"
+                    : "bg-transparent border-gray-600 hover:bg-gray-700"
                     } text-white rounded-lg transition-colors`}
                 >
                   Rooms
@@ -586,8 +571,8 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                   variant={searchType === "users" ? "default" : "outline"}
                   onClick={() => handleSearchByType("users")}
                   className={`${searchType === "users"
-                      ? "bg-indigo-600 hover:bg-indigo-700"
-                      : "bg-transparent border-gray-600 hover:bg-gray-700"
+                    ? "bg-indigo-600 hover:bg-indigo-700"
+                    : "bg-transparent border-gray-600 hover:bg-gray-700"
                     } text-white rounded-lg transition-colors`}
                 >
                   Users
@@ -655,7 +640,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
             </div>
           </PopoverContent>
         </Popover>
-       
       </div>
     </header>
   );
