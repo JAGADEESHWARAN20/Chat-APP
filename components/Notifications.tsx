@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useNotification } from "@/lib/store/notifications";
 import { useUser } from "@/lib/store/user";
+import { useRoomStore } from "@/lib/store/roomstore"; // Added for setSelectedRoom
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { toast } from "sonner";
 import { Button } from "./ui/button";
@@ -11,64 +12,68 @@ import { Avatar, AvatarImage, AvatarFallback } from "./ui/avatar";
 import { useRouter } from "next/navigation";
 import { User as SupabaseUser } from "@supabase/supabase-js";
 import { Trash2 } from "lucide-react";
+import { Database } from "@/lib/types/supabase"; // Added for Room type
 
 interface NotificationsProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
+type Room = Database["public"]["Tables"]["rooms"]["Row"]; // Added for Room type
+
 export default function Notifications({ isOpen, onClose }: NotificationsProps) {
   const user = useUser((state) => state.user) as SupabaseUser | undefined;
   const { notifications, markAsRead, fetchNotifications, subscribeToNotifications, setNotifications } = useNotification();
+  const { setSelectedRoom } = useRoomStore(); // Added for setSelectedRoom
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const supabase = supabaseBrowser();
 
   const handleAccept = async (notificationId: string, roomId: string | null) => {
-      console.log("Joining room:", roomId);
-      if (!roomId) {
-        toast.error("Invalid room ID");
-        return;
+    console.log("Joining room:", roomId);
+    if (!roomId) {
+      toast.error("Invalid room ID");
+      return;
+    }
+    try {
+      const response = await fetch(`/api/notifications/${notificationId}/accept`, {
+        method: "PATCH",
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to accept invitation");
       }
-      try {
-        const response = await fetch(`/api/notifications/${notificationId}/accept`, {
-          method: "PATCH", // Change from POST to PATCH
-        });
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || "Failed to accept invitation");
-        }
-        markAsRead(notificationId);
-        router.push(`/`);
-        onClose();
-        toast.success("Invitation accepted");
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Failed to accept invitation");
-        console.error("Error accepting invitation:", error);
-      }
-    };
+      markAsRead(notificationId);
+      router.push(`/`);
+      onClose();
+      toast.success("Invitation accepted");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to accept invitation");
+      console.error("Error accepting invitation:", error);
+    }
+  };
 
-    const handleReject = async (notificationId: string, roomId: string | null) => {
-      if (!roomId) {
-        toast.error("Invalid room ID");
-        return;
+  const handleReject = async (notificationId: string, roomId: string | null) => {
+    if (!roomId) {
+      toast.error("Invalid room ID");
+      return;
+    }
+    try {
+      const response = await fetch(`/api/notifications/${notificationId}/reject`, {
+        method: "PATCH",
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to reject invitation");
       }
-      try {
-        const response = await fetch(`/api/notifications/${notificationId}/reject`, {
-          method: "PATCH", // Change from POST to PATCH
-        });
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || "Failed to reject invitation");
-        }
-        markAsRead(notificationId);
-        onClose();
-        toast.success("Invitation rejected");
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Failed to reject invitation");
-        console.error("Error rejecting invitation:", error);
-      }
-    };
+      markAsRead(notificationId);
+      onClose();
+      toast.success("Invitation rejected");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to reject invitation");
+      console.error("Error rejecting invitation:", error);
+    }
+  };
 
   const handleNotificationClick = async (notificationId: string, roomId: string | null) => {
     if (!user) {
@@ -102,14 +107,34 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
       }
 
       // Mark notification as read
-      await supabase
-        .from("notifications")
-        .update({ status: "read" })
-        .eq("id", notificationId);
       markAsRead(notificationId);
 
-      // Navigate to the home page (or room-specific page if needed)
+      // Update selected room in store
+      setSelectedRoom(room);
+
+      // Fetch available rooms (adapted from fetchAvailableRooms in ChatHeader.tsx)
+      const { data: roomsData, error: roomsError } = await supabase
+        .from("room_participants")
+        .select("rooms(*)")
+        .eq("user_id", user.id)
+        .eq("status", "accepted");
+      if (roomsError) {
+        throw new Error("Failed to fetch rooms");
+      }
+      const rooms = roomsData
+        .map((item) => item.rooms)
+        .filter((room): room is Room => room !== null);
+      const roomsWithMembership = await Promise.all(
+        rooms.map(async (room) => ({
+          ...room,
+          isMember: await checkRoomMembership(room.id),
+        }))
+      );
+      // Note: We don't call setRooms here since it's in ChatHeader.tsx; assume UI refreshes on navigation
+
+      // Navigate and close dialog
       router.push("/");
+      onClose();
       toast.success(`Switched to ${room.name}`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to switch room");
@@ -117,81 +142,99 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
     }
   };
 
-    const handleMarkAsRead = async (notificationId: string) => {
-      try {
-        const response = await fetch(`/api/notifications/${notificationId}/read`, {
-          method: "POST",
-        });
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || "Failed to mark as read");
-        }
-        markAsRead(notificationId);
-        toast.success("Marked as read");
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Failed to mark as read");
-        console.error("Error marking as read:", error);
-      }
-    };
+  // Helper function to check room membership (adapted from ChatHeader.tsx)
+  const checkRoomMembership = async (roomId: string) => {
+    if (!user) return false;
+    const { data, error } = await supabase
+      .from("room_participants")
+      .select("status")
+      .eq("room_id", roomId)
+      .eq("user_id", user.id)
+      .eq("status", "accepted")
+      .single();
+    if (error && error.code !== "PGRST116") {
+      console.error("Error checking room membership:", error);
+      return false;
+    }
+    return data?.status === "accepted";
+  };
 
-    const handleMarkAsUnread = async (notificationId: string) => {
-      try {
-        const response = await fetch(`/api/notifications/${notificationId}/unread`, {
-          method: "POST",
-        });
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || "Failed to mark as unread");
-        }
-        setNotifications(
-          notifications.map((notif) =>
-            notif.id === notificationId ? { ...notif, is_read: false } : notif
-          )
-        );
-        toast.success("Marked as unread");
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Failed to mark as unread");
-        console.error("Error marking as unread:", error);
+  const handleMarkAsRead = async (notificationId: string) => {
+    try {
+      const response = await fetch(`/api/notifications/${notificationId}/read`, {
+        method: "POST",
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to mark as read");
       }
-    };
+      markAsRead(notificationId);
+      toast.success("Marked as read");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to mark as read");
+      console.error("Error marking as read:", error);
+    }
+  };
 
-    const handleDeleteNotification = async (notificationId: string) => {
-      try {
-        const response = await fetch(`/api/notifications/${notificationId}`, {
-          method: "DELETE",
-        });
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || "Failed to delete notification");
-        }
-        setNotifications(notifications.filter((notif) => notif.id !== notificationId));
-        toast.success("Notification deleted");
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Failed to delete notification");
-        console.error("Error deleting notification:", error);
+  const handleMarkAsUnread = async (notificationId: string) => {
+    try {
+      const response = await fetch(`/api/notifications/${notificationId}/unread`, {
+        method: "POST",
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to mark as unread");
       }
-    };
+      setNotifications(
+        notifications.map((notif) =>
+          notif.id === notificationId ? { ...notif, is_read: false } : notif
+        )
+      );
+      toast.success("Marked as unread");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to mark as unread");
+      console.error("Error marking as unread:", error);
+    }
+  };
 
-    const handleClearAllNotifications = async () => {
-      if (!user?.id) {
-        toast.error("User not logged in");
-        return;
+  const handleDeleteNotification = async (notificationId: string) => {
+    try {
+      const response = await fetch(`/api/notifications/${notificationId}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to delete notification");
       }
-      try {
-        const response = await fetch(`/api/notifications`, {
-          method: "DELETE",
-        });
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || "Failed to clear notifications");
-        }
-        setNotifications([]);
-        toast.success("All notifications cleared");
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Failed to clear notifications");
-        console.error("Error clearing notifications:", error);
+      setNotifications(notifications.filter((notif) => notif.id !== notificationId));
+      toast.success("Notification deleted");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to delete notification");
+      console.error("Error deleting notification:", error);
+    }
+  };
+
+  const handleClearAllNotifications = async () => {
+    if (!user?.id) {
+      toast.error("User not logged in");
+      return;
+    }
+    try {
+      const response = await fetch(`/api/notifications`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to clear notifications");
       }
-    };
+      setNotifications([]);
+      toast.success("All notifications cleared");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to clear notifications");
+      console.error("Error clearing notifications:", error);
+    }
+  };
+
   useEffect(() => {
     if (!user?.id) return;
 
