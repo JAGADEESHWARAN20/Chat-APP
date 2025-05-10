@@ -67,7 +67,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 
   const [debouncedCallback] = useDebounce((value: string) => setSearchQuery(value), 300);
   const [debouncedSearchQuery] = useDebounce(searchQuery, 300);
-
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const checkRoomMembership = useCallback(
     async (roomId: string) => {
       if (!user) return false;
@@ -150,12 +150,14 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       toast.error("User not authenticated");
       return;
     }
-    if (!selectedRoom || !selectedRoom.id) {
-      toast.error("No room selected to leave");
+    if (!selectedRoom || !selectedRoom.id || !UUID_REGEX.test(selectedRoom.id)) {
+      console.error("Invalid or missing room ID in selectedRoom:", selectedRoom);
+      toast.error("No valid room selected to leave");
       return;
     }
     setIsLeaving(true);
     try {
+      console.log(`Sending leave request for room ${selectedRoom.id}`);
       const response = await fetch(`/api/rooms/${selectedRoom.id}/leave`, {
         method: "PATCH",
       });
@@ -173,6 +175,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to leave room");
+      console.error("Error leaving room:", error);
     } finally {
       setIsLeaving(false);
     }
@@ -373,7 +376,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
           {result.name} {result.is_private && "🔒"}
         </span>
       </div>
-      {selectedRoom?.id === result.id && result.isMember ? (
+      {selectedRoom?.id === result.id && result.isMember && UUID_REGEX.test(selectedRoom.id) ? (
         <Button
           size="sm"
           variant="destructive"
