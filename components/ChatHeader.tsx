@@ -73,7 +73,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     async (roomId: string) => {
       if (!user) return false;
       const { data, error } = await supabase
-        .from("room_participants")
+        .from("room_members") // Aligned with backend table name
         .select("status")
         .eq("room_id", roomId)
         .eq("user_id", user.id)
@@ -149,7 +149,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     if (!user) return;
     try {
       const { data: roomsData, error } = await supabase
-        .from("room_participants")
+        .from("room_members") // Aligned with backend table name
         .select("rooms(*)")
         .eq("user_id", user.id)
         .eq("status", "accepted");
@@ -243,7 +243,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       return;
     }
 
-    // Ensure selectedRoom is not null and has a valid id
+    // Validate selectedRoom
     if (!selectedRoom || !selectedRoom.id || !UUID_REGEX.test(selectedRoom.id)) {
       console.error("Invalid or missing room ID in selectedRoom:", selectedRoom);
       await fetchAvailableRooms();
@@ -252,13 +252,20 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         toast.error("No valid room selected to leave");
         return;
       }
+      // Update selectedRoom and proceed with the new value
       setSelectedRoom(newSelectedRoom);
-      return; // Exit to avoid proceeding with the old selectedRoom
+      // Use the newSelectedRoom directly to ensure the updated value is used
+      const roomId = newSelectedRoom.id;
+      await proceedToLeaveRoom(roomId);
+    } else {
+      const roomId = selectedRoom.id;
+      await proceedToLeaveRoom(roomId);
     }
+  };
 
+  const proceedToLeaveRoom = async (roomId: string) => {
     setIsLeaving(true);
     try {
-      const roomId = selectedRoom.id; // Safe to access after validation
       console.log(`Sending leave request for room ${roomId}`);
       const response = await fetch(`/api/rooms/${roomId}/leave`, {
         method: "PATCH",
@@ -285,6 +292,8 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         if (!newSelectedRoom) {
           toast.error("No other rooms available to switch to");
           router.push("/");
+        } else {
+          setSelectedRoom(newSelectedRoom);
         }
       }
     } catch (error) {
