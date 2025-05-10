@@ -1,4 +1,4 @@
-// /api/rooms/[roomId]/leave.ts
+// app/api/rooms/[roomId]/leave/route.ts
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
@@ -15,10 +15,12 @@ export async function PATCH(
       data: { session },
       error: sessionError,
     } = await supabase.auth.getSession();
+
     if (sessionError || !session) {
       console.error("Session error:", sessionError?.message || "No session found");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
     const roomId = params.roomId;
     console.log(`Attempting to leave room ${roomId}`);
 
@@ -27,16 +29,17 @@ export async function PATCH(
       return NextResponse.json({ error: "Invalid room ID" }, { status: 400 });
     }
 
-
     const userId = session.user.id;
     console.log(`User ${userId} is authenticated`);
 
+    // Check if the user is a member of the room
     const { data: membership, error: membershipError } = await supabase
       .from("room_members")
       .select("id")
       .eq("room_id", roomId)
       .eq("user_id", userId)
       .single();
+
     if (membershipError || !membership) {
       console.error(
         "Membership check failed:",
@@ -47,27 +50,33 @@ export async function PATCH(
         { status: 403 }
       );
     }
+
     console.log(`User ${userId} is a member of room ${roomId}`);
 
+    // Fetch remaining rooms for the user
     const { data: remainingRooms, error: remainingRoomsError } = await supabase
       .from("room_members")
       .select("room_id")
       .eq("user_id", userId)
       .neq("room_id", roomId);
+
     if (remainingRoomsError) {
       console.error(
         "Error fetching remaining rooms:",
         remainingRoomsError.message
       );
     }
+
     const hasOtherRooms = remainingRooms && remainingRooms.length > 0;
     console.log(`User has other rooms: ${hasOtherRooms}`);
 
+    // Fetch room details
     const { data: room, error: roomError } = await supabase
       .from("rooms")
       .select("name")
       .eq("id", roomId)
       .single();
+
     if (roomError || !room) {
       console.error(
         "Room fetch error:",
@@ -75,12 +84,15 @@ export async function PATCH(
       );
       return NextResponse.json({ error: "Room not found" }, { status: 404 });
     }
+
     console.log(`Room ${roomId} found: ${room.name}`);
 
+    // Call the leave_room RPC
     const { error: deleteError } = await supabase.rpc("leave_room", {
       p_room_id: roomId,
       p_user_id: userId,
     });
+
     if (deleteError) {
       console.error("Error during leave_room transaction:", deleteError.message);
       return NextResponse.json(
@@ -88,10 +100,12 @@ export async function PATCH(
         { status: 500 }
       );
     }
+
     console.log(
       `Successfully removed user ${userId} from room ${roomId} membership and participation`
     );
 
+    // Send a notification
     const notification = {
       user_id: userId,
       type: "room_left",
@@ -101,9 +115,11 @@ export async function PATCH(
       status: "unread",
       created_at: new Date().toISOString(),
     };
+
     const { error: notificationError } = await supabase
       .from("notifications")
       .insert(notification);
+
     if (notificationError) {
       console.error(
         "Error sending room_left notification:",
