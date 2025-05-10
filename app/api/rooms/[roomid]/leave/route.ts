@@ -1,8 +1,8 @@
+// /api/rooms/[roomId]/leave.ts
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
-// UUID validation regex
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function PATCH(
@@ -14,13 +14,11 @@ export async function PATCH(
     const roomId = params.roomId;
     console.log(`Attempting to leave room ${roomId}`);
 
-    // Validate roomId
     if (!roomId || roomId === "undefined" || !UUID_REGEX.test(roomId)) {
       console.error("Invalid roomId:", roomId);
       return NextResponse.json({ error: "Invalid room ID" }, { status: 400 });
     }
 
-    // Check if user is authenticated
     const {
       data: { session },
       error: sessionError,
@@ -33,10 +31,9 @@ export async function PATCH(
     const userId = session.user.id;
     console.log(`User ${userId} is authenticated`);
 
-    // Check if the user is a member of the room
     const { data: membership, error: membershipError } = await supabase
       .from("room_members")
-      .select("id") // Simplified to check existence
+      .select("id")
       .eq("room_id", roomId)
       .eq("user_id", userId)
       .single();
@@ -52,7 +49,6 @@ export async function PATCH(
     }
     console.log(`User ${userId} is a member of room ${roomId}`);
 
-    // Check remaining rooms for the user
     const { data: remainingRooms, error: remainingRoomsError } = await supabase
       .from("room_members")
       .select("room_id")
@@ -67,7 +63,6 @@ export async function PATCH(
     const hasOtherRooms = remainingRooms && remainingRooms.length > 0;
     console.log(`User has other rooms: ${hasOtherRooms}`);
 
-    // Fetch room details for the notification
     const { data: room, error: roomError } = await supabase
       .from("rooms")
       .select("name")
@@ -82,7 +77,6 @@ export async function PATCH(
     }
     console.log(`Room ${roomId} found: ${room.name}`);
 
-    // Start a transaction for atomic deletes
     const { error: deleteError } = await supabase.rpc("leave_room", {
       p_room_id: roomId,
       p_user_id: userId,
@@ -98,7 +92,6 @@ export async function PATCH(
       `Successfully removed user ${userId} from room ${roomId} membership and participation`
     );
 
-    // Send a notification to the authenticated user
     const notification = {
       user_id: userId,
       type: "room_left",
@@ -116,7 +109,6 @@ export async function PATCH(
         "Error sending room_left notification:",
         notificationError.message
       );
-      // Continue despite notification error to avoid failing the leave operation
     } else {
       console.log(`Sent room_left notification to user ${userId}`);
     }
