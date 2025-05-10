@@ -87,6 +87,12 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     [user, supabase]
   );
 
+  useEffect(() => {
+    if (!selectedRoom && availableRooms.length > 0) {
+      useRoomStore.getState().initializeDefaultRoom();
+    }
+  }, [selectedRoom, availableRooms]);
+
   const fetchAvailableRooms = useCallback(async () => {
     if (!user) return;
     try {
@@ -112,13 +118,15 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       if (isMounted.current) {
         setAvailableRooms(roomsWithMembership);
         setRooms(roomsWithMembership);
+        // Initialize the default room if not set
+        useRoomStore.getState().initializeDefaultRoom();
       }
     } catch (error) {
       console.error("Error fetching rooms:", error);
       toast.error("Failed to fetch rooms");
     }
   }, [user, supabase, checkRoomMembership, setRooms]);
-
+  
   const handleRoomSwitch = async (room: Room) => {
     if (!user) {
       toast.error("You must be logged in to switch rooms");
@@ -160,6 +168,9 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       console.log(`Sending leave request for room ${selectedRoom.id}`);
       const response = await fetch(`/api/rooms/${selectedRoom.id}/leave`, {
         method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
       });
       if (!response.ok) {
         const error = await response.json();
@@ -168,10 +179,13 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       const { hasOtherRooms } = await response.json();
       toast.success("Left room successfully");
       setIsMember(false);
-      await fetchAvailableRooms();
+      await fetchAvailableRooms(); // Refresh the list of rooms
       if (!hasOtherRooms) {
         setSelectedRoom(null);
         router.push("/"); // Redirect to home if no other rooms
+      } else {
+        // Set the selected room to another available room
+        useRoomStore.getState().initializeDefaultRoom();
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to leave room");
@@ -376,7 +390,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
           {result.name} {result.is_private && "🔒"}
         </span>
       </div>
-      {selectedRoom?.id === result.id && result.isMember && UUID_REGEX.test(selectedRoom.id) ? (
+      {selectedRoom?.id === result.id && result.isMember && UUID_REGEX.test(result.id) ? (
         <Button
           size="sm"
           variant="destructive"

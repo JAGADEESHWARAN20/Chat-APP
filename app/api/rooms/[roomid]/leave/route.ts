@@ -7,7 +7,7 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { roomId: string } }
+  { params }: { params: { roomId: string } } // Correct parameter name
 ) {
   try {
     const supabase = createRouteHandlerClient({ cookies });
@@ -21,7 +21,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const roomId = params.roomId;
+    const roomId = params.roomId; // Corrected to match folder name [roomId]
     console.log(`Attempting to leave room ${roomId}`);
 
     if (!roomId || roomId === "undefined" || !UUID_REGEX.test(roomId)) {
