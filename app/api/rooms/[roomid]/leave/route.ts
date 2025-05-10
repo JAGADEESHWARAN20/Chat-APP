@@ -11,14 +11,6 @@ export async function PATCH(
 ) {
   try {
     const supabase = createRouteHandlerClient({ cookies });
-    const roomId = params.roomId;
-    console.log(`Attempting to leave room ${roomId}`);
-
-    if (!roomId || roomId === "undefined" || !UUID_REGEX.test(roomId)) {
-      console.error("Invalid roomId:", roomId);
-      return NextResponse.json({ error: "Invalid room ID" }, { status: 400 });
-    }
-
     const {
       data: { session },
       error: sessionError,
@@ -27,6 +19,14 @@ export async function PATCH(
       console.error("Session error:", sessionError?.message || "No session found");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const roomId = params.roomId;
+    console.log(`Attempting to leave room ${roomId}`);
+
+    if (!roomId || roomId === "undefined" || !UUID_REGEX.test(roomId)) {
+      console.error("Invalid roomId:", roomId);
+      return NextResponse.json({ error: "Invalid room ID" }, { status: 400 });
+    }
+
 
     const userId = session.user.id;
     console.log(`User ${userId} is authenticated`);
