@@ -21,7 +21,10 @@ export async function PATCH(
     }
 
     // Check if user is authenticated
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    const {
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession();
     if (sessionError || !session) {
       console.error("Session error:", sessionError?.message || "No session found");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -33,26 +36,33 @@ export async function PATCH(
     // Check if the user is a member of the room
     const { data: membership, error: membershipError } = await supabase
       .from("room_members")
-      .select("*")
+      .select("id") // Simplified to check existence
       .eq("room_id", roomId)
       .eq("user_id", userId)
-      .eq("active", true)
       .single();
     if (membershipError || !membership) {
-      console.error("Membership check failed:", membershipError?.message || "No active membership found");
-      return NextResponse.json({ error: "You are not an active member of this room" }, { status: 404 });
+      console.error(
+        "Membership check failed:",
+        membershipError?.message || "No membership found"
+      );
+      return NextResponse.json(
+        { error: "You are not a member of this room" },
+        { status: 403 }
+      );
     }
-    console.log(`User ${userId} is an active member of room ${roomId}`);
+    console.log(`User ${userId} is a member of room ${roomId}`);
 
     // Check remaining rooms for the user
     const { data: remainingRooms, error: remainingRoomsError } = await supabase
       .from("room_members")
       .select("room_id")
       .eq("user_id", userId)
-      .eq("active", true)
       .neq("room_id", roomId);
     if (remainingRoomsError) {
-      console.error("Error fetching remaining rooms:", remainingRoomsError.message);
+      console.error(
+        "Error fetching remaining rooms:",
+        remainingRoomsError.message
+      );
     }
     const hasOtherRooms = remainingRooms && remainingRooms.length > 0;
     console.log(`User has other rooms: ${hasOtherRooms}`);
@@ -64,42 +74,31 @@ export async function PATCH(
       .eq("id", roomId)
       .single();
     if (roomError || !room) {
-      console.error("Room fetch error:", roomError?.message || "Room not found");
+      console.error(
+        "Room fetch error:",
+        roomError?.message || "Room not found"
+      );
       return NextResponse.json({ error: "Room not found" }, { status: 404 });
     }
     console.log(`Room ${roomId} found: ${room.name}`);
 
-    // Delete the user's record from room_members
-    const { error: deleteMemberError } = await supabase
-      .from("room_members")
-      .delete()
-      .eq("room_id", roomId)
-      .eq("user_id", userId);
-    if (deleteMemberError) {
-      console.error("Error deleting from room_members:", deleteMemberError.message);
+    // Start a transaction for atomic deletes
+    const { error: deleteError } = await supabase.rpc("leave_room", {
+      p_room_id: roomId,
+      p_user_id: userId,
+    });
+    if (deleteError) {
+      console.error("Error during leave_room transaction:", deleteError.message);
       return NextResponse.json(
-        { error: "Failed to remove from room members", details: deleteMemberError.message },
+        { error: "Failed to leave room", details: deleteError.message },
         { status: 500 }
       );
     }
-    console.log(`Deleted user ${userId} from room_members for room ${roomId}`);
+    console.log(
+      `Successfully removed user ${userId} from room ${roomId} membership and participation`
+    );
 
-    // Delete the user's record from room_participants
-    const { error: deleteParticipantError } = await supabase
-      .from("room_participants")
-      .delete()
-      .eq("room_id", roomId)
-      .eq("user_id", userId);
-    if (deleteParticipantError) {
-      console.error("Error deleting from room_participants:", deleteParticipantError.message);
-      return NextResponse.json(
-        { error: "Failed to remove from room participants", details: deleteParticipantError.message },
-        { status: 500 }
-      );
-    }
-    console.log(`Deleted user ${userId} from room_participants for room ${roomId}`);
-
-    // Send a notification to the authenticated user (the user who left)
+    // Send a notification to the authenticated user
     const notification = {
       user_id: userId,
       type: "room_left",
@@ -113,7 +112,11 @@ export async function PATCH(
       .from("notifications")
       .insert(notification);
     if (notificationError) {
-      console.error("Error sending room_left notification:", notificationError.message);
+      console.error(
+        "Error sending room_left notification:",
+        notificationError.message
+      );
+      // Continue despite notification error to avoid failing the leave operation
     } else {
       console.log(`Sent room_left notification to user ${userId}`);
     }
