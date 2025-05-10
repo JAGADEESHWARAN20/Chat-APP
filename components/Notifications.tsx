@@ -104,8 +104,8 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
       }
 
       markAsRead(notificationId);
-      router.push(`/rooms/${roomId}`);
-      onClose();
+     
+   
       toast.success(`Switched to ${room.name}`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to switch room");
