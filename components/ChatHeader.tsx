@@ -256,9 +256,11 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       setSelectedRoom(newSelectedRoom);
       // Use the newSelectedRoom directly to ensure the updated value is used
       const roomId = newSelectedRoom.id;
+      console.log(roomId);
       await proceedToLeaveRoom(roomId);
     } else {
       const roomId = selectedRoom.id;
+      console.log(roomId);
       await proceedToLeaveRoom(roomId);
     }
   };
