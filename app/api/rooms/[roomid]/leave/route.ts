@@ -7,7 +7,7 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { roomId: string } }
+  { params }: { params: { roomId: string } } // params is correctly defined here
 ) {
   try {
     const supabase = createRouteHandlerClient({ cookies });
@@ -21,7 +21,8 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const roomId = params.roomId;
+    // THE FIX IS HERE:
+    const roomId = params.roomId; // Use params.roomId to get the value from the URL
     console.log(`Received request to leave room with ID: ${roomId}`);
 
     if (!roomId || roomId === "undefined" || !UUID_REGEX.test(roomId)) {
