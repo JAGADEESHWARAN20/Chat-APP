@@ -1,3 +1,4 @@
+// app/api/rooms/[roomId]/leave/route.ts
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
@@ -9,28 +10,6 @@ export async function PATCH(
   { params }: { params: { roomId: string } }
 ) {
   try {
-    console.log('Raw params received:', params);
-
-    const roomId = params.roomId;
-    console.log(`Raw roomId: ${roomId}`);
-
-    // Decode the roomId in case it was encoded
-    const decodedRoomId = decodeURIComponent(roomId);
-    console.log(`Decoded roomId: ${decodedRoomId}`);
-
-    // More flexible UUID validation
-    if (!decodedRoomId || decodedRoomId === "undefined" || !decodedRoomId.match(UUID_REGEX)) {
-      console.error("Invalid roomId format:", decodedRoomId);
-      return NextResponse.json(
-        {
-          error: "Invalid room ID format",
-          details: `Received: ${decodedRoomId}`,
-          expected: "UUID format (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)"
-        },
-        { status: 400 }
-      );
-    }
-
     // Initialize Supabase client
     const supabase = createRouteHandlerClient({ cookies });
 
@@ -42,14 +21,36 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Get room ID from params (handle both camelCase and lowercase)
+    const roomId = params.roomId;
+    if (!roomId) {
+      return NextResponse.json(
+        { error: "Room ID is required" },
+        { status: 400 }
+      );
+    }
+
+    console.log('Received roomId:', roomId);
+
+    // Decode and validate room ID
+    const decodedRoomId = decodeURIComponent(roomId);
+    console.log('Decoded roomId:', decodedRoomId);
+
+    if (!UUID_REGEX.test(decodedRoomId)) {
+      return NextResponse.json(
+        { error: "Invalid room ID format. Expected UUID format." },
+        { status: 400 }
+      );
+    }
+
     const userId = session.user.id;
-    console.log(`User ${userId} attempting to leave room ${roomId}`);
+    console.log(`User ${userId} attempting to leave room ${decodedRoomId}`);
 
     // Check if the user is a member of the room
     const { data: membership, error: membershipError } = await supabase
       .from("room_members")
       .select("id")
-      .eq("room_id", roomId)
+      .eq("room_id", decodedRoomId)
       .eq("user_id", userId)
       .single();
 
@@ -66,7 +67,7 @@ export async function PATCH(
       .from("room_members")
       .select("room_id")
       .eq("user_id", userId)
-      .neq("room_id", roomId);
+      .neq("room_id", decodedRoomId);
 
     const hasOtherRooms = remainingRooms && remainingRooms.length > 0;
 
@@ -74,7 +75,7 @@ export async function PATCH(
     const { data: room, error: roomError } = await supabase
       .from("rooms")
       .select("name")
-      .eq("id", roomId)
+      .eq("id", decodedRoomId)
       .single();
 
     if (roomError || !room) {
@@ -84,7 +85,7 @@ export async function PATCH(
 
     // Call the leave_room RPC
     const { error: deleteError } = await supabase.rpc("leave_room", {
-      p_room_id: roomId,
+      p_room_id: decodedRoomId,
       p_user_id: userId,
     });
 
@@ -100,7 +101,7 @@ export async function PATCH(
     const notification = {
       user_id: userId,
       type: "room_left",
-      room_id: roomId,
+      room_id: decodedRoomId,
       sender_id: userId,
       message: `You have left the room "${room.name}"`,
       status: "unread",

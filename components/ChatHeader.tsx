@@ -283,7 +283,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     try {
       console.log(`Attempting to leave room: ${roomId}`);
 
-      // Validate room ID again
       const cleanRoomId = roomId.trim();
       if (!UUID_REGEX.test(cleanRoomId)) {
         throw new Error(`Invalid room ID format: ${cleanRoomId}`);
@@ -293,59 +292,39 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          "Accept": "application/json"
         },
         credentials: 'include'
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        const errorMessage = errorData.error || errorData.message || "Failed to leave room";
-        throw new Error(errorMessage);
+        throw new Error(errorData.error || "Failed to leave room");
       }
 
-      const { hasOtherRooms } = await response.json();
-      toast.success(`Successfully left the room`);
+      const result = await response.json();
+      toast.success(result.message || "Successfully left the room");
 
       // Update local state
       setIsMember(false);
       await fetchAvailableRooms();
 
-      if (!hasOtherRooms) {
+      if (!result.hasOtherRooms) {
         setSelectedRoom(null);
         router.push("/");
-        toast.info("You've left all rooms. Redirecting to home.");
       } else {
         const newSelectedRoom = useRoomStore.getState().selectedRoom;
-        if (!newSelectedRoom) {
-          toast.error("No other rooms available to switch to");
-          router.push("/");
-        } else {
+        if (newSelectedRoom) {
           setSelectedRoom(newSelectedRoom);
-          toast.success(`Switched to #${newSelectedRoom.name}`);
         }
       }
     } catch (error) {
       console.error("Error leaving room:", error);
-      let errorMessage = "Failed to leave room";
-
-      if (error instanceof Error) {
-        errorMessage = error.message;
-
-        if (error.message.includes("Invalid room ID")) {
-          errorMessage = "The room ID is invalid. Please try again.";
-        } else if (error.message.includes("not a member")) {
-          errorMessage = "You are not a member of this room.";
-        } else if (error.message.includes("Unauthorized")) {
-          errorMessage = "Please log in to leave rooms.";
-        }
-      }
-
-      toast.error(errorMessage);
+      toast.error(error instanceof Error ? error.message : "Failed to leave room");
     } finally {
       setIsLeaving(false);
     }
   };
+
 
   const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     debouncedCallback(e.target.value);
