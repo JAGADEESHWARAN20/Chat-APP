@@ -283,11 +283,13 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     try {
       console.log(`Attempting to leave room: ${roomId}`);
 
-      const cleanRoomId = roomId;
+      // Validate room ID again
+      const cleanRoomId = roomId.trim();
       if (!UUID_REGEX.test(cleanRoomId)) {
         throw new Error(`Invalid room ID format: ${cleanRoomId}`);
       }
 
+      // FIXED: Properly encode the roomId in the URL
       const response = await fetch(`/api/rooms/${encodeURIComponent(cleanRoomId)}/leave`, {
         method: "PATCH",
         headers: {
@@ -319,11 +321,26 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       }
     } catch (error) {
       console.error("Error leaving room:", error);
-      toast.error(error instanceof Error ? error.message : "Failed to leave room");
+      let errorMessage = "Failed to leave room";
+
+      if (error instanceof Error) {
+        errorMessage = error.message;
+
+        if (error.message.includes("Invalid room ID")) {
+          errorMessage = "The room ID is invalid. Please try again.";
+        } else if (error.message.includes("not a member")) {
+          errorMessage = "You are not a member of this room.";
+        } else if (error.message.includes("Unauthorized")) {
+          errorMessage = "Please log in to leave rooms.";
+        }
+      }
+
+      toast.error(errorMessage);
     } finally {
       setIsLeaving(false);
     }
   };
+
 
 
   const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {

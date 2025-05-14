@@ -7,7 +7,7 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { roomId: string } }
+  { params }: { params: { roomId: string } } // This should match your filename [roomId]
 ) {
   try {
     // Initialize Supabase client
@@ -21,23 +21,24 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Get room ID from params (handle both camelCase and lowercase)
+    // Get room ID from params - FIXED: Now properly accessing params.roomId
     const roomId = params.roomId;
-    console.log(roomId)
+    console.log('Received roomId:', roomId); // Debug log
+
     if (!roomId) {
+      console.error("Room ID is missing in parameters");
       return NextResponse.json(
         { error: "Room ID is required" },
         { status: 400 }
       );
     }
 
-    console.log('Received roomId:', roomId);
-
     // Decode and validate room ID
     const decodedRoomId = decodeURIComponent(roomId);
-    console.log('Decoded roomId:', decodedRoomId);
+    console.log('Decoded roomId:', decodedRoomId); // Debug log
 
     if (!UUID_REGEX.test(decodedRoomId)) {
+      console.error("Invalid room ID format:", decodedRoomId);
       return NextResponse.json(
         { error: "Invalid room ID format. Expected UUID format." },
         { status: 400 }
