@@ -7,7 +7,7 @@ export interface IRoom {
 }
 
 export interface IRoomParticipant {
-     created_at: string;
+     created_at: string | null;
      joined_at: string | null; // Updated to allow null
      room_id: string;
      status: string | null; // Updated to allow null
