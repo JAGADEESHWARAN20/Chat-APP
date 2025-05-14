@@ -23,6 +23,7 @@ export async function PATCH(
 
     // Get room ID from params (handle both camelCase and lowercase)
     const roomId = params.roomId;
+    console.log(roomId)
     if (!roomId) {
       return NextResponse.json(
         { error: "Room ID is required" },
