@@ -9,28 +9,37 @@ export async function PATCH(
   { params }: { params: { roomId: string } }
 ) {
   try {
-    console.log('Received request with params:', params); // Debug log
+    console.log('Raw params received:', params);
 
+    const roomId = params.roomId;
+    console.log(`Raw roomId: ${roomId}`);
+
+    // Decode the roomId in case it was encoded
+    const decodedRoomId = decodeURIComponent(roomId);
+    console.log(`Decoded roomId: ${decodedRoomId}`);
+
+    // More flexible UUID validation
+    if (!decodedRoomId || decodedRoomId === "undefined" || !decodedRoomId.match(UUID_REGEX)) {
+      console.error("Invalid roomId format:", decodedRoomId);
+      return NextResponse.json(
+        {
+          error: "Invalid room ID format",
+          details: `Received: ${decodedRoomId}`,
+          expected: "UUID format (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)"
+        },
+        { status: 400 }
+      );
+    }
+
+    // Initialize Supabase client
     const supabase = createRouteHandlerClient({ cookies });
-    const {
-      data: { session },
-      error: sessionError,
-    } = await supabase.auth.getSession();
+
+    // Get session
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
     if (sessionError || !session) {
       console.error("Session error:", sessionError?.message || "No session found");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const roomId = params.roomId;
-    console.log(`Attempting to leave room with ID: ${roomId}`);
-
-    if (!roomId || !UUID_REGEX.test(roomId)) {
-      console.error("Invalid roomId format:", roomId);
-      return NextResponse.json(
-        { error: "Invalid room ID format. Expected UUID format." },
-        { status: 400 }
-      );
     }
 
     const userId = session.user.id;
