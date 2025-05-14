@@ -10,10 +10,10 @@ export async function PATCH(
   { params }: { params: { roomId?: string; roomid?: string } }
 ) {
   const supabase = createRouteHandlerClient<Database>({ cookies });
-  // Check both roomId and roomid to handle potential naming issues
+  // Handle both roomId and roomid due to potential folder naming
   const roomId = params.roomId ?? params.roomid;
 
-  // Log the entire params object and roomId for debugging
+  // Log params and roomId for debugging
   console.log(`[Leave Room] Request params:`, params);
   console.log(`[Leave Room] Processing leave request for roomId: ${roomId}`);
 
@@ -89,7 +89,7 @@ export async function PATCH(
 
     const { data: member, error: memberError } = await supabase
       .from("room_members")
-      .select("id")
+      .select("user_id")
       .eq("room_id", roomId)
       .eq("user_id", userId)
       .single();
@@ -107,7 +107,21 @@ export async function PATCH(
       );
     }
 
-    if ((!participant || participant.status !== "accepted") && !member) {
+    if (!participant && !member) {
+      console.warn(`[Leave Room] User ${userId} is not a member of roomId: ${roomId}`);
+      return NextResponse.json(
+        {
+          success: false,
+          error: "You're not a member of this room",
+          code: "NOT_A_MEMBER"
+        },
+        { status: 403 }
+      );
+    }
+
+    const isActiveParticipant = participant?.status === "accepted";
+
+    if (!isActiveParticipant && !member) {
       console.warn(`[Leave Room] User ${userId} is not an active member of roomId: ${roomId}`);
       return NextResponse.json(
         {
