@@ -236,7 +236,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       console.error("Switch room error:", err);
     }
   };
-
   const handleLeaveRoom = async () => {
     console.log("[Leave Room Frontend] Current selectedRoom:", selectedRoom);
 
@@ -246,15 +245,21 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       return;
     }
 
-    if (!selectedRoom?.id) {
-      console.error("[Leave Room Frontend] No room selected or missing ID");
+    if (!selectedRoom) {
+      console.error("[Leave Room Frontend] No room selected");
       toast.error("No room selected");
       return;
     }
 
+    if (!selectedRoom.id || typeof selectedRoom.id !== "string") {
+      console.error("[Leave Room Frontend] Invalid or missing room ID", { selectedRoom });
+      toast.error("Invalid room selection");
+      return;
+    }
+
     const roomId = selectedRoom.id.trim();
-    if (!UUID_REGEX.test(roomId)) {
-      console.error("[Leave Room Frontend] Invalid room ID format:", roomId);
+    if (!roomId || !UUID_REGEX.test(roomId)) {
+      console.error("[Leave Room Frontend] Invalid room ID format:", roomId, { selectedRoom });
       toast.error("Invalid room ID format");
       return;
     }
@@ -262,7 +267,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     try {
       await proceedToLeaveRoom(roomId);
     } catch (error) {
-      console.error("[Leave Room Frontend] Error in handleLeaveRoom:", error);
+      console.error("[Leave Room Frontend] Error in handleLeaveRoom:", error, { selectedRoom });
       toast.error("Failed to leave the room");
     }
   };
@@ -272,6 +277,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     console.log(`[Leave Room Frontend] Attempting to leave room: ${roomId}`);
 
     try {
+      console.log(`[Leave Room Frontend] Sending PATCH request to /api/rooms/${roomId}/leave`);
       const response = await fetch(`/api/rooms/${encodeURIComponent(roomId)}/leave`, {
         method: "PATCH",
         headers: {
@@ -339,7 +345,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         }
       }
     } catch (error) {
-      console.error("[Leave Room Frontend] Error leaving room:", error);
+      console.error("[Leave Room Frontend] Error leaving room:", error, { roomId });
       toast.error(error instanceof Error ? error.message : "Failed to leave room");
     } finally {
       setIsLeaving(false);
