@@ -161,31 +161,31 @@ export async function POST(
       }
     }
 
+   
     // 9. Send appropriate notification
-    // 9. Send appropriate notification
-    if (room.is_private && !room.created_by) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Room creator not found for private room",
-          code: "CREATOR_NOT_FOUND"
-        },
-        { status: 500 }
-      );
-    }
+if (room.is_private && !room.created_by) {
+  return NextResponse.json(
+    {
+      success: false,
+      error: "Room creator not found for private room",
+      code: "CREATOR_NOT_FOUND"
+    },
+    { status: 500 }
+  );
+}
 
-    const notification = {
-      user_id: room.is_private ? room.created_by! : userId, // Use non-null assertion after validation
-      sender_id: userId,
-      room_id: roomId,
-      type: room.is_private ? "join_request" : "room_joined",
-      message: room.is_private
-        ? `${session.user.email || "A user"} requested to join "${room.name}"`
-        : `You joined "${room.name}"`,
-      status: "unread"
-    };
+const notification = {
+  user_id: room.is_private ? room.created_by! : userId, // Use non-null assertion after validation
+  sender_id: userId,
+  room_id: roomId,
+  type: room.is_private ? "join_request" : "room_joined",
+  message: room.is_private
+    ? `${session.user.email || "A user"} requested to join "${room.name}"`
+    : `You joined "${room.name}"`,
+  status: "unread"
+};
 
-    await supabase.from("notifications").insert(notification);
+await supabase.from("notifications").insert(notification);
     // 10. Return success response
     return NextResponse.json(
       {

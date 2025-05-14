@@ -253,24 +253,24 @@ export type Database = {
       }
       room_participants: {
         Row: {
-          created_at: string // Added created_at (non-nullable, default now())
-          joined_at: string | null // Updated to allow null
+          created_at: string | null
+          joined_at: string | null
           room_id: string
-          status: string | null // Updated to allow null
+          status: string
           user_id: string
         }
         Insert: {
-          created_at?: string | null // Optional, default set by database
-          joined_at?: string | null // Updated to allow null
+          created_at?: string | null
+          joined_at?: string | null
           room_id: string
-          status?: string | null // Updated to allow null
+          status?: string
           user_id: string
         }
         Update: {
-          created_at?: string | null // Optional
-          joined_at?: string | null // Updated to allow null
+          created_at?: string | null
+          joined_at?: string
           room_id?: string
-          status?: string | null // Updated to allow null
+          status?: string
           user_id?: string
         }
         Relationships: [
@@ -336,7 +336,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      leave_room: {
+        Args: { p_room_id: string; p_user_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
