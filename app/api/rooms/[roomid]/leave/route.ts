@@ -1,7 +1,7 @@
-// app/api/rooms/[roomId]/leave/route.ts
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
+import { Database } from "@/lib/types/supabase";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -9,16 +9,13 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { roomId: string } }
 ) {
-  const supabase = createRouteHandlerClient({ cookies });
-  let userId: string;
-  let roomId: string;
+  const supabase = createRouteHandlerClient<Database>({ cookies });
 
   try {
     // 1. Authentication check
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
     if (sessionError || !session?.user) {
-      console.error('[Leave Room] Auth error:', sessionError?.message || 'No session');
       return NextResponse.json(
         {
           success: false,
@@ -29,12 +26,11 @@ export async function POST(
       );
     }
 
-    userId = session.user.id;
+    const userId = session.user.id;
+    const roomId = params.roomId;
 
     // 2. Validate room ID
-    roomId = params.roomId;
     if (!roomId || !UUID_REGEX.test(roomId)) {
-      console.error('[Leave Room] Invalid room ID:', roomId);
       return NextResponse.json(
         {
           success: false,
@@ -53,7 +49,6 @@ export async function POST(
       .single();
 
     if (roomError || !room) {
-      console.error('[Leave Room] Room fetch error:', roomError?.message || 'Not found');
       return NextResponse.json(
         {
           success: false,
@@ -64,20 +59,38 @@ export async function POST(
       );
     }
 
-    // 4. Check membership status
-    const { data: membership, error: membershipError } = await supabase
-      .from("room_members")
-      .select("id, status, role")
+    // 4. Check membership status in both tables
+    const { data: participant, error: participantError } = await supabase
+      .from("room_participants")
+      .select("status")
       .eq("room_id", roomId)
       .eq("user_id", userId)
       .single();
 
-    if (membershipError || !membership) {
-      console.error('[Leave Room] Membership check failed:', membershipError?.message || 'No membership');
+    const { data: member, error: memberError } = await supabase
+      .from("room_members")
+      .select("id")
+      .eq("room_id", roomId)
+      .eq("user_id", userId)
+      .single();
+
+    if ((participantError && participantError.code !== "PGRST116") ||
+      (memberError && memberError.code !== "PGRST116")) {
       return NextResponse.json(
         {
           success: false,
-          error: "You're not a member of this room",
+          error: "Failed to verify membership",
+          code: "MEMBERSHIP_CHECK_FAILED"
+        },
+        { status: 500 }
+      );
+    }
+
+    if ((!participant || participant.status !== "accepted") && !member) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "You're not an active member of this room",
           code: "NOT_A_MEMBER"
         },
         { status: 403 }
@@ -92,7 +105,6 @@ export async function POST(
         .eq("room_id", roomId);
 
       if (countError) {
-        console.error('[Leave Room] Member count error:', countError.message);
         return NextResponse.json(
           {
             success: false,
@@ -115,14 +127,13 @@ export async function POST(
         );
       }
 
-      // If creator is the only member, proceed with room deletion
+      // Begin transaction for creator leaving (last member)
       const { error: deleteError } = await supabase
         .from("rooms")
         .delete()
         .eq("id", roomId);
 
       if (deleteError) {
-        console.error('[Leave Room] Room deletion error:', deleteError.message);
         return NextResponse.json(
           {
             success: false,
@@ -132,35 +143,22 @@ export async function POST(
           { status: 500 }
         );
       }
-
-      // Create special notification
-      await supabase
-        .from("notifications")
-        .insert({
-          user_id: userId,
-          type: "room_deleted",
-          room_id: roomId,
-          message: `You deleted the room "${room.name}"`,
-          status: "unread"
-        });
-
-      return NextResponse.json({
-        success: true,
-        message: `Room "${room.name}" deleted as you were the last member`,
-        roomDeleted: true,
-        hasOtherRooms: false
-      });
     }
 
-    // 6. Regular member leaving process
-    const { error: leaveError } = await supabase
+    // 6. Remove from both tables (transaction would be better here)
+    const { error: leaveParticipantError } = await supabase
+      .from("room_participants")
+      .delete()
+      .eq("room_id", roomId)
+      .eq("user_id", userId);
+
+    const { error: leaveMemberError } = await supabase
       .from("room_members")
       .delete()
       .eq("room_id", roomId)
       .eq("user_id", userId);
 
-    if (leaveError) {
-      console.error('[Leave Room] Leave error:', leaveError.message);
+    if (leaveParticipantError || leaveMemberError) {
       return NextResponse.json(
         {
           success: false,
@@ -173,9 +171,10 @@ export async function POST(
 
     // 7. Check for other available rooms
     const { data: otherRooms } = await supabase
-      .from("room_members")
+      .from("room_participants")
       .select("room_id, rooms(name)")
       .eq("user_id", userId)
+      .eq("status", "accepted")
       .order("created_at", { ascending: false });
 
     const hasOtherRooms = otherRooms && otherRooms.length > 0;
@@ -197,10 +196,14 @@ export async function POST(
     return NextResponse.json({
       success: true,
       message: `Successfully left "${room.name}"`,
-      roomLeft: room,
+      roomLeft: {
+        id: room.id,
+        name: room.name
+      },
       hasOtherRooms,
       defaultRoom: hasOtherRooms ? {
         id: defaultRoom?.room_id,
+        name: defaultRoom?.rooms?.name
       } : null
     });
 
