@@ -238,44 +238,58 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   };
 
   const handleLeaveRoom = async () => {
-    if (!user) {
-      toast.error("User not authenticated");
-      return;
-    }
-
-    // Validate selectedRoom
-    if (!selectedRoom || !selectedRoom.id || !UUID_REGEX.test(selectedRoom.id)) {
-      console.error("Invalid or missing room ID in selectedRoom:", selectedRoom);
-      await fetchAvailableRooms();
-      const newSelectedRoom = useRoomStore.getState().selectedRoom;
-      if (!newSelectedRoom || !newSelectedRoom.id || !UUID_REGEX.test(newSelectedRoom.id)) {
-        toast.error("No valid room selected to leave");
+    try {
+      if (!user) {
+        toast.error("Please log in to leave a room");
         return;
       }
-      // Update selectedRoom and proceed with the new value
-      setSelectedRoom(newSelectedRoom);
-      // Use the newSelectedRoom directly to ensure the updated value is used
-      await proceedToLeaveRoom(newSelectedRoom.id);
-    } else {
-      await proceedToLeaveRoom(selectedRoom.id);
+
+      if (!selectedRoom) {
+        toast.error("No room selected");
+        await fetchAvailableRooms();
+        const newSelectedRoom = useRoomStore.getState().selectedRoom;
+        if (!newSelectedRoom) {
+          toast.error("No rooms available to leave");
+          return;
+        }
+        setSelectedRoom(newSelectedRoom);
+        return;
+      }
+
+      if (!selectedRoom.id) {
+        toast.error("Invalid room selection");
+        return;
+      }
+
+      const roomId = selectedRoom.id.trim();
+      if (!UUID_REGEX.test(roomId)) {
+        toast.error("Invalid room ID format");
+        return;
+      }
+
+      // Show confirmation dialog
+      const confirmLeave = confirm(`Are you sure you want to leave #${selectedRoom.name}?`);
+      if (!confirmLeave) return;
+
+      await proceedToLeaveRoom(roomId);
+    } catch (error) {
+      console.error("Error in handleLeaveRoom:", error);
+      toast.error("An error occurred while preparing to leave the room");
     }
   };
 
   const proceedToLeaveRoom = async (roomId: string) => {
     setIsLeaving(true);
     try {
-      console.log(`Sending leave request for room ${roomId}`);
+      console.log(`Attempting to leave room: ${roomId}`);
 
-      // Remove any existing encoding and properly encode the roomId
-      const decodedRoomId = decodeURIComponent(roomId);
-      console.log(`Decoded room ID: ${decodedRoomId}`);
-
-      // Verify the UUID format before sending
-      if (!UUID_REGEX.test(decodedRoomId)) {
-        throw new Error(`Invalid room ID format: ${decodedRoomId}`);
+      // Validate room ID again
+      const cleanRoomId = roomId.trim();
+      if (!UUID_REGEX.test(cleanRoomId)) {
+        throw new Error(`Invalid room ID format: ${cleanRoomId}`);
       }
 
-      const response = await fetch(`/api/rooms/${encodeURIComponent(decodedRoomId)}/leave`, {
+      const response = await fetch(`/api/rooms/${encodeURIComponent(cleanRoomId)}/leave`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -284,15 +298,54 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         credentials: 'include'
       });
 
-      // Rest of your code...
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.error || errorData.message || "Failed to leave room";
+        throw new Error(errorMessage);
+      }
+
+      const { hasOtherRooms } = await response.json();
+      toast.success(`Successfully left the room`);
+
+      // Update local state
+      setIsMember(false);
+      await fetchAvailableRooms();
+
+      if (!hasOtherRooms) {
+        setSelectedRoom(null);
+        router.push("/");
+        toast.info("You've left all rooms. Redirecting to home.");
+      } else {
+        const newSelectedRoom = useRoomStore.getState().selectedRoom;
+        if (!newSelectedRoom) {
+          toast.error("No other rooms available to switch to");
+          router.push("/");
+        } else {
+          setSelectedRoom(newSelectedRoom);
+          toast.success(`Switched to #${newSelectedRoom.name}`);
+        }
+      }
     } catch (error) {
       console.error("Error leaving room:", error);
-      toast.error(error instanceof Error ? error.message : "Failed to leave room");
+      let errorMessage = "Failed to leave room";
+
+      if (error instanceof Error) {
+        errorMessage = error.message;
+
+        if (error.message.includes("Invalid room ID")) {
+          errorMessage = "The room ID is invalid. Please try again.";
+        } else if (error.message.includes("not a member")) {
+          errorMessage = "You are not a member of this room.";
+        } else if (error.message.includes("Unauthorized")) {
+          errorMessage = "Please log in to leave rooms.";
+        }
+      }
+
+      toast.error(errorMessage);
     } finally {
       setIsLeaving(false);
     }
   };
-
 
   const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     debouncedCallback(e.target.value);
