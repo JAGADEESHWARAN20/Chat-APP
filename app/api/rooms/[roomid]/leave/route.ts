@@ -10,12 +10,17 @@ export async function POST(
   { params }: { params: { roomId: string } }
 ) {
   const supabase = createRouteHandlerClient<Database>({ cookies });
+  const roomId = params.roomId;
+
+  // Log the roomId for debugging
+  console.log(`[Leave Room] Processing leave request for roomId: ${roomId}`);
 
   try {
     // 1. Authentication check
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
     if (sessionError || !session?.user) {
+      console.error(`[Leave Room] Authentication failed for roomId: ${roomId}`);
       return NextResponse.json(
         {
           success: false,
@@ -27,10 +32,10 @@ export async function POST(
     }
 
     const userId = session.user.id;
-    const roomId = params.roomId;
 
     // 2. Validate room ID
     if (!roomId || !UUID_REGEX.test(roomId)) {
+      console.error(`[Leave Room] Invalid roomId: ${roomId}`);
       return NextResponse.json(
         {
           success: false,
@@ -49,6 +54,7 @@ export async function POST(
       .single();
 
     if (roomError || !room) {
+      console.error(`[Leave Room] Room not found for roomId: ${roomId}, error: ${roomError?.message}`);
       return NextResponse.json(
         {
           success: false,
@@ -76,6 +82,7 @@ export async function POST(
 
     if ((participantError && participantError.code !== "PGRST116") ||
       (memberError && memberError.code !== "PGRST116")) {
+      console.error(`[Leave Room] Membership check failed for roomId: ${roomId}, participantError: ${participantError?.message}, memberError: ${memberError?.message}`);
       return NextResponse.json(
         {
           success: false,
@@ -87,6 +94,7 @@ export async function POST(
     }
 
     if ((!participant || participant.status !== "accepted") && !member) {
+      console.warn(`[Leave Room] User ${userId} is not an active member of roomId: ${roomId}`);
       return NextResponse.json(
         {
           success: false,
@@ -105,6 +113,7 @@ export async function POST(
         .eq("room_id", roomId);
 
       if (countError) {
+        console.error(`[Leave Room] Failed to verify member count for roomId: ${roomId}, error: ${countError.message}`);
         return NextResponse.json(
           {
             success: false,
@@ -116,6 +125,7 @@ export async function POST(
       }
 
       if (memberCount && memberCount > 1) {
+        console.warn(`[Leave Room] Creator ${userId} cannot leave roomId: ${roomId} with ${memberCount} members`);
         return NextResponse.json(
           {
             success: false,
@@ -134,6 +144,7 @@ export async function POST(
         .eq("id", roomId);
 
       if (deleteError) {
+        console.error(`[Leave Room] Failed to delete roomId: ${roomId}, error: ${deleteError.message}`);
         return NextResponse.json(
           {
             success: false,
@@ -145,7 +156,7 @@ export async function POST(
       }
     }
 
-    // 6. Remove from both tables (transaction would be better here)
+    // 6. Remove from both tables
     const { error: leaveParticipantError } = await supabase
       .from("room_participants")
       .delete()
@@ -159,6 +170,7 @@ export async function POST(
       .eq("user_id", userId);
 
     if (leaveParticipantError || leaveMemberError) {
+      console.error(`[Leave Room] Failed to leave roomId: ${roomId}, participantError: ${leaveParticipantError?.message}, memberError: ${leaveMemberError?.message}`);
       return NextResponse.json(
         {
           success: false,
@@ -192,6 +204,8 @@ export async function POST(
         status: "unread"
       });
 
+    console.log(`[Leave Room] User ${userId} successfully left roomId: ${roomId}`);
+
     // 9. Return success response
     return NextResponse.json({
       success: true,
@@ -208,7 +222,7 @@ export async function POST(
     });
 
   } catch (error) {
-    console.error('[Leave Room] Unexpected error:', error);
+    console.error(`[Leave Room] Unexpected error for roomId: ${roomId}`, error);
     return NextResponse.json(
       {
         success: false,
@@ -219,4 +233,47 @@ export async function POST(
       { status: 500 }
     );
   }
+}
+
+// Handle unsupported HTTP methods
+export async function GET(request: NextRequest) {
+  return NextResponse.json(
+    {
+      success: false,
+      error: "Method not allowed",
+      code: "METHOD_NOT_ALLOWED"
+    },
+    {
+      status: 405,
+      headers: { Allow: "POST" }
+    }
+  );
+}
+
+export async function PUT(request: NextRequest) {
+  return NextResponse.json(
+    {
+      success: false,
+      error: "Method not allowed",
+      code: "METHOD_NOT_ALLOWED"
+    },
+    {
+      status: 405,
+      headers: { Allow: "POST" }
+    }
+  );
+}
+
+export async function DELETE(request: NextRequest) {
+  return NextResponse.json(
+    {
+      success: false,
+      error: "Method not allowed",
+      code: "METHOD_NOT_ALLOWED"
+    },
+    {
+      status: 405,
+      headers: { Allow: "POST" }
+    }
+  );
 }
