@@ -5,7 +5,7 @@ import { Database } from "@/lib/types/supabase";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export async function POST(
+export async function PATCH(
   request: NextRequest,
   { params }: { params: { roomId: string } }
 ) {
@@ -137,7 +137,7 @@ export async function POST(
         );
       }
 
-      // Begin transaction for creator leaving (last member)
+      // Delete room if creator is the last member
       const { error: deleteError } = await supabase
         .from("rooms")
         .delete()
@@ -245,7 +245,21 @@ export async function GET(request: NextRequest) {
     },
     {
       status: 405,
-      headers: { Allow: "POST" }
+      headers: { Allow: "PATCH" }
+    }
+  );
+}
+
+export async function POST(request: NextRequest) {
+  return NextResponse.json(
+    {
+      success: false,
+      error: "Method not allowed",
+      code: "METHOD_NOT_ALLOWED"
+    },
+    {
+      status: 405,
+      headers: { Allow: "PATCH" }
     }
   );
 }
@@ -259,7 +273,7 @@ export async function PUT(request: NextRequest) {
     },
     {
       status: 405,
-      headers: { Allow: "POST" }
+      headers: { Allow: "PATCH" }
     }
   );
 }
@@ -273,7 +287,7 @@ export async function DELETE(request: NextRequest) {
     },
     {
       status: 405,
-      headers: { Allow: "POST" }
+      headers: { Allow: "PATCH" }
     }
   );
 }
