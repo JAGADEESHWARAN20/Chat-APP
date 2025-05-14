@@ -1,4 +1,3 @@
-// app/api/rooms/[roomId]/leave/route.ts
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
@@ -7,9 +6,11 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { roomId: string } } // params is correctly defined here
+  { params }: { params: { roomId: string } }
 ) {
   try {
+    console.log('Received request with params:', params); // Debug log
+
     const supabase = createRouteHandlerClient({ cookies });
     const {
       data: { session },
@@ -21,17 +22,19 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // THE FIX IS HERE:
-    const roomId = params.roomId; // Use params.roomId to get the value from the URL
-    console.log(`Received request to leave room with ID: ${roomId}`);
+    const roomId = params.roomId;
+    console.log(`Attempting to leave room with ID: ${roomId}`);
 
-    if (!roomId || roomId === "undefined" || !UUID_REGEX.test(roomId)) {
-      console.error("Invalid roomId:", roomId);
-      return NextResponse.json({ error: "Invalid room ID" }, { status: 400 });
+    if (!roomId || !UUID_REGEX.test(roomId)) {
+      console.error("Invalid roomId format:", roomId);
+      return NextResponse.json(
+        { error: "Invalid room ID format. Expected UUID format." },
+        { status: 400 }
+      );
     }
 
     const userId = session.user.id;
-    console.log(`User ${userId} is authenticated`);
+    console.log(`User ${userId} attempting to leave room ${roomId}`);
 
     // Check if the user is a member of the room
     const { data: membership, error: membershipError } = await supabase
@@ -42,17 +45,12 @@ export async function PATCH(
       .single();
 
     if (membershipError || !membership) {
-      console.error(
-        "Membership check failed:",
-        membershipError?.message || "No membership found"
-      );
+      console.error("Membership check failed:", membershipError?.message || "No membership found");
       return NextResponse.json(
         { error: "You are not a member of this room" },
         { status: 403 }
       );
     }
-
-    console.log(`User ${userId} is a member of room ${roomId}`);
 
     // Fetch remaining rooms for the user
     const { data: remainingRooms, error: remainingRoomsError } = await supabase
@@ -61,17 +59,9 @@ export async function PATCH(
       .eq("user_id", userId)
       .neq("room_id", roomId);
 
-    if (remainingRoomsError) {
-      console.error(
-        "Error fetching remaining rooms:",
-        remainingRoomsError.message
-      );
-    }
-
     const hasOtherRooms = remainingRooms && remainingRooms.length > 0;
-    console.log(`User has other rooms: ${hasOtherRooms}`);
 
-    // Fetch room details
+    // Fetch room details for notification
     const { data: room, error: roomError } = await supabase
       .from("rooms")
       .select("name")
@@ -79,14 +69,9 @@ export async function PATCH(
       .single();
 
     if (roomError || !room) {
-      console.error(
-        "Room fetch error:",
-        roomError?.message || "Room not found"
-      );
+      console.error("Room fetch error:", roomError?.message || "Room not found");
       return NextResponse.json({ error: "Room not found" }, { status: 404 });
     }
-
-    console.log(`Room ${roomId} found: ${room.name}`);
 
     // Call the leave_room RPC
     const { error: deleteError } = await supabase.rpc("leave_room", {
@@ -101,10 +86,6 @@ export async function PATCH(
         { status: 500 }
       );
     }
-
-    console.log(
-      `Successfully removed user ${userId} from room ${roomId} membership and participation`
-    );
 
     // Send a notification
     const notification = {
@@ -122,12 +103,7 @@ export async function PATCH(
       .insert(notification);
 
     if (notificationError) {
-      console.error(
-        "Error sending room_left notification:",
-        notificationError.message
-      );
-    } else {
-      console.log(`Sent room_left notification to user ${userId}`);
+      console.error("Error sending room_left notification:", notificationError.message);
     }
 
     return NextResponse.json({

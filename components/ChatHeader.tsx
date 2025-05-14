@@ -255,13 +255,9 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       // Update selectedRoom and proceed with the new value
       setSelectedRoom(newSelectedRoom);
       // Use the newSelectedRoom directly to ensure the updated value is used
-      const roomId = newSelectedRoom.id;
-      console.log(roomId);
-      await proceedToLeaveRoom(roomId);
+      await proceedToLeaveRoom(newSelectedRoom.id);
     } else {
-      const roomId = selectedRoom.id;
-      console.log(roomId);
-      await proceedToLeaveRoom(roomId);
+      await proceedToLeaveRoom(selectedRoom.id);
     }
   };
 
@@ -269,9 +265,12 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     setIsLeaving(true);
     try {
       console.log(`Sending leave request for room ${roomId}`);
-      const response = await fetch(`/api/rooms/${roomId}/leave`, {
+
+      // Updated fetch call with proper URL encoding
+      const response = await fetch(`/api/rooms/${encodeURIComponent(roomId)}/leave`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
+        credentials: 'include' // Add this if you need to include cookies
       });
 
       if (!response.ok) {
@@ -299,8 +298,8 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         }
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to leave room");
       console.error("Error leaving room:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to leave room");
     } finally {
       setIsLeaving(false);
     }
