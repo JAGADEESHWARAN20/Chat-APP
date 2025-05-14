@@ -7,12 +7,13 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { roomId: string } }
+  { params }: { params: { roomId?: string } }
 ) {
   const supabase = createRouteHandlerClient<Database>({ cookies });
   const roomId = params.roomId;
 
-  // Log the roomId for debugging
+  // Log the entire params object and roomId for debugging
+  console.log(`[Leave Room] Request params:`, params);
   console.log(`[Leave Room] Processing leave request for roomId: ${roomId}`);
 
   try {
@@ -34,12 +35,24 @@ export async function PATCH(
     const userId = session.user.id;
 
     // 2. Validate room ID
-    if (!roomId || !UUID_REGEX.test(roomId)) {
-      console.error(`[Leave Room] Invalid roomId: ${roomId}`);
+    if (!roomId) {
+      console.error(`[Leave Room] Missing roomId in request parameters`);
       return NextResponse.json(
         {
           success: false,
-          error: "Invalid room identifier",
+          error: "Room identifier is missing",
+          code: "MISSING_ROOM_ID"
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!UUID_REGEX.test(roomId)) {
+      console.error(`[Leave Room] Invalid roomId format: ${roomId}`);
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Invalid room identifier format",
           code: "INVALID_ROOM_ID"
         },
         { status: 400 }
