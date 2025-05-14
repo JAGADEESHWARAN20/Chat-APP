@@ -10,7 +10,7 @@ export async function PATCH(
   { params }: { params: { roomId?: string; roomid?: string } }
 ) {
   const supabase = createRouteHandlerClient<Database>({ cookies });
-  // Handle both roomId and roomid due to potential folder naming
+  // Handle both roomId and roomid due to folder naming
   const roomId = params.roomId ?? params.roomid;
 
   // Log params and roomId for debugging
@@ -89,7 +89,7 @@ export async function PATCH(
 
     const { data: member, error: memberError } = await supabase
       .from("room_members")
-      .select("user_id")
+      .select("status")
       .eq("room_id", roomId)
       .eq("user_id", userId)
       .single();
@@ -137,7 +137,7 @@ export async function PATCH(
     if (room.created_by === userId) {
       const { count: memberCount, error: countError } = await supabase
         .from("room_members")
-        .select("*", { count: "exact" })
+        .select("user_id", { count: "exact" })
         .eq("room_id", roomId);
 
       if (countError) {
