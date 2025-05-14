@@ -238,6 +238,13 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   };
 
   const handleLeaveRoom = async () => {
+    console.log('Current selectedRoom:', selectedRoom); // Debug log
+
+    if (!selectedRoom?.id) {
+      console.error('No room selected or missing ID');
+      toast.error("No room selected");
+      return;
+    }
     try {
       if (!user) {
         toast.error("Please log in to leave a room");
@@ -267,10 +274,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         return;
       }
 
-      // Show confirmation dialog
-      const confirmLeave = confirm(`Are you sure you want to leave #${selectedRoom.name}?`);
-      if (!confirmLeave) return;
-
       await proceedToLeaveRoom(roomId);
     } catch (error) {
       console.error("Error in handleLeaveRoom:", error);
@@ -283,19 +286,18 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     try {
       console.log(`Attempting to leave room: ${roomId}`);
 
-      // Validate room ID again
+      // Validate room ID
       const cleanRoomId = roomId.trim();
       if (!UUID_REGEX.test(cleanRoomId)) {
         throw new Error(`Invalid room ID format: ${cleanRoomId}`);
       }
 
-      // FIXED: Properly encode the roomId in the URL
+      // Make the API request
       const response = await fetch(`/api/rooms/${encodeURIComponent(cleanRoomId)}/leave`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
         },
-        credentials: 'include'
       });
 
       if (!response.ok) {
