@@ -7,10 +7,11 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { roomId?: string } }
+  { params }: { params: { roomId?: string; roomid?: string } }
 ) {
   const supabase = createRouteHandlerClient<Database>({ cookies });
-  const roomId = params.roomId;
+  // Check both roomId and roomid to handle potential naming issues
+  const roomId = params.roomId ?? params.roomid;
 
   // Log the entire params object and roomId for debugging
   console.log(`[Leave Room] Request params:`, params);
