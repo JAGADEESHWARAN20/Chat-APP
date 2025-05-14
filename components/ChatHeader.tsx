@@ -238,62 +238,41 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   };
 
   const handleLeaveRoom = async () => {
-    console.log('Current selectedRoom:', selectedRoom); // Debug log
+    console.log("[Leave Room Frontend] Current selectedRoom:", selectedRoom);
+
+    if (!user) {
+      console.error("[Leave Room Frontend] User not authenticated");
+      toast.error("Please log in to leave a room");
+      return;
+    }
 
     if (!selectedRoom?.id) {
-      console.error('No room selected or missing ID');
+      console.error("[Leave Room Frontend] No room selected or missing ID");
       toast.error("No room selected");
       return;
     }
+
+    const roomId = selectedRoom.id.trim();
+    if (!UUID_REGEX.test(roomId)) {
+      console.error("[Leave Room Frontend] Invalid room ID format:", roomId);
+      toast.error("Invalid room ID format");
+      return;
+    }
+
     try {
-      if (!user) {
-        toast.error("Please log in to leave a room");
-        return;
-      }
-
-      if (!selectedRoom) {
-        toast.error("No room selected");
-        await fetchAvailableRooms();
-        const newSelectedRoom = useRoomStore.getState().selectedRoom;
-        if (!newSelectedRoom) {
-          toast.error("No rooms available to leave");
-          return;
-        }
-        setSelectedRoom(newSelectedRoom);
-        return;
-      }
-
-      if (!selectedRoom.id) {
-        toast.error("Invalid room selection");
-        return;
-      }
-
-      const roomId = selectedRoom.id.trim();
-      if (!UUID_REGEX.test(roomId)) {
-        toast.error("Invalid room ID format");
-        return;
-      }
-
       await proceedToLeaveRoom(roomId);
     } catch (error) {
-      console.error("Error in handleLeaveRoom:", error);
-      toast.error("An error occurred while preparing to leave the room");
+      console.error("[Leave Room Frontend] Error in handleLeaveRoom:", error);
+      toast.error("Failed to leave the room");
     }
   };
 
   const proceedToLeaveRoom = async (roomId: string) => {
     setIsLeaving(true);
+    console.log(`[Leave Room Frontend] Attempting to leave room: ${roomId}`);
+
     try {
-      console.log(`Attempting to leave room: ${roomId}`);
-
-      // Validate room ID
-      const cleanRoomId = roomId.trim();
-      if (!UUID_REGEX.test(cleanRoomId)) {
-        throw new Error(`Invalid room ID format: ${cleanRoomId}`);
-      }
-
-      // Make the API request
-      const response = await fetch(`/api/rooms/${encodeURIComponent(cleanRoomId)}/leave`, {
+      const response = await fetch(`/api/rooms/${encodeURIComponent(roomId)}/leave`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -302,10 +281,45 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || "Failed to leave room");
+        const errorCode = errorData.code || "UNKNOWN_ERROR";
+        let errorMessage = errorData.error || "Failed to leave room";
+
+        // Map backend error codes to user-friendly messages
+        switch (errorCode) {
+          case "AUTH_REQUIRED":
+            errorMessage = "Please log in to leave the room.";
+            break;
+          case "INVALID_ROOM_ID":
+            errorMessage = "The room ID is invalid.";
+            break;
+          case "ROOM_NOT_FOUND":
+            errorMessage = "The room does not exist.";
+            break;
+          case "NOT_A_MEMBER":
+            errorMessage = "You are not a member of this room.";
+            break;
+          case "CREATOR_CANNOT_LEAVE":
+            errorMessage = "As the room creator, you must transfer ownership first.";
+            break;
+          case "ROOM_DELETION_FAILED":
+            errorMessage = "Failed to delete the empty room.";
+            break;
+          case "LEAVE_FAILED":
+            errorMessage = "Unable to leave the room. Please try again.";
+            break;
+          case "METHOD_NOT_ALLOWED":
+            errorMessage = "Incorrect request method. Please contact support.";
+            break;
+          default:
+            errorMessage = "An unexpected error occurred.";
+        }
+
+        console.error(`[Leave Room Frontend] API error for roomId: ${roomId}, code: ${errorCode}, message: ${errorMessage}`);
+        throw new Error(errorMessage);
       }
 
       const result = await response.json();
+      console.log(`[Leave Room Frontend] Successfully left room: ${roomId}`, result);
       toast.success(result.message || "Successfully left the room");
 
       // Update local state
@@ -319,30 +333,18 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         const newSelectedRoom = useRoomStore.getState().selectedRoom;
         if (newSelectedRoom) {
           setSelectedRoom(newSelectedRoom);
+        } else {
+          setSelectedRoom(null);
+          router.push("/");
         }
       }
     } catch (error) {
-      console.error("Error leaving room:", error);
-      let errorMessage = "Failed to leave room";
-
-      if (error instanceof Error) {
-        errorMessage = error.message;
-
-        if (error.message.includes("Invalid room ID")) {
-          errorMessage = "The room ID is invalid. Please try again.";
-        } else if (error.message.includes("not a member")) {
-          errorMessage = "You are not a member of this room.";
-        } else if (error.message.includes("Unauthorized")) {
-          errorMessage = "Please log in to leave rooms.";
-        }
-      }
-
-      toast.error(errorMessage);
+      console.error("[Leave Room Frontend] Error leaving room:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to leave room");
     } finally {
       setIsLeaving(false);
     }
   };
-
 
 
   const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
