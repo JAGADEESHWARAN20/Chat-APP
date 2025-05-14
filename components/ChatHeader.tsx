@@ -283,7 +283,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     try {
       console.log(`Attempting to leave room: ${roomId}`);
 
-      const cleanRoomId = roomId.trim();
+      const cleanRoomId = roomId;
       if (!UUID_REGEX.test(cleanRoomId)) {
         throw new Error(`Invalid room ID format: ${cleanRoomId}`);
       }
