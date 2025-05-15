@@ -51,67 +51,76 @@ export default function ListMessages() {
     }
   };
 
-  useEffect(() => {
-    if (!selectedRoom) return;
+   useEffect(() => {
+    if (!selectedRoom?.id) return;
 
     const loadInitialMessages = async () => {
       setIsLoading(true);
       try {
-        setMessages([]); // Clear existing messages to avoid duplicates
-        const { data: messagesData, error } = await supabase
-          .from("messages")
-          .select(`
-            *,
-            users (
-              id,
-              username,
-              avatar_url,
-              display_name,
-              created_at
-            )
-          `)
-          .eq("room_id", selectedRoom.id)
-          .order("created_at", { ascending: false })
-          .limit(LIMIT_MESSAGE);
-
-        if (error) {
-          toast.error("Failed to load messages");
-          return;
+        const res = await fetch(`/api/messages/${selectedRoom.id}`);
+        if (!res.ok) {
+          throw new Error(await res.text());
         }
-
-        if (messagesData) {
-          const formattedMessages: Imessage[] = messagesData.reverse().map((msg) => ({
-            id: msg.id,
-            created_at: msg.created_at,
-            is_edited: msg.is_edited,
-            sender_id: msg.sender_id,
-            text: msg.text,
-            room_id: msg.room_id,
-            direct_chat_id: msg.direct_chat_id,
-            dm_thread_id: msg.dm_thread_id,
-            status: msg.status,
-            users: msg.users
-              ? {
-                  id: msg.users.id,
-                  avatar_url: msg.users.avatar_url || "",
-                  display_name: msg.users.display_name || "",
-                  username: msg.users.username || "",
-                  created_at: msg.users.created_at,
-                }
-              : null,
+        const { messages } = await res.json();
+        
+        if (messages) {
+          const formattedMessages = messages.map((msg: any) => ({
+            ...msg,
+            users: msg.users ? {
+              id: msg.users.id,
+              avatar_url: msg.users.avatar_url || "",
+              display_name: msg.users.display_name || "",
+              username: msg.users.username || "",
+              created_at: msg.users.created_at,
+            } : null
           }));
           setMessages(formattedMessages);
         }
-      } catch (err) {
-        toast.error("Unexpected error loading messages");
-        console.error(err);
+      } catch (error) {
+        toast.error("Failed to load messages");
+        console.error(error);
       } finally {
         setIsLoading(false);
       }
     };
 
     loadInitialMessages();
-  }, [selectedRoom, supabase, setMessages]);
+  }, [selectedRoom?.id, setMessages]);
+  useEffect(() => {
+    if (!selectedRoom?.id) return;
+
+    const loadInitialMessages = async () => {
+      setIsLoading(true);
+      try {
+        const res = await fetch(`/api/messages/${selectedRoom.id}`);
+        if (!res.ok) {
+          throw new Error(await res.text());
+        }
+        const { messages } = await res.json();
+
+        if (messages) {
+          const formattedMessages = messages.map((msg: any) => ({
+            ...msg,
+            users: msg.users ? {
+              id: msg.users.id,
+              avatar_url: msg.users.avatar_url || "",
+              display_name: msg.users.display_name || "",
+              username: msg.users.username || "",
+              created_at: msg.users.created_at,
+            } : null
+          }));
+          setMessages(formattedMessages);
+        }
+      } catch (error) {
+        toast.error("Failed to load messages");
+        console.error(error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadInitialMessages();
+  }, [selectedRoom?.id, setMessages]);
 
   useEffect(() => {
     if (!selectedRoom) return;
