@@ -17,7 +17,6 @@ export interface Inotification {
   sender_id: string;
   user_id: string;
   room_id: string | null;
-  join_status?: string | null;
   users: {
     id: string;
     username: string;
@@ -70,7 +69,7 @@ export const useNotification = create<NotificationState>((set) => {
       .single();
 
     if (error) {
-      console.warn(`Failed to fetch user ${userId}:`, error.message);
+      console.warn(`[Notifications Store] Failed to fetch user ${userId}:`, error.message);
       return null;
     }
 
@@ -111,7 +110,6 @@ export const useNotification = create<NotificationState>((set) => {
               sender_id,
               user_id,
               room_id,
-              join_status,
               users:users!notifications_sender_id_fkey(id, username, display_name, avatar_url, created_at),
               recipient:users!notifications_user_id_fkey(id, username, display_name, avatar_url, created_at),
               rooms:rooms!notifications_room_id_fkey(id, name, created_at, created_by, is_private)
@@ -126,7 +124,7 @@ export const useNotification = create<NotificationState>((set) => {
 
           if (error) {
             if (error.code === "PGRST102" || error.message.includes("Could not find a relationship")) {
-              console.warn("Falling back to fetch notifications without joins.");
+              console.warn("[Notifications Store] Falling back to fetch notifications without joins.");
 
               // Fallback query without joins
               const { data: fallbackData, error: fallbackError } = await supabase
@@ -139,8 +137,7 @@ export const useNotification = create<NotificationState>((set) => {
                   type,
                   sender_id,
                   user_id,
-                  room_id,
-                  join_status
+                  room_id
                 `)
                 .eq("user_id", userId)
                 .order("created_at", { ascending: false })
@@ -168,7 +165,7 @@ export const useNotification = create<NotificationState>((set) => {
                       .single();
 
                     if (roomError) {
-                      console.warn(`Failed to fetch room ${notif.room_id}:`, roomError.message);
+                      console.warn(`[Notifications Store] Failed to fetch room ${notif.room_id}:`, roomError.message);
                     } else {
                       rooms = roomData;
                     }
@@ -196,9 +193,9 @@ export const useNotification = create<NotificationState>((set) => {
         } catch (error) {
           if (attempt === retries) {
             toast.error(error instanceof Error ? error.message : "Failed to fetch notifications");
-            console.error(`Error fetching notifications (attempt ${attempt}/${retries}):`, error);
+            console.error(`[Notifications Store] Error fetching notifications (attempt ${attempt}/${retries}):`, error);
           } else {
-            console.warn(`Retrying fetchNotifications (attempt ${attempt}/${retries})...`);
+            console.warn(`[Notifications Store] Retrying fetchNotifications (attempt ${attempt}/${retries})...`);
             await delay(1000 * attempt);
           }
         }
@@ -235,7 +232,7 @@ export const useNotification = create<NotificationState>((set) => {
                   .single();
 
                 if (roomError) {
-                  console.warn(`Failed to fetch room ${data.room_id}:`, roomError.message);
+                  console.warn(`[Notifications Store] Failed to fetch room ${data.room_id}:`, roomError.message);
                 } else {
                   rooms = roomData;
                 }
@@ -256,7 +253,7 @@ export const useNotification = create<NotificationState>((set) => {
                 return { notifications: newNotifications };
               });
             } catch (error) {
-              console.error("Error processing INSERT notification:", error);
+              console.error("[Notifications Store] Error processing INSERT notification:", error);
               toast.error("Failed to process new notification");
             }
           }
@@ -284,7 +281,7 @@ export const useNotification = create<NotificationState>((set) => {
                   .single();
 
                 if (roomError) {
-                  console.warn(`Failed to fetch room ${updatedData.room_id}:`, roomError.message);
+                  console.warn(`[Notifications Store] Failed to fetch room ${updatedData.room_id}:`, roomError.message);
                 } else {
                   rooms = roomData;
                 }
@@ -303,7 +300,7 @@ export const useNotification = create<NotificationState>((set) => {
                 ),
               }));
             } catch (error) {
-              console.error("Error processing UPDATE notification:", error);
+              console.error("[Notifications Store] Error processing UPDATE notification:", error);
               toast.error("Failed to process updated notification");
             }
           }
@@ -323,19 +320,19 @@ export const useNotification = create<NotificationState>((set) => {
                 notifications: state.notifications.filter((notif) => notif.id !== deletedId),
               }));
             } catch (error) {
-              console.error("Error processing DELETE notification:", error);
+              console.error("[Notifications Store] Error processing DELETE notification:", error);
               toast.error("Failed to process deleted notification");
             }
           }
         )
         .subscribe((status, err) => {
           if (status === "SUBSCRIBED") {
-            console.log(`Subscribed to notifications:${userId}`);
+            console.log(`[Notifications Store] Subscribed to notifications:${userId}`);
           } else if (status === "CLOSED") {
-            console.log(`Channel notifications:${userId} closed`);
+            console.log(`[Notifications Store] Channel notifications:${userId} closed`);
             channel = null;
           } else if (status === "CHANNEL_ERROR") {
-            console.error(`Channel notifications:${userId} error:`, err);
+            console.error(`[Notifications Store] Channel notifications:${userId} error:`, err);
             toast.error("Error in notification subscription");
           }
         });
@@ -345,7 +342,7 @@ export const useNotification = create<NotificationState>((set) => {
       if (channel) {
         supabase.removeChannel(channel);
         channel = null;
-        console.log("Unsubscribed from notifications channel");
+        console.log("[Notifications Store] Unsubscribed from notifications channel");
       }
     },
   };

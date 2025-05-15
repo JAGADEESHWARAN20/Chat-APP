@@ -39,7 +39,6 @@ export const transformNotification = (
           sender_id: notif.sender_id ?? "",
           user_id: notif.user_id,
           room_id: notif.room_id ?? null,
-          join_status: notif.join_status ?? null,
           users: users
                ? {
                     id: users.id,
@@ -63,7 +62,7 @@ export const transformNotification = (
                     id: rooms.id,
                     name: rooms.name,
                     created_at: rooms.created_at,
-                    created_by: rooms.created_by ?? "", // Provide fallback for null
+                    created_by: rooms.created_by ?? "",
                     is_private: rooms.is_private,
                }
                : null,
