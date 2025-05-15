@@ -540,13 +540,16 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
           </span>
         </Button>
       ) : (
-        <Button
-          size="sm"
-          onClick={() => handleJoinRoom(result.id)}
-          disabled={!user}
-        >
-          Join
-        </Button>
+            <Button
+              size="sm"
+              onClick={() => {
+                console.log(`[Join Room Frontend] Clicking join for roomId: ${result.id}`);
+                handleJoinRoom(result.id);
+              }}
+              disabled={!user}
+            >
+              Join
+            </Button>
       )}
     </li>
   );

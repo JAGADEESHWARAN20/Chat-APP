@@ -7,10 +7,11 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { roomId: string } }
+  { params }: { params: { roomId?: string; roomid?: string } }
 ) {
   const supabase = createRouteHandlerClient<Database>({ cookies });
-  const roomId = params.roomId;
+  // Handle both roomId and roomid due to potential folder naming
+  const roomId = params.roomId ?? params.roomid;
 
   // Log params and roomId
   console.log(`[Join Room] Request params:`, params);
@@ -126,7 +127,7 @@ export async function POST(
           .insert({
             room_id: roomId,
             user_id: userId,
-            status: "accepted" // Align with frontend expectation
+            status: "accepted"
           });
 
         if (memberInsertError) {
@@ -135,7 +136,6 @@ export async function POST(
             {
               success: false,
               error: "Failed to add to room members",
-              code: "MEMBER_ADD_FAILED"
             },
             { status: 500 }
           );
@@ -203,7 +203,7 @@ export async function POST(
           {
             room_id: roomId,
             user_id: userId,
-            status: "accepted" // Align with frontend expectation
+            status: "accepted"
           },
           { onConflict: "room_id,user_id" }
         );
