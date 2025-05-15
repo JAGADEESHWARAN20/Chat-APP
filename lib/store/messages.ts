@@ -1,25 +1,11 @@
 import { create } from "zustand";
 import { LIMIT_MESSAGE } from "../constant";
+import { Database } from "@/lib/types/supabase";
 
-// Message type
-export interface Imessage {
-	id: string;
-	text: string;
-	send_by: string;
-	room_id: string | null;
-	direct_chat_id?: string | null;
-	dm_thread_id?: string | null;
-	is_edit: boolean;
-	created_at: string;
-	status: string | null;
-	users: {
-		id: string;
-		avatar_url: string;
-		display_name: string;
-		username: string;
-		created_at: string;
-	} | null;
-}
+// Derive Imessage type from Database
+export type Imessage = Database["public"]["Tables"]["messages"]["Row"] & {
+	users: Database["public"]["Tables"]["users"]["Row"] | null;
+};
 
 // Zustand state and actions
 interface MessageState {
@@ -51,6 +37,7 @@ export const useMessage = create<MessageState>()((set) => ({
 			page: state.page + 1,
 			hasMore: newMessages.length >= LIMIT_MESSAGE,
 		})),
+
 	setOptimisticIds: (id) =>
 		set((state) => ({
 			optimisticIds: [...state.optimisticIds, id],

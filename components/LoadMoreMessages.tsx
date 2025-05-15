@@ -26,6 +26,7 @@ export default function LoadMoreMessages() {
 			const { from, to } = getFromAndTo(page, LIMIT_MESSAGE);
 			const supabase = supabaseBrowser();
 
+			console.log("[LoadMoreMessages] Fetching messages for room:", selectedRoom.id, { from, to });
 			const { data, error } = await supabase
 				.from("messages")
 				.select("*, users(*)")
@@ -33,15 +34,19 @@ export default function LoadMoreMessages() {
 				.range(from, to)
 				.order("created_at", { ascending: false });
 
-			if (error) throw error;
+			if (error) {
+				console.error("[LoadMoreMessages] Supabase Query Error:", error);
+				throw error;
+			}
 
+			console.log("[LoadMoreMessages] Messages fetched:", data);
 			if (data && data.length > 0) {
-				setMessages((data as Imessage[]).reverse());
+				setMessages(data.reverse()); // Type assertion no longer needed
 			} else {
 				toast.info("No more messages to load.");
 			}
 		} catch (err: any) {
-			console.error("Error loading messages:", err);
+			console.error("[LoadMoreMessages] Error:", err);
 			toast.error(err.message || "Failed to load messages");
 		} finally {
 			setLoading(false);
