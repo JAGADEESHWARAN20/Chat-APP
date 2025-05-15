@@ -2,11 +2,10 @@
 
 import React from "react";
 import { Input } from "./ui/input";
-import { supabaseBrowser } from "@/lib/supabase/browser";
 import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
 import { useUser } from "@/lib/store/user";
-import { Imessage, useMessage } from "@/lib/store/messages";
+import {  useMessage } from "@/lib/store/messages";
 import { useRoomStore } from "@/lib/store/roomstore";
 import { useDirectChatStore } from "@/lib/store/directChatStore";
 
@@ -16,7 +15,6 @@ export default function ChatInput() {
 	const setOptimisticIds = useMessage((state) => state.setOptimisticIds);
 	const selectedRoom = useRoomStore((state) => state.selectedRoom);
 	const selectedDirectChat = useDirectChatStore((state) => state.selectedChat);
-	const supabase = supabaseBrowser();
 
 	const handleSendMessage = async (text: string) => {
 		if (!text.trim()) {
@@ -36,7 +34,7 @@ export default function ChatInput() {
 		const newMessage = {
 			id,
 			text,
-			sender_id: user.id, // Changed from send_by to sender_id
+			sender_id: user.id,
 			room_id: selectedRoom?.id || null,
 			direct_chat_id: selectedDirectChat?.id || null,
 			dm_thread_id: null,
@@ -57,20 +55,20 @@ export default function ChatInput() {
 		setOptimisticIds(id);
 
 		try {
-			const { error } = await supabase.from("messages").insert({
-				id,
-				text,
-				sender_id: user.id, // Changed from send_by to sender_id
-				room_id: selectedRoom?.id || null,
-				direct_chat_id: selectedDirectChat?.id || null,
-				dm_thread_id: null,
-				is_edited: false,
-				created_at: new Date().toISOString(),
-				status: "sent"
+			const response = await fetch('/api/messages/send', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify({
+					text,
+					room_id: selectedRoom?.id || null,
+					direct_chat_id: selectedDirectChat?.id || null
+				})
 			});
 
-			if (error) {
-				throw error;
+			if (!response.ok) {
+				throw new Error(await response.text());
 			}
 		} catch (error) {
 			console.error("Error sending message:", error);
