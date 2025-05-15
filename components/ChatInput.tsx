@@ -73,7 +73,7 @@ export default function ChatInput() {
 					room_id: roomId,
 					direct_chat_id: directChatId,
 					dm_thread_id: null, // Added this field
-					send_by: user.id,
+					sender_id: user.id,
 					created_at: new Date().toISOString(),
 					status: "sent",
 					is_edited: false,
