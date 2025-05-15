@@ -95,12 +95,20 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         return;
       }
       const currentRoomId = roomId || selectedRoom?.id;
+      console.log(`[Join Room Frontend] Attempting to join roomId: ${currentRoomId}`);
       if (!currentRoomId) {
+        console.error("[Join Room Frontend] No room selected");
         toast.error("No room selected");
         return;
       }
+      if (!UUID_REGEX.test(currentRoomId)) {
+        console.error(`[Join Room Frontend] Invalid roomId format: ${currentRoomId}`);
+        toast.error("Invalid room ID format");
+        return;
+      }
       try {
-        const response = await fetch(`/api/rooms/${currentRoomId}/join`, {
+        console.log(`[Join Room Frontend] Sending POST request to /api/rooms/${currentRoomId}/join`);
+        const response = await fetch(`/api/rooms/${encodeURIComponent(currentRoomId)}/join`, {
           method: "POST",
         });
         if (!response.ok) {
@@ -141,6 +149,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
           throw new Error(errorMessage);
         }
         const data = await response.json();
+        console.log(`[Join Room Frontend] Successfully joined roomId: ${currentRoomId}`, data);
         toast.success(data.message);
         if (!data.status || data.status === "accepted") {
           const { data: room, error: roomError } = await supabase
@@ -149,12 +158,14 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
             .eq("id", currentRoomId)
             .single();
           if (roomError || !room) {
+            console.error(`[Join Room Frontend] Failed to fetch room details for roomId: ${currentRoomId}`);
             throw new Error("Failed to fetch room details");
           }
           setSelectedRoom(room);
           setIsMember(true);
         }
       } catch (error) {
+        console.error(`[Join Room Frontend] Error joining roomId: ${currentRoomId}`, error);
         toast.error(error instanceof Error ? error.message : "Failed to join room");
       }
     },
