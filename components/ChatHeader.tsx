@@ -105,7 +105,40 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         });
         if (!response.ok) {
           const errorData = await response.json();
-          throw new Error(errorData.error || "Failed to join room");
+          const errorCode = errorData.code || "UNKNOWN_ERROR";
+          let errorMessage = errorData.error || "Failed to join room";
+
+          switch (errorCode) {
+            case "AUTH_REQUIRED":
+              errorMessage = "Please log in to join the room.";
+              break;
+            case "INVALID_ROOM_ID":
+              errorMessage = "The room ID is invalid.";
+              break;
+            case "MISSING_ROOM_ID":
+              errorMessage = "Room ID is missing.";
+              break;
+            case "ROOM_NOT_FOUND":
+              errorMessage = "The room does not exist.";
+              break;
+            case "PARTICIPATION_CHECK_FAILED":
+              errorMessage = "Unable to verify membership status.";
+              break;
+            case "JOIN_FAILED":
+              errorMessage = "Unable to join the room. Please try again.";
+              break;
+            case "MEMBER_ADD_FAILED":
+              errorMessage = "Failed to add you to the room members.";
+              break;
+            case "CREATOR_NOT_FOUND":
+              errorMessage = "Room creator not found for private room.";
+              break;
+            default:
+              errorMessage = "An unexpected error occurred.";
+          }
+
+          console.error(`[Join Room Frontend] API error for roomId: ${currentRoomId}, code: ${errorCode}, message: ${errorMessage}`);
+          throw new Error(errorMessage);
         }
         const data = await response.json();
         toast.success(data.message);
@@ -120,23 +153,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
           }
           setSelectedRoom(room);
           setIsMember(true);
-          const notification = {
-            id: crypto.randomUUID(),
-            user_id: user.id,
-            type: "user_joined",
-            room_id: currentRoomId,
-            sender_id: user.id,
-            message: `${user.email} joined the room ${room.name}`,
-            status: "unread",
-            created_at: new Date().toISOString(),
-          };
-          await supabase
-            .channel("global-notifications")
-            .send({
-              type: "broadcast",
-              event: "user_joined",
-              payload: notification,
-            });
         }
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Failed to join room");
