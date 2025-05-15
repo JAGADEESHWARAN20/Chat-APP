@@ -12,46 +12,41 @@ export async function PATCH(
      try {
           const supabase = createRouteHandlerClient<Database>({ cookies });
           const notificationId = params.notificationId;
-          console.log(`Processing accept for notification ID: ${notificationId}`);
+          console.log(`[Notifications Accept] Processing accept for notification ID: ${notificationId}`);
 
           // Validate notificationId
           const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
           if (!notificationId || !uuidRegex.test(notificationId)) {
-               console.error(`Invalid notification ID: ${notificationId}`);
+               console.error(`[Notifications Accept] Invalid notification ID: ${notificationId}`);
                return NextResponse.json({ error: "Invalid notification ID" }, { status: 400 });
           }
 
           // Check if user is authenticated
           const { data: { session }, error: sessionError } = await supabase.auth.getSession();
           if (sessionError || !session) {
-               console.error("Session error:", sessionError?.message);
+               console.error("[Notifications Accept] Session error:", sessionError?.message);
                return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
           }
-          console.log(`Authenticated user ID: ${session.user.id}`);
+          console.log(`[Notifications Accept] Authenticated user ID: ${session.user.id}`);
 
-          // Fetch the notification to verify it exists, is a join_request, and is pending
+          // Fetch the notification to verify it exists, is a join_request, and is unread
           const { data: notificationCore, error: notificationCoreError } = await supabase
                .from("notifications")
-               .select("id, message, created_at, status, type, sender_id, user_id, room_id, join_status")
+               .select("id, message, created_at, status, type, sender_id, user_id, room_id")
                .eq("id", notificationId)
                .eq("type", "join_request")
                .eq("user_id", session.user.id)
+               .eq("status", "unread")
                .single();
 
           if (notificationCoreError || !notificationCore) {
-               console.error("Notification fetch error:", notificationCoreError?.message || "Notification not found");
-               return NextResponse.json({ error: "Notification not found or not a join request" }, { status: 404 });
-          }
-
-          // Check if the join_status is still pending
-          if (notificationCore.join_status !== "pending") {
-               console.error(`Join request already processed: current status is ${notificationCore.join_status}`);
-               return NextResponse.json({ error: `Join request already ${notificationCore.join_status}` }, { status: 400 });
+               console.error("[Notifications Accept] Notification fetch error:", notificationCoreError?.message || "Notification not found");
+               return NextResponse.json({ error: "Notification not found, not a join request, or already processed" }, { status: 404 });
           }
 
           // Fetch related data
           if (!notificationCore.sender_id) {
-               console.error("Sender ID is null");
+               console.error("[Notifications Accept] Sender ID is null");
                return NextResponse.json({ error: "Invalid notification data: missing sender_id" }, { status: 400 });
           }
           const { data: senderData, error: senderError } = await supabase
@@ -60,12 +55,12 @@ export async function PATCH(
                .eq("id", notificationCore.sender_id)
                .single();
           if (senderError || !senderData) {
-               console.error("Sender fetch error:", senderError?.message);
+               console.error("[Notifications Accept] Sender fetch error:", senderError?.message);
                return NextResponse.json({ error: "Sender not found" }, { status: 404 });
           }
 
           if (!notificationCore.user_id) {
-               console.error("Recipient ID is null");
+               console.error("[Notifications Accept] Recipient ID is null");
                return NextResponse.json({ error: "Invalid notification data: missing user_id" }, { status: 400 });
           }
           const { data: recipientData, error: recipientError } = await supabase
@@ -74,12 +69,12 @@ export async function PATCH(
                .eq("id", notificationCore.user_id)
                .single();
           if (recipientError || !recipientData) {
-               console.error("Recipient fetch error:", recipientError?.message);
+               console.error("[Notifications Accept] Recipient fetch error:", recipientError?.message);
                return NextResponse.json({ error: "Recipient not found" }, { status: 404 });
           }
 
           if (!notificationCore.room_id) {
-               console.error("Room ID is null");
+               console.error("[Notifications Accept] Room ID is null");
                return NextResponse.json({ error: "Invalid notification data: missing room_id" }, { status: 400 });
           }
           const { data: roomData, error: roomError } = await supabase
@@ -88,14 +83,31 @@ export async function PATCH(
                .eq("id", notificationCore.room_id)
                .single();
           if (roomError || !roomData) {
-               console.error("Room fetch error:", roomError?.message);
+               console.error("[Notifications Accept] Room fetch error:", roomError?.message);
                return NextResponse.json({ error: "Room not found" }, { status: 404 });
           }
 
           // Verify user is the room creator
           if (roomData.created_by !== session.user.id) {
-               console.error(`Permission denied: User ${session.user.id} is not the room creator (${roomData.created_by})`);
+               console.error(`[Notifications Accept] Permission denied: User ${session.user.id} is not the room creator (${roomData.created_by})`);
                return NextResponse.json({ error: "Only the room creator can accept join requests" }, { status: 403 });
+          }
+
+          // Check if the sender is already a member (optional, for safety)
+          const { data: existingMembership, error: membershipCheckError } = await supabase
+               .from("room_members")
+               .select("status")
+               .eq("room_id", notificationCore.room_id)
+               .eq("user_id", notificationCore.sender_id)
+               .eq("status", "accepted")
+               .single();
+          if (membershipCheckError && membershipCheckError.code !== "PGRST116") { // PGRST116 = no rows found
+               console.error("[Notifications Accept] Error checking existing membership:", membershipCheckError.message);
+               return NextResponse.json({ error: "Failed to verify membership status" }, { status: 500 });
+          }
+          if (existingMembership) {
+               console.error("[Notifications Accept] User is already a member of the room");
+               return NextResponse.json({ error: "User is already a member of the room" }, { status: 400 });
           }
 
           // Update room_participants to accepted
@@ -105,10 +117,10 @@ export async function PATCH(
                .eq("room_id", notificationCore.room_id)
                .eq("user_id", notificationCore.sender_id);
           if (participantError) {
-               console.error("Error updating room_participants:", participantError.message);
+               console.error("[Notifications Accept] Error updating room_participants:", participantError.message);
                return NextResponse.json({ error: "Failed to accept join request", details: participantError.message }, { status: 500 });
           }
-          console.log(`Updated room_participants: user ${notificationCore.sender_id} accepted into room ${notificationCore.room_id}`);
+          console.log(`[Notifications Accept] Updated room_participants: user ${notificationCore.sender_id} accepted into room ${notificationCore.room_id}`);
 
           // Add to room_members with upsert to avoid duplicates
           const { error: membershipError } = await supabase
@@ -118,26 +130,27 @@ export async function PATCH(
                          {
                               room_id: notificationCore.room_id,
                               user_id: notificationCore.sender_id,
-                              active: true,
+                              status: "accepted",
+                              joined_at: new Date().toISOString(),
                          },
                     ],
                     { onConflict: "room_id,user_id" }
                );
           if (membershipError) {
-               console.error("Error adding to room_members:", membershipError.message);
+               console.error("[Notifications Accept] Error adding to room_members:", membershipError.message);
                return NextResponse.json({ error: "Failed to add to room_members", details: membershipError.message }, { status: 500 });
           }
-          console.log(`Added user ${notificationCore.sender_id} to room_members for room ${notificationCore.room_id}`);
+          console.log(`[Notifications Accept] Added user ${notificationCore.sender_id} to room_members for room ${notificationCore.room_id}`);
 
-          // Update the notification's join_status to 'accepted' and status to 'read'
+          // Update the notification's status to 'read'
           const { error: updateError } = await supabase
                .from("notifications")
-               .update({ join_status: "accepted", status: "read" })
+               .update({ status: "read" })
                .eq("id", notificationId);
           if (updateError) {
-               console.error("Error updating notification status:", updateError.message);
+               console.error("[Notifications Accept] Error updating notification status:", updateError.message);
           } else {
-               console.log(`Updated notification ${notificationId}: join_status to accepted, status to read`);
+               console.log(`[Notifications Accept] Updated notification ${notificationId}: status to read`);
           }
 
           // Notify the requester that they were accepted
@@ -152,18 +165,16 @@ export async function PATCH(
                     message,
                     status: "unread",
                     created_at: new Date().toISOString(),
-                    join_status: 'accepted', // Explicitly set for clarity
                });
           if (acceptNotificationError) {
-               console.error("Error sending accept notification:", acceptNotificationError.message);
+               console.error("[Notifications Accept] Error sending user_joined notification:", acceptNotificationError.message);
           } else {
-               console.log(`Sent user_joined notification to user ${notificationCore.sender_id}`);
+               console.log(`[Notifications Accept] Sent user_joined notification to user ${notificationCore.sender_id}`);
           }
 
           // Construct the updated notification object for the response
           const notification = {
                ...notificationCore,
-               join_status: "accepted",
                status: "read",
                users: senderData,
                recipient: recipientData,
@@ -175,7 +186,7 @@ export async function PATCH(
 
           return NextResponse.json({ message: "Join request accepted", notification: transformedNotification }, { status: 200 });
      } catch (error) {
-          console.error("Server error in accept route:", error);
+          console.error("[Notifications Accept] Server error:", error);
           return NextResponse.json(
                { error: "Internal server error", details: error instanceof Error ? error.message : "Unknown error" },
                { status: 500 }

@@ -3,6 +3,8 @@ import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { Database } from "@/lib/types/supabase";
 import { transformNotification } from "@/lib/utils/notifications";
+
+// PATCH: Reject a join request notification
 export async function PATCH(
      req: NextRequest,
      { params }: { params: { notificationId: string } }
@@ -10,46 +12,41 @@ export async function PATCH(
      try {
           const supabase = createRouteHandlerClient<Database>({ cookies });
           const notificationId = params.notificationId;
-          console.log(`Processing reject for notification ID: ${notificationId}`);
+          console.log(`[Notifications Reject] Processing reject for notification ID: ${notificationId}`);
 
           // Validate notificationId
           const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
           if (!notificationId || !uuidRegex.test(notificationId)) {
-               console.error(`Invalid notification ID: ${notificationId}`);
+               console.error(`[Notifications Reject] Invalid notification ID: ${notificationId}`);
                return NextResponse.json({ error: "Invalid notification ID" }, { status: 400 });
           }
 
           // Check if user is authenticated
           const { data: { session }, error: sessionError } = await supabase.auth.getSession();
           if (sessionError || !session) {
-               console.error("Session error:", sessionError?.message);
+               console.error("[Notifications Reject] Session error:", sessionError?.message);
                return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
           }
-          console.log(`Authenticated user ID: ${session.user.id}`);
+          console.log(`[Notifications Reject] Authenticated user ID: ${session.user.id}`);
 
-          // Fetch the notification to verify it exists, is a join_request, and is pending
+          // Fetch the notification to verify it exists, is a join_request, and is unread
           const { data: notificationCore, error: notificationCoreError } = await supabase
                .from("notifications")
-               .select("id, message, created_at, status, type, sender_id, user_id, room_id, join_status")
+               .select("id, message, created_at, status, type, sender_id, user_id, room_id")
                .eq("id", notificationId)
                .eq("type", "join_request")
                .eq("user_id", session.user.id)
+               .eq("status", "unread")
                .single();
 
           if (notificationCoreError || !notificationCore) {
-               console.error("Notification fetch error:", notificationCoreError?.message || "Notification not found");
-               return NextResponse.json({ error: "Notification not found or not a join request" }, { status: 404 });
-          }
-
-          // Check if the join_status is still pending
-          if (notificationCore.join_status !== "pending") {
-               console.error(`Join request already processed: current status is ${notificationCore.join_status}`);
-               return NextResponse.json({ error: `Join request already ${notificationCore.join_status}` }, { status: 400 });
+               console.error("[Notifications Reject] Notification fetch error:", notificationCoreError?.message || "Notification not found");
+               return NextResponse.json({ error: "Notification not found, not a join request, or already processed" }, { status: 404 });
           }
 
           // Fetch related data
           if (!notificationCore.sender_id) {
-               console.error("Sender ID is null");
+               console.error("[Notifications Reject] Sender ID is null");
                return NextResponse.json({ error: "Invalid notification data: missing sender_id" }, { status: 400 });
           }
           const { data: senderData, error: senderError } = await supabase
@@ -58,12 +55,12 @@ export async function PATCH(
                .eq("id", notificationCore.sender_id)
                .single();
           if (senderError || !senderData) {
-               console.error("Sender fetch error:", senderError?.message);
+               console.error("[Notifications Reject] Sender fetch error:", senderError?.message);
                return NextResponse.json({ error: "Sender not found" }, { status: 404 });
           }
 
           if (!notificationCore.user_id) {
-               console.error("Recipient ID is null");
+               console.error("[Notifications Reject] Recipient ID is null");
                return NextResponse.json({ error: "Invalid notification data: missing user_id" }, { status: 400 });
           }
           const { data: recipientData, error: recipientError } = await supabase
@@ -72,12 +69,12 @@ export async function PATCH(
                .eq("id", notificationCore.user_id)
                .single();
           if (recipientError || !recipientData) {
-               console.error("Recipient fetch error:", recipientError?.message);
+               console.error("[Notifications Reject] Recipient fetch error:", recipientError?.message);
                return NextResponse.json({ error: "Recipient not found" }, { status: 404 });
           }
 
           if (!notificationCore.room_id) {
-               console.error("Room ID is null");
+               console.error("[Notifications Reject] Room ID is null");
                return NextResponse.json({ error: "Invalid notification data: missing room_id" }, { status: 400 });
           }
           const { data: roomData, error: roomError } = await supabase
@@ -86,13 +83,13 @@ export async function PATCH(
                .eq("id", notificationCore.room_id)
                .single();
           if (roomError || !roomData) {
-               console.error("Room fetch error:", roomError?.message);
+               console.error("[Notifications Reject] Room fetch error:", roomError?.message);
                return NextResponse.json({ error: "Room not found" }, { status: 404 });
           }
 
           // Verify user is the room creator
           if (roomData.created_by !== session.user.id) {
-               console.error(`Permission denied: User ${session.user.id} is not the room creator (${roomData.created_by})`);
+               console.error(`[Notifications Reject] Permission denied: User ${session.user.id} is not the room creator (${roomData.created_by})`);
                return NextResponse.json({ error: "Only the room creator can reject join requests" }, { status: 403 });
           }
 
@@ -103,20 +100,20 @@ export async function PATCH(
                .eq("room_id", notificationCore.room_id)
                .eq("user_id", notificationCore.sender_id);
           if (participantError) {
-               console.error("Error updating room_participants:", participantError.message);
+               console.error("[Notifications Reject] Error updating room_participants:", participantError.message);
                return NextResponse.json({ error: "Failed to reject join request", details: participantError.message }, { status: 500 });
           }
-          console.log(`Updated room_participants: user ${notificationCore.sender_id} rejected from room ${notificationCore.room_id}`);
+          console.log(`[Notifications Reject] Updated room_participants: user ${notificationCore.sender_id} rejected from room ${notificationCore.room_id}`);
 
-          // Update the notification's join_status to 'rejected' and status to 'read'
+          // Update the notification's status to 'read'
           const { error: updateError } = await supabase
                .from("notifications")
-               .update({ join_status: "rejected", status: "read" })
+               .update({ status: "read" })
                .eq("id", notificationId);
           if (updateError) {
-               console.error("Error updating notification status:", updateError.message);
+               console.error("[Notifications Reject] Error updating notification status:", updateError.message);
           } else {
-               console.log(`Updated notification ${notificationId}: join_status to rejected, status to read`);
+               console.log(`[Notifications Reject] Updated notification ${notificationId}: status to read`);
           }
 
           // Notify the requester that their request was rejected
@@ -131,18 +128,16 @@ export async function PATCH(
                     message,
                     status: "unread",
                     created_at: new Date().toISOString(),
-                    join_status: null,
                });
           if (rejectNotificationError) {
-               console.error("Error sending reject notification:", rejectNotificationError.message);
+               console.error("[Notifications Reject] Error sending join_request_rejected notification:", rejectNotificationError.message);
           } else {
-               console.log(`Sent join_request_rejected notification to user ${notificationCore.sender_id}`);
+               console.log(`[Notifications Reject] Sent join_request_rejected notification to user ${notificationCore.sender_id}`);
           }
 
           // Construct the updated notification object for the response
           const notification = {
                ...notificationCore,
-               join_status: "rejected",
                status: "read",
                users: senderData,
                recipient: recipientData,
@@ -154,7 +149,7 @@ export async function PATCH(
 
           return NextResponse.json({ message: "Join request rejected", notification: transformedNotification }, { status: 200 });
      } catch (error) {
-          console.error("Server error in reject route:", error);
+          console.error("[Notifications Reject] Server error:", error);
           return NextResponse.json(
                { error: "Internal server error", details: error instanceof Error ? error.message : "Unknown error" },
                { status: 500 }
