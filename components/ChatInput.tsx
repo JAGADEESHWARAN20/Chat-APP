@@ -44,12 +44,13 @@ export default function ChatInput() {
 		const newMessage: Imessage = {
 			id,
 			text,
-			send_by: user.id,
+			sender_id: user.id,
 			room_id: roomId || null,
 			direct_chat_id: directChatId || null,
-			is_edit: false,
+			dm_thread_id: null, // Added this field
+			is_edited: false,
 			created_at: new Date().toISOString(),
-			status: "sent", // Match database schema
+			status: "sent",
 			users: {
 				id: user.id,
 				avatar_url: user.user_metadata.avatar_url || "",
@@ -71,18 +72,17 @@ export default function ChatInput() {
 					text,
 					room_id: roomId,
 					direct_chat_id: directChatId,
+					dm_thread_id: null, // Added this field
 					send_by: user.id,
-					created_at: new Date().toISOString(), // Ensure created_at is included
+					created_at: new Date().toISOString(),
 					status: "sent",
+					is_edited: false,
 				});
 
 			if (error) {
 				console.error("Supabase error:", error);
 				throw error;
 			}
-
-			// Optionally, refresh notifications or messages if needed
-			// (This is handled by Supabase real-time subscriptions in ChatHeader)
 		} catch (error) {
 			if (error instanceof Error) {
 				console.error("Error sending message:", error);
