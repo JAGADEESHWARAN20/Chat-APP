@@ -88,155 +88,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     [user, supabase]
   );
 
-  const handleJoinRoom = useCallback(
-    async (roomId?: string) => {
-      if (!user) {
-        toast.error("You must be logged in to join a room");
-        return;
-      }
-      const currentRoomId = roomId || selectedRoom?.id;
-      console.log(`[Join Room Frontend] Attempting to join roomId: ${currentRoomId}`);
-      if (!currentRoomId) {
-        console.error("[Join Room Frontend] No room selected");
-        toast.error("No room selected");
-        return;
-      }
-      if (!UUID_REGEX.test(currentRoomId)) {
-        console.error(`[Join Room Frontend] Invalid roomId format: ${currentRoomId}`);
-        toast.error("Invalid room ID format");
-        return;
-      }
-      try {
-        console.log(`[Join Room Frontend] Sending POST request to /api/rooms/${currentRoomId}/join`);
-        const response = await fetch(`/api/rooms/${encodeURIComponent(currentRoomId)}/join`, {
-          method: "POST",
-        });
-        if (!response.ok) {
-          const errorData = await response.json();
-          const errorCode = errorData.code || "UNKNOWN_ERROR";
-          let errorMessage = errorData.error || "Failed to join room";
 
-          switch (errorCode) {
-            case "AUTH_REQUIRED":
-              errorMessage = "Please log in to join the room.";
-              break;
-            case "INVALID_ROOM_ID":
-              errorMessage = "The room ID is invalid.";
-              break;
-            case "MISSING_ROOM_ID":
-              errorMessage = "Room ID is missing.";
-              break;
-            case "ROOM_NOT_FOUND":
-              errorMessage = "The room does not exist.";
-              break;
-            case "PARTICIPATION_CHECK_FAILED":
-              errorMessage = "Unable to verify membership status.";
-              break;
-            case "JOIN_FAILED":
-              errorMessage = "Unable to join the room. Please try again.";
-              break;
-            case "MEMBER_ADD_FAILED":
-              errorMessage = "Failed to add you to the room members.";
-              break;
-            case "CREATOR_NOT_FOUND":
-              errorMessage = "Room creator not found for private room.";
-              break;
-            default:
-              errorMessage = "An unexpected error occurred.";
-          }
-
-          console.error(`[Join Room Frontend] API error for roomId: ${currentRoomId}, code: ${errorCode}, message: ${errorMessage}`);
-          throw new Error(errorMessage);
-        }
-        const data = await response.json();
-        console.log(`[Join Room Frontend] Successfully joined roomId: ${currentRoomId}`, data);
-        toast.success(data.message);
-        if (!data.status || data.status === "accepted") {
-          const { data: room, error: roomError } = await supabase
-            .from("rooms")
-            .select("*")
-            .eq("id", currentRoomId)
-            .single();
-          if (roomError || !room) {
-            console.error(`[Join Room Frontend] Failed to fetch room details for roomId: ${currentRoomId}`);
-            throw new Error("Failed to fetch room details");
-          }
-          setSelectedRoom(room);
-          setIsMember(true);
-        }
-      } catch (error) {
-        console.error(`[Join Room Frontend] Error joining roomId: ${currentRoomId}`, error);
-        toast.error(error instanceof Error ? error.message : "Failed to join room");
-      }
-    },
-    [user, selectedRoom, setSelectedRoom, supabase]
-  );
-
-  const fetchAvailableRooms = useCallback(async () => {
-    if (!user) return;
-    try {
-      const { data: roomsData, error } = await supabase
-        .from("room_members") // Aligned with backend table name
-        .select("rooms(*)")
-        .eq("user_id", user.id)
-        .eq("status", "accepted");
-
-      if (error) {
-        console.error("Error fetching rooms:", error);
-        toast.error("Failed to fetch rooms");
-        return;
-      }
-
-      let rooms = roomsData
-        .map((item) => item.rooms)
-        .filter((room): room is Room => room !== null);
-
-      if (rooms.length === 0) {
-        const { data: generalChat, error: generalChatError } = await supabase
-          .from("rooms")
-          .select("*")
-          .eq("name", "General Chat")
-          .eq("is_private", false)
-          .single();
-
-        if (generalChatError || !generalChat) {
-          const { data: newRoom, error: createError } = await supabase
-            .from("rooms")
-            .insert({ name: "General Chat", is_private: false, created_by: user.id })
-            .select()
-            .single();
-
-          if (createError || !newRoom) {
-            console.error("Error creating General Chat:", createError);
-            toast.error("Failed to create default room");
-            return;
-          }
-
-          await handleJoinRoom(newRoom.id);
-          rooms = [newRoom];
-        } else {
-          await handleJoinRoom(generalChat.id);
-          rooms = [generalChat];
-        }
-      }
-
-      const roomsWithMembership = await Promise.all(
-        rooms.map(async (room) => ({
-          ...room,
-          isMember: await checkRoomMembership(room.id),
-        }))
-      );
-
-      if (isMounted.current) {
-        setAvailableRooms(roomsWithMembership);
-        setRooms(roomsWithMembership);
-        useRoomStore.getState().initializeDefaultRoom();
-      }
-    } catch (error) {
-      console.error("Error fetching rooms:", error);
-      toast.error("Failed to fetch rooms");
-    }
-  }, [user, supabase, checkRoomMembership, setRooms, handleJoinRoom]);
 
   const handleRoomSwitch = async (room: Room) => {
     if (!user) {
@@ -244,6 +96,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       return;
     }
     try {
+      console.log(`[Switch Room Frontend] Attempting to switch to roomId: ${room.id}`);
       const response = await fetch("/api/rooms/switch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -257,12 +110,18 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       setIsSwitchRoomPopoverOpen(false);
       toast.success(`Switched to ${room.name}`);
       await fetchAvailableRooms();
+      // Refresh search results to update button states
+      if (searchType) {
+        console.log("[Switch Room Frontend] Refreshing search results after switching room");
+        await fetchSearchResults();
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Failed to switch room";
       toast.error(errorMessage);
-      console.error("Switch room error:", err);
+      console.error("[Switch Room Frontend] Error:", err);
     }
   };
+
   const handleLeaveRoom = async () => {
     console.log("[Leave Room Frontend] Current selectedRoom:", selectedRoom);
 
@@ -433,6 +292,162 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       }
     }
   }, [debouncedSearchQuery, searchType, checkRoomMembership]);
+
+  const handleJoinRoom = useCallback(
+    async (roomId?: string) => {
+      if (!user) {
+        toast.error("You must be logged in to join a room");
+        return;
+      }
+      const currentRoomId = roomId || selectedRoom?.id;
+      console.log(`[Join Room Frontend] Attempting to join roomId: ${currentRoomId}`);
+      if (!currentRoomId) {
+        console.error("[Join Room Frontend] No room selected");
+        toast.error("No room selected");
+        return;
+      }
+      if (!UUID_REGEX.test(currentRoomId)) {
+        console.error(`[Join Room Frontend] Invalid roomId format: ${currentRoomId}`);
+        toast.error("Invalid room ID format");
+        return;
+      }
+      try {
+        console.log(`[Join Room Frontend] Sending POST request to /api/rooms/${currentRoomId}/join`);
+        const response = await fetch(`/api/rooms/${encodeURIComponent(currentRoomId)}/join`, {
+          method: "POST",
+        });
+        if (!response.ok) {
+          const errorData = await response.json();
+          const errorCode = errorData.code || "UNKNOWN_ERROR";
+          let errorMessage = errorData.error || "Failed to join room";
+
+          switch (errorCode) {
+            case "AUTH_REQUIRED":
+              errorMessage = "Please log in to join the room.";
+              break;
+            case "INVALID_ROOM_ID":
+              errorMessage = "The room ID is invalid.";
+              break;
+            case "MISSING_ROOM_ID":
+              errorMessage = "Room ID is missing.";
+              break;
+            case "ROOM_NOT_FOUND":
+              errorMessage = "The room does not exist.";
+              break;
+            case "PARTICIPATION_CHECK_FAILED":
+              errorMessage = "Unable to verify membership status.";
+              break;
+            case "JOIN_FAILED":
+              errorMessage = "Unable to join the room. Please try again.";
+              break;
+            case "MEMBER_ADD_FAILED":
+              errorMessage = "Failed to add you to the room members.";
+              break;
+            case "CREATOR_NOT_FOUND":
+              errorMessage = "Room creator not found for private room.";
+              break;
+            default:
+              errorMessage = "An unexpected error occurred.";
+          }
+
+          console.error(`[Join Room Frontend] API error for roomId: ${currentRoomId}, code: ${errorCode}, message: ${errorMessage}`);
+          throw new Error(errorMessage);
+        }
+        const data = await response.json();
+        console.log(`[Join Room Frontend] Successfully joined roomId: ${currentRoomId}`, data);
+        toast.success(data.message);
+        if (!data.status || data.status === "accepted") {
+          const { data: room, error: roomError } = await supabase
+            .from("rooms")
+            .select("*")
+            .eq("id", currentRoomId)
+            .single();
+          if (roomError || !room) {
+            console.error(`[Join Room Frontend] Failed to fetch room details for roomId: ${currentRoomId}`);
+            throw new Error("Failed to fetch room details");
+          }
+          setSelectedRoom(room);
+          setIsMember(true);
+          // Refresh search results to update button states
+          if (searchType) {
+            console.log("[Join Room Frontend] Refreshing search results after joining room");
+            await fetchSearchResults();
+          }
+        }
+      } catch (error) {
+        console.error(`[Join Room Frontend] Error joining roomId: ${currentRoomId}`, error);
+        toast.error(error instanceof Error ? error.message : "Failed to join room");
+      }
+    },
+    [user, selectedRoom, setSelectedRoom, supabase, searchType, fetchSearchResults] // Add dependencies
+  );
+
+  const fetchAvailableRooms = useCallback(async () => {
+    if (!user) return;
+    try {
+      const { data: roomsData, error } = await supabase
+        .from("room_members") // Aligned with backend table name
+        .select("rooms(*)")
+        .eq("user_id", user.id)
+        .eq("status", "accepted");
+
+      if (error) {
+        console.error("Error fetching rooms:", error);
+        toast.error("Failed to fetch rooms");
+        return;
+      }
+
+      let rooms = roomsData
+        .map((item) => item.rooms)
+        .filter((room): room is Room => room !== null);
+
+      if (rooms.length === 0) {
+        const { data: generalChat, error: generalChatError } = await supabase
+          .from("rooms")
+          .select("*")
+          .eq("name", "General Chat")
+          .eq("is_private", false)
+          .single();
+
+        if (generalChatError || !generalChat) {
+          const { data: newRoom, error: createError } = await supabase
+            .from("rooms")
+            .insert({ name: "General Chat", is_private: false, created_by: user.id })
+            .select()
+            .single();
+
+          if (createError || !newRoom) {
+            console.error("Error creating General Chat:", createError);
+            toast.error("Failed to create default room");
+            return;
+          }
+
+          await handleJoinRoom(newRoom.id);
+          rooms = [newRoom];
+        } else {
+          await handleJoinRoom(generalChat.id);
+          rooms = [generalChat];
+        }
+      }
+
+      const roomsWithMembership = await Promise.all(
+        rooms.map(async (room) => ({
+          ...room,
+          isMember: await checkRoomMembership(room.id),
+        }))
+      );
+
+      if (isMounted.current) {
+        setAvailableRooms(roomsWithMembership);
+        setRooms(roomsWithMembership);
+        useRoomStore.getState().initializeDefaultRoom();
+      }
+    } catch (error) {
+      console.error("Error fetching rooms:", error);
+      toast.error("Failed to fetch rooms");
+    }
+  }, [user, supabase, checkRoomMembership, setRooms, handleJoinRoom]);
+
 
   const handleCreateRoom = async () => {
     if (!user) {
