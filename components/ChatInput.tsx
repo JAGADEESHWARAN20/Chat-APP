@@ -19,8 +19,12 @@ export default function ChatInput() {
 	const supabase = supabaseBrowser();
 
 	const handleSendMessage = async (text: string) => {
-		if (!text.trim() || !user) {
-			toast.error("Please log in and enter a message");
+		if (!text.trim()) {
+			toast.error("Message cannot be empty");
+			return;
+		}
+		if (!user) {
+			toast.error("Please log in to send messages");
 			return;
 		}
 		if (!selectedRoom && !selectedDirectChat) {
@@ -29,35 +33,23 @@ export default function ChatInput() {
 		}
 
 		const id = uuidv4();
-		const roomId = selectedRoom?.id;
-		const directChatId = selectedDirectChat?.id;
-
-		if (roomId && !selectedRoom) {
-			toast.error("Room selection is invalid");
-			return;
-		}
-		if (directChatId && !selectedDirectChat) {
-			toast.error("Direct chat selection is invalid");
-			return;
-		}
-
-		const newMessage: Imessage = {
+		const newMessage = {
 			id,
 			text,
-			sender_id: user.id,
-			room_id: roomId || null,
-			direct_chat_id: directChatId || null,
-			dm_thread_id: null, // Added this field
+			sender_id: user.id, // Changed from send_by to sender_id
+			room_id: selectedRoom?.id || null,
+			direct_chat_id: selectedDirectChat?.id || null,
+			dm_thread_id: null,
 			is_edited: false,
 			created_at: new Date().toISOString(),
 			status: "sent",
 			users: {
 				id: user.id,
 				avatar_url: user.user_metadata.avatar_url || "",
+				display_name: user.user_metadata.user_name || user.email || "",
+				username: user.user_metadata.user_name || user.email?.split('@')[0] || "",
 				created_at: new Date().toISOString(),
-				display_name: user.user_metadata.user_name || "",
-				username: user.user_metadata.user_name || "",
-			},
+			}
 		};
 
 		// Optimistic update
@@ -65,34 +57,25 @@ export default function ChatInput() {
 		setOptimisticIds(id);
 
 		try {
-			const { error } = await supabase
-				.from("messages")
-				.insert({
-					id,
-					text,
-					room_id: roomId,
-					direct_chat_id: directChatId,
-					dm_thread_id: null, // Added this field
-					sender_id: user.id,
-					created_at: new Date().toISOString(),
-					status: "sent",
-					is_edited: false,
-				});
+			const { error } = await supabase.from("messages").insert({
+				id,
+				text,
+				sender_id: user.id, // Changed from send_by to sender_id
+				room_id: selectedRoom?.id || null,
+				direct_chat_id: selectedDirectChat?.id || null,
+				dm_thread_id: null,
+				is_edited: false,
+				created_at: new Date().toISOString(),
+				status: "sent"
+			});
 
 			if (error) {
-				console.error("Supabase error:", error);
 				throw error;
 			}
 		} catch (error) {
-			if (error instanceof Error) {
-				console.error("Error sending message:", error);
-				toast.error(`Failed to send message: ${error.message}`);
-			} else {
-				console.error("Unknown error sending message:", error);
-				toast.error("Failed to send message due to an unknown error");
-			}
+			console.error("Error sending message:", error);
+			toast.error("Failed to send message");
 			useMessage.getState().optimisticDeleteMessage(id);
-			return;
 		}
 	};
 
