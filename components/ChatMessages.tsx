@@ -29,8 +29,8 @@ export default function ChatMessages() {
         const formattedMessages: Imessage[] = messages.map((msg: any) => ({
           id: msg.id,
           created_at: msg.created_at,
-          is_edit: msg.is_edit,
-          send_by: msg.send_by,
+          is_edited: msg.is_edited,
+          sender_id: msg.sender_id,
           text: msg.text,
           room_id: msg.room_id,
           direct_chat_id: msg.direct_chat_id,
@@ -48,8 +48,8 @@ export default function ChatMessages() {
         const formattedMessages: Imessage[] = messages.map((msg: any) => ({
           id: msg.id,
           created_at: msg.created_at,
-          is_edit: msg.is_edit,
-          send_by: msg.send_by,
+          is_edited: msg.is_edited,
+          sender_id: msg.sender_id,
           text: msg.text,
           room_id: msg.room_id,
           direct_chat_id: msg.direct_chat_id,
