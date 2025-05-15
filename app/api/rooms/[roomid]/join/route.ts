@@ -1,4 +1,5 @@
 // app/api/rooms/[roomId]/join/route.ts
+
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
@@ -6,13 +7,30 @@ import { Database } from "@/lib/types/supabase";
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { roomId: string } }
+  context: { params: { roomId?: string } }
 ) {
   const supabase = createRouteHandlerClient<Database>({ cookies });
 
   try {
-    // 1. Authentication check
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    // 1. Extract roomId safely
+    const roomId = context.params?.roomId;
+    if (!roomId || typeof roomId !== "string") {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Room ID is required in the URL",
+          code: "ROOM_ID_REQUIRED"
+        },
+        { status: 400 }
+      );
+    }
+
+    // 2. Get user session
+    const {
+      data: { session },
+      error: sessionError
+    } = await supabase.auth.getSession();
+
     if (sessionError || !session) {
       return NextResponse.json(
         {
@@ -25,21 +43,8 @@ export async function POST(
     }
 
     const userId = session.user.id;
-    const roomId = params.roomId;
 
-    // 2. Validate room ID
-    if (!roomId) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Room ID is required",
-          code: "ROOM_ID_REQUIRED"
-        },
-        { status: 400 }
-      );
-    }
-
-    // 3. Verify room exists and get details
+    // 3. Check if room exists
     const { data: room, error: roomError } = await supabase
       .from("rooms")
       .select("id, name, created_by, is_private")
@@ -57,7 +62,7 @@ export async function POST(
       );
     }
 
-    // 4. Check existing participation status
+    // 4. Check if user is already a participant
     const { data: existingParticipant, error: participantError } = await supabase
       .from("room_participants")
       .select("status")
@@ -76,9 +81,8 @@ export async function POST(
       );
     }
 
-    // 5. Handle already accepted members
+    // 5. If already accepted, ensure user is in room_members
     if (existingParticipant?.status === "accepted") {
-      // Check if also in room_members
       const { data: existingMember } = await supabase
         .from("room_members")
         .select("id")
@@ -87,7 +91,6 @@ export async function POST(
         .single();
 
       if (!existingMember) {
-        // Add to room_members if not already there
         await supabase
           .from("room_members")
           .insert({
@@ -107,19 +110,20 @@ export async function POST(
       );
     }
 
-    // 6. Determine join status based on room privacy
-    const status = room.is_private ? "pending" : "accepted";
-    const joined_at = room.is_private ? null : new Date().toISOString();
+    // 6. Determine join status
+    const isPrivate = room.is_private;
+    const status = isPrivate ? "pending" : "accepted";
+    const joined_at = isPrivate ? null : new Date().toISOString();
 
-    // 7. Upsert participation record
+    // 7. Upsert to room_participants
     const { error: upsertError } = await supabase
       .from("room_participants")
       .upsert(
         {
           room_id: roomId,
           user_id: userId,
-          status: status,
-          joined_at: joined_at
+          status,
+          joined_at
         },
         { onConflict: "room_id,user_id" }
       );
@@ -136,8 +140,8 @@ export async function POST(
       );
     }
 
-    // 8. For non-private rooms, add to members immediately
-    if (!room.is_private) {
+    // 8. If public, add to room_members
+    if (!isPrivate) {
       const { error: memberError } = await supabase
         .from("room_members")
         .upsert(
@@ -161,37 +165,38 @@ export async function POST(
       }
     }
 
-   
-    // 9. Send appropriate notification
-if (room.is_private && !room.created_by) {
-  return NextResponse.json(
-    {
-      success: false,
-      error: "Room creator not found for private room",
-      code: "CREATOR_NOT_FOUND"
-    },
-    { status: 500 }
-  );
-}
+    // 9. Validate room creator before sending notification
+    if (isPrivate && !room.created_by) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Room creator not found for private room",
+          code: "CREATOR_NOT_FOUND"
+        },
+        { status: 500 }
+      );
+    }
 
-const notification = {
-  user_id: room.is_private ? room.created_by! : userId, // Use non-null assertion after validation
-  sender_id: userId,
-  room_id: roomId,
-  type: room.is_private ? "join_request" : "room_joined",
-  message: room.is_private
-    ? `${session.user.email || "A user"} requested to join "${room.name}"`
-    : `You joined "${room.name}"`,
-  status: "unread"
-};
+    // 10. Send notification
+    const notification = {
+      user_id: isPrivate ? room.created_by! : userId,
+      sender_id: userId,
+      room_id: roomId,
+      type: isPrivate ? "join_request" : "room_joined",
+      message: isPrivate
+        ? `${session.user.email || "A user"} requested to join "${room.name}"`
+        : `You joined "${room.name}"`,
+      status: "unread"
+    };
 
-await supabase.from("notifications").insert(notification);
-    // 10. Return success response
+    await supabase.from("notifications").insert(notification);
+
+    // 11. Done!
     return NextResponse.json(
       {
         success: true,
-        status: status,
-        message: room.is_private
+        status,
+        message: isPrivate
           ? "Join request sent to room admin"
           : "Successfully joined room",
         room: {
@@ -202,9 +207,8 @@ await supabase.from("notifications").insert(notification);
       },
       { status: 200 }
     );
-
   } catch (error) {
-    console.error('[Join Room] Unexpected error:', error);
+    console.error("[Join Room] Unexpected error:", error);
     return NextResponse.json(
       {
         success: false,
