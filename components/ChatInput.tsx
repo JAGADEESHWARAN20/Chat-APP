@@ -55,7 +55,7 @@ export default function ChatInput() {
 		setOptimisticIds(id);
 
 		try {
-			const response = await fetch('/api/messages/send', {
+			const response = await fetch('/api/messages', {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
