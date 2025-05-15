@@ -83,8 +83,8 @@ export default function ListMessages() {
           const formattedMessages: Imessage[] = messagesData.reverse().map((msg) => ({
             id: msg.id,
             created_at: msg.created_at,
-            is_edit: msg.is_edit,
-            send_by: msg.send_by,
+            is_edited: msg.is_edited,
+            sender_id: msg.sender_id,
             text: msg.text,
             room_id: msg.room_id,
             direct_chat_id: msg.direct_chat_id,
@@ -135,7 +135,7 @@ export default function ListMessages() {
               supabase
                 .from("users")
                 .select("*")
-                .eq("id", messagePayload.send_by)
+                .eq("id", messagePayload.sender_id)
                 .single<UserRow>()
                 .then(({ data: user, error }) => {
                   if (error) {
@@ -146,8 +146,8 @@ export default function ListMessages() {
                     const newMessage: Imessage = {
                       id: messagePayload.id,
                       created_at: messagePayload.created_at,
-                      is_edit: messagePayload.is_edit,
-                      send_by: messagePayload.send_by,
+                      is_edited: messagePayload.is_edited,
+                      sender_id: messagePayload.sender_id,
                       room_id: messagePayload.room_id,
                       direct_chat_id: messagePayload.direct_chat_id,
                       dm_thread_id: messagePayload.dm_thread_id,
@@ -175,9 +175,9 @@ export default function ListMessages() {
               optimisticUpdateMessage(updatedMessage.id, {
                 id: updatedMessage.id,
                 text: updatedMessage.text,
-                is_edit: updatedMessage.is_edit,
+                is_edited: updatedMessage.is_edited,
                 created_at: updatedMessage.created_at,
-                send_by: updatedMessage.send_by,
+                sender_id: updatedMessage.sender_id,
                 room_id: updatedMessage.room_id,
                 direct_chat_id: updatedMessage.direct_chat_id,
                 dm_thread_id: updatedMessage.dm_thread_id,
