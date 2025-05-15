@@ -12,10 +12,12 @@ export async function GET(req: NextRequest) {
           // Check if user is authenticated
           const { data: { session }, error: sessionError } = await supabase.auth.getSession();
           if (sessionError || !session) {
+               console.error("[Notifications GET] Session error:", sessionError?.message);
                return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
           }
 
           const userId = session.user.id;
+          console.log(`[Notifications GET] Fetching notifications for user: ${userId}`);
 
           // Fetch notifications with joins, including all required fields
           const { data: notifications, error: notificationError } = await supabase
@@ -29,7 +31,6 @@ export async function GET(req: NextRequest) {
         sender_id,
         user_id,
         room_id,
-        join_status,
         users:users!notifications_sender_id_fkey(id, username, display_name, avatar_url, created_at),
         recipient:users!notifications_user_id_fkey(id, username, display_name, avatar_url, created_at),
         rooms:rooms!notifications_room_id_fkey(id, name, created_at, created_by, is_private)
@@ -39,7 +40,7 @@ export async function GET(req: NextRequest) {
                .limit(20);
 
           if (notificationError) {
-               console.error("Error fetching notifications:", notificationError);
+               console.error("[Notifications GET] Error fetching notifications:", notificationError.message);
                throw new Error(notificationError.message || "Failed to fetch notifications");
           }
 
@@ -50,7 +51,10 @@ export async function GET(req: NextRequest) {
 
           return NextResponse.json({ notifications: transformedNotifications }, { status: 200 });
      } catch (error) {
-          console.error("Error fetching notifications:", error);
+          console.error(
+               "[Notifications GET] Server error:",
+               error instanceof Error ? error.message : "Unknown error"
+          );
           return NextResponse.json(
                { error: error instanceof Error ? error.message : "Failed to fetch notifications" },
                { status: 500 }
@@ -65,10 +69,12 @@ export async function DELETE(req: NextRequest) {
           // Check if user is authenticated
           const { data: { session }, error: sessionError } = await supabase.auth.getSession();
           if (sessionError || !session) {
+               console.error("[Notifications DELETE] Session error:", sessionError?.message);
                return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
           }
 
           const userId = session.user.id;
+          console.log(`[Notifications DELETE] Deleting notifications for user: ${userId}`);
 
           // Delete all notifications for the user
           const { error } = await supabase
@@ -77,13 +83,16 @@ export async function DELETE(req: NextRequest) {
                .eq("user_id", userId);
 
           if (error) {
-               console.error("Error deleting notifications:", error);
+               console.error("[Notifications DELETE] Error deleting notifications:", error.message);
                throw new Error(error.message || "Failed to delete notifications");
           }
 
           return NextResponse.json({ message: "Notifications cleared" }, { status: 200 });
      } catch (error) {
-          console.error("Error deleting notifications:", error);
+          console.error(
+               "[Notifications DELETE] Server error:",
+               error instanceof Error ? error.message : "Unknown error"
+          );
           return NextResponse.json(
                { error: error instanceof Error ? error.message : "Failed to delete notifications" },
                { status: 500 }
