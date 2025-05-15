@@ -31,6 +31,7 @@ export async function GET(req: NextRequest) {
         sender_id,
         user_id,
         room_id,
+        join_status,
         users:users!notifications_sender_id_fkey(id, username, display_name, avatar_url, created_at),
         recipient:users!notifications_user_id_fkey(id, username, display_name, avatar_url, created_at),
         rooms:rooms!notifications_room_id_fkey(id, name, created_at, created_by, is_private)

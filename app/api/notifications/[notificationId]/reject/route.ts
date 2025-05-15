@@ -138,6 +138,7 @@ export async function PATCH(
           // Construct the updated notification object for the response
           const notification = {
                ...notificationCore,
+               join_status:'rejected',
                status: "read",
                users: senderData,
                recipient: recipientData,

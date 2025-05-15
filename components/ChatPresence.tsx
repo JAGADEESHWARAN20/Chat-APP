@@ -51,14 +51,22 @@ export default function ChatPresence() {
                     try {
                         await channel.track({
                             user_id: user.id,
-                            online_at: '2025-04-18 07:16:40', // Current timestamp
+                            online_at: new Date().toISOString(),
                             room_id: selectedRoom.id
                         });
+
+                        // Ensure the user is marked active in the room
+                        await supabase
+                            .from("room_members")
+                            .update({ active: true })
+                            .eq("room_id", selectedRoom.id)
+                            .eq("user_id", user.id);
                     } catch (error) {
-                        console.error('Error tracking presence:', error);
+                        console.error('Error tracking presence or updating active status:', error);
                     }
                 }
             });
+
 
         return () => {
             channel.untrack();

@@ -21,6 +21,7 @@ export async function POST(req: NextRequest) {
                .select("*")
                .eq("room_id", roomId)
                .eq("user_id", userId)
+               .eq("active", true) // 🔒 only allow active members
                .single();
           if (membershipError || !membership) {
                return NextResponse.json({ error: "You are not a member of this room" }, { status: 403 });

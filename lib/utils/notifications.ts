@@ -32,13 +32,14 @@ export const transformNotification = (
 
      return {
           id: notif.id,
-          content: notif.message,
+          message: notif.message,
           created_at: notif.created_at ?? null,
-          is_read: notif.status === "read",
+          status: notif.status,
           type: notif.type,
           sender_id: notif.sender_id ?? "",
           user_id: notif.user_id,
           room_id: notif.room_id ?? null,
+          join_status:notif.join_status,
           users: users
                ? {
                     id: users.id,

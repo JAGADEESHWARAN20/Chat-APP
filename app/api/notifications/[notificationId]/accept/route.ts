@@ -175,6 +175,7 @@ export async function PATCH(
           // Construct the updated notification object for the response
           const notification = {
                ...notificationCore,
+               join_status: 'accepted',
                status: "read",
                users: senderData,
                recipient: recipientData,
