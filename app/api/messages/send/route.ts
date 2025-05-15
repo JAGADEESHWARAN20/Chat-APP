@@ -7,7 +7,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 export async function POST(req: NextRequest) {
   try {
     const supabase = createRouteHandlerClient<Database>({ cookies });
-    const { text, room_id, direct_chat_id } = await req.json();
+    const { content, roomId } = await req.json();
 
     // Validate session
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
@@ -15,23 +15,32 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Validate that either room_id or direct_chat_id is provided
-    if (!room_id && !direct_chat_id) {
-      return NextResponse.json({ error: "Either room_id or direct_chat_id is required" }, { status: 400 });
+    const userId = session.user.id;
+
+    // Check if the user is a member of the room
+    const { data: membership, error: membershipError } = await supabase
+      .from("room_members")
+      .select("*")
+      .eq("room_id", roomId)
+      .eq("user_id", userId)
+      .single();
+
+    if (membershipError || !membership) {
+      return NextResponse.json({ error: "You are not a member of this room" }, { status: 403 });
     }
 
-    // Create the message
-    const { data: newMessage, error: messageError } = await supabase
+    // Insert the message with user details
+    const { data: message, error: messageError } = await supabase
       .from("messages")
       .insert({
-        text,
-        sender_id: session.user.id,
-        room_id: room_id || null,
-        direct_chat_id: direct_chat_id || null,
-        dm_thread_id: null,
-        is_edited: false,
+        text: content, // Changed from 'content' to 'text' to match schema
+        room_id: roomId,
+        sender_id: userId, // Changed from 'user_id' to 'sender_id' to match schema
+        created_at: new Date().toISOString(),
         status: "sent",
-        created_at: new Date().toISOString()
+        is_edited: false,
+        direct_chat_id: null,
+        dm_thread_id: null
       })
       .select(`
         *,
@@ -50,40 +59,76 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Failed to send message" }, { status: 500 });
     }
 
-    // Broadcast notification if it's a room message
-    if (room_id) {
-      const { data: room } = await supabase
-        .from("rooms")
-        .select("name")
-        .eq("id", room_id)
-        .single();
+    // Fetch room details
+    const { data: room, error: roomError } = await supabase
+      .from("rooms")
+      .select("name, created_by")
+      .eq("id", roomId)
+      .single();
 
-      const notification = {
-        id: crypto.randomUUID(),
-        user_id: session.user.id,
-        type: "new_message",
-        room_id,
-        sender_id: session.user.id,
-        message: `${newMessage.users?.username || "A user"} sent a message in ${room?.name || "a room"}`,
-        status: "unread",
-        created_at: new Date().toISOString(),
-      };
-
-      await supabaseServer()
-        .channel("global-notifications")
-        .send({
-          type: "broadcast",
-          event: "new-message",
-          payload: notification,
-        });
+    if (roomError || !room) {
+      return NextResponse.json({ error: "Room not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true, message: newMessage });
+    // Fetch room members to notify (excluding the sender)
+    const { data: members, error: membersError } = await supabase
+      .from("room_members")
+      .select("user_id")
+      .eq("room_id", roomId)
+      .neq("user_id", userId);
+
+    if (membersError) {
+      console.error("Error fetching room members:", membersError);
+      return NextResponse.json({ error: "Failed to fetch room members" }, { status: 500 });
+    }
+
+    // Insert notifications for each member
+    const notifications = members.map((member) => ({
+      user_id: member.user_id,
+      type: "new_message",
+      room_id: roomId,
+      sender_id: userId,
+      message: `${message.users?.username || "A user"} sent a message in ${room.name}: "${content}"`,
+      status: "unread",
+      created_at: new Date().toISOString(),
+    }));
+
+    const { error: notificationError } = await supabase
+      .from("notifications")
+      .insert(notifications);
+
+    if (notificationError) {
+      console.error("Error inserting notifications:", notificationError);
+    }
+
+    // Broadcast real-time notification
+    await supabaseServer()
+      .channel(`room-${roomId}-notifications`)
+      .send({
+        type: "broadcast",
+        event: "new-message",
+        payload: {
+          roomId,
+          message: {
+            ...message,
+            content // Include both 'text' and 'content' for backward compatibility
+          }
+        },
+      });
+
+    return NextResponse.json({
+      success: true,
+      message: {
+        ...message,
+        content // Include both 'text' and 'content' for backward compatibility
+      }
+    });
   } catch (error) {
-    console.error("Server error in message send route:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    console.error("Server error in messages route:", errorMessage, error);
+    return NextResponse.json({
+      error: "Failed to send message",
+      details: errorMessage
+    }, { status: 500 });
   }
 }
