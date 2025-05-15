@@ -33,18 +33,28 @@ export function DeleteAlert() {
 	const optimisticDeleteMessage = useMessage(
 		(state) => state.optimisticDeleteMessage
 	);
+
 	const handleDeleteMessage = async () => {
+		if (!actionMessage?.id) {
+			console.error("[DeleteAlert] No message selected for deletion");
+			toast.error("No message selected for deletion");
+			return;
+		}
+
+		console.log("[DeleteAlert] Deleting message:", actionMessage.id);
 		const supabase = supabaseBrowser();
-		optimisticDeleteMessage(actionMessage?.id!);
+		optimisticDeleteMessage(actionMessage.id);
 
 		const { error } = await supabase
 			.from("messages")
 			.delete()
-			.eq("id", actionMessage?.id!);
+			.eq("id", actionMessage.id);
 
 		if (error) {
+			console.error("[DeleteAlert] Supabase Delete Error:", error);
 			toast.error(error.message);
 		} else {
+			console.log("[DeleteAlert] Message deleted successfully");
 			toast.success("Successfully deleted a message");
 		}
 	};
@@ -56,13 +66,10 @@ export function DeleteAlert() {
 			</AlertDialogTrigger>
 			<AlertDialogContent>
 				<AlertDialogHeader>
-					<AlertDialogTitle>
-						Are you absolutely sure?
-					</AlertDialogTitle>
+					<AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
 					<AlertDialogDescription>
-						This action cannot be undone. This will permanently
-						delete your account and remove your data from our
-						servers.
+						This action cannot be undone. This will permanently delete the
+						message from the chat.
 					</AlertDialogDescription>
 				</AlertDialogHeader>
 				<AlertDialogFooter>
@@ -85,21 +92,33 @@ export function EditAlert() {
 	const inputRef = useRef() as React.MutableRefObject<HTMLInputElement>;
 
 	const handleEdit = async () => {
-		const supabase = supabaseBrowser();
+		if (!actionMessage?.id) {
+			console.error("[EditAlert] No message selected for editing");
+			toast.error("No message selected for editing");
+			return;
+		}
+
 		const text = inputRef.current.value.trim();
+		console.log("[EditAlert] Editing message:", actionMessage.id, { text });
+
 		if (text) {
-			optimisticUpdateMessage(actionMessage?.id!, { text, is_edit: true }); // Fixed to pass messageId and updates separately
+			optimisticUpdateMessage(actionMessage.id, { text, is_edited: true });
+			const supabase = supabaseBrowser();
 			const { error } = await supabase
 				.from("messages")
-				.update({ text, is_edit: true })
-				.eq("id", actionMessage?.id!);
+				.update({ text, is_edited: true })
+				.eq("id", actionMessage.id);
+
 			if (error) {
+				console.error("[EditAlert] Supabase Update Error:", error);
 				toast.error(error.message);
 			} else {
+				console.log("[EditAlert] Message updated successfully");
 				toast.success("Update Successfully");
 			}
 			document.getElementById("trigger-edit")?.click();
 		} else {
+			console.log("[EditAlert] Empty message text, triggering delete");
 			document.getElementById("trigger-edit")?.click();
 			document.getElementById("trigger-delete")?.click();
 		}
