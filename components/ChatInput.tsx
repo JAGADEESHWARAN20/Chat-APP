@@ -72,7 +72,7 @@ export default function ChatInput() {
 					text,
 					room_id: roomId,
 					direct_chat_id: directChatId,
-					send_by: user.id,
+					sender_id: user.id,
 					created_at: new Date().toISOString(),
 					status: "sent",
 				});
