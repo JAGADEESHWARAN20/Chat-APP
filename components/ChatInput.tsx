@@ -2,10 +2,11 @@
 
 import React from "react";
 import { Input } from "./ui/input";
+import { supabaseBrowser } from "@/lib/supabase/browser";
 import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
 import { useUser } from "@/lib/store/user";
-import {  useMessage } from "@/lib/store/messages";
+import { Imessage, useMessage } from "@/lib/store/messages";
 import { useRoomStore } from "@/lib/store/roomstore";
 import { useDirectChatStore } from "@/lib/store/directChatStore";
 
@@ -15,14 +16,11 @@ export default function ChatInput() {
 	const setOptimisticIds = useMessage((state) => state.setOptimisticIds);
 	const selectedRoom = useRoomStore((state) => state.selectedRoom);
 	const selectedDirectChat = useDirectChatStore((state) => state.selectedChat);
+	const supabase = supabaseBrowser();
 
 	const handleSendMessage = async (text: string) => {
-		if (!text.trim()) {
-			toast.error("Message cannot be empty");
-			return;
-		}
-		if (!user) {
-			toast.error("Please log in to send messages");
+		if (!text.trim() || !user) {
+			toast.error("Please log in and enter a message");
 			return;
 		}
 		if (!selectedRoom && !selectedDirectChat) {
@@ -31,23 +29,35 @@ export default function ChatInput() {
 		}
 
 		const id = uuidv4();
-		const newMessage = {
+		const roomId = selectedRoom?.id;
+		const directChatId = selectedDirectChat?.id;
+
+		if (roomId && !selectedRoom) {
+			toast.error("Room selection is invalid");
+			return;
+		}
+		if (directChatId && !selectedDirectChat) {
+			toast.error("Direct chat selection is invalid");
+			return;
+		}
+
+		const newMessage: Imessage = {
 			id,
 			text,
 			sender_id: user.id,
-			room_id: selectedRoom?.id || null,
-			direct_chat_id: selectedDirectChat?.id || null,
-			dm_thread_id: null,
+			room_id: roomId || null,
+			direct_chat_id: directChatId || null,
 			is_edited: false,
+			dm_thread_id: null, // Set to null if not used
 			created_at: new Date().toISOString(),
 			status: "sent",
 			users: {
 				id: user.id,
 				avatar_url: user.user_metadata.avatar_url || "",
-				display_name: user.user_metadata.user_name || user.email || "",
-				username: user.user_metadata.user_name || user.email?.split('@')[0] || "",
 				created_at: new Date().toISOString(),
-			}
+				display_name: user.user_metadata.user_name || "",
+				username: user.user_metadata.user_name || "",
+			},
 		};
 
 		// Optimistic update
@@ -55,25 +65,32 @@ export default function ChatInput() {
 		setOptimisticIds(id);
 
 		try {
-			const response = await fetch('/api/messages', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({
+			const { error } = await supabase
+				.from("messages")
+				.insert({
+					id,
 					text,
-					room_id: selectedRoom?.id || null,
-					direct_chat_id: selectedDirectChat?.id || null
-				})
-			});
+					room_id: roomId,
+					direct_chat_id: directChatId,
+					send_by: user.id,
+					created_at: new Date().toISOString(),
+					status: "sent",
+				});
 
-			if (!response.ok) {
-				throw new Error(await response.text());
+			if (error) {
+				console.error("Supabase error:", error);
+				throw error;
 			}
 		} catch (error) {
-			console.error("Error sending message:", error);
-			toast.error("Failed to send message");
+			if (error instanceof Error) {
+				console.error("Error sending message:", error);
+				toast.error(`Failed to send message: ${error.message}`);
+			} else {
+				console.error("Unknown error sending message:", error);
+				toast.error("Failed to send message due to an unknown error");
+			}
 			useMessage.getState().optimisticDeleteMessage(id);
+			return;
 		}
 	};
 

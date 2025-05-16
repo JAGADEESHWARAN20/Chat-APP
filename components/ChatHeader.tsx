@@ -685,7 +685,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
             className="relative"
           >
             <Bell className="h-5 w-5" />
-            {notifications.filter((n) => !n.is_read).length > 0 && (
+            {notifications.filter((n) => !n.status).length > 0 && (
               <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full"></span>
             )}
           </Button>
