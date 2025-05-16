@@ -136,6 +136,7 @@ export async function POST(
             {
               success: false,
               error: "Failed to add to room members",
+              code: "MEMBER_ADD_FAILED"
             },
             { status: 500 }
           );
@@ -163,7 +164,7 @@ export async function POST(
     // 6. Determine join status based on room privacy
     console.log(`[Join Room] Determining join status for roomId: ${roomId}`);
     const status = room.is_private ? "pending" : "accepted";
-    const joined_at = room.is_private ? null : new Date().toISOString();
+    const joined_at = room.is_private ? undefined : new Date().toISOString(); // Changed null to undefined
     console.log(`[Join Room] Join status determined for roomId: ${roomId}`, { status, joined_at });
 
     // 7. Upsert participation record

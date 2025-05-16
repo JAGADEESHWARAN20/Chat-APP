@@ -72,11 +72,12 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const checkRoomMembership = useCallback(
     async (roomId: string) => {
       if (!user) return false;
+      const userId = user.id;
       const { data, error } = await supabase
         .from("room_members") // Aligned with backend table name
         .select("status")
         .eq("room_id", roomId)
-        .eq("user_id", user.id)
+        .eq("user_id", userId)
         .eq("status", "accepted")
         .single();
       if (error && error.code !== "PGRST116") {
@@ -379,16 +380,17 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         toast.error(error instanceof Error ? error.message : "Failed to join room");
       }
     },
-    [user, selectedRoom, setSelectedRoom, supabase, searchType, fetchSearchResults] // Add dependencies
+    [user, selectedRoom, setSelectedRoom, supabase, searchType, fetchSearchResults, UUID_REGEX] // Added UUID_REGEX
   );
 
   const fetchAvailableRooms = useCallback(async () => {
     if (!user) return;
     try {
+      const userId = user.id;
       const { data: roomsData, error } = await supabase
         .from("room_members") // Aligned with backend table name
         .select("rooms(*)")
-        .eq("user_id", user.id)
+        .eq("user_id", userId)
         .eq("status", "accepted");
 
       if (error) {
