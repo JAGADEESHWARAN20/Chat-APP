@@ -22,7 +22,7 @@ interface MessageState {
   setMessages: (messages: Imessage[]) => void;
   clearMessages: () => void;
   setOptimisticIds: (id: string) => void;
-  replaceMessage: (oldId: string, newMessage: Imessage) => void; // Added
+  replaceMessage: (oldId: string, newMessage: Imessage) => void;
 }
 
 export const useMessage = create<MessageState>()((set) => ({
