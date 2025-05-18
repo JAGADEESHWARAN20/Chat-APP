@@ -18,71 +18,71 @@ export default function ChatInput() {
   const selectedDirectChat = useDirectChatStore((state) => state.selectedChat);
 
   const handleSendMessage = async (text: string) => {
-    if (!text.trim() || !user) {
-      toast.error("Please log in and enter a message");
-      return;
-    }
-    if (!selectedRoom && !selectedDirectChat) {
-      toast.error("Please select a room or user to chat with");
-      return;
-    }
+  if (!text.trim() || !user) {
+    toast.error("Please log in and enter a message");
+    return;
+  }
+  if (!selectedRoom && !selectedDirectChat) {
+    toast.error("Please select a room or user to chat with");
+    return;
+  }
 
-    const id = uuidv4();
-    const roomId = selectedRoom?.id;
-    const directChatId = selectedDirectChat?.id;
+  const id = uuidv4();
+  const roomId = selectedRoom?.id;
+  const directChatId = selectedDirectChat?.id;
 
-    const newMessage: Imessage = {
-      id,
-      text,
-      sender_id: user.id,
-      room_id: roomId || null,
-      direct_chat_id: directChatId || null,
-      is_edited: false,
-      dm_thread_id: null,
+  const newMessage: Imessage = {
+    id,
+    text,
+    sender_id: user.id,
+    room_id: roomId || null,
+    direct_chat_id: directChatId || null,
+    is_edited: false,
+    dm_thread_id: null,
+    created_at: new Date().toISOString(),
+    status: "sent",
+    users: {
+      id: user.id,
+      avatar_url: user.user_metadata.avatar_url || "",
       created_at: new Date().toISOString(),
-      status: "sent",
-      users: {
-        id: user.id,
-        avatar_url: user.user_metadata.avatar_url || "",
-        created_at: new Date().toISOString(),
-        display_name: user.user_metadata.user_name || "",
-        username: user.user_metadata.user_name || "",
-      },
-    };
-
-    // Optimistic update
-    addMessage(newMessage);
-    setOptimisticIds(id);
-
-    try {
-      const response = await fetch("/api/messages/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          content: text,
-          roomId: roomId || undefined,
-          directChatId: directChatId || undefined,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to send message");
-      }
-
-      // API returns the message with server-generated fields, so we can rely on it
-      addMessage(data.message);
-    } catch (error) {
-      console.error("Error sending message:", error);
-      toast.error(
-        error instanceof Error
-          ? `Failed to send message: ${error.message}`
-          : "Failed to send message due to an unknown error"
-      );
-      optimisticDeleteMessage(id);
-    }
+      display_name: user.user_metadata.user_name || "",
+      username: user.user_metadata.user_name || "",
+    },
   };
+
+  // Optimistic update
+  addMessage(newMessage);
+  setOptimisticIds(id);
+
+  try {
+    const response = await fetch("/api/messages/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        content: text,
+        roomId: roomId || undefined,
+        directChatId: directChatId || undefined,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "Failed to send message");
+    }
+
+    // Update with server-generated message
+    addMessage(data.message);
+  } catch (error) {
+    console.error("Error sending message:", error);
+    toast.error(
+      error instanceof Error
+        ? `Failed to send message: ${error.message}`
+        : "Failed to send message due to an unknown error"
+    );
+    optimisticDeleteMessage(id);
+  }
+};
 
   return (
     <div className="p-5">
