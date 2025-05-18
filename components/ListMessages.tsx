@@ -9,10 +9,9 @@ import { ArrowDown } from "lucide-react";
 import LoadMoreMessages from "./LoadMoreMessages";
 import { Database } from "@/lib/types/supabase";
 import { useRoomStore } from "@/lib/store/roomstore";
+import { useRealtimeMessages } from "@/hooks/useRealtimeMessages";
 import { LIMIT_MESSAGE } from "@/lib/constant";
 
-type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
-type UserRow = Database["public"]["Tables"]["users"]["Row"];
 type Notification = Database["public"]["Tables"]["notifications"]["Row"] & {
   rooms?: { name: string };
   users?: { username: string };
@@ -24,15 +23,13 @@ export default function ListMessages() {
   const [notification, setNotification] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const selectedRoom = useRoomStore((state) => state.selectedRoom);
-  const {
-    messages,
-    setMessages,
-    addMessage,
-    optimisticIds,
-    optimisticDeleteMessage,
-    optimisticUpdateMessage,
-  } = useMessage((state) => state);
+  const { messages, setMessages } = useMessage((state) => state);
   const supabase = supabaseBrowser();
+
+  // Use the useRealtimeMessages hook
+  useRealtimeMessages(selectedRoom?.id, null, () => {
+    setNotification((prev) => prev + 1);
+  });
 
   const handleOnScroll = () => {
     if (!scrollRef.current) return;
@@ -51,41 +48,6 @@ export default function ListMessages() {
     }
   };
 
-   useEffect(() => {
-    if (!selectedRoom?.id) return;
-
-    const loadInitialMessages = async () => {
-      setIsLoading(true);
-      try {
-        const res = await fetch(`/api/messages/${selectedRoom.id}`);
-        if (!res.ok) {
-          throw new Error(await res.text());
-        }
-        const { messages } = await res.json();
-        
-        if (messages) {
-          const formattedMessages = messages.map((msg: any) => ({
-            ...msg,
-            users: msg.users ? {
-              id: msg.users.id,
-              avatar_url: msg.users.avatar_url || "",
-              display_name: msg.users.display_name || "",
-              username: msg.users.username || "",
-              created_at: msg.users.created_at,
-            } : null
-          }));
-          setMessages(formattedMessages);
-        }
-      } catch (error) {
-        toast.error("Failed to load messages");
-        console.error(error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadInitialMessages();
-  }, [selectedRoom?.id, setMessages]);
   useEffect(() => {
     if (!selectedRoom?.id) return;
 
@@ -101,13 +63,15 @@ export default function ListMessages() {
         if (messages) {
           const formattedMessages = messages.map((msg: any) => ({
             ...msg,
-            users: msg.users ? {
-              id: msg.users.id,
-              avatar_url: msg.users.avatar_url || "",
-              display_name: msg.users.display_name || "",
-              username: msg.users.username || "",
-              created_at: msg.users.created_at,
-            } : null
+            users: msg.users
+              ? {
+                  id: msg.users.id,
+                  avatar_url: msg.users.avatar_url || "",
+                  display_name: msg.users.display_name || "",
+                  username: msg.users.username || "",
+                  created_at: msg.users.created_at,
+                }
+              : null,
           }));
           setMessages(formattedMessages);
         }
@@ -125,88 +89,6 @@ export default function ListMessages() {
   useEffect(() => {
     if (!selectedRoom) return;
 
-    const messageChannel = supabase
-      .channel(`room_messages_${selectedRoom.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "messages",
-          filter: `room_id=eq.${selectedRoom.id}`,
-        },
-        (payload) => {
-          try {
-            const messagePayload = payload.new as MessageRow;
-            if (payload.eventType === "INSERT" && !optimisticIds.includes(messagePayload.id)) {
-              if (messagePayload.room_id !== selectedRoom.id) return;
-
-              supabase
-                .from("users")
-                .select("*")
-                .eq("id", messagePayload.sender_id)
-                .single<UserRow>()
-                .then(({ data: user, error }) => {
-                  if (error) {
-                    toast.error(error.message);
-                    return;
-                  }
-                  if (user) {
-                    const newMessage: Imessage = {
-                      id: messagePayload.id,
-                      created_at: messagePayload.created_at,
-                      is_edited: messagePayload.is_edited,
-                      sender_id: messagePayload.sender_id,
-                      room_id: messagePayload.room_id,
-                      direct_chat_id: messagePayload.direct_chat_id,
-                      dm_thread_id: messagePayload.dm_thread_id,
-                      status: messagePayload.status,
-                      text: messagePayload.text,
-                      users: {
-                        id: user.id,
-                        avatar_url: user.avatar_url || "",
-                        display_name: user.display_name || "",
-                        username: user.username || "",
-                        created_at: user.created_at,
-                      },
-                    };
-                    addMessage(newMessage);
-
-                    if (scrollRef.current && scrollRef.current.scrollTop < scrollRef.current.scrollHeight - scrollRef.current.clientHeight - 10) {
-                      setNotification((prev) => prev + 1);
-                    }
-                  }
-                });
-            } else if (payload.eventType === "UPDATE") {
-              const updatedMessage = payload.new as MessageRow;
-              if (updatedMessage.room_id !== selectedRoom.id) return;
-
-              optimisticUpdateMessage(updatedMessage.id, {
-                id: updatedMessage.id,
-                text: updatedMessage.text,
-                is_edited: updatedMessage.is_edited,
-                created_at: updatedMessage.created_at,
-                sender_id: updatedMessage.sender_id,
-                room_id: updatedMessage.room_id,
-                direct_chat_id: updatedMessage.direct_chat_id,
-                dm_thread_id: updatedMessage.dm_thread_id,
-                status: updatedMessage.status,
-              });
-            } else if (payload.eventType === "DELETE") {
-              const deletedMessage = payload.old as MessageRow;
-              if (deletedMessage.room_id !== selectedRoom.id) return;
-
-              optimisticDeleteMessage(payload.old.id);
-            }
-          } catch (err) {
-            toast.error("Error processing real-time message update");
-            console.error(err);
-          }
-        }
-      )
-      .subscribe();
-
-    // Subscribe to global notifications for cross-room messages
     const notificationChannel = supabase
       .channel("global-notifications")
       .on(
@@ -214,7 +96,6 @@ export default function ListMessages() {
         { event: "new-message" },
         (payload) => {
           const newNotification = payload.payload as Notification;
-          // Only show toast if the message is from a different room
           if (newNotification.room_id !== selectedRoom.id) {
             toast.info(newNotification.message);
           }
@@ -233,10 +114,9 @@ export default function ListMessages() {
       .subscribe();
 
     return () => {
-      supabase.removeChannel(messageChannel);
       supabase.removeChannel(notificationChannel);
     };
-  }, [selectedRoom, optimisticIds, addMessage, optimisticUpdateMessage, optimisticDeleteMessage, supabase]);
+  }, [selectedRoom, supabase]);
 
   useEffect(() => {
     if (scrollRef.current && !userScrolled) {
