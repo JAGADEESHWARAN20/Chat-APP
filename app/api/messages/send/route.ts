@@ -16,6 +16,12 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+    if (roomId && directChatId) {
+      return NextResponse.json(
+        { error: "Cannot specify both roomId and directChatId" },
+        { status: 400 }
+      );
+    }
 
     // Validate session
     const {
@@ -30,6 +36,7 @@ export async function POST(req: NextRequest) {
 
     // Validate membership or direct chat participation
     if (roomId) {
+      // Check room_members (for API logic)
       const { data: membership, error: membershipError } = await supabase
         .from("room_members")
         .select("*")
@@ -43,13 +50,28 @@ export async function POST(req: NextRequest) {
           { status: 403 }
         );
       }
+
+      // Check room_participants (to align with RLS)
+      const { data: participant, error: participantError } = await supabase
+        .from("room_participants")
+        .select("*")
+        .eq("room_id", roomId)
+        .eq("user_id", userId)
+        .eq("status", "accepted")
+        .single();
+
+      if (participantError || !participant) {
+        return NextResponse.json(
+          { error: "You are not an accepted participant in this room" },
+          { status: 403 }
+        );
+      }
     } else if (directChatId) {
       const { data: directChat, error: directChatError } = await supabase
         .from("direct_chats")
         .select("*")
         .eq("id", directChatId)
-        .in("user_id_1", [userId])
-        .in("user_id_2", [userId])
+        .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`)
         .single();
 
       if (directChatError || !directChat) {
@@ -88,9 +110,18 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (messageError) {
-      console.error("Error sending message:", messageError);
+      console.error("Error sending message:", {
+        message: messageError.message,
+        details: messageError.details,
+        hint: messageError.hint,
+        code: messageError.code,
+      });
       return NextResponse.json(
-        { error: "Failed to send message", details: messageError.message },
+        {
+          error: "Failed to send message",
+          details: messageError.message,
+          supabaseCode: messageError.code,
+        },
         { status: 500 }
       );
     }
@@ -123,6 +154,7 @@ export async function POST(req: NextRequest) {
           user_id: member.user_id,
           type: "new_message",
           room_id: roomId,
+          direct_chat_id: null,
           sender_id: userId,
           message: `${message.users?.username || "A user"} sent a message in ${room.name}: "${content}"`,
           status: "unread",
@@ -165,6 +197,7 @@ export async function POST(req: NextRequest) {
         const notification = {
           user_id: recipientId,
           type: "new_message",
+          room_id: null,
           direct_chat_id: directChatId,
           sender_id: userId,
           message: `${message.users?.username || "A user"} sent you a message: "${content}"`,
@@ -194,9 +227,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, message });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    console.error("Server error in messages route:", errorMessage, error);
+    console.error("Server error in messages route:", {
+      message: errorMessage,
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     return NextResponse.json(
-      { error: "Failed to send message", details: errorMessage },
+      {
+        error: "Failed to send message",
+        details: errorMessage,
+      },
       { status: 500 }
     );
   }
