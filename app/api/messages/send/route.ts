@@ -130,48 +130,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Handle notifications and real-time broadcast
+    // Real-time broadcast (notifications are now handled by the trigger)
     if (roomId) {
-      const { data: room, error: roomError } = await supabase
-        .from("rooms")
-        .select("name, created_by")
-        .eq("id", roomId)
-        .single();
-
-      if (roomError || !room) {
-        console.error("Error fetching room:", roomError);
-        return NextResponse.json({ error: "Room not found" }, { status: 404 });
-      }
-
-      const { data: members, error: membersError } = await supabase
-        .from("room_members")
-        .select("user_id")
-        .eq("room_id", roomId)
-        .neq("user_id", userId);
-
-      if (membersError) {
-        console.error("Error fetching room members:", membersError);
-      } else {
-        const notifications = members.map((member) => ({
-          user_id: member.user_id,
-          type: "new_message",
-          room_id: roomId,
-          direct_chat_id: null,
-          sender_id: userId,
-          message: `${message.users?.username || "A user"} sent a message in ${room.name}: "${content}"`,
-          status: "unread",
-          created_at: new Date().toISOString(),
-        }));
-
-        const { error: notificationError } = await supabase
-          .from("notifications")
-          .insert(notifications);
-
-        if (notificationError) {
-          console.error("Error inserting notifications:", notificationError);
-        }
-      }
-
       await supabaseServer()
         .channel(`room-${roomId}-notifications`)
         .send({
@@ -180,47 +140,13 @@ export async function POST(req: NextRequest) {
           payload: { roomId, message },
         });
     } else if (directChatId) {
-      const { data: directChat, error: directChatError } = await supabase
-        .from("direct_chats")
-        .select("user_id_1, user_id_2")
-        .eq("id", directChatId)
-        .single();
-
-      if (directChatError || !directChat) {
-        console.error("Error fetching direct chat:", directChatError);
-      } else {
-        const recipientId =
-          directChat.user_id_1 === userId
-            ? directChat.user_id_2
-            : directChat.user_id_1;
-
-        const notification = {
-          user_id: recipientId,
-          type: "new_message",
-          room_id: null,
-          direct_chat_id: directChatId,
-          sender_id: userId,
-          message: `${message.users?.username || "A user"} sent you a message: "${content}"`,
-          status: "unread",
-          created_at: new Date().toISOString(),
-        };
-
-        const { error: notificationError } = await supabase
-          .from("notifications")
-          .insert(notification);
-
-        if (notificationError) {
-          console.error("Error inserting direct chat notification:", notificationError);
-        }
-
-        await supabaseServer()
-          .channel(`direct-chat-${directChatId}-notifications`)
-          .send({
-            type: "broadcast",
-            event: "new-message",
-            payload: { directChatId, message },
-          });
-      }
+      await supabaseServer()
+        .channel(`direct-chat-${directChatId}-notifications`)
+        .send({
+          type: "broadcast",
+          event: "new-message",
+          payload: { directChatId, message },
+        });
     }
 
     return NextResponse.json({ success: true, message });
