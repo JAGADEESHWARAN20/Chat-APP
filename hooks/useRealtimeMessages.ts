@@ -7,7 +7,7 @@ import { Database } from "@/lib/types/supabase";
 
 export const useRealtimeMessages = (
   roomId?: string,
-  directChatId?: string,
+  directChatId?: string | null, // Updated to allow null
   onNewMessage?: () => void
 ) => {
   const addMessage = useMessage((state) => state.addMessage);
@@ -32,7 +32,11 @@ export const useRealtimeMessages = (
     getUser().then((user) => {
       const channelName = roomId
         ? `room-${roomId}-notifications`
-        : `direct-chat-${directChatId}-notifications`;
+        : directChatId
+        ? `direct-chat-${directChatId}-notifications`
+        : null;
+
+      if (!channelName) return;
 
       const channel = supabase
         .channel(channelName)
