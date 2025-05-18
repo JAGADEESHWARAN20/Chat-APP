@@ -36,7 +36,6 @@ export async function POST(req: NextRequest) {
 
     // Validate membership or direct chat participation
     if (roomId) {
-      // Check room_members (for API logic)
       const { data: membership, error: membershipError } = await supabase
         .from("room_members")
         .select("*")
@@ -51,7 +50,6 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Check room_participants (to align with RLS)
       const { data: participant, error: participantError } = await supabase
         .from("room_participants")
         .select("*")
@@ -82,19 +80,23 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Log the message payload before insert
+    const messagePayload = {
+      text: content,
+      room_id: roomId || null,
+      direct_chat_id: directChatId || null,
+      sender_id: userId,
+      created_at: new Date().toISOString(),
+      status: "sent",
+      is_edited: false,
+      dm_thread_id: null,
+    };
+    console.log("Inserting message with payload:", messagePayload);
+
     // Insert the message
     const { data: message, error: messageError } = await supabase
       .from("messages")
-      .insert({
-        text: content,
-        room_id: roomId || null,
-        direct_chat_id: directChatId || null,
-        sender_id: userId,
-        created_at: new Date().toISOString(),
-        status: "sent",
-        is_edited: false,
-        dm_thread_id: null,
-      })
+      .insert(messagePayload)
       .select(
         `
         *,
@@ -115,6 +117,8 @@ export async function POST(req: NextRequest) {
         details: messageError.details,
         hint: messageError.hint,
         code: messageError.code,
+        requestBody: { content, roomId, directChatId, userId },
+        messagePayload,
       });
       return NextResponse.json(
         {
@@ -128,7 +132,6 @@ export async function POST(req: NextRequest) {
 
     // Handle notifications and real-time broadcast
     if (roomId) {
-      // Fetch room details
       const { data: room, error: roomError } = await supabase
         .from("rooms")
         .select("name, created_by")
@@ -136,10 +139,10 @@ export async function POST(req: NextRequest) {
         .single();
 
       if (roomError || !room) {
+        console.error("Error fetching room:", roomError);
         return NextResponse.json({ error: "Room not found" }, { status: 404 });
       }
 
-      // Fetch room members to notify (excluding the sender)
       const { data: members, error: membersError } = await supabase
         .from("room_members")
         .select("user_id")
@@ -149,7 +152,6 @@ export async function POST(req: NextRequest) {
       if (membersError) {
         console.error("Error fetching room members:", membersError);
       } else {
-        // Insert notifications
         const notifications = members.map((member) => ({
           user_id: member.user_id,
           type: "new_message",
@@ -170,7 +172,6 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Broadcast real-time notification
       await supabaseServer()
         .channel(`room-${roomId}-notifications`)
         .send({
@@ -179,7 +180,6 @@ export async function POST(req: NextRequest) {
           payload: { roomId, message },
         });
     } else if (directChatId) {
-      // Notify the other participant in the direct chat
       const { data: directChat, error: directChatError } = await supabase
         .from("direct_chats")
         .select("user_id_1, user_id_2")
@@ -213,7 +213,6 @@ export async function POST(req: NextRequest) {
           console.error("Error inserting direct chat notification:", notificationError);
         }
 
-        // Broadcast real-time notification for direct chat
         await supabaseServer()
           .channel(`direct-chat-${directChatId}-notifications`)
           .send({
@@ -230,6 +229,7 @@ export async function POST(req: NextRequest) {
     console.error("Server error in messages route:", {
       message: errorMessage,
       stack: error instanceof Error ? error.stack : undefined,
+      requestBody: await req.json().catch(() => ({})),
     });
     return NextResponse.json(
       {
