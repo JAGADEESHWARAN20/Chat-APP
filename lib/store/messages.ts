@@ -4,76 +4,84 @@ import { Database } from "@/lib/types/supabase";
 
 // Derive Imessage type from Database
 export type Imessage = Database["public"]["Tables"]["messages"]["Row"] & {
-	users: Database["public"]["Tables"]["users"]["Row"] | null;
+  users: Database["public"]["Tables"]["users"]["Row"] | null;
 };
 
 // Zustand state and actions
 interface MessageState {
-	hasMore: boolean;
-	page: number;
-	messages: Imessage[];
-	actionMessage: Imessage | undefined;
-	optimisticIds: string[];
-	addMessage: (message: Imessage) => void;
-	setActionMessage: (message: Imessage | undefined) => void;
-	optimisticDeleteMessage: (messageId: string) => void;
-	optimisticUpdateMessage: (messageId: string, updates: Partial<Imessage>) => void;
-	addOptimisticId: (id: string) => void;
-	setMessages: (messages: Imessage[]) => void;
-	clearMessages: () => void;
-	setOptimisticIds: (id: string) => void;
+  hasMore: boolean;
+  page: number;
+  messages: Imessage[];
+  actionMessage: Imessage | undefined;
+  optimisticIds: string[];
+  addMessage: (message: Imessage) => void;
+  setActionMessage: (message: Imessage | undefined) => void;
+  optimisticDeleteMessage: (messageId: string) => void;
+  optimisticUpdateMessage: (messageId: string, updates: Partial<Imessage>) => void;
+  addOptimisticId: (id: string) => void;
+  setMessages: (messages: Imessage[]) => void;
+  clearMessages: () => void;
+  setOptimisticIds: (id: string) => void;
+  replaceMessage: (oldId: string, newMessage: Imessage) => void; // Added
 }
 
 export const useMessage = create<MessageState>()((set) => ({
-	hasMore: true,
-	page: 1,
-	messages: [],
-	optimisticIds: [],
-	actionMessage: undefined,
+  hasMore: true,
+  page: 1,
+  messages: [],
+  optimisticIds: [],
+  actionMessage: undefined,
 
-	setMessages: (newMessages) =>
-		set((state) => ({
-			messages: [...newMessages, ...state.messages],
-			page: state.page + 1,
-			hasMore: newMessages.length >= LIMIT_MESSAGE,
-		})),
+  setMessages: (newMessages) =>
+    set((state) => ({
+      messages: [...newMessages, ...state.messages],
+      page: state.page + 1,
+      hasMore: newMessages.length >= LIMIT_MESSAGE,
+    })),
 
-	setOptimisticIds: (id) =>
-		set((state) => ({
-			optimisticIds: [...state.optimisticIds, id],
-		})),
+  setOptimisticIds: (id) =>
+    set((state) => ({
+      optimisticIds: [...state.optimisticIds, id],
+    })),
 
-	addOptimisticId: (id: string) =>
-		set((state) => ({
-			optimisticIds: [...state.optimisticIds, id],
-		})),
+  addOptimisticId: (id: string) =>
+    set((state) => ({
+      optimisticIds: [...state.optimisticIds, id],
+    })),
 
-	addMessage: (newMessage) =>
-		set((state) => {
-			const exists = state.messages.some((msg) => msg.id === newMessage.id);
-			return exists
-				? { messages: state.messages }
-				: { messages: [...state.messages, newMessage] };
-		}),
+  addMessage: (newMessage) =>
+    set((state) => {
+      const exists = state.messages.some((msg) => msg.id === newMessage.id);
+      return exists
+        ? { messages: state.messages }
+        : { messages: [...state.messages, newMessage] };
+    }),
 
-	setActionMessage: (message) => set(() => ({ actionMessage: message })),
+  replaceMessage: (oldId, newMessage) =>
+    set((state) => ({
+      messages: state.messages.map((msg) =>
+        msg.id === oldId ? newMessage : msg
+      ),
+    })),
 
-	optimisticDeleteMessage: (messageId) =>
-		set((state) => ({
-			messages: state.messages.filter((message) => message.id !== messageId),
-		})),
+  setActionMessage: (message) => set(() => ({ actionMessage: message })),
 
-	optimisticUpdateMessage: (messageId, updates) =>
-		set((state) => ({
-			messages: state.messages.map((message) =>
-				message.id === messageId ? { ...message, ...updates } : message
-			),
-		})),
+  optimisticDeleteMessage: (messageId) =>
+    set((state) => ({
+      messages: state.messages.filter((message) => message.id !== messageId),
+    })),
 
-	clearMessages: () =>
-		set(() => ({
-			messages: [],
-			page: 1,
-			hasMore: true,
-		})),
+  optimisticUpdateMessage: (messageId, updates) =>
+    set((state) => ({
+      messages: state.messages.map((message) =>
+        message.id === messageId ? { ...message, ...updates } : message
+      ),
+    })),
+
+  clearMessages: () =>
+    set(() => ({
+      messages: [],
+      page: 1,
+      hasMore: true,
+    })),
 }));
