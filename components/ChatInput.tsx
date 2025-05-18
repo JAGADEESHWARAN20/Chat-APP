@@ -4,23 +4,34 @@ import React from "react";
 import { Input } from "./ui/input";
 import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
-import { useUser } from "@/lib/store/user";
 import { Imessage, useMessage } from "@/lib/store/messages";
 import { useRoomStore } from "@/lib/store/roomstore";
 import { useDirectChatStore } from "@/lib/store/directChatStore";
+import { supabaseBrowser } from "@/lib/supabase/browser";
 
 export default function ChatInput() {
-  const user = useUser((state) => state.user);
   const addMessage = useMessage((state) => state.addMessage);
-  const replaceMessage = useMessage((state) => state.replaceMessage); // Added
+  const replaceMessage = useMessage((state) => state.replaceMessage);
   const setOptimisticIds = useMessage((state) => state.setOptimisticIds);
   const optimisticDeleteMessage = useMessage((state) => state.optimisticDeleteMessage);
   const selectedRoom = useRoomStore((state) => state.selectedRoom);
   const selectedDirectChat = useDirectChatStore((state) => state.selectedChat);
+  const supabase = supabaseBrowser();
 
   const handleSendMessage = async (text: string) => {
-    if (!text.trim() || !user) {
-      toast.error("Please log in and enter a message");
+    // Fetch the current user
+    const {
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession();
+    if (sessionError || !session) {
+      toast.error("Please log in to send a message");
+      return;
+    }
+    const user = session.user;
+
+    if (!text.trim()) {
+      toast.error("Please enter a message");
       return;
     }
     if (!selectedRoom && !selectedDirectChat) {
@@ -74,6 +85,11 @@ export default function ChatInput() {
 
       // Replace the optimistic message with the server-returned message
       replaceMessage(id, data.message);
+
+      // Remove the temporary id from optimisticIds
+      useMessage.setState((state) => ({
+        optimisticIds: state.optimisticIds.filter((optId) => optId !== id),
+      }));
     } catch (error) {
       console.error("Error sending message:", error);
       toast.error(
