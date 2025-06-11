@@ -235,11 +235,13 @@ export default function ListMessages() {
             <div className="flex-1 pb-5">
               <LoadMoreMessages />
             </div>
-            <div className="space-y-7">
-              {filteredMessages.map((value) => (
-                <Message key={value.id} message={value} />
-              ))}
-            </div>
+              <div className="space-y-7">
+                {[...filteredMessages]
+                  .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+                  .map((value) => (
+                    <Message key={value.id} message={value} />
+                  ))}
+              </div>
           </>
         )}
 
