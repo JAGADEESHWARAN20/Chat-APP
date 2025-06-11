@@ -51,41 +51,6 @@ export default function ListMessages() {
     }
   };
 
-   useEffect(() => {
-    if (!selectedRoom?.id) return;
-
-    const loadInitialMessages = async () => {
-      setIsLoading(true);
-      try {
-        const res = await fetch(`/api/messages/${selectedRoom.id}`);
-        if (!res.ok) {
-          throw new Error(await res.text());
-        }
-        const { messages } = await res.json();
-        
-        if (messages) {
-          const formattedMessages = messages.map((msg: any) => ({
-            ...msg,
-            users: msg.users ? {
-              id: msg.users.id,
-              avatar_url: msg.users.avatar_url || "",
-              display_name: msg.users.display_name || "",
-              username: msg.users.username || "",
-              created_at: msg.users.created_at,
-            } : null
-          }));
-          setMessages(formattedMessages);
-        }
-      } catch (error) {
-        toast.error("Failed to load messages");
-        console.error(error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadInitialMessages();
-  }, [selectedRoom?.id, setMessages]);
   useEffect(() => {
     if (!selectedRoom?.id) return;
 

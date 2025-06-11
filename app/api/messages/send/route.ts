@@ -16,6 +16,7 @@ export async function POST(req: NextRequest) {
     }
 
     const userId = session.user.id;
+    console.log(userId);
 
     // Check if the user is a member of the room
     const { data: membership, error: membershipError } = await supabase
@@ -57,6 +58,9 @@ export async function POST(req: NextRequest) {
     if (messageError) {
       console.error("Error sending message:", messageError);
       return NextResponse.json({ error: "Failed to send message" }, { status: 500 });
+    }
+    if (!messageError) {
+      console.log('sending message completed');
     }
 
     // Fetch room details

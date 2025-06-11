@@ -32,11 +32,17 @@ export const useMessage = create<MessageState>()((set) => ({
 	actionMessage: undefined,
 
 	setMessages: (newMessages) =>
-		set((state) => ({
-			messages: [...newMessages, ...state.messages],
-			page: state.page + 1,
-			hasMore: newMessages.length >= LIMIT_MESSAGE,
-		})),
+		set((state) => {
+			const existingIds = new Set(state.messages.map((msg) => msg.id));
+			const filteredNew = newMessages.filter((msg) => !existingIds.has(msg.id));
+
+			return {
+				messages: [...filteredNew, ...state.messages],
+				page: state.page + 1,
+				hasMore: newMessages.length >= LIMIT_MESSAGE,
+			};
+		}),
+
 
 	setOptimisticIds: (id) =>
 		set((state) => ({
@@ -51,9 +57,8 @@ export const useMessage = create<MessageState>()((set) => ({
 	addMessage: (newMessage) =>
 		set((state) => {
 			const exists = state.messages.some((msg) => msg.id === newMessage.id);
-			return exists
-				? { messages: state.messages }
-				: { messages: [...state.messages, newMessage] };
+			if (exists) return { messages: state.messages };
+			return { messages: [...state.messages, newMessage] };
 		}),
 
 	setActionMessage: (message) => set(() => ({ actionMessage: message })),
