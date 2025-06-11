@@ -3,28 +3,28 @@
 import { useEffect, useState } from "react";
 import { useNotification } from "@/lib/store/notifications";
 import { useUser } from "@/lib/store/user";
-import { useRoomStore } from "@/lib/store/roomstore"; // Added for setSelectedRoom
+import { useRoomStore } from "@/lib/store/roomstore";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { toast } from "sonner";
 import { Button } from "./ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"; // Updated imports
 import { Avatar, AvatarImage, AvatarFallback } from "./ui/avatar";
 import { useRouter } from "next/navigation";
 import { User as SupabaseUser } from "@supabase/supabase-js";
-import { Trash2 } from "lucide-react";
-import { Database } from "@/lib/types/supabase"; // Added for Room type
+import { Trash2, ArrowLeft } from "lucide-react"; // Added ArrowLeft for the icon
+import { Database } from "@/lib/types/supabase";
 
 interface NotificationsProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-type Room = Database["public"]["Tables"]["rooms"]["Row"]; // Added for Room type
+type Room = Database["public"]["Tables"]["rooms"]["Row"];
 
 export default function Notifications({ isOpen, onClose }: NotificationsProps) {
   const user = useUser((state) => state.user) as SupabaseUser | undefined;
   const { notifications, markAsRead, fetchNotifications, subscribeToNotifications, setNotifications } = useNotification();
-  const { setSelectedRoom } = useRoomStore(); // Added for setSelectedRoom
+  const { setSelectedRoom } = useRoomStore();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const supabase = supabaseBrowser();
@@ -85,7 +85,6 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
       return;
     }
     try {
-      // Fetch room details to ensure it exists
       const { data: room, error: roomError } = await supabase
         .from("rooms")
         .select("*")
@@ -95,7 +94,6 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
         throw new Error("Room not found");
       }
 
-      // Call the room switch API
       const response = await fetch("/api/rooms/switch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -106,13 +104,9 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
         throw new Error(errorData.error || "Failed to switch room");
       }
 
-      // Mark notification as read
       markAsRead(notificationId);
-
-      // Update selected room in store
       setSelectedRoom(room);
 
-      // Fetch available rooms (adapted from fetchAvailableRooms in ChatHeader.tsx)
       const { data: roomsData, error: roomsError } = await supabase
         .from("room_participants")
         .select("rooms(*)")
@@ -130,9 +124,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
           isMember: await checkRoomMembership(room.id),
         }))
       );
-      // Note: We don't call setRooms here since it's in ChatHeader.tsx; assume UI refreshes on navigation
 
-      // Navigate and close dialog
       router.push("/");
       onClose();
       toast.success(`Switched to ${room.name}`);
@@ -142,7 +134,6 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
     }
   };
 
-  // Helper function to check room membership (adapted from ChatHeader.tsx)
   const checkRoomMembership = async (roomId: string) => {
     if (!user) return false;
     const { data, error } = await supabase
@@ -255,22 +246,32 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
   }, [user?.id, fetchNotifications, subscribeToNotifications]);
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent aria-labelledby="notifications-title">
-        <DialogHeader className="flex flex-row items-center justify-between">
-          <DialogTitle id="notifications-title" className="text-2xl font-bold">Notifications</DialogTitle>
-          {notifications.length > 0 && (
+    <Sheet open={isOpen} onOpenChange={onClose}>
+      <SheetContent side="left" className="w-full p-4">
+        <SheetHeader className="flex flex-row items-center justify-between mb-4">
+          <SheetTitle className="text-2xl font-bold">Notifications</SheetTitle>
+          <div className="flex items-center gap-2">
+            {notifications.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleClearAllNotifications}
+                className="text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                Clear All
+              </Button>
+            )}
             <Button
               variant="ghost"
-              size="sm"
-              onClick={handleClearAllNotifications}
+              size="icon"
+              onClick={onClose}
               className="text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
             >
-              Clear All
+              <ArrowLeft className="h-5 w-5" />
             </Button>
-          )}
-        </DialogHeader>
-        <div className="space-y-4 max-h-[300px] overflow-y-auto overflow-x-hidden custom-scrollbar">
+          </div>
+        </SheetHeader>
+        <div className="space-y-4 max-h-[calc(100vh-100px)] overflow-y-auto overflow-x-hidden custom-scrollbar">
           {isLoading ? (
             <p className="text-gray-400 text-sm">Loading notifications...</p>
           ) : notifications.length === 0 ? (
@@ -363,7 +364,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
             ))
           )}
         </div>
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   );
 }
