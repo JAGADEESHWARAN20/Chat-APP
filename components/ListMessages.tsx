@@ -224,7 +224,7 @@ export default function ListMessages() {
   return (
     <>
       <div
-        className="flex-1 flex flex-col p-5 h-full overflow-y-auto"
+        className="flex-1 flex flex-col p-1 h-full overflow-y-auto"
         ref={scrollRef}
         onScroll={handleOnScroll}
       >
@@ -235,7 +235,7 @@ export default function ListMessages() {
             <div className="flex-1 pb-5">
               <LoadMoreMessages />
             </div>
-              <div className="space-y-7">
+              <div className="space-y-2">
                 {[...filteredMessages]
                   .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
                   .map((value) => (
