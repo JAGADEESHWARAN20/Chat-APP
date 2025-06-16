@@ -48,7 +48,7 @@ export function ResponsiveToaster() {
                }}
                visibleToasts={isMobile ? 3 : 5}
                richColors={false}
-               closeButton
+              
           />
      );
 }
