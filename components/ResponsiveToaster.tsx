@@ -19,22 +19,35 @@ export function ResponsiveToaster() {
                     classNames: {
                          toast: `
             group glass-toast 
-            backdrop-blur-lg 
-            bg-opacity-80
-            dark:bg-opacity-70
-            border border-opacity-20
-            dark:border-opacity-30
+            backdrop-blur-xl
+            bg-opacity-20
+            dark:bg-opacity-30
+            border border-white/20
+            dark:border-white/10
             shadow-lg
-            ${isMobile ? "w-[90vw] mx-auto" : "w-auto"}
+            rounded-xl
+            ${isMobile ? "w-[90vw] mx-auto" : "w-auto max-w-md"}
           `,
-                         title: "font-semibold",
-                         description: "opacity-90",
-                         actionButton: "glass-button",
-                         cancelButton: "glass-button",
+                         title: "font-semibold text-foreground",
+                         description: "text-foreground/80",
+                         actionButton: `
+            glass-button
+            bg-white/20
+            hover:bg-white/30
+            text-foreground
+            border-white/30
+          `,
+                         cancelButton: `
+            glass-button
+            bg-white/10
+            hover:bg-white/20
+            text-foreground
+            border-white/20
+          `,
                     },
                }}
                visibleToasts={isMobile ? 3 : 5}
-               richColors
+               richColors={false}
                closeButton
           />
      );
