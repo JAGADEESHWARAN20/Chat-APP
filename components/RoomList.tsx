@@ -50,15 +50,23 @@ export default function RoomList() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ roomId: room.id }),
       });
+      const data = await response.json();
+
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to switch room");
+        throw new Error(data.error || "Failed to switch room");
+      }
+
+      if (data.status === "pending") {
+        toast.info(data.message || "Switch request sent to room owner for approval");
+        // Refresh participations to update UI
+        await fetchParticipations();
+        return;
       }
 
       setSelectedRoom(room);
-      toast.success(`Switched to ${room.name}`);
+      toast.success(data.message || `Switched to ${room.name}`);
     } catch (err) {
-      toast.error("Failed to switch room");
+      toast.error(err instanceof Error ? err.message : "Failed to switch room");
       console.error(err);
     }
   };
@@ -115,6 +123,8 @@ export default function RoomList() {
         if (room) {
           await handleRoomSwitch(room);
         }
+      } else if (data.status === "pending") {
+        await fetchParticipations();
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to join room");
@@ -124,6 +134,29 @@ export default function RoomList() {
   const canJoinRoom = (room: IRoom) => {
     const participation = userParticipations.find((p) => p.room_id === room.id);
     return !participation || participation.status === "rejected";
+  };
+
+  const fetchParticipations = async () => {
+    if (!user) return;
+
+    try {
+      const { data: participations, error } = await supabase
+        .from("room_participants")
+        .select("*")
+        .eq("user_id", user.id);
+      if (error) {
+        toast.error("Failed to fetch participations");
+        console.error("Error fetching participations:", error);
+        return;
+      }
+
+      if (participations) {
+        setUserParticipations(participations);
+      }
+    } catch (err) {
+      toast.error("Unexpected error fetching participations");
+      console.error("Unexpected error:", err);
+    }
   };
 
   useEffect(() => {
@@ -147,7 +180,6 @@ export default function RoomList() {
     };
 
     const initializeActiveRoom = async () => {
-      // Fetch all active rooms for the user
       const { data: activeRooms, error: activeRoomsError } = await supabase
         .from("room_members")
         .select("room_id")
@@ -160,15 +192,13 @@ export default function RoomList() {
       }
 
       if (!activeRooms || activeRooms.length === 0) {
-        // No active room; default to general_chat if user is a member
         const generalChat = rooms.find((r) => r.name === "General Chat");
-        if (generalChat && generalChat.created_by) {
+        if (generalChat && generalChat.created_by === user.id) {
           await handleRoomSwitch(generalChat);
         } else {
           setSelectedRoom(null);
         }
       } else if (activeRooms.length > 1) {
-        // Multiple active rooms; fix by keeping the first one and deactivating others
         const firstActiveRoomId = activeRooms[0].room_id;
         const { error: fixError } = await supabase
           .from("room_members")
@@ -187,7 +217,6 @@ export default function RoomList() {
           setSelectedRoom(null);
         }
       } else {
-        // Exactly one active room
         const activeRoom = rooms.find((r) => r.id === activeRooms[0].room_id);
         if (activeRoom) {
           setSelectedRoom(activeRoom);
@@ -215,27 +244,6 @@ export default function RoomList() {
 
   useEffect(() => {
     if (!user) return;
-
-    const fetchParticipations = async () => {
-      try {
-        const { data: participations, error } = await supabase
-          .from("room_participants")
-          .select("*")
-          .eq("user_id", user.id);
-        if (error) {
-          toast.error("Failed to fetch participations");
-          console.error("Error fetching participations:", error);
-          return;
-        }
-
-        if (participations) {
-          setUserParticipations(participations);
-        }
-      } catch (err) {
-        toast.error("Unexpected error fetching participations");
-        console.error("Unexpected error:", err);
-      }
-    };
 
     fetchParticipations();
 
@@ -273,6 +281,7 @@ export default function RoomList() {
         {rooms.map((room) => {
           const participation = userParticipations.find((p) => p.room_id === room.id);
           const isMember = participation?.status === "accepted";
+          const isPending = participation?.status === "pending";
 
           return (
             <div key={room.id} className="flex justify-between items-center gap-2">
@@ -282,9 +291,11 @@ export default function RoomList() {
                 onClick={() => {
                   if (isMember) {
                     handleRoomSwitch(room);
+                  } else if (!isPending) {
+                    handleJoinRoom(room.id);
                   }
                 }}
-                disabled={!isMember}
+                disabled={isPending}
               >
                 <span className="truncate flex items-center gap-2">
                   {room.name}
@@ -293,7 +304,7 @@ export default function RoomList() {
                 </span>
               </Button>
 
-              {!isMember && canJoinRoom(room) && (
+              {!isMember && !isPending && (
                 <Button size="sm" onClick={() => handleJoinRoom(room.id)}>
                   Join
                 </Button>
@@ -310,7 +321,7 @@ export default function RoomList() {
                 </Button>
               )}
 
-              {participation?.status === "pending" && (
+              {isPending && (
                 <span className="text-sm text-muted-foreground">Pending</span>
               )}
             </div>

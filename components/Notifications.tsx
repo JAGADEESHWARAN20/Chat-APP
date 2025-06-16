@@ -32,48 +32,137 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
   const supabase = supabaseBrowser();
   const isMobile = useMediaQuery("(max-width: 768px)");
 
-  const handleAccept = async (notificationId: string, roomId: string | null) => {
+  const handleAccept = async (notificationId: string, roomId: string | null, type: string) => {
     if (!roomId) {
       toast.error("Invalid room ID");
       return;
     }
+    if (!user) {
+      toast.error("You must be logged in to accept requests");
+      return;
+    }
+
     try {
-      const response = await fetch(`/api/notifications/${notificationId}/accept`, {
-        method: "PATCH",
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to accept invitation");
+      if (type === "join_request") {
+        const response = await fetch(`/api/notifications/${notificationId}/accept`, {
+          method: "PATCH",
+        });
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "Failed to accept invitation");
+        }
+        markAsRead(notificationId);
+        router.push(`/`);
+        onClose();
+        toast.success("Invitation accepted");
+      } else if (type === "room_switch") {
+        // Fetch the sender_id from the notification
+        const { data: notification, error: notifError } = await supabase
+          .from("notifications")
+          .select("sender_id")
+          .eq("id", notificationId)
+          .single();
+        if (notifError || !notification?.sender_id) {
+          throw new Error("Failed to fetch notification details");
+        }
+
+        // Update room_participants to accept the user
+        const { error: participantError } = await supabase
+          .from("room_participants")
+          .update({ status: "accepted" })
+          .eq("room_id", roomId)
+          .eq("user_id", notification.sender_id);
+        if (participantError) {
+          throw new Error(`Failed to update participant status: ${participantError.message}`);
+        }
+
+        // Sync with room_members
+        const { error: memberError } = await supabase
+          .from("room_members")
+          .upsert(
+            { room_id: roomId, user_id: notification.sender_id, status: "accepted", active: false },
+            { onConflict: "room_id,user_id" }
+          );
+        if (memberError) {
+          throw new Error(`Failed to sync membership: ${memberError.message}`);
+        }
+
+        // Update notification status
+        const { error: notificationError } = await supabase
+          .from("notifications")
+          .update({ status: "read", join_status: "accepted" })
+          .eq("id", notificationId);
+        if (notificationError) {
+          throw new Error(`Failed to update notification: ${notificationError.message}`);
+        }
+
+        toast.success("Switch request approved");
+        await fetchNotifications(user.id);
       }
-      markAsRead(notificationId);
-      router.push(`/`);
-      onClose();
-      toast.success("Invitation accepted");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to accept invitation");
-      console.error("Error accepting invitation:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to accept request");
+      console.error("Error accepting request:", error);
     }
   };
 
-  const handleReject = async (notificationId: string, roomId: string | null) => {
+  const handleReject = async (notificationId: string, roomId: string | null, type: string) => {
     if (!roomId) {
       toast.error("Invalid room ID");
       return;
     }
+    if (!user) {
+      toast.error("You must be logged in to reject requests");
+      return;
+    }
+
     try {
-      const response = await fetch(`/api/notifications/${notificationId}/reject`, {
-        method: "PATCH",
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to reject invitation");
+      if (type === "join_request") {
+        const response = await fetch(`/api/notifications/${notificationId}/reject`, {
+          method: "PATCH",
+        });
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "Failed to reject invitation");
+        }
+        markAsRead(notificationId);
+        onClose();
+        toast.success("Invitation rejected");
+      } else if (type === "room_switch") {
+        // Fetch the sender_id from the notification
+        const { data: notification, error: notifError } = await supabase
+          .from("notifications")
+          .select("sender_id")
+          .eq("id", notificationId)
+          .single();
+        if (notifError || !notification?.sender_id) {
+          throw new Error("Failed to fetch notification details");
+        }
+
+        // Update room_participants to reject the user
+        const { error: participantError } = await supabase
+          .from("room_participants")
+          .update({ status: "rejected" })
+          .eq("room_id", roomId)
+          .eq("user_id", notification.sender_id);
+        if (participantError) {
+          throw new Error(`Failed to update participant status: ${participantError.message}`);
+        }
+
+        // Update notification status
+        const { error: notificationError } = await supabase
+          .from("notifications")
+          .update({ status: "read", join_status: "rejected" })
+          .eq("id", notificationId);
+        if (notificationError) {
+          throw new Error(`Failed to update notification: ${notificationError.message}`);
+        }
+
+        toast.success("Switch request rejected");
+        await fetchNotifications(user.id);
       }
-      markAsRead(notificationId);
-      onClose();
-      toast.success("Invitation rejected");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to reject invitation");
-      console.error("Error rejecting invitation:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to reject request");
+      console.error("Error rejecting request:", error);
     }
   };
 
@@ -101,9 +190,16 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ roomId: room.id }),
       });
+      const data = await response.json();
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to switch room");
+        throw new Error(data.error || "Failed to switch room");
+      }
+
+      if (data.status === "pending") {
+        toast.info(data.message || "Switch request sent to room owner for approval");
+        markAsRead(notificationId);
+        await fetchNotifications(user.id);
+        return;
       }
 
       markAsRead(notificationId);
@@ -225,14 +321,14 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
         <p className="text-xs text-gray-400 mt-1">
           {notif.created_at ? new Date(notif.created_at).toLocaleString() : "Unknown time"}
         </p>
-        {notif.type === "join_request" && (
+        {(notif.type === "join_request" || notif.type === "room_switch") && notif.join_status === "pending" && (
           <div className="flex gap-2 mt-2">
             <Button
               variant="outline"
               size="sm"
               onClick={(e) => {
                 e.stopPropagation();
-                handleAccept(notif.id, notif.room_id);
+                handleAccept(notif.id, notif.room_id, notif.type);
               }}
               className="bg-green-600 hover:bg-green-700 text-white h-8 px-3"
             >
@@ -243,7 +339,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
               size="sm"
               onClick={(e) => {
                 e.stopPropagation();
-                handleReject(notif.id, notif.room_id);
+                handleReject(notif.id, notif.room_id, notif.type);
               }}
               className="bg-red-600 hover:bg-red-700 text-white h-8 px-3"
             >

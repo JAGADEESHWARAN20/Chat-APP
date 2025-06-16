@@ -49,7 +49,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const [searchQuery, setSearchQuery] = useState("");
   const [searchType, setSearchType] = useState<"rooms" | "users" | null>(null);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
-  const [availableRooms, setAvailableRooms] = useState<(Room & { isMember: boolean })[]>([]);
+  const [availableRooms, setAvailableRooms] = useState<(Room & { isMember: boolean; participationStatus: string | null })[]>([]);
   const supabase = supabaseBrowser();
   const [isSearchPopoverOpen, setIsSearchPopoverOpen] = useState(false);
   const [isSwitchRoomPopoverOpen, setIsSwitchRoomPopoverOpen] = useState(false);
@@ -72,8 +72,9 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const checkRoomMembership = useCallback(
     async (roomId: string) => {
       if (!user) return false;
+      console.log(isMember);
       const { data, error } = await supabase
-        .from("room_members") // Aligned with backend table name
+        .from("room_members")
         .select("status")
         .eq("room_id", roomId)
         .eq("user_id", user.id)
@@ -88,7 +89,23 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     [user, supabase]
   );
 
-
+  const checkRoomParticipation = useCallback(
+    async (roomId: string) => {
+      if (!user) return null;
+      const { data, error } = await supabase
+        .from("room_participants")
+        .select("status")
+        .eq("room_id", roomId)
+        .eq("user_id", user.id)
+        .single();
+      if (error && error.code !== "PGRST116") {
+        console.error("Error checking room participation:", error);
+        return null;
+      }
+      return data?.status || null;
+    },
+    [user, supabase]
+  );
 
   const handleRoomSwitch = async (room: Room) => {
     if (!user) {
@@ -102,11 +119,18 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ roomId: room.id }),
       });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to switch room. You may be restricted by the current room's policies.");
-      }
       const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to switch room");
+      }
+
+      if (data.status === "pending") {
+        toast.info(data.message || "Switch request sent to room owner for approval");
+        await fetchAvailableRooms();
+        return;
+      }
+
       setSelectedRoom(room);
       setIsSwitchRoomPopoverOpen(false);
       toast.success(data.message || `Switched to ${room.name}`);
@@ -124,98 +148,36 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   };
 
   const handleLeaveRoom = async () => {
-    console.log("[Leave Room Frontend] Current selectedRoom:", selectedRoom);
-
     if (!user) {
-      console.error("[Leave Room Frontend] User not authenticated");
       toast.error("Please log in to leave a room");
       return;
     }
 
     if (!selectedRoom) {
-      console.error("[Leave Room Frontend] No room selected");
       toast.error("No room selected");
       return;
     }
 
-    if (!selectedRoom.id || typeof selectedRoom.id !== "string") {
-      console.error("[Leave Room Frontend] Invalid or missing room ID", { selectedRoom });
-      toast.error("Invalid room selection");
-      return;
-    }
-
-    const roomId = selectedRoom.id.trim();
-    if (!roomId || !UUID_REGEX.test(roomId)) {
-      console.error("[Leave Room Frontend] Invalid room ID format:", roomId, { selectedRoom });
-      toast.error("Invalid room ID format");
+    if (!selectedRoom.id || !UUID_REGEX.test(selectedRoom.id)) {
+      toast.error("Invalid room ID");
       return;
     }
 
     try {
-      await proceedToLeaveRoom(roomId);
-    } catch (error) {
-      console.error("[Leave Room Frontend] Error in handleLeaveRoom:", error, { selectedRoom });
-      toast.error("Failed to leave the room");
-    }
-  };
-
-  const proceedToLeaveRoom = async (roomId: string) => {
-    setIsLeaving(true);
-    console.log(`[Leave Room Frontend] Attempting to leave room: ${roomId}`);
-
-    try {
-      console.log(`[Leave Room Frontend] Sending PATCH request to /api/rooms/${roomId}/leave`);
-      const response = await fetch(`/api/rooms/${encodeURIComponent(roomId)}/leave`, {
+      setIsLeaving(true);
+      const response = await fetch(`/api/rooms/${encodeURIComponent(selectedRoom.id)}/leave`, {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorCode = errorData.code || "UNKNOWN_ERROR";
-        let errorMessage = errorData.error || "Failed to leave room";
-
-        // Map backend error codes to user-friendly messages
-        switch (errorCode) {
-          case "AUTH_REQUIRED":
-            errorMessage = "Please log in to leave the room.";
-            break;
-          case "INVALID_ROOM_ID":
-            errorMessage = "The room ID is invalid.";
-            break;
-          case "ROOM_NOT_FOUND":
-            errorMessage = "The room does not exist.";
-            break;
-          case "NOT_A_MEMBER":
-            errorMessage = "You are not a member of this room.";
-            break;
-          case "CREATOR_CANNOT_LEAVE":
-            errorMessage = "As the room creator, you must transfer ownership first.";
-            break;
-          case "ROOM_DELETION_FAILED":
-            errorMessage = "Failed to delete the empty room.";
-            break;
-          case "LEAVE_FAILED":
-            errorMessage = "Unable to leave the room. Please try again.";
-            break;
-          case "METHOD_NOT_ALLOWED":
-            errorMessage = "Incorrect request method. Please contact support.";
-            break;
-          default:
-            errorMessage = "An unexpected error occurred.";
-        }
-
-        console.error(`[Leave Room Frontend] API error for roomId: ${roomId}, code: ${errorCode}, message: ${errorMessage}`);
-        throw new Error(errorMessage);
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to leave room");
       }
 
       const result = await response.json();
-      console.log(`[Leave Room Frontend] Successfully left room: ${roomId}`, result);
       toast.success(result.message || "Successfully left the room");
 
-      // Update local state
       setIsMember(false);
       await fetchAvailableRooms();
 
@@ -232,13 +194,11 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         }
       }
     } catch (error) {
-      console.error("[Leave Room Frontend] Error leaving room:", error, { roomId });
       toast.error(error instanceof Error ? error.message : "Failed to leave room");
     } finally {
       setIsLeaving(false);
     }
   };
-
 
   const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     debouncedCallback(e.target.value);
@@ -269,6 +229,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
               results.map(async (room) => ({
                 ...room,
                 isMember: await checkRoomMembership(room.id),
+                participationStatus: await checkRoomParticipation(room.id),
               }))
             );
             setSearchResults(resultsWithMembership);
@@ -292,7 +253,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         setIsLoading(false);
       }
     }
-  }, [debouncedSearchQuery, searchType, checkRoomMembership]);
+  }, [debouncedSearchQuery, searchType, checkRoomMembership, checkRoomParticipation]);
 
   const handleJoinRoom = useCallback(
     async (roomId?: string) => {
@@ -301,61 +262,23 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         return;
       }
       const currentRoomId = roomId || selectedRoom?.id;
-      console.log(`[Join Room Frontend] Attempting to join roomId: ${currentRoomId}`);
       if (!currentRoomId) {
-        console.error("[Join Room Frontend] No room selected");
         toast.error("No room selected");
         return;
       }
       if (!UUID_REGEX.test(currentRoomId)) {
-        console.error(`[Join Room Frontend] Invalid roomId format: ${currentRoomId}`);
         toast.error("Invalid room ID format");
         return;
       }
       try {
-        console.log(`[Join Room Frontend] Sending POST request to /api/rooms/${currentRoomId}/join`);
         const response = await fetch(`/api/rooms/${encodeURIComponent(currentRoomId)}/join`, {
           method: "POST",
         });
         if (!response.ok) {
           const errorData = await response.json();
-          const errorCode = errorData.code || "UNKNOWN_ERROR";
-          let errorMessage = errorData.error || "Failed to join room";
-
-          switch (errorCode) {
-            case "AUTH_REQUIRED":
-              errorMessage = "Please log in to join the room.";
-              break;
-            case "INVALID_ROOM_ID":
-              errorMessage = "The room ID is invalid.";
-              break;
-            case "MISSING_ROOM_ID":
-              errorMessage = "Room ID is missing.";
-              break;
-            case "ROOM_NOT_FOUND":
-              errorMessage = "The room does not exist.";
-              break;
-            case "PARTICIPATION_CHECK_FAILED":
-              errorMessage = "Unable to verify membership status.";
-              break;
-            case "JOIN_FAILED":
-              errorMessage = "Unable to join the room. Please try again.";
-              break;
-            case "MEMBER_ADD_FAILED":
-              errorMessage = "Failed to add you to the room members.";
-              break;
-            case "CREATOR_NOT_FOUND":
-              errorMessage = "Room creator not found for private room.";
-              break;
-            default:
-              errorMessage = "An unexpected error occurred.";
-          }
-
-          console.error(`[Join Room Frontend] API error for roomId: ${currentRoomId}, code: ${errorCode}, message: ${errorMessage}`);
-          throw new Error(errorMessage);
+          throw new Error(errorData.error || "Failed to join room");
         }
         const data = await response.json();
-        console.log(`[Join Room Frontend] Successfully joined roomId: ${currentRoomId}`, data);
         toast.success(data.message);
         if (!data.status || data.status === "accepted") {
           const { data: room, error: roomError } = await supabase
@@ -364,30 +287,26 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
             .eq("id", currentRoomId)
             .single();
           if (roomError || !room) {
-            console.error(`[Join Room Frontend] Failed to fetch room details for roomId: ${currentRoomId}`);
             throw new Error("Failed to fetch room details");
           }
           setSelectedRoom(room);
           setIsMember(true);
-          // Refresh search results to update button states
-          if (searchType) {
-            console.log("[Join Room Frontend] Refreshing search results after joining room");
-            await fetchSearchResults();
-          }
+        }
+        if (searchType) {
+          await fetchSearchResults();
         }
       } catch (error) {
-        console.error(`[Join Room Frontend] Error joining roomId: ${currentRoomId}`, error);
         toast.error(error instanceof Error ? error.message : "Failed to join room");
       }
     },
-    [user, selectedRoom, setSelectedRoom, supabase, searchType, fetchSearchResults] // Add dependencies
+    [user, selectedRoom, setSelectedRoom, supabase, searchType, fetchSearchResults]
   );
 
   const fetchAvailableRooms = useCallback(async () => {
     if (!user) return;
     try {
       const { data: roomsData, error } = await supabase
-        .from("room_members") // Aligned with backend table name
+        .from("room_members")
         .select("rooms(*)")
         .eq("user_id", user.id)
         .eq("status", "accepted");
@@ -435,6 +354,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         rooms.map(async (room) => ({
           ...room,
           isMember: await checkRoomMembership(room.id),
+          participationStatus: await checkRoomParticipation(room.id),
         }))
       );
 
@@ -447,7 +367,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       console.error("Error fetching rooms:", error);
       toast.error("Failed to fetch rooms");
     }
-  }, [user, supabase, checkRoomMembership, setRooms, handleJoinRoom]);
+  }, [user, supabase, checkRoomMembership, checkRoomParticipation, setRooms, handleJoinRoom]);
 
 
   const handleCreateRoom = async () => {
@@ -481,13 +401,9 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       await handleJoinRoom(newRoom.id);
       await fetchAvailableRooms();
     } catch (error) {
-      if (isMounted.current) {
-        toast.error(error instanceof Error ? error.message : "Failed to create room");
-      }
+      toast.error(error instanceof Error ? error.message : "Failed to create room");
     } finally {
-      if (isMounted.current) {
-        setIsCreating(false);
-      }
+      setIsCreating(false);
     }
   };
 
@@ -510,10 +426,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     fetchAvailableRooms();
     fetchNotifications(user.id);
     subscribeToNotifications(user.id);
-
-    return () => {
-      // Cleanup handled by Notifications component
-    };
   }, [user, fetchAvailableRooms, fetchNotifications, subscribeToNotifications]);
 
   useEffect(() => {
@@ -536,7 +448,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     }
   }, [selectedRoom, availableRooms]);
 
-  const renderRoomSearchResult = (result: Room & { isMember: boolean }) => (
+  const renderRoomSearchResult = (result: Room & { isMember: boolean; participationStatus: string | null }) => (
     <li key={result.id} className="flex items-center justify-between">
       <div className="flex items-center gap-2">
         <span className="text-sm font-semibold text-white">
@@ -566,13 +478,12 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
             Switch
           </span>
         </Button>
+      ) : result.participationStatus === "pending" ? (
+        <span className="text-sm text-muted-foreground">Pending</span>
       ) : (
         <Button
           size="sm"
-          onClick={() => {
-            console.log(`[Join Room Frontend] Clicking join for roomId: ${result.id}`);
-            handleJoinRoom(result.id);
-          }}
+          onClick={() => handleJoinRoom(result.id)}
           disabled={!user}
         >
           Join
@@ -659,17 +570,21 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                         <span className="text-sm font-semibold text-white">
                           {room.name} {room.is_private && "🔒"}
                         </span>
-                        <Button
-                          size="sm"
-                          variant={selectedRoom?.id === room.id ? "secondary" : "outline"}
-                          onClick={() => handleRoomSwitch(room)}
-                          className="text-white border-gray-600"
-                        >
-                          <span className="flex items-center gap-1">
-                            <ArrowRight className="h-4 w-4" />
-                            Switch
-                          </span>
-                        </Button>
+                        {room.participationStatus === "pending" ? (
+                          <span className="text-sm text-muted-foreground">Pending</span>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant={selectedRoom?.id === room.id ? "secondary" : "outline"}
+                            onClick={() => handleRoomSwitch(room)}
+                            className="text-white border-gray-600"
+                          >
+                            <span className="flex items-center gap-1">
+                              <ArrowRight className="h-4 w-4" />
+                              Switch
+                            </span>
+                          </Button>
+                        )}
                       </li>
                     ))}
                   </ul>
@@ -779,7 +694,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                           <UserIcon className="h-4 w-4 text-gray-400" />
                         </li>
                       ) : (
-                        renderRoomSearchResult(result as Room & { isMember: boolean })
+                        renderRoomSearchResult(result as Room & { isMember: boolean; participationStatus: string | null })
                       )
                     )}
                   </ul>
