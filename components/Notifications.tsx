@@ -43,62 +43,16 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
     }
 
     try {
-      if (type === "join_request") {
-        const response = await fetch(`/api/notifications/${notificationId}/accept`, {
-          method: "PATCH",
-        });
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || "Failed to accept invitation");
-        }
-        markAsRead(notificationId);
-        router.push(`/`);
-        onClose();
-        toast.success("Invitation accepted");
-      } else if (type === "room_switch") {
-        // Fetch the sender_id from the notification
-        const { data: notification, error: notifError } = await supabase
-          .from("notifications")
-          .select("sender_id")
-          .eq("id", notificationId)
-          .single();
-        if (notifError || !notification?.sender_id) {
-          throw new Error("Failed to fetch notification details");
-        }
-
-        // Update room_participants to accept the user
-        const { error: participantError } = await supabase
-          .from("room_participants")
-          .update({ status: "accepted" })
-          .eq("room_id", roomId)
-          .eq("user_id", notification.sender_id);
-        if (participantError) {
-          throw new Error(`Failed to update participant status: ${participantError.message}`);
-        }
-
-        // Sync with room_members
-        const { error: memberError } = await supabase
-          .from("room_members")
-          .upsert(
-            { room_id: roomId, user_id: notification.sender_id, status: "accepted", active: false },
-            { onConflict: "room_id,user_id" }
-          );
-        if (memberError) {
-          throw new Error(`Failed to sync membership: ${memberError.message}`);
-        }
-
-        // Update notification status
-        const { error: notificationError } = await supabase
-          .from("notifications")
-          .update({ status: "read", join_status: "accepted" })
-          .eq("id", notificationId);
-        if (notificationError) {
-          throw new Error(`Failed to update notification: ${notificationError.message}`);
-        }
-
-        toast.success("Switch request approved");
-        await fetchNotifications(user.id);
+      const response = await fetch(`/api/notifications/${notificationId}/accept`, {
+        method: "PATCH",
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to accept request");
       }
+      markAsRead(notificationId);
+      await fetchNotifications(user.id);
+      toast.success(`${type === "join_request" ? "Join" : "Switch"} request approved`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to accept request");
       console.error("Error accepting request:", error);
@@ -116,50 +70,16 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
     }
 
     try {
-      if (type === "join_request") {
-        const response = await fetch(`/api/notifications/${notificationId}/reject`, {
-          method: "PATCH",
-        });
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || "Failed to reject invitation");
-        }
-        markAsRead(notificationId);
-        onClose();
-        toast.success("Invitation rejected");
-      } else if (type === "room_switch") {
-        // Fetch the sender_id from the notification
-        const { data: notification, error: notifError } = await supabase
-          .from("notifications")
-          .select("sender_id")
-          .eq("id", notificationId)
-          .single();
-        if (notifError || !notification?.sender_id) {
-          throw new Error("Failed to fetch notification details");
-        }
-
-        // Update room_participants to reject the user
-        const { error: participantError } = await supabase
-          .from("room_participants")
-          .update({ status: "rejected" })
-          .eq("room_id", roomId)
-          .eq("user_id", notification.sender_id);
-        if (participantError) {
-          throw new Error(`Failed to update participant status: ${participantError.message}`);
-        }
-
-        // Update notification status
-        const { error: notificationError } = await supabase
-          .from("notifications")
-          .update({ status: "read", join_status: "rejected" })
-          .eq("id", notificationId);
-        if (notificationError) {
-          throw new Error(`Failed to update notification: ${notificationError.message}`);
-        }
-
-        toast.success("Switch request rejected");
-        await fetchNotifications(user.id);
+      const response = await fetch(`/api/notifications/${notificationId}/reject`, {
+        method: "PATCH",
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to reject request");
       }
+      markAsRead(notificationId);
+      await fetchNotifications(user.id);
+      toast.success(`${type === "join_request" ? "Join" : "Switch"} request rejected`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to reject request");
       console.error("Error rejecting request:", error);
