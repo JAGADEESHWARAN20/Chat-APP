@@ -11,7 +11,7 @@ export function ResponsiveToaster() {
 
      return (
           <SonnerToaster
-               position={isMobile ? "top-center" : "bottom-right"}
+               position="center-center" // Force center position
                theme={theme === "system" ? "light" : (theme as any)}
                toastOptions={{
                     duration: 4000,
@@ -26,16 +26,19 @@ export function ResponsiveToaster() {
             dark:border-white/10
             shadow-lg
             rounded-xl
-            ${isMobile ? "w-[90vw] mx-auto" : "w-auto max-w-md"}
+            ${isMobile ? "w-[90vw]" : "w-auto max-w-md"}
+            mx-auto // Center horizontally
+            my-2 // Vertical margin
           `,
-                         title: "font-semibold text-foreground",
-                         description: "text-foreground/80",
+                         title: "font-semibold text-foreground text-center",
+                         description: "text-foreground/80 text-center",
                          actionButton: `
             glass-button
             bg-white/20
             hover:bg-white/30
             text-foreground
             border-white/30
+            mx-1
           `,
                          cancelButton: `
             glass-button
@@ -43,12 +46,13 @@ export function ResponsiveToaster() {
             hover:bg-white/20
             text-foreground
             border-white/20
+            mx-1
           `,
                     },
                }}
-               visibleToasts={isMobile ? 3 : 5}
+               visibleToasts={5}
                richColors={false}
-              
+               closeButton
           />
      );
 }

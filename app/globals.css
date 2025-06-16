@@ -86,23 +86,30 @@
   background: linear-gradient(45deg, #c7c5ec, transparent); /* Slightly darker gradient on hover */
 }
 
-/* globals.css or your main CSS file */
+/* globals.css */
 .glass-toast {
 	background: linear-gradient(to bottom right,
-			rgba(255, 255, 255, 0.4),
-			rgba(255, 255, 255, 0.2)) !important;
-	backdrop-filter: blur(16px) saturate(180%) !important;
-	-webkit-backdrop-filter: blur(16px) saturate(180%) !important;
-	border: 1px solid rgba(255, 255, 255, 0.3) !important;
-	box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1) !important;
+			rgba(255, 255, 255, 0.5),
+			rgba(255, 255, 255, 0.3)) !important;
+	backdrop-filter: blur(20px) saturate(180%) !important;
+	-webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+	border: 1px solid rgba(255, 255, 255, 0.25) !important;
+	box-shadow:
+		0 4px 30px rgba(0, 0, 0, 0.1),
+		inset 0 0 10px rgba(255, 255, 255, 0.1) !important;
+	transform: translateY(0) !important;
+	opacity: 1 !important;
+	transition: all 0.3s ease !important;
 }
 
 .dark .glass-toast {
 	background: linear-gradient(to bottom right,
-			rgba(0, 0, 0, 0.4),
-			rgba(0, 0, 0, 0.2)) !important;
-	border: 1px solid rgba(255, 255, 255, 0.1) !important;
-	box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
+			rgba(30, 30, 30, 0.7),
+			rgba(50, 50, 50, 0.5)) !important;
+	border: 1px solid rgba(255, 255, 255, 0.15) !important;
+	box-shadow:
+		0 4px 30px rgba(0, 0, 0, 0.3),
+		inset 0 0 10px rgba(255, 255, 255, 0.05) !important;
 }
 
 .glass-button {
@@ -112,8 +119,18 @@
 	border-radius: 0.5rem !important;
 	padding: 0.35rem 0.75rem !important;
 	font-weight: 500 !important;
+	min-width: 80px !important;
 }
 
 .glass-button:hover {
-	transform: translateY(-1px) !important;
+	transform: translateY(-1px) scale(1.02) !important;
+	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Center the toaster container */
+[data-sonner-toaster] {
+	left: 50% !important;
+	transform: translateX(-50%) !important;
+	top: 50% !important;
+	margin-top: 0 !important;
 }
