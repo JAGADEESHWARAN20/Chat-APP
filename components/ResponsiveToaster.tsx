@@ -11,7 +11,7 @@ export function ResponsiveToaster() {
 
      return (
           <SonnerToaster
-               position="center-center" // Force center position
+               position={isMobile ? "center" : "bottom-right"}
                theme={theme === "system" ? "light" : (theme as any)}
                toastOptions={{
                     duration: 4000,
@@ -27,8 +27,6 @@ export function ResponsiveToaster() {
             shadow-lg
             rounded-xl
             ${isMobile ? "w-[90vw]" : "w-auto max-w-md"}
-            mx-auto // Center horizontally
-            my-2 // Vertical margin
           `,
                          title: "font-semibold text-foreground text-center",
                          description: "text-foreground/80 text-center",

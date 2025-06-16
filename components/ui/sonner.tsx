@@ -4,15 +4,24 @@
 import { useTheme } from "next-themes";
 import { Toaster as Sonner } from "sonner";
 
-type ToasterProps = React.ComponentProps<typeof Sonner>;
+// Extend the Position type to include center options
+type Position = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'top-center' | 'bottom-center' | 'center';
 
-const Toaster = ({ ...props }: ToasterProps) => {
+type ToasterProps = Omit<React.ComponentProps<typeof Sonner>, 'position'> & {
+  position?: Position;
+};
+
+const Toaster = ({ position = 'bottom-right', ...props }: ToasterProps) => {
   const { theme = "system" } = useTheme();
+
+  // Map our custom 'center' position to 'top-center' and use CSS to center it
+  const sonnerPosition = position === 'center' ? 'top-center' : position;
 
   return (
     <Sonner
       theme={theme as ToasterProps["theme"]}
-      className="toaster group"
+      className={`toaster group ${position === 'center' ? 'center-toaster' : ''}`}
+      position={sonnerPosition}
       toastOptions={{
         classNames: {
           toast: `
@@ -24,6 +33,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
             backdrop-blur-lg
             bg-opacity-80
             dark:bg-opacity-70
+            ${position === 'center' ? 'mx-auto my-auto' : ''}
           `,
           description: "group-[.toast]:text-muted-foreground",
           actionButton: `

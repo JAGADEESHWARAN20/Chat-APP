@@ -85,8 +85,17 @@
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(45deg, #c7c5ec, transparent); /* Slightly darker gradient on hover */
 }
+/* Center the toaster container */
+.center-toaster {
+	left: 50% !important;
+	transform: translateX(-50%) !important;
+	top: 50% !important;
+	transform: translate(-50%, -50%) !important;
+	bottom: auto !important;
+	right: auto !important;
+}
 
-/* globals.css */
+/* Glass effect styles */
 .glass-toast {
 	background: linear-gradient(to bottom right,
 			rgba(255, 255, 255, 0.5),
@@ -97,9 +106,6 @@
 	box-shadow:
 		0 4px 30px rgba(0, 0, 0, 0.1),
 		inset 0 0 10px rgba(255, 255, 255, 0.1) !important;
-	transform: translateY(0) !important;
-	opacity: 1 !important;
-	transition: all 0.3s ease !important;
 }
 
 .dark .glass-toast {
@@ -125,12 +131,4 @@
 .glass-button:hover {
 	transform: translateY(-1px) scale(1.02) !important;
 	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1) !important;
-}
-
-/* Center the toaster container */
-[data-sonner-toaster] {
-	left: 50% !important;
-	transform: translateX(-50%) !important;
-	top: 50% !important;
-	margin-top: 0 !important;
 }
