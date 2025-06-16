@@ -48,7 +48,7 @@ export default function ChatInput() {
 			room_id: roomId || null,
 			direct_chat_id: directChatId || null,
 			is_edited: false,
-			dm_thread_id: null, // Set to null if not used
+			dm_thread_id: null, 
 			created_at: new Date().toISOString(),
 			status: "sent",
 			users: {
@@ -95,7 +95,7 @@ export default function ChatInput() {
 	};
 
 	return (
-		<div className="p-5">
+		<div className="p-1">
 			<Input
 				placeholder={
 					selectedRoom
