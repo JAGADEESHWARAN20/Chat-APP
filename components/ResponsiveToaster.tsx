@@ -50,7 +50,7 @@ export function ResponsiveToaster() {
                }}
                visibleToasts={5}
                richColors={false}
-               closeButton
+               
           />
      );
 }

@@ -87,7 +87,7 @@
 }
 /* Center the toaster container */
 .center-toaster {
-	left: 50% !important;
+	left: 55% !important;
 	transform: translateX(-50%) !important;
 	top: 50% !important;
 	transform: translate(-50%, -50%) !important;
