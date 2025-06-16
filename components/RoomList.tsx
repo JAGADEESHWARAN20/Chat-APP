@@ -71,7 +71,7 @@ export default function RoomList() {
 
     try {
       const response = await fetch(`/api/rooms/${roomId}/leave`, {
-        method: "PATCH", // Updated to match the PATCH method in the API
+        method: "PATCH",
       });
       if (!response.ok) {
         const errorData = await response.json();
@@ -81,7 +81,7 @@ export default function RoomList() {
       const { hasOtherRooms } = await response.json();
       toast.success("Left room successfully");
       if (!hasOtherRooms) {
-        setSelectedRoom(null); // No rooms left, show ChatAbout
+        setSelectedRoom(null);
       }
       await refreshRooms();
     } catch (error) {
@@ -147,16 +147,52 @@ export default function RoomList() {
     };
 
     const initializeActiveRoom = async () => {
-      const { data, error } = await supabase
+      // Fetch all active rooms for the user
+      const { data: activeRooms, error: activeRoomsError } = await supabase
         .from("room_members")
         .select("room_id")
         .eq("user_id", user.id)
-        .eq("active", true)
-        .single();
-      if (data) {
-        const activeRoom = rooms.find((r) => r.id === data.room_id);
+        .eq("active", true);
+      if (activeRoomsError) {
+        console.error("Error fetching active rooms:", activeRoomsError.message);
+        toast.error("Failed to initialize active room");
+        return;
+      }
+
+      if (!activeRooms || activeRooms.length === 0) {
+        // No active room; default to general_chat if user is a member
+        const generalChat = rooms.find((r) => r.name === "General Chat");
+        if (generalChat && generalChat.created_by) {
+          await handleRoomSwitch(generalChat);
+        } else {
+          setSelectedRoom(null);
+        }
+      } else if (activeRooms.length > 1) {
+        // Multiple active rooms; fix by keeping the first one and deactivating others
+        const firstActiveRoomId = activeRooms[0].room_id;
+        const { error: fixError } = await supabase
+          .from("room_members")
+          .update({ active: false })
+          .eq("user_id", user.id)
+          .neq("room_id", firstActiveRoomId);
+        if (fixError) {
+          console.error("Error fixing multiple active rooms:", fixError.message);
+          toast.error("Failed to fix active room state");
+          return;
+        }
+        const activeRoom = rooms.find((r) => r.id === firstActiveRoomId);
         if (activeRoom) {
           setSelectedRoom(activeRoom);
+        } else {
+          setSelectedRoom(null);
+        }
+      } else {
+        // Exactly one active room
+        const activeRoom = rooms.find((r) => r.id === activeRooms[0].room_id);
+        if (activeRoom) {
+          setSelectedRoom(activeRoom);
+        } else {
+          setSelectedRoom(null);
         }
       }
     };
@@ -193,7 +229,7 @@ export default function RoomList() {
         }
 
         if (participations) {
-          setUserParticipations(participations); // No need to cast status, type now matches
+          setUserParticipations(participations);
         }
       } catch (err) {
         toast.error("Unexpected error fetching participations");
