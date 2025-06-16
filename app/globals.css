@@ -85,3 +85,37 @@
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(45deg, #c7c5ec, transparent); /* Slightly darker gradient on hover */
 }
+
+/* globals.css or your main CSS file */
+.glass-toast {
+	background: rgba(255, 255, 255, 0.8);
+	backdrop-filter: blur(12px);
+	-webkit-backdrop-filter: blur(12px);
+	border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.dark .glass-toast {
+	background: rgba(0, 0, 0, 0.7);
+	border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.glass-button {
+	background: rgba(255, 255, 255, 0.3);
+	backdrop-filter: blur(5px);
+	-webkit-backdrop-filter: blur(5px);
+	border: 1px solid rgba(255, 255, 255, 0.2);
+	transition: all 0.2s ease;
+}
+
+.glass-button:hover {
+	background: rgba(255, 255, 255, 0.4);
+}
+
+.dark .glass-button {
+	background: rgba(255, 255, 255, 0.1);
+	border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.dark .glass-button:hover {
+	background: rgba(255, 255, 255, 0.2);
+}
