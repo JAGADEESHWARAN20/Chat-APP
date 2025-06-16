@@ -90,40 +90,38 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 
 
 
- const handleRoomSwitch = async (room: Room) => {
-  if (!user) {
-    toast.error("You must be logged in to switch rooms");
-    return;
-  }
-  try {
-    console.log(`[Switch Room Frontend] Attempting to switch to roomId: ${room.id}`);
-    const response = await fetch("/api/rooms/switch", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ roomId: room.id }),
-    });
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || "Failed to switch room. You may be restricted by the current room's policies.");
+  const handleRoomSwitch = async (room: Room) => {
+    if (!user) {
+      toast.error("You must be logged in to switch rooms");
+      return;
     }
-    const data = await response.json();
-    setSelectedRoom(room);
-    setIsSwitchRoomPopoverOpen(false);
-    toast.success(data.message || `Switched to ${room.name}`);
-    await fetchAvailableRooms();
-    // Refresh search results to update button states
-    if (searchType) {
-      console.log("[Switch Room Frontend] Refreshing search results after switching room");
-      await fetchSearchResults();
+    try {
+      console.log(`[Switch Room Frontend] Attempting to switch to roomId: ${room.id}`);
+      const response = await fetch("/api/rooms/switch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roomId: room.id }),
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to switch room. You may be restricted by the current room's policies.");
+      }
+      const data = await response.json();
+      setSelectedRoom(room);
+      setIsSwitchRoomPopoverOpen(false);
+      toast.success(data.message || `Switched to ${room.name}`);
+      await fetchAvailableRooms();
+      if (searchType) {
+        console.log("[Switch Room Frontend] Refreshing search results after switching room");
+        await fetchSearchResults();
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to switch room";
+      toast.error(errorMessage);
+      console.error("[Switch Room Frontend] Error:", err);
+      await fetchAvailableRooms();
     }
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : "Failed to switch room";
-    toast.error(errorMessage);
-    console.error("[Switch Room Frontend] Error:", err);
-    // Refresh available rooms to ensure UI reflects the correct state
-    await fetchAvailableRooms();
-  }
-};
+  };
 
   const handleLeaveRoom = async () => {
     console.log("[Leave Room Frontend] Current selectedRoom:", selectedRoom);

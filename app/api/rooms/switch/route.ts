@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
           if (!membership) {
                const { data: participant, error: participantError } = await supabase
                     .from("room_participants")
-                    .select("status, active")
+                    .select("status")
                     .eq("room_id", roomId)
                     .eq("user_id", session.user.id)
                     .single();
@@ -53,21 +53,13 @@ export async function POST(req: NextRequest) {
                }
 
                if (!room.is_private) {
-                    // Deactivate all other rooms in both room_members and room_participants
+                    // Deactivate all other rooms in room_members
                     const { error: deactivateMembersError } = await supabase
                          .from("room_members")
                          .update({ active: false })
                          .eq("user_id", session.user.id);
                     if (deactivateMembersError) {
                          console.error("Error deactivating other rooms in room_members:", deactivateMembersError.message);
-                    }
-
-                    const { error: deactivateParticipantsError } = await supabase
-                         .from("room_participants")
-                         .update({ active: false })
-                         .eq("user_id", session.user.id);
-                    if (deactivateParticipantsError) {
-                         console.error("Error deactivating other rooms in room_participants:", deactivateParticipantsError.message);
                     }
 
                     // Add to room_members
@@ -87,21 +79,10 @@ export async function POST(req: NextRequest) {
                          console.error("Error adding to room_members:", membershipError.message);
                          return NextResponse.json({ error: "Failed to sync membership" }, { status: 500 });
                     }
-
-                    // Update room_participants to activate the new room
-                    const { error: activateParticipantError } = await supabase
-                         .from("room_participants")
-                         .update({ active: true })
-                         .eq("room_id", roomId)
-                         .eq("user_id", session.user.id);
-                    if (activateParticipantError) {
-                         console.error("Error activating room in room_participants:", activateParticipantError.message);
-                         return NextResponse.json({ error: "Failed to activate room in participants" }, { status: 500 });
-                    }
                }
           }
 
-          // Transaction to manage active room in both tables
+          // Transaction to manage active room in room_members
           const transaction = async () => {
                // Deactivate all other rooms for the user in room_members
                const { error: deactivateMembersError } = await supabase
@@ -114,17 +95,6 @@ export async function POST(req: NextRequest) {
                     throw new Error(`Failed to deactivate other rooms in room_members: ${deactivateMembersError.message}`);
                }
 
-               // Deactivate all other rooms for the user in room_participants
-               const { error: deactivateParticipantsError } = await supabase
-                    .from("room_participants")
-                    .update({ active: false })
-                    .eq("user_id", session.user.id)
-                    .neq("room_id", roomId);
-               if (deactivateParticipantsError) {
-                    console.error("Error deactivating other rooms in room_participants:", deactivateParticipantsError.message);
-                    throw new Error(`Failed to deactivate other rooms in room_participants: ${deactivateParticipantsError.message}`);
-               }
-
                // Activate the selected room in room_members
                const { error: activateMembersError } = await supabase
                     .from("room_members")
@@ -134,17 +104,6 @@ export async function POST(req: NextRequest) {
                if (activateMembersError) {
                     console.error("Error activating room in room_members:", activateMembersError.message);
                     throw new Error(`Failed to activate room in room_members: ${activateMembersError.message}`);
-               }
-
-               // Activate the selected room in room_participants
-               const { error: activateParticipantsError } = await supabase
-                    .from("room_participants")
-                    .update({ active: true })
-                    .eq("room_id", roomId)
-                    .eq("user_id", session.user.id);
-               if (activateParticipantsError) {
-                    console.error("Error activating room in room_participants:", activateParticipantsError.message);
-                    throw new Error(`Failed to activate room in room_participants: ${activateParticipantsError.message}`);
                }
 
                // Fetch the currently active room
