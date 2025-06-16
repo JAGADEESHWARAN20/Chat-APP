@@ -7,12 +7,14 @@ import { useRoomStore } from "@/lib/store/roomstore";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { toast } from "sonner";
 import { Button } from "./ui/button";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"; // Updated imports
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Avatar, AvatarImage, AvatarFallback } from "./ui/avatar";
 import { useRouter } from "next/navigation";
 import { User as SupabaseUser } from "@supabase/supabase-js";
-import { Trash2, ArrowLeft } from "lucide-react"; // Added ArrowLeft for the icon
+import { Check, X, ArrowLeft } from "lucide-react";
 import { Database } from "@/lib/types/supabase";
+import { useMediaQuery } from "@/hooks/use-media-query";
+import { Swipeable } from "./ui/swipeable";
 
 interface NotificationsProps {
   isOpen: boolean;
@@ -28,9 +30,9 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const supabase = supabaseBrowser();
+  const isMobile = useMediaQuery("(max-width: 768px)");
 
   const handleAccept = async (notificationId: string, roomId: string | null) => {
-    console.log("Joining room:", roomId);
     if (!roomId) {
       toast.error("Invalid room ID");
       return;
@@ -150,44 +152,6 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
     return data?.status === "accepted";
   };
 
-  const handleMarkAsRead = async (notificationId: string) => {
-    try {
-      const response = await fetch(`/api/notifications/${notificationId}/read`, {
-        method: "POST",
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to mark as read");
-      }
-      markAsRead(notificationId);
-      toast.success("Marked as read");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to mark as read");
-      console.error("Error marking as read:", error);
-    }
-  };
-
-  const handleMarkAsUnread = async (notificationId: string) => {
-    try {
-      const response = await fetch(`/api/notifications/${notificationId}/unread`, {
-        method: "POST",
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to mark as unread");
-      }
-      setNotifications(
-        notifications.map((notif) =>
-          notif.id === notificationId ? { ...notif, is_read: false } : notif
-        )
-      );
-      toast.success("Marked as unread");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to mark as unread");
-      console.error("Error marking as unread:", error);
-    }
-  };
-
   const handleDeleteNotification = async (notificationId: string) => {
     try {
       const response = await fetch(`/api/notifications/${notificationId}`, {
@@ -245,9 +209,68 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
     fetchAndSubscribe();
   }, [user?.id, fetchNotifications, subscribeToNotifications]);
 
+  const renderNotificationContent = (notif: any) => (
+    <div
+      className={`p-4 rounded-lg flex items-start gap-3 w-full transition-colors ${notif.status === "read" ? "bg-gray-800/50" : "bg-indigo-900/20"}`}
+      onClick={() => handleNotificationClick(notif.id, notif.room_id)}
+    >
+      <Avatar className="h-10 w-10 flex-shrink-0">
+        <AvatarImage src={notif.users?.avatar_url ?? ""} alt={notif.users?.display_name || "User"} />
+        <AvatarFallback className="bg-indigo-500 text-white">
+          {notif.users?.display_name?.[0] || "?"}
+        </AvatarFallback>
+      </Avatar>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm text-white truncate text-wrap">{notif.message}</p>
+        <p className="text-xs text-gray-400 mt-1">
+          {notif.created_at ? new Date(notif.created_at).toLocaleString() : "Unknown time"}
+        </p>
+        {notif.type === "join_request" && (
+          <div className="flex gap-2 mt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleAccept(notif.id, notif.room_id);
+              }}
+              className="bg-green-600 hover:bg-green-700 text-white h-8 px-3"
+            >
+              <Check className="h-4 w-4 mr-1" /> Accept
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleReject(notif.id, notif.room_id);
+              }}
+              className="bg-red-600 hover:bg-red-700 text-white h-8 px-3"
+            >
+              <X className="h-4 w-4 mr-1" /> Decline
+            </Button>
+          </div>
+        )}
+      </div>
+      {!isMobile && (
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleDeleteNotification(notif.id);
+          }}
+          className="text-gray-300 hover:text-white hover:bg-red-600/50"
+        >
+          <X className="h-4 w-4" />
+        </Button>
+      )}
+    </div>
+  );
+
   return (
     <Sheet open={isOpen} onOpenChange={onClose}>
-      <SheetContent side="left" className="w-full p-4">
+      <SheetContent side="left" className="w-full p-4 sm:max-w-md">
         <SheetHeader className="flex flex-row items-center justify-between mb-4">
           <SheetTitle className="text-2xl font-bold">Notifications</SheetTitle>
           <div className="flex items-center gap-2">
@@ -256,7 +279,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
                 variant="ghost"
                 size="sm"
                 onClick={handleClearAllNotifications}
-                className="text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+                className="text-gray-300 hover:text-white hover:bg-gray-700"
               >
                 Clear All
               </Button>
@@ -265,103 +288,37 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
               variant="ghost"
               size="icon"
               onClick={onClose}
-              className="text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+              className="text-gray-300 hover:text-white hover:bg-gray-700"
             >
               <ArrowLeft className="h-5 w-5" />
             </Button>
           </div>
         </SheetHeader>
-        <div className="space-y-4 max-h-[calc(100vh-100px)] overflow-y-auto overflow-x-hidden custom-scrollbar">
+        <div className="space-y-2 max-h-[calc(100vh-100px)] overflow-y-auto">
           {isLoading ? (
-            <p className="text-gray-400 text-sm">Loading notifications...</p>
+            <div className="flex justify-center items-center h-20">
+              <p className="text-gray-400">Loading notifications...</p>
+            </div>
           ) : notifications.length === 0 ? (
-            <p className="text-gray-400 text-sm">No notifications</p>
+            <div className="flex justify-center items-center h-20">
+              <p className="text-gray-400">No notifications</p>
+            </div>
           ) : (
-            notifications.slice(0, 5).map((notif) => (
-              <div
-                key={notif.id}
-                className={`p-3 rounded-lg flex flex-col items-start justify-center gap-3 ${notif.status ? "bg-gray-800/50" : "bg-gray-700/50"} hover:bg-gray-700/70 cursor-pointer transition-colors`}
-                onClick={() => handleNotificationClick(notif.id, notif.room_id)}
-              >
-                <div className="flex gap-3 w-full">
-                  <Avatar className="h-10 w-10 flex-shrink-0">
-                    <AvatarImage src={notif.users?.avatar_url ?? ""} alt={notif.users?.display_name || "User"} className="rounded-full" />
-                    <AvatarFallback className="bg-indigo-500 text-white rounded-full">
-                      {notif.users?.display_name?.[0] || "?"}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-white truncate text-wrap">{notif.message}</p>
-                    <p className="text-xs text-gray-400 truncate">
-                      {notif.created_at ? new Date(notif.created_at).toLocaleString() : "Unknown time"}
-                    </p>
-                  </div>
+            notifications.map((notif) =>
+              isMobile ? (
+                <Swipeable
+                  key={notif.id}
+                  onSwipeLeft={() => handleDeleteNotification(notif.id)}
+                  swipeThreshold={50}
+                >
+                  {renderNotificationContent(notif)}
+                </Swipeable>
+              ) : (
+                <div key={notif.id}>
+                  {renderNotificationContent(notif)}
                 </div>
-                <div className="flex items-center justify-between gap-2 flex-shrink-0">
-                  {notif.type === "join_request" && !notif.status && (
-                    <>
-                      <Button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleAccept(notif.id, notif.room_id);
-                        }}
-                        aria-label={`Accept invitation for notification ${notif.id}`}
-                        className="bg-violet-600 hover:bg-violet-700 text-white text-sm px-3 py-1 rounded-lg transition-colors"
-                      >
-                        Accept
-                      </Button>
-                      <Button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleReject(notif.id, notif.room_id);
-                        }}
-                        aria-label={`Reject invitation for notification ${notif.id}`}
-                        className="bg-red-600 hover:bg-red-700 text-white text-sm px-3 py-1 rounded-lg transition-colors"
-                      >
-                        Reject
-                      </Button>
-                    </>
-                  )}
-                  {notif.status ? (
-                    <Button
-                      variant="outline"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleMarkAsUnread(notif.id);
-                      }}
-                      aria-label={`Mark notification ${notif.id} as unread`}
-                      className="bg-transparent border-gray-600 text-gray-300 hover:bg-gray-700 hover:text-white text-sm px-3 py-1 rounded-lg transition-colors"
-                    >
-                      Mark as Unread
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleMarkAsRead(notif.id);
-                      }}
-                      aria-label={`Mark notification ${notif.id} as read`}
-                      className="bg-transparent border-gray-600 text-gray-300 hover:bg-gray-700 hover:text-white text-sm px-3 py-1 rounded-lg transition-colors"
-                    >
-                      Mark as Read
-                    </Button>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteNotification(notif.id);
-                    }}
-                    aria-label={`Delete notification ${notif.id}`}
-                    className="text-gray-300 hover:text-white hover:bg-red-600/50 rounded-full transition-colors"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            ))
+              )
+            )
           )}
         </div>
       </SheetContent>
