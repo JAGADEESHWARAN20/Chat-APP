@@ -13,7 +13,7 @@ export const useFetchRooms = (
      user: { id: string } | undefined,
      checkRoomMembership: (roomId: string) => Promise<boolean>,
      checkRoomParticipation: (roomId: string) => Promise<string | null>,
-     setAvailableRooms: (rooms: RoomWithMembership[]) => void, // Change to Zustand-style setter
+     setAvailableRooms: (rooms: RoomWithMembership[]) => void,
      setRooms: (rooms: RoomWithMembership[]) => void,
      isMounted: React.MutableRefObject<boolean>,
      initializeDefaultRoom?: () => void
@@ -28,6 +28,9 @@ export const useFetchRooms = (
           }
 
           try {
+               let rooms: Room[] = [];
+
+               // Fetch rooms the user is a member of
                const { data: memberships, error: memberError } = await supabase
                     .from("room_members")
                     .select("room_id")
@@ -36,15 +39,18 @@ export const useFetchRooms = (
 
                if (memberError) {
                     console.error("Error fetching room memberships:", memberError);
-                    toast.error("Failed to fetch room memberships");
-                    if (isMounted.current) {
-                         setAvailableRooms([]);
-                         setRooms([]);
+                    // If the error is due to RLS recursion, log it and proceed to fetch public rooms
+                    if (memberError.code === "42P17") {
+                         console.warn("RLS policy issue detected while fetching memberships. Proceeding to fetch public rooms.");
+                    } else {
+                         toast.error("Failed to fetch room memberships");
+                         if (isMounted.current) {
+                              setAvailableRooms([]);
+                              setRooms([]);
+                         }
+                         return;
                     }
-                    return;
                }
-
-               let rooms: Room[] = [];
 
                if (memberships && memberships.length > 0) {
                     const roomIds = memberships.map((m) => m.room_id);
@@ -66,6 +72,7 @@ export const useFetchRooms = (
                     rooms = roomsData || [];
                }
 
+               // If no rooms are found via memberships, fetch the default public "General Chat" room
                if (rooms.length === 0) {
                     const { data: generalChat, error: generalChatError } = await supabase
                          .from("rooms")
