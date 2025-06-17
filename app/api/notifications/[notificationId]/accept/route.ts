@@ -117,7 +117,11 @@ export async function PATCH(
       .eq("room_id", notificationCore.room_id)
       .eq("user_id", notificationCore.sender_id);
     if (participantError) {
-      console.error("[Notifications Accept] Error updating room_participants:", participantError.message);
+      console.error("[Notifications Accept] Error updating room_participants:", {
+        error: participantError.message,
+        room_id: notificationCore.room_id,
+        user_id: notificationCore.sender_id,
+      });
       return NextResponse.json({ error: "Failed to accept request", details: participantError.message }, { status: 500 });
     }
     console.log(`[Notifications Accept] Updated room_participants: user ${notificationCore.sender_id} accepted into room ${notificationCore.room_id}`);

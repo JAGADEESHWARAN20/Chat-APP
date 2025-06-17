@@ -94,18 +94,19 @@ export async function PATCH(
     }
 
     // Update room_participants to rejected
+    // Delete from room_participants
     const { error: participantError } = await supabase
       .from("room_participants")
-      .update({ status: "rejected" })
+      .delete()
       .eq("room_id", notificationCore.room_id)
       .eq("user_id", notificationCore.sender_id);
     if (participantError) {
-      console.error("[Notifications Reject] Error updating room_participants:", participantError.message);
+      console.error("[Notifications Reject] Error deleting from room_participants:", participantError.message);
       return NextResponse.json({ error: "Failed to reject request", details: participantError.message }, { status: 500 });
     }
-    console.log(`[Notifications Reject] Updated room_participants: user ${notificationCore.sender_id} rejected from room ${notificationCore.room_id}`);
+    console.log(`[Notifications Reject] Deleted user ${notificationCore.sender_id} from room_participants for room ${notificationCore.room_id}`);
 
-    // Ensure the user is not in room_members (optional safety check)
+    // Ensure the user is not in room_members
     const { error: removeMemberError } = await supabase
       .from("room_members")
       .delete()
@@ -116,7 +117,6 @@ export async function PATCH(
     } else {
       console.log(`[Notifications Reject] Ensured user ${notificationCore.sender_id} is not in room_members for room ${notificationCore.room_id}`);
     }
-
     // Update the notification's status to 'read' and join_status to 'rejected'
     const { error: updateError } = await supabase
       .from("notifications")

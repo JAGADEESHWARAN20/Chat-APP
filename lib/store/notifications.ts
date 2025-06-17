@@ -243,11 +243,12 @@ export const useNotification = create<NotificationState>((set) => {
               });
 
               set((state) => {
-                const newNotifications = [formattedNotification, ...state.notifications].slice(0, 20);
-                if (formattedNotification.status !== "read") {
-                  toast.info(formattedNotification.message);
-                }
-                return { notifications: newNotifications };
+                const updatedNotifications = state.notifications.map((notif) =>
+                  notif.id === formattedNotification.id
+                    ? { ...notif, ...formattedNotification } // force re-render
+                    : notif
+                );
+                return { notifications: updatedNotifications };
               });
             } catch (error) {
               console.error("[Notifications Store] Error processing INSERT notification:", error);

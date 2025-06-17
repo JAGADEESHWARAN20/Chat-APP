@@ -248,9 +248,9 @@ export async function POST(
       message: room.is_private
         ? `${session.user.email || "A user"} requested to join "${room.name}"`
         : `You joined "${room.name}"`,
-      status: "unread"
+      status: "unread",
+      join_status: room.is_private ? "pending" : null
     };
-
     const { error: notificationError } = await supabase.from("notifications").insert(notification);
     if (notificationError) {
       console.error(`[Join Room] Notification insert failed for roomId: ${roomId}, error: ${notificationError.message}`);
