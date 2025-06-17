@@ -90,15 +90,23 @@ export default function RoomInitializer() {
                     }
 
                     if (roomsData) {
+                         // Get all room participations for the user
+                         const { data: participations } = await supabase
+                              .from('room_participants')
+                              .select('*')
+                              .eq('user_id', user.id);
+
                          // Filter out rooms with null created_by and transform the data
-                         const transformedRooms: IRoom[] = roomsData
+                         const transformedRooms = roomsData
                               .filter(room => room.created_by !== null)
                               .map(room => ({
                                    id: room.id,
                                    name: room.name,
                                    is_private: room.is_private,
                                    created_by: room.created_by!, // We can safely use ! here because of the filter
-                                   created_at: room.created_at
+                                   created_at: room.created_at,
+                                   isMember: participations?.some(p => p.room_id === room.id && p.status === 'accepted') || false,
+                                   participationStatus: participations?.find(p => p.room_id === room.id)?.status || null
                               }));
 
                          setRooms(transformedRooms);
