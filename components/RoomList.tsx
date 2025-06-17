@@ -29,7 +29,12 @@ export default function RoomList() {
 
       const { success, rooms } = await response.json();
       if (success && rooms) {
-        setRooms(rooms as IRoom[]);
+        const transformedRooms = rooms.map((room: IRoom) => ({
+          ...room,
+          isMember: userParticipations.some(p => p.room_id === room.id && p.status === 'accepted'),
+          participationStatus: userParticipations.find(p => p.room_id === room.id)?.status || null
+        }));
+        setRooms(transformedRooms);
         toast.success("Rooms refreshed");
       }
     } catch (err) {
@@ -56,12 +61,16 @@ export default function RoomList() {
         throw new Error(errorData.error || "Failed to switch room");
       }
 
-      setSelectedRoom(room);
+      setSelectedRoom({
+        ...room,
+        isMember: userParticipations.some(p => p.room_id === room.id && p.status === 'accepted'),
+        participationStatus: userParticipations.find(p => p.room_id === room.id)?.status || null
+      });
       toast.success("Successfully switched room");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to switch room");
     }
-  }, [user, setSelectedRoom]);
+  }, [user, setSelectedRoom, userParticipations]);
 
   const handleLeaveRoom = async (roomId: string) => {
     if (!user) {
@@ -163,7 +172,12 @@ export default function RoomList() {
 
         const { success, rooms: fetchedRooms } = await response.json();
         if (success && fetchedRooms) {
-          setRooms(fetchedRooms as IRoom[]);
+          const transformedRooms = fetchedRooms.map((room: IRoom) => ({
+            ...room,
+            isMember: userParticipations.some(p => p.room_id === room.id && p.status === 'accepted'),
+            participationStatus: userParticipations.find(p => p.room_id === room.id)?.status || null
+          }));
+          setRooms(transformedRooms);
         }
       } catch (err) {
         toast.error("Unexpected error fetching rooms");
@@ -232,7 +246,7 @@ export default function RoomList() {
     return () => {
       supabase.removeChannel(roomChannel);
     };
-  }, [user, supabase, setRooms, setSelectedRoom, rooms, handleRoomSwitch]);
+  }, [user, supabase, setRooms, setSelectedRoom, rooms, handleRoomSwitch, userParticipations]);
 
   useEffect(() => {
     if (!user) return;
