@@ -2,9 +2,44 @@
 
 import { useRef, useEffect } from "react";
 import { useRoomStore } from "./roomstore";
-import { IRoom } from "@/lib/types/rooms";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { useUser } from "@/lib/store/user";
+import { toast } from "sonner";
+import { Database } from "@/lib/types/supabase";
+
+type Room = Database["public"]["Tables"]["rooms"]["Row"];
+type RoomWithMembership = Room & {
+     isMember: boolean;
+     participationStatus: string | null;
+};
+
+// Define IRoom to match Room, assuming it's the same structure
+interface IRoom extends Room { }
+
+const transformRooms = async (
+     rooms: IRoom[],
+     userId: string,
+     supabase: ReturnType<typeof supabaseBrowser>
+): Promise<RoomWithMembership[]> => {
+     try {
+          const { data: participations, error } = await supabase
+               .from("room_participants")
+               .select("*")
+               .eq("user_id", userId);
+
+          if (error) {
+               throw new Error("Failed to fetch room participations");
+          }
+
+          return rooms.map((room) => ({
+               ...room,
+               isMember: participations?.some((p) => p.room_id === room.id && p.status === "accepted") || false,
+               participationStatus: participations?.find((p) => p.room_id === room.id)?.status || null,
+          }));
+     } catch (error) {
+          throw error;
+     }
+};
 
 function InitRoom({ rooms }: { rooms: IRoom[] }) {
      const initState = useRef(false);
@@ -13,29 +48,20 @@ function InitRoom({ rooms }: { rooms: IRoom[] }) {
 
      useEffect(() => {
           if (!initState.current && user) {
-               const transformRooms = async () => {
+               const initialize = async () => {
                     try {
-                         const { data: participations } = await supabase
-                              .from('room_participants')
-                              .select('*')
-                              .eq('user_id', user.id);
-
-                         const transformedRooms = rooms.map(room => ({
-                              ...room,
-                              isMember: participations?.some(p => p.room_id === room.id && p.status === 'accepted') || false,
-                              participationStatus: participations?.find(p => p.room_id === room.id)?.status || null
-                         }));
-
+                         const transformedRooms = await transformRooms(rooms, user.id, supabase);
                          useRoomStore.setState({ rooms: transformedRooms });
                     } catch (error) {
-                         console.error('Error transforming rooms:', error);
+                         console.error("Error transforming rooms:", error);
+                         toast.error(error instanceof Error ? error.message : "Failed to initialize rooms");
                     }
                };
 
-               transformRooms();
+               initialize();
+               initState.current = true;
           }
-          initState.current = true;
-     }, [rooms, user, supabase]);
+     }, [rooms, user, supabase]); // Dependencies are fine since initState prevents re-runs
 
      return null;
 }
