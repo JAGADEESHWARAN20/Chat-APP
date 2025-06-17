@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
                .eq("user_id", userId)
                .single();
           if (membershipError && membershipError.code !== "PGRST116") {
-               console.error("Membership error:", membershipError?.message);
+               console.error("[Switch Room] Membership error:", membershipError?.message);
                return NextResponse.json({ error: "Failed to check membership", code: "MEMBERSHIP_CHECK_FAILED" }, { status: 500 });
           }
 
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
                     .eq("user_id", userId)
                     .single();
                if (participantError && participantError.code !== "PGRST116") {
-                    console.error("Participant error:", participantError?.message);
+                    console.error("[Switch Room] Participant error:", participantError?.message);
                     return NextResponse.json({ error: "Failed to check participant status", code: "PARTICIPATION_CHECK_FAILED" }, { status: 500 });
                }
 
@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
                               .from("room_members")
                               .insert({ room_id: roomId, user_id: userId, status: "accepted", active: false });
                          if (joinError) {
-                              console.error("Error adding owner to room_members:", joinError.message);
+                              console.error("[Switch Room] Error adding owner to room_members:", joinError.message);
                               return NextResponse.json({ error: "Failed to join room", code: "MEMBER_ADD_FAILED" }, { status: 500 });
                          }
                     } else {
@@ -94,14 +94,14 @@ export async function POST(req: NextRequest) {
                               .from("room_participants")
                               .insert({ room_id: roomId, user_id: userId, status: "pending" });
                          if (participantInsertError) {
-                              console.error("Error creating participant request:", participantInsertError.message);
+                              console.error("[Switch Room] Error creating participant request:", participantInsertError.message);
                               return NextResponse.json({ error: "Failed to request room switch", code: "PARTICIPANT_INSERT_FAILED" }, { status: 500 });
                          }
 
                          const { error: notificationError } = await supabase
                               .from("notifications")
                               .insert({
-                                   user_id: room.created_by, // Notify the room owner
+                                   user_id: room.created_by,
                                    type: "room_switch",
                                    room_id: roomId,
                                    sender_id: userId,
@@ -110,7 +110,7 @@ export async function POST(req: NextRequest) {
                                    join_status: "pending",
                               });
                          if (notificationError) {
-                              console.error("Error sending notification:", notificationError.message);
+                              console.error("[Switch Room] Error sending notification:", notificationError.message);
                               return NextResponse.json({ error: "Failed to send switch request", code: "NOTIFICATION_FAILED" }, { status: 500 });
                          }
 
@@ -120,7 +120,6 @@ export async function POST(req: NextRequest) {
                          );
                     }
                } else if (participant.status !== "accepted") {
-                    // If participant status is pending or rejected, return appropriate message
                     if (participant.status === "pending") {
                          return NextResponse.json(
                               { success: false, message: "Your request to switch to this room is still pending", status: "pending" },
@@ -141,10 +140,11 @@ export async function POST(req: NextRequest) {
                          { onConflict: "room_id,user_id" }
                     );
                if (membershipInsertError) {
-                    console.error("Error syncing membership:", membershipInsertError.message);
+                    console.error("[Switch Room] Error syncing membership:", membershipInsertError.message);
                     return NextResponse.json({ error: "Failed to sync membership", code: "MEMBER_ADD_FAILED" }, { status: 500 });
                }
           } else if (membership.status !== "accepted") {
+               console.error("[Switch Room] Membership status not accepted:", { userId, roomId, status: membership.status });
                return NextResponse.json(
                     { error: "Your membership status is not accepted", code: "NOT_A_MEMBER" },
                     { status: 403 }
@@ -159,7 +159,7 @@ export async function POST(req: NextRequest) {
                     .update({ active: false, updated_at: new Date().toISOString() })
                     .eq("user_id", userId);
                if (deactivateMembersError) {
-                    console.error("Error deactivating rooms in room_members:", deactivateMembersError.message);
+                    console.error("[Switch Room] Error deactivating rooms in room_members:", deactivateMembersError.message);
                     throw new Error(`Failed to deactivate rooms in room_members: ${deactivateMembersError.message}`);
                }
 
@@ -173,7 +173,7 @@ export async function POST(req: NextRequest) {
                     .select()
                     .single();
                if (activateMembersError || !updatedMembership) {
-                    console.error("Error activating room in room_members:", activateMembersError?.message || "No membership found");
+                    console.error("[Switch Room] Error activating room in room_members:", activateMembersError?.message || "No membership found");
                     throw new Error(`Failed to activate room in room_members: ${activateMembersError?.message || "No membership found"}`);
                }
 
@@ -184,22 +184,31 @@ export async function POST(req: NextRequest) {
                     .eq("user_id", userId)
                     .eq("active", true);
                if (activeRoomsError) {
-                    console.error("Error fetching active rooms:", activeRoomsError.message);
+                    console.error("[Switch Room] Error fetching active rooms:", activeRoomsError.message);
                     throw new Error(`Failed to verify active room: ${activeRoomsError.message}`);
                }
                if (!activeRooms || activeRooms.length === 0) {
-                    console.error("No active rooms found after switch");
-                    throw new Error("No active room found after switch");
-               }
-               if (activeRooms.length > 1) {
-                    console.error("Multiple active rooms found after switch:", activeRooms);
+                    console.error("[Switch Room] No active rooms found after switch for user:", userId);
+                    // If no active room, set the current room as active (this handles edge cases where user has no active room)
+                    const { error: setActiveError } = await supabase
+                         .from("room_members")
+                         .update({ active: true, updated_at: new Date().toISOString() })
+                         .eq("room_id", roomId)
+                         .eq("user_id", userId)
+                         .eq("status", "accepted");
+                    if (setActiveError) {
+                         console.error("[Switch Room] Error setting active room:", setActiveError.message);
+                         throw new Error(`Failed to set active room: ${setActiveError.message}`);
+                    }
+               } else if (activeRooms.length > 1) {
+                    console.error("[Switch Room] Multiple active rooms found after switch:", activeRooms);
                     const { error: fixError } = await supabase
                          .from("room_members")
                          .update({ active: false, updated_at: new Date().toISOString() })
                          .eq("user_id", userId)
                          .neq("room_id", roomId);
                     if (fixError) {
-                         console.error("Error fixing multiple active rooms:", fixError.message);
+                         console.error("[Switch Room] Error fixing multiple active rooms:", fixError.message);
                          throw new Error(`Failed to fix multiple active rooms: ${fixError.message}`);
                     }
                }
@@ -212,11 +221,11 @@ export async function POST(req: NextRequest) {
                     .eq("active", true)
                     .single();
                if (currentRoomError || !currentRoom) {
-                    console.error("Error fetching current room:", currentRoomError?.message || "No active room found");
+                    console.error("[Switch Room] Error fetching current room:", currentRoomError?.message || "No active room found");
                     throw new Error("No active room found after switch");
                }
                if (currentRoom.room_id !== roomId) {
-                    console.error("Active room does not match requested room:", currentRoom.room_id, roomId);
+                    console.error("[Switch Room] Active room does not match requested room:", currentRoom.room_id, roomId);
                     throw new Error("Active room mismatch after switch");
                }
           };

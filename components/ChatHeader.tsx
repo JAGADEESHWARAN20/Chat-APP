@@ -128,6 +128,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       if (data.status === "pending") {
         toast.info(data.message || "Switch request sent to room owner for approval");
         await fetchAvailableRooms();
+        setIsSwitchRoomPopoverOpen(false); // Close the popover
         return;
       }
 
