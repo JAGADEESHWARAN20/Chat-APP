@@ -72,7 +72,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const checkRoomMembership = useCallback(
     async (roomId: string) => {
       if (!user) return false;
-      console.log(isMember);
       const { data, error } = await supabase
         .from("room_members")
         .select("status")
@@ -86,7 +85,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       }
       return data?.status === "accepted";
     },
-    [user, supabase]
+    [user, supabase, isMember]
   );
 
   const checkRoomParticipation = useCallback(
@@ -148,7 +147,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     }
   };
 
-  const handleLeaveRoom = async () => {
+  const handleLeaveRoom = useCallback(async () => {
     if (!user) {
       toast.error("Please log in to leave a room");
       return;
@@ -199,11 +198,11 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     } finally {
       setIsLeaving(false);
     }
-  };
+  }, [user, selectedRoom, UUID_REGEX, setIsLeaving, setIsMember, setSelectedRoom, router]);
 
-  const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSearchInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     debouncedCallback(e.target.value);
-  };
+  }, [debouncedCallback]);
 
   const fetchSearchResults = useCallback(async () => {
     if (!searchType) return;

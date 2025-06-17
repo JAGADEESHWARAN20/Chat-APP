@@ -240,7 +240,7 @@ export default function RoomList() {
     return () => {
       supabase.removeChannel(roomChannel);
     };
-  }, [user, supabase, setRooms, setSelectedRoom, rooms]);
+  }, [user, supabase, setRooms, setSelectedRoom, rooms, handleRoomSwitch]);
 
   useEffect(() => {
     if (!user) return;
@@ -259,7 +259,7 @@ export default function RoomList() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user, supabase]);
+  }, [user, supabase, fetchParticipations]);
 
   if (!user) {
     return (

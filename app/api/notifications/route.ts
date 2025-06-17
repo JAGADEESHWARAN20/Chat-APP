@@ -47,7 +47,10 @@ export async function GET(req: NextRequest) {
 
           // Transform notifications using transformNotification
           const transformedNotifications: Inotification[] = notifications
-               ? notifications.map(transformNotification)
+               ? notifications.map((notif) => transformNotification({
+                    ...notif,
+                    direct_chat_id: null
+               }))
                : [];
 
           return NextResponse.json({ notifications: transformedNotifications }, { status: 200 });
