@@ -4,7 +4,7 @@ import { useRoomStore } from '@/lib/store/roomstore';
 import { supabaseBrowser } from '@/lib/supabase/browser';
 import { useUser } from '@/lib/store/user';
 import { toast } from 'sonner';
-import { IRoom } from '@/lib/types/rooms';
+// import { IRoom } from '@/lib/types/rooms';
 
 export default function RoomInitializer() {
      const { setRooms, initializeDefaultRoom } = useRoomStore();
