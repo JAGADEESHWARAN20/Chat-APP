@@ -157,6 +157,7 @@ export type Database = {
       notifications: {
         Row: {
           created_at: string | null
+          direct_chat_id: string | null
           id: string
           join_status: string | null
           message: string
@@ -168,6 +169,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          direct_chat_id?: string | null
           id?: string
           join_status?: string | null
           message: string
@@ -179,6 +181,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          direct_chat_id?: string | null
           id?: string
           join_status?: string | null
           message?: string
@@ -189,6 +192,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "notifications_direct_chat_id_fkey"
+            columns: ["direct_chat_id"]
+            isOneToOne: false
+            referencedRelation: "direct_chats"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "notifications_room_id_fkey"
             columns: ["room_id"]
@@ -218,6 +228,7 @@ export type Database = {
           joined_at: string | null
           room_id: string
           status: string | null
+          updated_at: string | null
           user_id: string
         }
         Insert: {
@@ -225,6 +236,7 @@ export type Database = {
           joined_at?: string | null
           room_id: string
           status?: string | null
+          updated_at?: string | null
           user_id: string
         }
         Update: {
@@ -232,6 +244,7 @@ export type Database = {
           joined_at?: string | null
           room_id?: string
           status?: string | null
+          updated_at?: string | null
           user_id?: string
         }
         Relationships: [
@@ -253,6 +266,7 @@ export type Database = {
       }
       room_participants: {
         Row: {
+          active: boolean | null
           created_at: string | null
           joined_at: string
           room_id: string
@@ -260,6 +274,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          active?: boolean | null
           created_at?: string | null
           joined_at?: string
           room_id: string
@@ -267,6 +282,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          active?: boolean | null
           created_at?: string | null
           joined_at?: string
           room_id?: string

@@ -113,7 +113,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       return;
     }
     try {
-      console.log(`[Switch Room Frontend] Attempting to switch to roomId: ${room.id}`);
       const response = await fetch("/api/rooms/switch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -139,16 +138,12 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 
       setSelectedRoom(room);
       setIsSwitchRoomPopoverOpen(false);
+      const isMemberNow = await checkRoomMembership(room.id);
+      setIsMember(isMemberNow);
       toast.success(data.message || `Switched to ${room.name}`);
       await fetchAvailableRooms();
-      if (searchType) {
-        console.log("[Switch Room Frontend] Refreshing search results after switching room");
-        await fetchSearchResults();
-      }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Failed to switch room";
-      toast.error(errorMessage);
-      console.error("[Switch Room Frontend] Error:", err);
+      toast.error(err instanceof Error ? err.message : "Failed to switch room");
       await fetchAvailableRooms();
     }
   };

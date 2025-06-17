@@ -52,10 +52,21 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
       }
       markAsRead(notificationId);
       await fetchNotifications(user.id);
+
+      // Fetch updated rooms and set selected room
+      const { data: room, error: roomError } = await supabase
+        .from("rooms")
+        .select("*")
+        .eq("id", roomId)
+        .single();
+      if (roomError || !room) {
+        throw new Error("Failed to fetch room details");
+      }
+      setSelectedRoom(room);
+
       toast.success(`${type === "join_request" ? "Join" : "Switch"} request approved`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to accept request");
-      console.error("Error accepting request:", error);
     }
   };
 

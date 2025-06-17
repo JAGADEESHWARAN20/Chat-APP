@@ -18,6 +18,7 @@ export interface Inotification {
   user_id: string;
   room_id: string | null;
   join_status: string | null;
+  direct_chat_id: string | null;
   users: {
     id: string;
     username: string;
@@ -111,6 +112,7 @@ export const useNotification = create<NotificationState>((set) => {
               user_id,
               room_id,
               join_status,
+              direct_chat_id,
               users:users!notifications_sender_id_fkey(id, username, display_name, avatar_url, created_at),
               recipient:users!notifications_user_id_fkey(id, username, display_name, avatar_url, created_at),
               rooms:rooms!notifications_room_id_fkey(id, name, created_at, created_by, is_private)
@@ -138,7 +140,8 @@ export const useNotification = create<NotificationState>((set) => {
                   sender_id,
                   user_id,
                   room_id,
-                  join_status
+                  join_status,
+                  direct_chat_id
                 `)
                 .eq("user_id", userId)
                 .order("created_at", { ascending: false })
@@ -240,6 +243,7 @@ export const useNotification = create<NotificationState>((set) => {
                 users,
                 recipient,
                 rooms,
+                direct_chat_id: data.direct_chat_id,
               });
 
               set((state) => {
@@ -286,6 +290,7 @@ export const useNotification = create<NotificationState>((set) => {
                 users,
                 recipient,
                 rooms,
+                direct_chat_id: updatedData.direct_chat_id,
               });
 
               set((state) => ({

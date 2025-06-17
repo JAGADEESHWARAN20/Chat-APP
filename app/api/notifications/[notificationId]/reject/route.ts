@@ -32,7 +32,7 @@ export async function PATCH(
     // Fetch the notification to verify it exists, is a join_request or room_switch, and is unread
     const { data: notificationCore, error: notificationCoreError } = await supabase
       .from("notifications")
-      .select("id, message, created_at, status, type, sender_id, user_id, room_id, join_status")
+      .select("id, message, created_at, status, type, sender_id, user_id, room_id, join_status, direct_chat_id")
       .eq("id", notificationId)
       .in("type", ["join_request", "room_switch"])
       .eq("user_id", session.user.id)
@@ -93,7 +93,6 @@ export async function PATCH(
       return NextResponse.json({ error: "Only the room creator can reject requests" }, { status: 403 });
     }
 
-    // Update room_participants to rejected
     // Delete from room_participants
     const { error: participantError } = await supabase
       .from("room_participants")
@@ -117,6 +116,7 @@ export async function PATCH(
     } else {
       console.log(`[Notifications Reject] Ensured user ${notificationCore.sender_id} is not in room_members for room ${notificationCore.room_id}`);
     }
+
     // Update the notification's status to 'read' and join_status to 'rejected'
     const { error: updateError } = await supabase
       .from("notifications")
@@ -140,6 +140,7 @@ export async function PATCH(
         message,
         status: "unread",
         created_at: new Date().toISOString(),
+        direct_chat_id: null,
       });
     if (rejectNotificationError) {
       console.error("[Notifications Reject] Error sending rejection notification:", rejectNotificationError.message);
@@ -155,6 +156,7 @@ export async function PATCH(
       users: senderData,
       recipient: recipientData,
       rooms: roomData,
+      direct_chat_id: notificationCore.direct_chat_id,
     };
 
     // Transform the updated notification
