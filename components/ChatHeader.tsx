@@ -122,13 +122,18 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to switch room");
+        if (response.status === 403 && data.code === "ACCESS_DENIED") {
+          toast.error("You do not have permission to switch to this room.");
+        } else {
+          throw new Error(data.error || "Failed to switch room");
+        }
+        return;
       }
 
       if (data.status === "pending") {
         toast.info(data.message || "Switch request sent to room owner for approval");
         await fetchAvailableRooms();
-        setIsSwitchRoomPopoverOpen(false); // Close the popover
+        setIsSwitchRoomPopoverOpen(false);
         return;
       }
 
