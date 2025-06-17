@@ -39,17 +39,23 @@ import { useRoomStore } from "@/lib/store/roomstore";
 import { useDebounce } from "use-debounce";
 import Notifications from "./Notifications";
 import { useNotification } from "@/lib/store/notifications";
+import { useFetchRooms } from '@/hooks/useFetchRooms';
 
 type UserProfile = Database["public"]["Tables"]["users"]["Row"];
 type Room = Database["public"]["Tables"]["rooms"]["Row"];
 type SearchResult = UserProfile | Room;
+
+type RoomWithMembership = Room & {
+  isMember: boolean;
+  participationStatus: string | null;
+};
 
 export default function ChatHeader({ user }: { user: SupabaseUser | undefined }) {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [searchType, setSearchType] = useState<"rooms" | "users" | null>(null);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
-  const [availableRooms, setAvailableRooms] = useState<(Room & { isMember: boolean; participationStatus: string | null })[]>([]);
+  const [availableRooms, setAvailableRooms] = useState<RoomWithMembership[]>([]);
   const supabase = supabaseBrowser();
   const [isSearchPopoverOpen, setIsSearchPopoverOpen] = useState(false);
   const [isSwitchRoomPopoverOpen, setIsSwitchRoomPopoverOpen] = useState(false);
@@ -106,6 +112,15 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     [user, supabase]
   );
 
+  const { fetchAvailableRooms } = useFetchRooms(
+    user,
+    checkRoomMembership,
+    checkRoomParticipation,
+    setAvailableRooms,
+    setRooms,
+    isMounted
+  );
+
   const handleRoomSwitch = useCallback(async (room: Room) => {
     if (!user) {
       toast.error("You must be logged in to switch rooms");
@@ -135,17 +150,24 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         return;
       }
 
-      setSelectedRoom(room);
+      const isMember = await checkRoomMembership(room.id);
+      const participationStatus = await checkRoomParticipation(room.id);
+      const roomWithMembership: RoomWithMembership = {
+        ...room,
+        isMember,
+        participationStatus,
+      };
+
+      setSelectedRoom(roomWithMembership);
       setIsSwitchRoomPopoverOpen(false);
-      const isMemberNow = await checkRoomMembership(room.id);
-      setIsMember(isMemberNow);
+      setIsMember(isMember);
       toast.success(data.message || `Switched to ${room.name}`);
       await fetchAvailableRooms();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to switch room");
       await fetchAvailableRooms();
     }
-  }, [user, checkRoomMembership, setSelectedRoom, setIsMember, setIsSwitchRoomPopoverOpen]);
+  }, [user, checkRoomMembership, checkRoomParticipation, fetchAvailableRooms, setSelectedRoom, setIsMember, setIsSwitchRoomPopoverOpen]);
 
   const handleLeaveRoom = useCallback(async () => {
     if (!user) {
@@ -198,7 +220,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     } finally {
       setIsLeaving(false);
     }
-  }, [user, selectedRoom, UUID_REGEX, setIsLeaving, setIsMember, setSelectedRoom, router]);
+  }, [user, selectedRoom, UUID_REGEX, setIsLeaving, setIsMember, fetchAvailableRooms, setSelectedRoom, router]);
 
   const handleSearchInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     debouncedCallback(e.target.value);
@@ -289,7 +311,14 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
           if (roomError || !room) {
             throw new Error("Failed to fetch room details");
           }
-          setSelectedRoom(room);
+          const isMember = await checkRoomMembership(room.id);
+          const participationStatus = await checkRoomParticipation(room.id);
+          const roomWithMembership: RoomWithMembership = {
+            ...room,
+            isMember,
+            participationStatus,
+          };
+          setSelectedRoom(roomWithMembership);
           setIsMember(true);
         }
         if (searchType) {
@@ -299,76 +328,8 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         toast.error(error instanceof Error ? error.message : "Failed to join room");
       }
     },
-    [user, selectedRoom, setSelectedRoom, supabase, searchType, fetchSearchResults]
+    [user, selectedRoom, UUID_REGEX, setSelectedRoom, supabase, searchType, fetchSearchResults, setIsMember, checkRoomMembership, checkRoomParticipation]
   );
-
-  const fetchAvailableRooms = useCallback(async () => {
-    if (!user) return;
-    try {
-      const { data: roomsData, error } = await supabase
-        .from("room_members")
-        .select("rooms(*)")
-        .eq("user_id", user.id)
-        .eq("status", "accepted");
-
-      if (error) {
-        console.error("Error fetching rooms:", error);
-        toast.error("Failed to fetch rooms");
-        return;
-      }
-
-      let rooms = roomsData
-        .map((item) => item.rooms)
-        .filter((room): room is Room => room !== null);
-
-      if (rooms.length === 0) {
-        const { data: generalChat, error: generalChatError } = await supabase
-          .from("rooms")
-          .select("*")
-          .eq("name", "General Chat")
-          .eq("is_private", false)
-          .single();
-
-        if (generalChatError || !generalChat) {
-          const { data: newRoom, error: createError } = await supabase
-            .from("rooms")
-            .insert({ name: "General Chat", is_private: false, created_by: user.id })
-            .select()
-            .single();
-
-          if (createError || !newRoom) {
-            console.error("Error creating General Chat:", createError);
-            toast.error("Failed to create default room");
-            return;
-          }
-
-          await handleJoinRoom(newRoom.id);
-          rooms = [newRoom];
-        } else {
-          await handleJoinRoom(generalChat.id);
-          rooms = [generalChat];
-        }
-      }
-
-      const roomsWithMembership = await Promise.all(
-        rooms.map(async (room) => ({
-          ...room,
-          isMember: await checkRoomMembership(room.id),
-          participationStatus: await checkRoomParticipation(room.id),
-        }))
-      );
-
-      if (isMounted.current) {
-        setAvailableRooms(roomsWithMembership);
-        setRooms(roomsWithMembership);
-        useRoomStore.getState().initializeDefaultRoom();
-      }
-    } catch (error) {
-      console.error("Error fetching rooms:", error);
-      toast.error("Failed to fetch rooms");
-    }
-  }, [user, supabase, checkRoomMembership, checkRoomParticipation, setRooms, handleJoinRoom]);
-
 
   const handleCreateRoom = async () => {
     if (!user) {

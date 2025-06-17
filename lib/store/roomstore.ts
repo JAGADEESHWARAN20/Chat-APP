@@ -2,14 +2,20 @@ import { create } from "zustand";
 import { Database } from "@/lib/types/supabase";
 
 type IRoom = Database["public"]["Tables"]["rooms"]["Row"];
+// In roomstore.ts
+type RoomWithMembership = IRoom & {
+     isMember: boolean;
+     participationStatus: string | null;
+};
 
 interface RoomState {
-     rooms: IRoom[];
-     selectedRoom: IRoom | null;
-     setRooms: (rooms: IRoom[]) => void;
-     setSelectedRoom: (room: IRoom | null) => void;
+     rooms: RoomWithMembership[];
+     selectedRoom: RoomWithMembership | null;
+     setRooms: (rooms: RoomWithMembership[]) => void;
+     setSelectedRoom: (room: RoomWithMembership | null) => void;
      initializeDefaultRoom: () => void;
 }
+
 
 export const useRoomStore = create<RoomState>((set, get) => ({
      rooms: [],
