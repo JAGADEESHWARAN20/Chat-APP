@@ -85,7 +85,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       }
       return data?.status === "accepted";
     },
-    [user, supabase, isMember]
+    [user, supabase]
   );
 
   const checkRoomParticipation = useCallback(
@@ -106,7 +106,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     [user, supabase]
   );
 
-  const handleRoomSwitch = async (room: Room) => {
+  const handleRoomSwitch = useCallback(async (room: Room) => {
     if (!user) {
       toast.error("You must be logged in to switch rooms");
       return;
@@ -145,7 +145,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       toast.error(err instanceof Error ? err.message : "Failed to switch room");
       await fetchAvailableRooms();
     }
-  };
+  }, [user, checkRoomMembership, setSelectedRoom, setIsMember, setIsSwitchRoomPopoverOpen]);
 
   const handleLeaveRoom = useCallback(async () => {
     if (!user) {

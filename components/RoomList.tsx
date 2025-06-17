@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRoomStore } from "@/lib/store/roomstore";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { Button } from "./ui/button";
@@ -38,7 +38,7 @@ export default function RoomList() {
     }
   };
 
-  const handleRoomSwitch = async (room: IRoom) => {
+  const handleRoomSwitch = useCallback(async (room: IRoom) => {
     if (!user) {
       toast.error("You must be logged in to switch rooms");
       return;
@@ -50,26 +50,18 @@ export default function RoomList() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ roomId: room.id }),
       });
-      const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to switch room");
-      }
-
-      if (data.status === "pending") {
-        toast.info(data.message || "Switch request sent to room owner for approval");
-        // Refresh participations to update UI
-        await fetchParticipations();
-        return;
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to switch room");
       }
 
       setSelectedRoom(room);
-      toast.success(data.message || `Switched to ${room.name}`);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to switch room");
-      console.error(err);
+      toast.success("Successfully switched room");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to switch room");
     }
-  };
+  }, [user, setSelectedRoom]);
 
   const handleLeaveRoom = async (roomId: string) => {
     if (!user) {
@@ -136,7 +128,7 @@ export default function RoomList() {
     return !participation || participation.status === "rejected";
   };
 
-  const fetchParticipations = async () => {
+  const fetchParticipations = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -157,7 +149,7 @@ export default function RoomList() {
       toast.error("Unexpected error fetching participations");
       console.error("Unexpected error:", err);
     }
-  };
+  }, [user, supabase, setUserParticipations]);
 
   useEffect(() => {
     if (!user) return;

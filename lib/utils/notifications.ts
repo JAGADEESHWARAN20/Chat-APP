@@ -39,7 +39,8 @@ export const transformNotification = (
           sender_id: notif.sender_id ?? "",
           user_id: notif.user_id,
           room_id: notif.room_id ?? null,
-          join_status:notif.join_status,
+          join_status: notif.join_status,
+          direct_chat_id: notif.direct_chat_id ?? null,
           users: users
                ? {
                     id: users.id,
