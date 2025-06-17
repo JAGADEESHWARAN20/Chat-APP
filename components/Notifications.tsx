@@ -22,6 +22,10 @@ interface NotificationsProps {
 }
 
 type Room = Database["public"]["Tables"]["rooms"]["Row"];
+type RoomWithMembership = Room & {
+  isMember: boolean;
+  participationStatus: string | null;
+};
 
 export default function Notifications({ isOpen, onClose }: NotificationsProps) {
   const user = useUser((state) => state.user) as SupabaseUser | undefined;
@@ -31,6 +35,37 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
   const [isLoading, setIsLoading] = useState(false);
   const supabase = supabaseBrowser();
   const isMobile = useMediaQuery("(max-width: 768px)");
+
+  const checkRoomMembership = async (roomId: string) => {
+    if (!user) return false;
+    const { data, error } = await supabase
+      .from("room_participants")
+      .select("status")
+      .eq("room_id", roomId)
+      .eq("user_id", user.id)
+      .eq("status", "accepted")
+      .single();
+    if (error && error.code !== "PGRST116") {
+      console.error("Error checking room membership:", error);
+      return false;
+    }
+    return data?.status === "accepted";
+  };
+
+  const checkRoomParticipation = async (roomId: string) => {
+    if (!user) return null;
+    const { data, error } = await supabase
+      .from("room_participants")
+      .select("status")
+      .eq("room_id", roomId)
+      .eq("user_id", user.id)
+      .single();
+    if (error && error.code !== "PGRST116") {
+      console.error("Error checking room participation:", error);
+      return null;
+    }
+    return data?.status || null;
+  };
 
   const handleAccept = async (notificationId: string, roomId: string | null, type: string) => {
     if (!roomId) {
@@ -62,7 +97,14 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
       if (roomError || !room) {
         throw new Error("Failed to fetch room details");
       }
-      setSelectedRoom(room);
+      const isMember = await checkRoomMembership(room.id);
+      const participationStatus = await checkRoomParticipation(room.id);
+      const roomWithMembership: RoomWithMembership = {
+        ...room,
+        isMember,
+        participationStatus,
+      };
+      setSelectedRoom(roomWithMembership);
 
       toast.success(`${type === "join_request" ? "Join" : "Switch"} request approved`);
     } catch (error) {
@@ -134,7 +176,14 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
       }
 
       markAsRead(notificationId);
-      setSelectedRoom(room);
+      const isMember = await checkRoomMembership(room.id);
+      const participationStatus = await checkRoomParticipation(room.id);
+      const roomWithMembership: RoomWithMembership = {
+        ...room,
+        isMember,
+        participationStatus,
+      };
+      setSelectedRoom(roomWithMembership);
 
       const { data: roomsData, error: roomsError } = await supabase
         .from("room_participants")
@@ -151,6 +200,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
         rooms.map(async (room) => ({
           ...room,
           isMember: await checkRoomMembership(room.id),
+          participationStatus: await checkRoomParticipation(room.id), // Also fix here
         }))
       );
 
@@ -161,22 +211,6 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
       toast.error(error instanceof Error ? error.message : "Failed to switch room");
       console.error("Error switching room:", error);
     }
-  };
-
-  const checkRoomMembership = async (roomId: string) => {
-    if (!user) return false;
-    const { data, error } = await supabase
-      .from("room_participants")
-      .select("status")
-      .eq("room_id", roomId)
-      .eq("user_id", user.id)
-      .eq("status", "accepted")
-      .single();
-    if (error && error.code !== "PGRST116") {
-      console.error("Error checking room membership:", error);
-      return false;
-    }
-    return data?.status === "accepted";
   };
 
   const handleDeleteNotification = async (notificationId: string) => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Button } from "./ui/button";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { User as SupabaseUser } from "@supabase/supabase-js";
@@ -73,23 +73,24 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 
   const [debouncedCallback] = useDebounce((value: string) => setSearchQuery(value), 300);
   const [debouncedSearchQuery] = useDebounce(searchQuery, 300);
-  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const UUID_REGEX = useMemo(() => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, []);
 
   const checkRoomMembership = useCallback(
     async (roomId: string) => {
       if (!user) return false;
       const { data, error } = await supabase
-        .from("room_members")
-        .select("status")
-        .eq("room_id", roomId)
-        .eq("user_id", user.id)
-        .eq("status", "accepted")
-        .single();
+      .from("room_members")
+      .select("status")
+      .eq("room_id", roomId)
+      .eq("user_id", user.id)
+      .eq("status", "accepted")
+      .single();
       if (error && error.code !== "PGRST116") {
         console.error("Error checking room membership:", error);
         return false;
       }
       return data?.status === "accepted";
+      console.log(isMember);
     },
     [user, supabase]
   );
