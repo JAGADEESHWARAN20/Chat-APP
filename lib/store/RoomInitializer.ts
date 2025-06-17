@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { Database } from "@/lib/types/supabase";
 import { debounce } from "lodash";
 import { useFetchRooms } from "@/hooks/useFetchRooms";
+import { useRef } from 'react';
 
 type Room = Database["public"]["Tables"]["rooms"]["Row"];
 type RoomWithMembership = Room & {
@@ -44,6 +45,7 @@ export default function RoomInitializer() {
      const { setRooms, initializeDefaultRoom } = useRoomStore();
      const user = useUser((state) => state.user);
      const supabase = supabaseBrowser();
+     const isMounted = useRef(true);
 
      const checkRoomMembership = useCallback(
           async (roomId: string) => {
@@ -88,7 +90,7 @@ export default function RoomInitializer() {
           checkRoomParticipation,
           setRooms,
           setRooms,
-          { current: true },
+          isMounted,
           initializeDefaultRoom
      );
 
@@ -184,32 +186,29 @@ export default function RoomInitializer() {
                return;
           }
 
-          initializeRooms();
+          fetchAvailableRooms();
 
-          // Subscribe to room_members changes
-          const roomChannel = supabase
-               .channel("room_members_changes")
-               .on(
-                    "postgres_changes",
+          const roomChannel = supabase.channel('room_members_changes')
+               .on('postgres_changes',
                     {
-                         event: "*",
-                         schema: "public",
-                         table: "room_members",
-                         filter: `user_id=eq.${user.id}`,
+                         event: '*',
+                         schema: 'public',
+                         table: 'room_members',
+                         filter: `user_id=eq.${user.id}`
                     },
                     () => {
-                         console.log("Room membership change detected, refreshing rooms...");
-                         debouncedInitializeRooms();
-                    }
-               )
+                         console.log('Room membership change detected, refreshing rooms...');
+                         fetchAvailableRooms();
+                    })
                .subscribe((status) => {
-                    console.log("Room subscription status:", status);
+                    console.log('Room subscription status:', status);
                });
 
           return () => {
                supabase.removeChannel(roomChannel);
+               isMounted.current = false;
           };
-     }, [user, setRooms, supabase, debouncedInitializeRooms, initializeRooms]);
+     }, [user, setRooms, supabase, fetchAvailableRooms, initializeDefaultRoom]);
 
      return null;
 }
