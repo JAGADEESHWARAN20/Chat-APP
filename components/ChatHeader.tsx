@@ -64,7 +64,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const [newRoomName, setNewRoomName] = useState("");
   const [isPrivate, setIsPrivate] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
-  const { selectedRoom, setSelectedRoom, setRooms } = useRoomStore();
+  const { selectedRoom, setSelectedRoom, setRooms, initializeDefaultRoom } = useRoomStore();
   const { notifications, fetchNotifications, subscribeToNotifications } = useNotification();
   const isMounted = useRef(true);
   const [isLoading, setIsLoading] = useState(false);
@@ -79,18 +79,17 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     async (roomId: string) => {
       if (!user) return false;
       const { data, error } = await supabase
-      .from("room_members")
-      .select("status")
-      .eq("room_id", roomId)
-      .eq("user_id", user.id)
-      .eq("status", "accepted")
-      .single();
+        .from("room_members")
+        .select("status")
+        .eq("room_id", roomId)
+        .eq("user_id", user.id)
+        .eq("status", "accepted")
+        .single();
       if (error && error.code !== "PGRST116") {
         console.error("Error checking room membership:", error);
         return false;
       }
       return data?.status === "accepted";
-      console.log(isMember);
     },
     [user, supabase]
   );
@@ -119,7 +118,8 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     checkRoomParticipation,
     setAvailableRooms,
     setRooms,
-    isMounted
+    isMounted,
+    initializeDefaultRoom // Pass initializeDefaultRoom to the hook
   );
 
   const handleRoomSwitch = useCallback(async (room: Room) => {

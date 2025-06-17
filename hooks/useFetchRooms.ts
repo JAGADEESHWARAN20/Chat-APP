@@ -1,47 +1,42 @@
-import { useCallback } from 'react';
-import { supabaseBrowser } from '@/lib/supabase/browser';
-import { toast } from 'sonner';
-import { Database } from '@/lib/types/supabase';
-import { useRoomStore } from '@/lib/store/roomstore';
+import { useCallback } from "react";
+import { supabaseBrowser } from "@/lib/supabase/browser";
+import { toast } from "sonner";
+import { Database } from "@/lib/types/supabase";
 
-type Room = Database['public']['Tables']['rooms']['Row'];
+type Room = Database["public"]["Tables"]["rooms"]["Row"];
 type RoomWithMembership = Room & {
      isMember: boolean;
      participationStatus: string | null;
-};
-
-type RoomMemberRow = {
-     rooms: Room | null;
 };
 
 export const useFetchRooms = (
      user: { id: string } | undefined,
      checkRoomMembership: (roomId: string) => Promise<boolean>,
      checkRoomParticipation: (roomId: string) => Promise<string | null>,
-     setAvailableRooms: React.Dispatch<React.SetStateAction<RoomWithMembership[]>>,
-     setRooms: (rooms: RoomWithMembership[]) => void, // Updated type
-     isMounted: React.MutableRefObject<boolean>
+     setAvailableRooms: (rooms: RoomWithMembership[]) => void, // Change to Zustand-style setter
+     setRooms: (rooms: RoomWithMembership[]) => void,
+     isMounted: React.MutableRefObject<boolean>,
+     initializeDefaultRoom?: () => void
 ) => {
      const supabase = supabaseBrowser();
 
      const fetchAvailableRooms = useCallback(async () => {
           if (!user) {
-               setAvailableRooms([]); // Ensure state is reset if no user
+               setAvailableRooms([]);
                setRooms([]);
                return;
           }
 
           try {
-               // Fetch rooms where the user is a member
-               const { data: roomsData, error } = await supabase
+               const { data: memberships, error: memberError } = await supabase
                     .from("room_members")
-                    .select("rooms(*)")
+                    .select("room_id")
                     .eq("user_id", user.id)
                     .eq("status", "accepted");
 
-               if (error) {
-                    console.error("Error fetching rooms:", error);
-                    toast.error("Failed to fetch rooms");
+               if (memberError) {
+                    console.error("Error fetching room memberships:", memberError);
+                    toast.error("Failed to fetch room memberships");
                     if (isMounted.current) {
                          setAvailableRooms([]);
                          setRooms([]);
@@ -49,11 +44,28 @@ export const useFetchRooms = (
                     return;
                }
 
-               let rooms = (roomsData as RoomMemberRow[])
-                    .map((item) => item.rooms)
-                    .filter((room): room is Room => room !== null);
+               let rooms: Room[] = [];
 
-               // If no rooms are found, look for or create "General Chat"
+               if (memberships && memberships.length > 0) {
+                    const roomIds = memberships.map((m) => m.room_id);
+                    const { data: roomsData, error: roomsError } = await supabase
+                         .from("rooms")
+                         .select("*")
+                         .in("id", roomIds);
+
+                    if (roomsError) {
+                         console.error("Error fetching rooms:", roomsError);
+                         toast.error("Failed to fetch rooms");
+                         if (isMounted.current) {
+                              setAvailableRooms([]);
+                              setRooms([]);
+                         }
+                         return;
+                    }
+
+                    rooms = roomsData || [];
+               }
+
                if (rooms.length === 0) {
                     const { data: generalChat, error: generalChatError } = await supabase
                          .from("rooms")
@@ -75,7 +87,15 @@ export const useFetchRooms = (
                     if (!generalChat) {
                          const { data: newRoom, error: createError } = await supabase
                               .from("rooms")
-                              .insert({ name: "General Chat", is_private: false, created_by: user.id })
+                              .upsert(
+                                   {
+                                        name: "General Chat",
+                                        is_private: false,
+                                        created_by: user.id,
+                                        created_at: new Date().toISOString(),
+                                   },
+                                   { onConflict: "name,is_private" }
+                              )
                               .select()
                               .single();
 
@@ -89,7 +109,6 @@ export const useFetchRooms = (
                               return;
                          }
 
-                         // Automatically join the user to the new "General Chat"
                          const { error: joinError } = await supabase
                               .from("room_members")
                               .insert({
@@ -112,7 +131,6 @@ export const useFetchRooms = (
 
                          rooms = [newRoom];
                     } else {
-                         // If "General Chat" exists, join the user if not already a member
                          const isMember = await checkRoomMembership(generalChat.id);
                          if (!isMember) {
                               const { error: joinError } = await supabase
@@ -139,7 +157,6 @@ export const useFetchRooms = (
                     }
                }
 
-               // Augment rooms with membership and participation status
                const roomsWithMembership = await Promise.all(
                     rooms.map(async (room) => ({
                          ...room,
@@ -151,7 +168,9 @@ export const useFetchRooms = (
                if (isMounted.current) {
                     setAvailableRooms(roomsWithMembership);
                     setRooms(roomsWithMembership);
-                    useRoomStore.getState().initializeDefaultRoom();
+                    if (initializeDefaultRoom) {
+                         initializeDefaultRoom();
+                    }
                }
           } catch (error) {
                console.error("Error fetching rooms:", error);
@@ -161,7 +180,7 @@ export const useFetchRooms = (
                     setRooms([]);
                }
           }
-     }, [user, supabase, checkRoomMembership, checkRoomParticipation, setAvailableRooms, setRooms, isMounted]);
+     }, [user, supabase, checkRoomMembership, checkRoomParticipation, setAvailableRooms, setRooms, isMounted, initializeDefaultRoom]);
 
      return { fetchAvailableRooms };
 };
