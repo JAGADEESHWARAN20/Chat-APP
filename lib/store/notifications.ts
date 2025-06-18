@@ -2,7 +2,6 @@ import { create } from "zustand";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { toast } from "sonner";
 import { Database } from "@/lib/types/supabase";
-import { transformNotification } from "@/lib/utils/notifications";
 
 type User = Database["public"]["Tables"]["users"]["Row"];
 type Room = Database["public"]["Tables"]["rooms"]["Row"];
@@ -46,7 +45,7 @@ interface NotificationState {
   notifications: Inotification[];
   setNotifications: (notifications: Inotification[]) => void;
   addNotification: (notification: Inotification) => void;
-  markAsRead: (notificationId: string) => void;
+  markAsRead: (notificationId: string) => Promise<void>;
   fetchNotifications: (userId: string, page?: number, limit?: number, retries?: number) => Promise<void>;
   subscribeToNotifications: (userId: string) => void;
   unsubscribeFromNotifications: () => void;
@@ -54,43 +53,26 @@ interface NotificationState {
 
 export const useNotification = create<NotificationState>((set, get) => {
   const supabase = supabaseBrowser();
-  const usersCache = new Map<string, User>();
   let notificationChannel: ReturnType<typeof supabase.channel> | null = null;
 
   const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-  const fetchUserData = async (userId: string): Promise<User | null> => {
-    if (usersCache.has(userId)) {
-      return usersCache.get(userId)!;
-    }
-
-    const { data, error } = await supabase
-      .from("users")
-      .select("id, username, display_name, avatar_url, created_at")
-      .eq("id", userId)
-      .single();
-
-    if (error) {
-      console.warn(`[Notifications Store] Failed to fetch user ${userId}:`, error.message);
-      return null;
-    }
-
-    usersCache.set(userId, data);
-    return data;
-  };
-
   return {
     notifications: [],
 
-    setNotifications: (notifications) => set({ notifications }),
+    setNotifications: (notifications) => 
+      set({ notifications }),
 
-    addNotification: (notification) =>
+    addNotification: (notification) => {
+      console.log("[Notifications] Adding notification:", notification);
       set((state) => ({
         notifications: [notification, ...state.notifications].slice(0, 20),
-      })),
+      }));
+    },
 
-    markAsRead: async (notificationId) => {
+    markAsRead: async (notificationId: string) => {
       try {
+        console.log("[Notifications] Marking as read:", notificationId);
         const { error } = await supabase
           .from("notifications")
           .update({ status: "read" })
@@ -104,12 +86,13 @@ export const useNotification = create<NotificationState>((set, get) => {
           ),
         }));
       } catch (error) {
-        console.error("Error marking notification as read:", error);
+        console.error("[Notifications] Error marking as read:", error);
         toast.error("Failed to mark notification as read");
       }
     },
 
-    fetchNotifications: async (userId, page = 1, limit = 20, retries = 3) => {
+    fetchNotifications: async (userId: string, page = 1, limit = 20, retries = 3) => {
+      console.log("[Notifications] Fetching notifications for user:", userId);
       for (let attempt = 1; attempt <= retries; attempt++) {
         try {
           const { data: notifications, error } = await supabase
@@ -144,10 +127,11 @@ export const useNotification = create<NotificationState>((set, get) => {
 
           if (error) throw error;
 
+          console.log("[Notifications] Fetched notifications:", notifications?.length || 0);
           set({ notifications: notifications || [] });
           return;
         } catch (error) {
-          console.error(`[Notifications Store] Fetch attempt ${attempt} failed:`, error);
+          console.error(`[Notifications] Fetch attempt ${attempt} failed:`, error);
           if (attempt === retries) {
             toast.error("Failed to load notifications");
             return;
@@ -157,13 +141,14 @@ export const useNotification = create<NotificationState>((set, get) => {
       }
     },
 
-    subscribeToNotifications: (userId) => {
-      // Clean up existing subscription if any
+    subscribeToNotifications: (userId: string) => {
+      console.log("[Notifications] Setting up subscription for user:", userId);
+      
       if (notificationChannel) {
+        console.log("[Notifications] Cleaning up existing subscription");
         notificationChannel.unsubscribe();
       }
 
-      // Create a new real-time subscription
       notificationChannel = supabase
         .channel(`notifications:${userId}`)
         .on(
@@ -175,10 +160,11 @@ export const useNotification = create<NotificationState>((set, get) => {
             filter: `user_id=eq.${userId}`,
           },
           async (payload) => {
+            console.log("[Notifications] Received real-time event:", payload.eventType, payload);
+            
             if (payload.eventType === "INSERT") {
               const newNotification = payload.new as RawNotification;
-
-              // Fetch complete notification data with related records
+              
               const { data: fullNotification, error } = await supabase
                 .from("notifications")
                 .select(`
@@ -209,55 +195,43 @@ export const useNotification = create<NotificationState>((set, get) => {
                 .single();
 
               if (error) {
-                console.error("Error fetching full notification:", error);
+                console.error("[Notifications] Error fetching full notification:", error);
                 return;
               }
 
+              console.log("[Notifications] Fetched full notification:", fullNotification);
+
               if (fullNotification) {
                 get().addNotification(fullNotification as Inotification);
-
-                // Show toast notification
-                const message =
-                  fullNotification.type === "message"
-                    ? `New message in ${fullNotification.rooms?.name || "a room"}`
-                    : fullNotification.message;
-
+                
+                // Show toast notification based on type
+                const message = fullNotification.type === "room_invite" 
+                  ? `${fullNotification.users?.display_name || "Someone"} invited you to join ${fullNotification.rooms?.name || "a room"}`
+                  : fullNotification.type === "message"
+                  ? `New message in ${fullNotification.rooms?.name || "a room"}`
+                  : fullNotification.message;
+                
                 toast(message, {
                   description: fullNotification.users?.display_name || "Someone",
                   action: {
                     label: "View",
                     onClick: () => {
                       // Handle notification click if needed
-                    },
-                  },
+                    }
+                  }
                 });
               }
-            } else if (payload.eventType === "UPDATE") {
-              const updatedNotification = payload.new as RawNotification;
-              set((state) => ({
-                notifications: state.notifications.map((notif) =>
-                  notif.id === updatedNotification.id ? { ...notif, ...updatedNotification } : notif
-                ),
-              }));
-            } else if (payload.eventType === "DELETE") {
-              const deletedNotification = payload.old as RawNotification;
-              set((state) => ({
-                notifications: state.notifications.filter(
-                  (notif) => notif.id !== deletedNotification.id
-                ),
-              }));
             }
           }
         )
         .subscribe((status) => {
-          if (status === "SUBSCRIBED") {
-            console.log("Subscribed to notifications");
-          }
+          console.log("[Notifications] Subscription status:", status);
         });
     },
 
     unsubscribeFromNotifications: () => {
       if (notificationChannel) {
+        console.log("[Notifications] Unsubscribing from notifications");
         notificationChannel.unsubscribe();
         notificationChannel = null;
       }

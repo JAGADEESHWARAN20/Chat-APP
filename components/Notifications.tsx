@@ -48,41 +48,6 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
   const supabase = supabaseBrowser();
   const isMobile = useMediaQuery("(max-width: 768px)");
 
-  const checkRoomMembership = useCallback(async (roomId: string) => {
-    if (!user) return false;
-    const { data, error } = await supabase
-      .from("room_participants")
-      .select("status")
-      .eq("room_id", roomId)
-      .eq("user_id", user.id)
-      .eq("status", "accepted")
-      .single();
-
-    if (error && error.code !== "PGRST116") {
-      console.error("Error checking room membership:", error);
-      return false;
-    }
-
-    return !!data;
-  }, [user, supabase]);
-
-  const checkRoomParticipation = useCallback(async (roomId: string) => {
-    if (!user) return null;
-    const { data, error } = await supabase
-      .from("room_participants")
-      .select("status")
-      .eq("room_id", roomId)
-      .eq("user_id", user.id)
-      .single();
-
-    if (error && error.code !== "PGRST116") {
-      console.error("Error checking room participation:", error);
-      return null;
-    }
-
-    return data?.status || null;
-  }, [user, supabase]);
-
   // Initialize notifications and subscribe to updates
   useEffect(() => {
     if (user?.id) {
@@ -118,26 +83,24 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to process notification");
+        const error = await response.json();
+        throw new Error(error.message || "Failed to process notification");
       }
 
       await markAsRead(notificationId);
 
       if (type === "room_invite") {
-        const isMember = await checkRoomMembership(roomId);
-        if (isMember) {
-          const { data: room } = await supabase
-            .from("rooms")
-            .select("*")
-            .eq("id", roomId)
-            .single();
+        const { data: room } = await supabase
+          .from("rooms")
+          .select("*")
+          .eq("id", roomId)
+          .single();
 
-          if (room) {
-            const roomWithMembership = transformRoom(room);
-            setSelectedRoom(roomWithMembership);
-            router.push(`/rooms/${room.id}`);
-            onClose();
-          }
+        if (room) {
+          const roomWithMembership = transformRoom(room);
+          setSelectedRoom(roomWithMembership);
+          router.push(`/rooms/${room.id}`);
+          onClose();
         }
       }
 
@@ -163,7 +126,8 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to reject notification");
+        const error = await response.json();
+        throw new Error(error.message || "Failed to reject notification");
       }
 
       await markAsRead(notificationId);
@@ -187,6 +151,10 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
       default:
         return notification.message || "New notification";
     }
+  }, []);
+
+  const shouldShowActions = useCallback((notification: any) => {
+    return notification.type === "room_invite" && notification.status !== "read";
   }, []);
 
   return (
@@ -216,8 +184,9 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
               {notifications.map((notification) => (
                 <Swipeable
                   key={notification.id}
-                  onSwipeLeft={() => handleReject(notification.id)}
+                  onSwipeLeft={() => shouldShowActions(notification) && handleReject(notification.id)}
                   onSwipeRight={() => 
+                    shouldShowActions(notification) &&
                     handleAccept(
                       notification.id, 
                       notification.room_id || null, 
@@ -247,8 +216,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
                         {new Date(notification.created_at || "").toLocaleString()}
                       </p>
                     </div>
-                    {notification.type === "room_invite" && 
-                     notification.status !== "read" && (
+                    {shouldShowActions(notification) && (
                       <div className="flex space-x-2">
                         <Button
                           variant="ghost"

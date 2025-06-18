@@ -9,9 +9,12 @@ export async function POST(req: NextRequest) {
     const supabase = createRouteHandlerClient<Database>({ cookies });
     const { content, roomId } = await req.json();
 
+    console.log("[Messages] Sending message to room:", roomId);
+
     // Validate session
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     if (sessionError || !session) {
+      console.error("[Messages] Session error:", sessionError);
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -26,6 +29,7 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (membershipError || !membership) {
+      console.error("[Messages] Membership error:", membershipError);
       return NextResponse.json({ error: "You are not a member of this room" }, { status: 403 });
     }
 
@@ -55,8 +59,21 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (messageError) {
-      console.error("Error inserting message:", messageError);
+      console.error("[Messages] Error inserting message:", messageError);
       return NextResponse.json({ error: "Failed to send message" }, { status: 500 });
+    }
+
+    console.log("[Messages] Message inserted successfully:", message.id);
+
+    // Get room details for notification
+    const { data: room, error: roomError } = await supabase
+      .from("rooms")
+      .select("name")
+      .eq("id", roomId)
+      .single();
+
+    if (roomError) {
+      console.error("[Messages] Error fetching room details:", roomError);
     }
 
     // Get all room members except the sender
@@ -66,15 +83,20 @@ export async function POST(req: NextRequest) {
       .eq("room_id", roomId)
       .neq("user_id", userId);
 
-    if (!membersError && roomMembers) {
+    if (membersError) {
+      console.error("[Messages] Error fetching room members:", membersError);
+    } else if (roomMembers) {
+      console.log("[Messages] Creating notifications for members:", roomMembers.length);
+
       // Create notifications for all room members
       const notifications = roomMembers.map((member) => ({
         user_id: member.user_id,
         sender_id: userId,
         room_id: roomId,
         type: "message",
-        message: content,
-        status: "unread"
+        message: `New message in ${room?.name || 'the room'}: ${content.substring(0, 50)}${content.length > 50 ? '...' : ''}`,
+        status: "unread",
+        created_at: new Date().toISOString()
       }));
 
       const { error: notificationError } = await supabase
@@ -82,8 +104,9 @@ export async function POST(req: NextRequest) {
         .insert(notifications);
 
       if (notificationError) {
-        console.error("Error creating notifications:", notificationError);
-        // Don't fail the request if notifications fail
+        console.error("[Messages] Error creating notifications:", notificationError);
+      } else {
+        console.log("[Messages] Notifications created successfully");
       }
     }
 
