@@ -3,12 +3,14 @@ import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { Database } from "@/lib/types/supabase";
 
+type NotificationType = "join_request" | "room_invite" | "message";
+
 type NotificationCore = {
   id: string;
   message: string;
   created_at: string | null;
   status: string | null;
-  type: "join_request" | "room_invite" | "message";
+  type: NotificationType;
   sender_id: string;
   user_id: string;
   room_id: string;
@@ -32,15 +34,15 @@ export async function POST(req: NextRequest, { params }: { params: { notificatio
 
     // Check authentication
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError) {
+    if (sessionError || !session?.user) {
       console.error("[Notifications Accept] Session error:", sessionError?.message);
-      return NextResponse.json({ error: "Authentication error", details: sessionError.message }, { status: 401 });
-    }
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized: No active session" }, { status: 401 });
+      return NextResponse.json(
+        { error: "Authentication error", details: sessionError?.message || "No active session" }, 
+        { status: 401 }
+      );
     }
 
-    // Fetch notification with detailed error logging
+    // First, get the notification details
     const { data: notification, error: notificationError } = await supabase
       .from("notifications")
       .select("*")
@@ -48,136 +50,90 @@ export async function POST(req: NextRequest, { params }: { params: { notificatio
       .single();
 
     if (notificationError || !notification) {
-      console.error("[Notifications Accept] Error fetching notification:", notificationError?.message);
+      console.error("[Notifications Accept] Error fetching notification:", notificationError);
       return NextResponse.json({ error: "Notification not found" }, { status: 404 });
     }
 
-    // Validate required fields
-    if (!notification.room_id) {
-      console.error("[Notifications Accept] Missing room_id");
-      return NextResponse.json({ error: "Invalid notification: missing room_id" }, { status: 400 });
+    // Determine which user to add to the room
+    const targetUserId = notification.type === "join_request" ? notification.sender_id : notification.user_id;
+    if (!targetUserId || !notification.room_id) {
+      return NextResponse.json({ error: "Invalid notification data" }, { status: 400 });
     }
 
-    // Start transaction for atomic operations
-    const userId = notification.type === "join_request" ? notification.sender_id : notification.user_id;
-    if (!userId) {
-      throw new Error("Missing user ID for room membership");
-    }
+    // Begin a series of atomic operations
+    const updates = [];
 
-    // 1. Verify room exists
-    const { data: room, error: roomError } = await supabase
-      .from("rooms")
-      .select("id, name, is_private")
-      .eq("id", notification.room_id)
-      .single();
-
-    if (roomError || !room) {
-      console.error("[Notifications Accept] Room not found:", roomError?.message);
-      return NextResponse.json({ error: "Room not found" }, { status: 404 });
-    }
-
-    // 2. Check if already a member to avoid duplicate entries
-    const { data: existingMember, error: memberCheckError } = await supabase
-      .from("room_members")
-      .select("*")
-      .eq("room_id", notification.room_id)
-      .eq("user_id", userId)
-      .single();
-
-    if (memberCheckError && memberCheckError.code !== "PGRST116") {
-      console.error("[Notifications Accept] Error checking membership:", memberCheckError.message);
-      return NextResponse.json({ error: "Failed to verify membership" }, { status: 500 });
-    }
-
-    const { data: existingParticipant, error: participantCheckError } = await supabase
-      .from("room_participants")
-      .select("*")
-      .eq("room_id", notification.room_id)
-      .eq("user_id", userId)
-      .single();
-
-    if (participantCheckError && participantCheckError.code !== "PGRST116") {
-      console.error("[Notifications Accept] Error checking participation:", participantCheckError.message);
-      return NextResponse.json({ error: "Failed to verify participation" }, { status: 500 });
-    }
-
-    console.log("[Notifications Accept] Current state:", {
-      room,
-      existingMember: existingMember || "none",
-      existingParticipant: existingParticipant || "none"
-    });
-
-    // 3. Update notification first
-    const { error: updateError } = await supabase
+    // 1. Update notification status
+    updates.push(supabase
       .from("notifications")
       .update({
         status: "read",
         join_status: "accepted",
-        updated_at: timestamp,
+        updated_at: timestamp
       })
-      .eq("id", notificationId);
+      .eq("id", notificationId));
 
-    if (updateError) {
-      console.error("[Notifications Accept] Error updating notification:", updateError.message);
-      return NextResponse.json({ error: "Failed to update notification" }, { status: 500 });
-    }
+    // 2. Add or update room membership
+    updates.push(supabase
+      .from("room_members")
+      .upsert({
+        room_id: notification.room_id,
+        user_id: targetUserId,
+        joined_at: timestamp,
+        status: "accepted",
+        active: false,
+        updated_at: timestamp
+      }, {
+        onConflict: "room_id,user_id"
+      }));
 
-    // 4. Add to room_members if not present
-    if (!existingMember) {
-      const { error: memberError } = await supabase
-        .from("room_members")
-        .insert([{
-          room_id: notification.room_id,
-          user_id: userId,
-          joined_at: timestamp,
-          status: "accepted",
-          active: false,
-          updated_at: timestamp
-        }]);
+    // 3. Add or update room participation
+    updates.push(supabase
+      .from("room_participants")
+      .upsert({
+        room_id: notification.room_id,
+        user_id: targetUserId,
+        status: "accepted",
+        joined_at: timestamp
+      }, {
+        onConflict: "room_id,user_id"
+      }));
 
-      if (memberError) {
-        console.error("[Notifications Accept] Error adding member:", memberError.message);
-        return NextResponse.json({ error: "Failed to add member" }, { status: 500 });
+    // Execute all updates
+    const results = await Promise.all(updates);
+    const errors = results.map(r => r.error).filter(Boolean);
+
+    if (errors.length > 0) {
+      console.error("[Notifications Accept] Update errors:", errors);
+      
+      // Check for specific error types
+      const hasUniqueViolation = errors.some(e => e?.code === "23505");
+      const hasForeignKeyViolation = errors.some(e => e?.code === "23503");
+      
+      if (hasUniqueViolation) {
+        return NextResponse.json({ error: "Already a member of this room" }, { status: 409 });
+      } else if (hasForeignKeyViolation) {
+        return NextResponse.json({ error: "Invalid room or user reference" }, { status: 400 });
       }
-    }
-
-    // 5. Update or add room_participant
-    const participantData = {
-      room_id: notification.room_id,
-      user_id: userId,
-      status: "accepted",
-      joined_at: timestamp
-    };
-
-    if (existingParticipant) {
-      const { error: updateParticipantError } = await supabase
-        .from("room_participants")
-        .update(participantData)
-        .eq("room_id", notification.room_id)
-        .eq("user_id", userId);
-
-      if (updateParticipantError) {
-        console.error("[Notifications Accept] Error updating participant:", updateParticipantError.message);
-        return NextResponse.json({ error: "Failed to update participant" }, { status: 500 });
-      }
-    } else {
-      const { error: insertParticipantError } = await supabase
-        .from("room_participants")
-        .insert([participantData]);
-
-      if (insertParticipantError) {
-        console.error("[Notifications Accept] Error inserting participant:", insertParticipantError.message);
-        return NextResponse.json({ error: "Failed to add participant" }, { status: 500 });
-      }
+      
+      throw new Error("Failed to update room membership");
     }
 
     console.log("[Notifications Accept] Successfully processed request:", {
       notificationId,
       roomId: notification.room_id,
-      userId
+      userId: targetUserId
     });
 
-    return NextResponse.json({ message: "Request accepted successfully" });
+    return NextResponse.json({ 
+      message: "Request accepted successfully",
+      data: {
+        notificationId,
+        roomId: notification.room_id,
+        userId: targetUserId,
+        timestamp
+      }
+    });
   } catch (error) {
     console.error("[Notifications Accept] Unexpected error:", error);
     return NextResponse.json({ 

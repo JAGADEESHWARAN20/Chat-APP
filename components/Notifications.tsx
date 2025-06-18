@@ -15,6 +15,7 @@ import { Check, X, ArrowLeft } from "lucide-react";
 import { Database } from "@/lib/types/supabase";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { Swipeable } from "./ui/swipeable";
+import { Inotification } from "@/lib/store/notifications";
 
 interface NotificationsProps {
   isOpen: boolean;
@@ -27,11 +28,21 @@ type RoomWithMembership = Room & {
   participationStatus: string | null;
 };
 
-const transformRoom = (room: Room): RoomWithMembership => ({
-  ...room,
-  isMember: true, // Since this is called after accepting invite
-  participationStatus: "accepted"
-});
+const transformRoom = async (room: Room, userId: string, supabase: ReturnType<typeof supabaseBrowser>): Promise<RoomWithMembership> => {
+  // Check actual membership status
+  const { data: membership } = await supabase
+    .from("room_participants")
+    .select("status")
+    .eq("room_id", room.id)
+    .eq("user_id", userId)
+    .single();
+
+  return {
+    ...room,
+    isMember: !!membership,
+    participationStatus: membership?.status || null
+  };
+};
 
 export default function Notifications({ isOpen, onClose }: NotificationsProps) {
   const user = useUser((state) => state.user) as SupabaseUser | undefined;
@@ -53,10 +64,15 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
     if (user?.id) {
       const initNotifications = async () => {
         try {
+          console.log("[Notifications] Initializing notifications for user:", user.id);
           await fetchNotifications(user.id);
+          console.log("[Notifications] Successfully fetched notifications");
+          
+          console.log("[Notifications] Setting up real-time subscription");
           subscribeToNotifications(user.id);
+          console.log("[Notifications] Real-time subscription established");
         } catch (error) {
-          console.error("Error initializing notifications:", error);
+          console.error("[Notifications] Error initializing notifications:", error);
           toast.error("Failed to load notifications");
         }
       };
@@ -65,49 +81,63 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
 
       // Cleanup subscription when component unmounts
       return () => {
+        console.log("[Notifications] Cleaning up notification subscription");
         unsubscribeFromNotifications();
       };
+    } else {
+      console.log("[Notifications] No user found, skipping initialization");
     }
   }, [user?.id, fetchNotifications, subscribeToNotifications, unsubscribeFromNotifications]);
 
   const handleAccept = async (notificationId: string, roomId: string | null, type: string) => {
     if (!user || !roomId) {
-      toast.error("Unable to process request");
+      toast.error("Unable to process request: Missing user or room information");
       return;
     }
 
     setIsLoading(true);
     try {
+      console.log("[Notifications] Processing accept request:", { notificationId, roomId, type });
+      
       const response = await fetch(`/api/notifications/${notificationId}/accept`, {
         method: "POST",
       });
 
       if (!response.ok) {
         const error = await response.json();
+        console.error("[Notifications] Accept request failed:", error);
         throw new Error(error.message || "Failed to process notification");
       }
 
+      console.log("[Notifications] Successfully processed accept request");
       await markAsRead(notificationId);
 
       if (type === "room_invite" || type === "join_request") {
-        const { data: room } = await supabase
+        console.log("[Notifications] Fetching updated room information");
+        const { data: room, error: roomError } = await supabase
           .from("rooms")
           .select("*")
           .eq("id", roomId)
           .single();
 
+        if (roomError) {
+          console.error("[Notifications] Error fetching room:", roomError);
+          throw new Error("Failed to fetch room information");
+        }
+
         if (room) {
-          const roomWithMembership = transformRoom(room);
+          const roomWithMembership = await transformRoom(room, user.id, supabase);
+          console.log("[Notifications] Switching to room:", roomWithMembership);
           setSelectedRoom(roomWithMembership);
-          router.push(`/rooms/${room.id}`);
           onClose();
+          router.refresh();
         }
       }
 
       toast.success("Request accepted successfully");
     } catch (error) {
-      console.error("Error accepting notification:", error);
-      toast.error("Failed to accept request");
+      console.error("[Notifications] Error in accept flow:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to process request");
     } finally {
       setIsLoading(false);
     }
@@ -140,22 +170,23 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
     }
   };
 
-  const getNotificationContent = useCallback((notification: any) => {
+  const getNotificationContent = useCallback((notification: Inotification) => {
     const senderName = notification.users?.display_name || notification.users?.username || "Someone";
+    const roomName = notification.rooms?.name || "a room";
 
     switch (notification.type) {
       case "room_invite":
-        return `${senderName} invited you to join ${notification.rooms?.name || "a room"}`;
+        return `${senderName} invited you to join ${roomName}`;
       case "join_request":
-        return `${senderName} requested to join ${notification.rooms?.name || "a room"}`;
+        return `${senderName} requested to join ${roomName}`;
       case "message":
-        return `New message from ${senderName} in ${notification.rooms?.name || "a room"}`;
+        return `New message from ${senderName} in ${roomName}`;
       default:
         return notification.message || "New notification";
     }
   }, []);
 
-  const shouldShowActions = useCallback((notification: any) => {
+  const shouldShowActions = useCallback((notification: Inotification) => {
     return (notification.type === "room_invite" || notification.type === "join_request") &&
       notification.status !== "read";
   }, []);
