@@ -11,9 +11,11 @@ import { Imessage } from "@/lib/store/messages";
 export default function ChatMessages() {
   const selectedRoom = useRoomStore((state) => state.selectedRoom);
   const selectedDirectChat = useDirectChatStore((state) => state.selectedChat);
-  const { setMessages, clearMessages } = useMessage((state) => ({
+  const { setMessages, clearMessages, subscribeToRoom, unsubscribeFromRoom } = useMessage((state) => ({
     setMessages: state.setMessages,
     clearMessages: state.clearMessages,
+    subscribeToRoom: state.subscribeToRoom,
+    unsubscribeFromRoom: state.unsubscribeFromRoom,
   }));
 
   const fetchMessages = useCallback(async () => {
@@ -40,6 +42,9 @@ export default function ChatMessages() {
         })) || [];
 
         setMessages(formattedMessages.reverse());
+        
+        // Subscribe to real-time updates for the room
+        subscribeToRoom(selectedRoom.id);
       } else if (selectedDirectChat) {
         const response = await fetch(`/api/direct-messages/${selectedDirectChat.id}`);
         if (!response.ok) throw new Error("Failed to fetch direct messages");
@@ -59,23 +64,24 @@ export default function ChatMessages() {
         })) || [];
 
         setMessages(formattedMessages.reverse());
-      } else {
-        setMessages([]);
       }
     } catch (error) {
-      if (error instanceof Error) {
-        toast.error("Failed to fetch messages");
-        console.error("Error fetching messages:", error.message);
-      }
+      console.error("Error fetching messages:", error);
+      toast.error("Failed to load messages");
     }
-  }, [selectedRoom, selectedDirectChat, clearMessages, setMessages]);
+  }, [selectedRoom, selectedDirectChat, setMessages, clearMessages, subscribeToRoom]);
 
   useEffect(() => {
     fetchMessages();
-  }, [fetchMessages, selectedRoom, selectedDirectChat]);
+
+    // Cleanup subscription when component unmounts or room changes
+    return () => {
+      unsubscribeFromRoom();
+    };
+  }, [fetchMessages, unsubscribeFromRoom]);
 
   return (
-    <Suspense fallback={"loading..."}>
+    <Suspense fallback={<div>Loading messages...</div>}>
       <ListMessages />
     </Suspense>
   );

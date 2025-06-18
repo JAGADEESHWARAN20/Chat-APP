@@ -16,7 +16,6 @@ export async function POST(req: NextRequest) {
     }
 
     const userId = session.user.id;
-    console.log(userId);
 
     // Check if the user is a member of the room
     const { data: membership, error: membershipError } = await supabase
@@ -34,9 +33,9 @@ export async function POST(req: NextRequest) {
     const { data: message, error: messageError } = await supabase
       .from("messages")
       .insert({
-        text: content, // Changed from 'content' to 'text' to match schema
+        text: content,
         room_id: roomId,
-        sender_id: userId, // Changed from 'user_id' to 'sender_id' to match schema
+        sender_id: userId,
         created_at: new Date().toISOString(),
         status: "sent",
         is_edited: false,
@@ -56,53 +55,36 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (messageError) {
-      console.error("Error sending message:", messageError);
+      console.error("Error inserting message:", messageError);
       return NextResponse.json({ error: "Failed to send message" }, { status: 500 });
     }
-    if (!messageError) {
-      console.log('sending message completed');
-    }
 
-    // Fetch room details
-    const { data: room, error: roomError } = await supabase
-      .from("rooms")
-      .select("name, created_by")
-      .eq("id", roomId)
-      .single();
-
-    if (roomError || !room) {
-      return NextResponse.json({ error: "Room not found" }, { status: 404 });
-    }
-
-    // Fetch room members to notify (excluding the sender)
-    const { data: members, error: membersError } = await supabase
+    // Get all room members except the sender
+    const { data: roomMembers, error: membersError } = await supabase
       .from("room_members")
       .select("user_id")
       .eq("room_id", roomId)
       .neq("user_id", userId);
 
-    if (membersError) {
-      console.error("Error fetching room members:", membersError);
-      return NextResponse.json({ error: "Failed to fetch room members" }, { status: 500 });
-    }
+    if (!membersError && roomMembers) {
+      // Create notifications for all room members
+      const notifications = roomMembers.map((member) => ({
+        user_id: member.user_id,
+        sender_id: userId,
+        room_id: roomId,
+        type: "message",
+        message: content,
+        status: "unread"
+      }));
 
-    // Insert notifications for each member
-    const notifications = members.map((member) => ({
-      user_id: member.user_id,
-      type: "new_message",
-      room_id: roomId,
-      sender_id: userId,
-      message: `${message.users?.username || "A user"} sent a message in ${room.name}: "${content}"`,
-      status: "unread",
-      created_at: new Date().toISOString(),
-    }));
+      const { error: notificationError } = await supabase
+        .from("notifications")
+        .insert(notifications);
 
-    const { error: notificationError } = await supabase
-      .from("notifications")
-      .insert(notifications);
-
-    if (notificationError) {
-      console.error("Error inserting notifications:", notificationError);
+      if (notificationError) {
+        console.error("Error creating notifications:", notificationError);
+        // Don't fail the request if notifications fail
+      }
     }
 
     // Broadcast real-time notification
