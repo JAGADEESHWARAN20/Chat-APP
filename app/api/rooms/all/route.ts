@@ -8,7 +8,7 @@ export async function GET() {
 
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     if (sessionError || !session?.user) {
-      console.error("[Rooms All] Authentication failed");
+      console.error("[Rooms All] Authentication failed", sessionError);
       return NextResponse.json(
         { error: "Authentication required" },
         { status: 401 }
@@ -22,7 +22,7 @@ export async function GET() {
       .from("rooms")
       .select("id, name, is_private, created_by, created_at")
       .order("created_at", { ascending: false });
-
+    
     if (roomsError) {
       console.error("[Rooms All] Error fetching rooms:", roomsError);
       return NextResponse.json(
@@ -34,7 +34,7 @@ export async function GET() {
     // Batch check membership for all rooms
     const roomIds = rooms.map((room) => room.id);
     const { data: memberships, error: membershipError } = await supabase
-      .from("room_members")
+      .from("room_participants") // or "room_members"
       .select("room_id, status")
       .in("room_id", roomIds)
       .eq("user_id", userId)
