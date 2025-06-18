@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNotification } from "@/lib/store/notifications";
 import { useUser } from "@/lib/store/user";
 import { useRoomStore } from "@/lib/store/roomstore";
@@ -27,16 +27,28 @@ type RoomWithMembership = Room & {
   participationStatus: string | null;
 };
 
+const transformRoom = (room: Room): RoomWithMembership => ({
+  ...room,
+  isMember: true, // Since this is called after accepting invite
+  participationStatus: "accepted"
+});
+
 export default function Notifications({ isOpen, onClose }: NotificationsProps) {
   const user = useUser((state) => state.user) as SupabaseUser | undefined;
-  const { notifications, markAsRead, fetchNotifications, subscribeToNotifications, setNotifications } = useNotification();
+  const { 
+    notifications, 
+    markAsRead, 
+    fetchNotifications, 
+    subscribeToNotifications, 
+    unsubscribeFromNotifications 
+  } = useNotification();
   const { setSelectedRoom } = useRoomStore();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const supabase = supabaseBrowser();
   const isMobile = useMediaQuery("(max-width: 768px)");
 
-  const checkRoomMembership = async (roomId: string) => {
+  const checkRoomMembership = useCallback(async (roomId: string) => {
     if (!user) return false;
     const { data, error } = await supabase
       .from("room_participants")
@@ -45,14 +57,16 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
       .eq("user_id", user.id)
       .eq("status", "accepted")
       .single();
+
     if (error && error.code !== "PGRST116") {
       console.error("Error checking room membership:", error);
       return false;
     }
-    return data?.status === "accepted";
-  };
 
-  const checkRoomParticipation = async (roomId: string) => {
+    return !!data;
+  }, [user, supabase]);
+
+  const checkRoomParticipation = useCallback(async (roomId: string) => {
     if (!user) return null;
     const { data, error } = await supabase
       .from("room_participants")
@@ -60,326 +74,210 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
       .eq("room_id", roomId)
       .eq("user_id", user.id)
       .single();
+
     if (error && error.code !== "PGRST116") {
       console.error("Error checking room participation:", error);
       return null;
     }
+
     return data?.status || null;
-  };
+  }, [user, supabase]);
+
+  // Initialize notifications and subscribe to updates
+  useEffect(() => {
+    if (user?.id) {
+      const initNotifications = async () => {
+        try {
+          await fetchNotifications(user.id);
+          subscribeToNotifications(user.id);
+        } catch (error) {
+          console.error("Error initializing notifications:", error);
+          toast.error("Failed to load notifications");
+        }
+      };
+
+      initNotifications();
+
+      // Cleanup subscription when component unmounts
+      return () => {
+        unsubscribeFromNotifications();
+      };
+    }
+  }, [user?.id, fetchNotifications, subscribeToNotifications, unsubscribeFromNotifications]);
 
   const handleAccept = async (notificationId: string, roomId: string | null, type: string) => {
-    if (!roomId) {
-      toast.error("Invalid room ID");
-      return;
-    }
-    if (!user) {
-      toast.error("You must be logged in to accept requests");
+    if (!user || !roomId) {
+      toast.error("Unable to process request");
       return;
     }
 
+    setIsLoading(true);
     try {
       const response = await fetch(`/api/notifications/${notificationId}/accept`, {
-        method: "PATCH",
+        method: "POST",
       });
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to accept request");
+        throw new Error("Failed to process notification");
       }
-      markAsRead(notificationId);
-      await fetchNotifications(user.id);
 
-      // Fetch updated rooms and set selected room
-      const { data: room, error: roomError } = await supabase
-        .from("rooms")
-        .select("*")
-        .eq("id", roomId)
-        .single();
-      if (roomError || !room) {
-        throw new Error("Failed to fetch room details");
+      await markAsRead(notificationId);
+
+      if (type === "room_invite") {
+        const isMember = await checkRoomMembership(roomId);
+        if (isMember) {
+          const { data: room } = await supabase
+            .from("rooms")
+            .select("*")
+            .eq("id", roomId)
+            .single();
+
+          if (room) {
+            const roomWithMembership = transformRoom(room);
+            setSelectedRoom(roomWithMembership);
+            router.push(`/rooms/${room.id}`);
+            onClose();
+          }
+        }
       }
-      const isMember = await checkRoomMembership(room.id);
-      const participationStatus = await checkRoomParticipation(room.id);
-      const roomWithMembership: RoomWithMembership = {
-        ...room,
-        isMember,
-        participationStatus,
-      };
-      setSelectedRoom(roomWithMembership);
 
-      toast.success(`${type === "join_request" ? "Join" : "Switch"} request approved`);
+      toast.success("Request accepted successfully");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to accept request");
+      console.error("Error accepting notification:", error);
+      toast.error("Failed to accept request");
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleReject = async (notificationId: string, roomId: string | null, type: string) => {
-    if (!roomId) {
-      toast.error("Invalid room ID");
-      return;
-    }
+  const handleReject = async (notificationId: string) => {
     if (!user) {
-      toast.error("You must be logged in to reject requests");
+      toast.error("Unable to process request");
       return;
     }
 
+    setIsLoading(true);
     try {
       const response = await fetch(`/api/notifications/${notificationId}/reject`, {
-        method: "PATCH",
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to reject request");
-      }
-      markAsRead(notificationId);
-      await fetchNotifications(user.id);
-      toast.success(`${type === "join_request" ? "Join" : "Switch"} request rejected`);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to reject request");
-      console.error("Error rejecting request:", error);
-    }
-  };
-
-  const handleNotificationClick = async (notificationId: string, roomId: string | null) => {
-    if (!user) {
-      toast.error("You must be logged in to switch rooms");
-      return;
-    }
-    if (!roomId) {
-      toast.error("Notification is missing room ID");
-      return;
-    }
-    try {
-      const { data: room, error: roomError } = await supabase
-        .from("rooms")
-        .select("*")
-        .eq("id", roomId)
-        .single();
-      if (roomError || !room) {
-        throw new Error("Room not found");
-      }
-
-      const response = await fetch("/api/rooms/switch", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roomId: room.id }),
       });
-      const data = await response.json();
+
       if (!response.ok) {
-        throw new Error(data.error || "Failed to switch room");
+        throw new Error("Failed to reject notification");
       }
 
-      if (data.status === "pending") {
-        toast.info(data.message || "Switch request sent to room owner for approval");
-        markAsRead(notificationId);
-        await fetchNotifications(user.id);
-        return;
-      }
-
-      markAsRead(notificationId);
-      const isMember = await checkRoomMembership(room.id);
-      const participationStatus = await checkRoomParticipation(room.id);
-      const roomWithMembership: RoomWithMembership = {
-        ...room,
-        isMember,
-        participationStatus,
-      };
-      setSelectedRoom(roomWithMembership);
-
-      const { data: roomsData, error: roomsError } = await supabase
-        .from("room_participants")
-        .select("rooms(*)")
-        .eq("user_id", user.id)
-        .eq("status", "accepted");
-      if (roomsError) {
-        throw new Error("Failed to fetch rooms");
-      }
-      const rooms = roomsData
-        .map((item) => item.rooms)
-        .filter((room): room is Room => room !== null);
-      const roomsWithMembership = await Promise.all(
-        rooms.map(async (room) => ({
-          ...room,
-          isMember: await checkRoomMembership(room.id),
-          participationStatus: await checkRoomParticipation(room.id), // Also fix here
-        }))
-      );
-
-      router.push("/");
-      onClose();
-      toast.success(`Switched to ${room.name}`);
+      await markAsRead(notificationId);
+      toast.success("Request rejected");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to switch room");
-      console.error("Error switching room:", error);
+      console.error("Error rejecting notification:", error);
+      toast.error("Failed to reject request");
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleDeleteNotification = async (notificationId: string) => {
-    try {
-      const response = await fetch(`/api/notifications/${notificationId}`, {
-        method: "DELETE",
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to delete notification");
-      }
-      setNotifications(notifications.filter((notif) => notif.id !== notificationId));
-      toast.success("Notification deleted");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to delete notification");
-      console.error("Error deleting notification:", error);
+  const getNotificationContent = useCallback((notification: any) => {
+    const senderName = notification.users?.display_name || notification.users?.username || "Someone";
+    
+    switch (notification.type) {
+      case "room_invite":
+        return `${senderName} invited you to join ${notification.rooms?.name || "a room"}`;
+      case "message":
+        return `New message from ${senderName} in ${notification.rooms?.name || "a room"}`;
+      default:
+        return notification.message || "New notification";
     }
-  };
-
-  const handleClearAllNotifications = async () => {
-    if (!user?.id) {
-      toast.error("User not logged in");
-      return;
-    }
-    try {
-      const response = await fetch(`/api/notifications`, {
-        method: "DELETE",
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to clear notifications");
-      }
-      setNotifications([]);
-      toast.success("All notifications cleared");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to clear notifications");
-      console.error("Error clearing notifications:", error);
-    }
-  };
-
-  useEffect(() => {
-    if (!user?.id) return;
-
-    const fetchAndSubscribe = async () => {
-      setIsLoading(true);
-      try {
-        await fetchNotifications(user.id);
-        subscribeToNotifications(user.id);
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Failed to load notifications");
-        console.error("Error in fetchAndSubscribe:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchAndSubscribe();
-  }, [user?.id, fetchNotifications, subscribeToNotifications]);
-
-  const renderNotificationContent = (notif: any) => (
-    <div
-      className={`p-4 rounded-lg flex items-start gap-3 w-full transition-colors ${notif.status === "read" ? "bg-gray-800/50" : "bg-indigo-900/20"}`}
-      onClick={() => handleNotificationClick(notif.id, notif.room_id)}
-    >
-      <Avatar className="h-10 w-10 flex-shrink-0">
-        <AvatarImage src={notif.users?.avatar_url ?? ""} alt={notif.users?.display_name || "User"} />
-        <AvatarFallback className="bg-indigo-500 text-white">
-          {notif.users?.display_name?.[0] || "?"}
-        </AvatarFallback>
-      </Avatar>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm text-white truncate text-wrap">{notif.message}</p>
-        <p className="text-xs text-gray-400 mt-1">
-          {notif.created_at ? new Date(notif.created_at).toLocaleString() : "Unknown time"}
-        </p>
-        {(notif.type === "join_request" || notif.type === "room_switch") && notif.join_status === "pending" && (
-          <div className="flex gap-2 mt-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleAccept(notif.id, notif.room_id, notif.type);
-              }}
-              className="bg-green-600 hover:bg-green-700 text-white h-8 px-3"
-            >
-              <Check className="h-4 w-4 mr-1" /> Accept
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleReject(notif.id, notif.room_id, notif.type);
-              }}
-              className="bg-red-600 hover:bg-red-700 text-white h-8 px-3"
-            >
-              <X className="h-4 w-4 mr-1" /> Decline
-            </Button>
-          </div>
-        )}
-      </div>
-      {!isMobile && (
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={(e) => {
-            e.stopPropagation();
-            handleDeleteNotification(notif.id);
-          }}
-          className="text-gray-300 hover:text-white hover:bg-red-600/50"
-        >
-          <X className="h-4 w-4" />
-        </Button>
-      )}
-    </div>
-  );
+  }, []);
 
   return (
     <Sheet open={isOpen} onOpenChange={onClose}>
-      <SheetContent side="left" className="w-full p-4 sm:max-w-md">
-        <SheetHeader className="flex flex-row items-center justify-between mb-4">
-          <SheetTitle className="text-2xl font-bold">Notifications</SheetTitle>
-          <div className="flex items-center gap-2">
-            {notifications.length > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleClearAllNotifications}
-                className="text-gray-300 hover:text-white hover:bg-gray-700"
-              >
-                Clear All
-              </Button>
-            )}
+      <SheetContent side={isMobile ? "bottom" : "right"} className="p-0 flex flex-col h-full w-full sm:max-w-sm">
+        <SheetHeader className="p-4 border-b">
+          <div className="flex items-center space-x-2">
             <Button
               variant="ghost"
               size="icon"
               onClick={onClose}
-              className="text-gray-300 hover:text-white hover:bg-gray-700"
+              className="shrink-0"
             >
               <ArrowLeft className="h-5 w-5" />
             </Button>
+            <SheetTitle>Notifications</SheetTitle>
           </div>
         </SheetHeader>
-        <div className="space-y-2 max-h-[calc(100vh-100px)] overflow-y-auto">
-          {isLoading ? (
-            <div className="flex justify-center items-center h-20">
-              <p className="text-gray-400">Loading notifications...</p>
-            </div>
-          ) : notifications.length === 0 ? (
-            <div className="flex justify-center items-center h-20">
-              <p className="text-gray-400">No notifications</p>
+
+        <div className="flex-1 overflow-y-auto py-2">
+          {notifications.length === 0 ? (
+            <div className="flex items-center justify-center h-full text-muted-foreground">
+              No notifications
             </div>
           ) : (
-            notifications.map((notif) =>
-              isMobile ? (
+            <div className="space-y-2">
+              {notifications.map((notification) => (
                 <Swipeable
-                  key={notif.id}
-                  onSwipeLeft={() => handleDeleteNotification(notif.id)}
-                  swipeThreshold={50}
+                  key={notification.id}
+                  onSwipeLeft={() => handleReject(notification.id)}
+                  onSwipeRight={() => 
+                    handleAccept(
+                      notification.id, 
+                      notification.room_id || null, 
+                      notification.type
+                    )
+                  }
                 >
-                  {renderNotificationContent(notif)}
+                  <div
+                    className={`p-4 flex items-start space-x-4 hover:bg-muted/50 relative ${
+                      notification.status === "read" ? "opacity-50" : ""
+                    }`}
+                  >
+                    <Avatar className="h-10 w-10">
+                      <AvatarImage
+                        src={notification.users?.avatar_url || ""}
+                        alt={notification.users?.username || "User"}
+                      />
+                      <AvatarFallback>
+                        {(notification.users?.username || "U")[0].toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 space-y-1">
+                      <p className="text-sm leading-none">
+                        {getNotificationContent(notification)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(notification.created_at || "").toLocaleString()}
+                      </p>
+                    </div>
+                    {notification.type === "room_invite" && 
+                     notification.status !== "read" && (
+                      <div className="flex space-x-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleReject(notification.id)}
+                          disabled={isLoading}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() =>
+                            handleAccept(
+                              notification.id,
+                              notification.room_id || null,
+                              notification.type
+                            )
+                          }
+                          disabled={isLoading}
+                        >
+                          <Check className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 </Swipeable>
-              ) : (
-                <div key={notif.id}>
-                  {renderNotificationContent(notif)}
-                </div>
-              )
-            )
+              ))}
+            </div>
           )}
         </div>
       </SheetContent>
