@@ -46,6 +46,7 @@ export default function RoomInitializer() {
      const user = useUser((state) => state.user);
      const supabase = supabaseBrowser();
      const isMounted = useRef(true);
+     const initializationInProgress = useRef(false);
 
      const checkRoomMembership = useCallback(
           async (roomId: string) => {
@@ -95,63 +96,57 @@ export default function RoomInitializer() {
      );
 
      const initializeRooms = useCallback(async () => {
+          if (initializationInProgress.current || !user) {
+               console.log("Initialization already in progress or no user");
+               return;
+          }
+
+          initializationInProgress.current = true;
+
           try {
-               if (!user) {
-                    setRooms([]);
-                    return;
-               }
+               // Start transaction for atomic operations
+               const { data: existingRoom, error: checkError } = await supabase
+                    .from("rooms")
+                    .select("*")
+                    .eq("name", "General Chat")
+                    .eq("is_private", false)
+                    .maybeSingle();
 
-               // First, check if default room exists
-               let existingRoom: Room | null = null;
-               try {
-                    const { data, error: checkError } = await supabase
-                         .from("rooms")
-                         .select("*")
-                         .eq("name", "General Chat")
-                         .eq("is_private", false)
-                         .maybeSingle();
-
-                    if (checkError) {
-                         console.error("Error checking for General Chat:", checkError);
-                         // If the error is due to RLS recursion, log it and proceed without creating a new room
-                         if (checkError.code === "42P17") {
-                              console.warn("RLS policy issue detected. Skipping default room creation.");
-                              await fetchAvailableRooms();
-                              return;
-                         }
-                         throw new Error("Failed to check for General Chat");
+               if (checkError) {
+                    if (checkError.code === "42P17") {
+                         console.warn("RLS policy issue detected, proceeding with room fetch");
+                         await fetchAvailableRooms();
+                         return;
                     }
-                    existingRoom = data;
-               } catch (error: any) {
-                    console.error("Caught error while checking for General Chat:", error);
-                    throw error;
+                    throw new Error(`Failed to check for General Chat: ${checkError.message}`);
                }
 
                const timestamp = new Date().toISOString();
 
                if (!existingRoom) {
-                    // Create default room with timestamp
+                    // Try to create the room with a unique constraint
                     const { data: newRoom, error: createError } = await supabase
                          .from("rooms")
-                         .upsert(
-                              {
-                                   name: "General Chat",
-                                   is_private: false,
-                                   created_by: user.id,
-                                   created_at: timestamp,
-                              },
-                              { onConflict: "name,is_private" }
-                         )
+                         .insert({
+                              name: "General Chat",
+                              is_private: false,
+                              created_by: user.id,
+                              created_at: timestamp,
+                         })
                          .select()
                          .single();
 
                     if (createError) {
-                         console.error("Error creating General Chat:", createError);
-                         throw new Error("Failed to create General Chat");
+                         if (createError.code === '23505') { // Unique violation
+                              console.log("Room already exists (race condition), fetching rooms...");
+                              await fetchAvailableRooms();
+                              return;
+                         }
+                         throw new Error(`Failed to create General Chat: ${createError.message}`);
                     }
 
                     if (newRoom) {
-                         // Add creator as room member
+                         // Ensure creator is a room member
                          const { error: memberError } = await supabase
                               .from("room_members")
                               .insert({
@@ -160,34 +155,51 @@ export default function RoomInitializer() {
                                    status: "accepted",
                                    joined_at: timestamp,
                                    active: true,
-                              });
+                              })
+                              .select()
+                              .single();
 
                          if (memberError) {
-                              console.error("Error adding room member:", memberError);
-                              throw new Error("Failed to add user to General Chat");
+                              if (memberError.code !== '23505') { // Ignore if already a member
+                                   throw new Error(`Failed to add user to General Chat: ${memberError.message}`);
+                              }
                          }
+
+                         // Initialize default room
+                         initializeDefaultRoom();
                     }
                }
 
-               // Fetch rooms using the hook
+               // Always fetch available rooms to ensure consistency
                await fetchAvailableRooms();
+
           } catch (error: any) {
-               console.error("Error initializing rooms:", error);
-               toast.error(error.message || "Failed to initialize rooms");
+               console.error("Error in room initialization:", error);
+               toast.error(`Room initialization failed: ${error.message}`);
                setRooms([]);
+          } finally {
+               initializationInProgress.current = false;
           }
      }, [user, supabase, fetchAvailableRooms, setRooms, initializeDefaultRoom]);
 
-     const debouncedInitializeRooms = debounce(initializeRooms, 300);
-
      useEffect(() => {
+          let isActive = true;
+
           if (!user) {
                setRooms([]);
                return;
           }
 
-          fetchAvailableRooms();
+          // Initial room setup with debounce
+          const debouncedInit = debounce(() => {
+               if (isActive && user) {
+                    initializeRooms();
+               }
+          }, 300);
 
+          debouncedInit();
+
+          // Set up real-time subscription for room membership changes
           const roomChannel = supabase.channel('room_members_changes')
                .on('postgres_changes',
                     {
@@ -196,19 +208,23 @@ export default function RoomInitializer() {
                          table: 'room_members',
                          filter: `user_id=eq.${user.id}`
                     },
-                    () => {
-                         console.log('Room membership change detected, refreshing rooms...');
-                         fetchAvailableRooms();
+                    (payload) => {
+                         console.log('Room membership change detected:', payload);
+                         if (isActive) {
+                              fetchAvailableRooms();
+                         }
                     })
                .subscribe((status) => {
                     console.log('Room subscription status:', status);
                });
 
           return () => {
-               supabase.removeChannel(roomChannel);
+               isActive = false;
+               roomChannel.unsubscribe();
                isMounted.current = false;
+               debouncedInit.cancel();
           };
-     }, [user, setRooms, supabase, fetchAvailableRooms, initializeDefaultRoom]);
+     }, [user, setRooms, supabase, fetchAvailableRooms, initializeRooms]);
 
      return null;
 }
