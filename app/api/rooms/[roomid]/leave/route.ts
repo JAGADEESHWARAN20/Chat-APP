@@ -10,217 +10,52 @@ export async function PATCH(
   { params }: { params: { roomId?: string; roomid?: string } }
 ) {
   const supabase = createRouteHandlerClient<Database>({ cookies });
-  // Handle both roomId and roomid due to folder naming
   const roomId = params.roomId ?? params.roomid;
 
-  // Log params and roomId for debugging
-  console.log(`[Leave Room] Request params:`, params);
-  console.log(`[Leave Room] Processing leave request for roomId: ${roomId}`);
-
   try {
-    // 1. Authentication check
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-
     if (sessionError || !session?.user) {
-      console.error(`[Leave Room] Authentication failed for roomId: ${roomId}`);
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Authentication required",
-          code: "AUTH_REQUIRED"
-        },
-        { status: 401 }
-      );
+      return NextResponse.json({ success: false, error: "Authentication required", code: "AUTH_REQUIRED" }, { status: 401 });
     }
 
     const userId = session.user.id;
 
-    // 2. Validate room ID
-    if (!roomId) {
-      console.error(`[Leave Room] Missing roomId in request parameters`);
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Room identifier is missing",
-          code: "MISSING_ROOM_ID"
-        },
-        { status: 400 }
-      );
+    if (!roomId || !UUID_REGEX.test(roomId)) {
+      return NextResponse.json({ success: false, error: "Invalid room identifier", code: "INVALID_ROOM_ID" }, { status: 400 });
     }
 
-    if (!UUID_REGEX.test(roomId)) {
-      console.error(`[Leave Room] Invalid roomId format: ${roomId}`);
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Invalid room identifier format",
-          code: "INVALID_ROOM_ID"
-        },
-        { status: 400 }
-      );
-    }
-
-    // 3. Verify room exists and get details
     const { data: room, error: roomError } = await supabase
       .from("rooms")
-      .select("id, name, created_by, is_private")
+      .select("id, name, created_by")
       .eq("id", roomId)
       .single();
-
     if (roomError || !room) {
-      console.error(`[Leave Room] Room not found for roomId: ${roomId}, error: ${roomError?.message}`);
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Room not found",
-          code: "ROOM_NOT_FOUND"
-        },
-        { status: 404 }
-      );
+      return NextResponse.json({ success: false, error: "Room not found", code: "ROOM_NOT_FOUND" }, { status: 404 });
     }
 
-    // 4. Check membership status in both tables
-    const { data: participant, error: participantError } = await supabase
-      .from("room_participants")
-      .select("status")
-      .eq("room_id", roomId)
-      .eq("user_id", userId)
-      .single();
-
-    const { data: member, error: memberError } = await supabase
+    const { data: member } = await supabase
       .from("room_members")
       .select("status")
       .eq("room_id", roomId)
       .eq("user_id", userId)
       .single();
-
-    if ((participantError && participantError.code !== "PGRST116") ||
-      (memberError && memberError.code !== "PGRST116")) {
-      console.error(`[Leave Room] Membership check failed for roomId: ${roomId}, participantError: ${participantError?.message}, memberError: ${memberError?.message}`);
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Failed to verify membership",
-          code: "MEMBERSHIP_CHECK_FAILED"
-        },
-        { status: 500 }
-      );
+    if (!member) {
+      return NextResponse.json({ success: false, error: "Not a member", code: "NOT_A_MEMBER" }, { status: 403 });
     }
 
-    if (!participant && !member) {
-      console.warn(`[Leave Room] User ${userId} is not a member of roomId: ${roomId}`);
-      return NextResponse.json(
-        {
-          success: false,
-          error: "You're not a member of this room",
-          code: "NOT_A_MEMBER"
-        },
-        { status: 403 }
-      );
-    }
-
-    const isActiveParticipant = participant?.status === "accepted";
-
-    if (!isActiveParticipant && !member) {
-      console.warn(`[Leave Room] User ${userId} is not an active member of roomId: ${roomId}`);
-      return NextResponse.json(
-        {
-          success: false,
-          error: "You're not an active member of this room",
-          code: "NOT_A_MEMBER"
-        },
-        { status: 403 }
-      );
-    }
-
-    // 5. Special handling for room creator
     if (room.created_by === userId) {
-      const { count: memberCount, error: countError } = await supabase
+      const { count } = await supabase
         .from("room_members")
         .select("user_id", { count: "exact" })
         .eq("room_id", roomId);
-
-      if (countError) {
-        console.error(`[Leave Room] Failed to verify member count for roomId: ${roomId}, error: ${countError.message}`);
-        return NextResponse.json(
-          {
-            success: false,
-            error: "Failed to verify room members",
-            code: "MEMBER_COUNT_ERROR"
-          },
-          { status: 500 }
-        );
+      if (count && count > 1) {
+        return NextResponse.json({ success: false, error: "Creator must transfer ownership", code: "CREATOR_CANNOT_LEAVE" }, { status: 400 });
       }
-
-      if (memberCount && memberCount > 1) {
-        console.warn(`[Leave Room] Creator ${userId} cannot leave roomId: ${roomId} with ${memberCount} members`);
-        return NextResponse.json(
-          {
-            success: false,
-            error: "As room creator, you must transfer ownership before leaving",
-            code: "CREATOR_CANNOT_LEAVE",
-            solution: "Please assign a new owner first"
-          },
-          { status: 400 }
-        );
-      }
-
-      // Delete room if creator is the last member
-      const { error: deleteError } = await supabase
-        .from("rooms")
-        .delete()
-        .eq("id", roomId);
-
-      if (deleteError) {
-        console.error(`[Leave Room] Failed to delete roomId: ${roomId}, error: ${deleteError.message}`);
-        return NextResponse.json(
-          {
-            success: false,
-            error: "Failed to delete empty room",
-            code: "ROOM_DELETION_FAILED"
-          },
-          { status: 500 }
-        );
-      }
+      await supabase.from("rooms").delete().eq("id", roomId);
     }
 
-    // 6. Remove from both tables
-    const { error: leaveParticipantError } = await supabase
-      .from("room_participants")
-      .delete()
-      .eq("room_id", roomId)
-      .eq("user_id", userId);
+    await supabase.rpc("leave_room", { p_room_id: roomId, p_user_id: userId });
 
-    const { error: leaveMemberError } = await supabase
-      .from("room_members")
-      .delete()
-      .eq("room_id", roomId)
-      .eq("user_id", userId);
-
-    if (leaveParticipantError || leaveMemberError) {
-      console.error(`[Leave Room] Failed to leave roomId: ${roomId}, participantError: ${leaveParticipantError?.message}, memberError: ${leaveMemberError?.message}`);
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Failed to leave room",
-          code: "LEAVE_FAILED"
-        },
-        { status: 500 }
-      );
-    }
-
-    // 7. Check for other available rooms
-    const { data: otherRooms } = await supabase
-      .from("room_participants")
-      .select("room_id, rooms(name)")
-      .eq("user_id", userId)
-      .eq("status", "accepted")
-      .order("created_at", { ascending: false });
-
-    const hasOtherRooms = otherRooms && otherRooms.length > 0;
-    const defaultRoom = otherRooms?.[0];
-
-    // 8. Create notification
     await supabase
       .from("notifications")
       .insert({
@@ -232,90 +67,34 @@ export async function PATCH(
         status: "unread"
       });
 
-    console.log(`[Leave Room] User ${userId} successfully left roomId: ${roomId}`);
+    const { data: otherRooms } = await supabase
+      .from("room_participants")
+      .select("room_id, rooms(name)")
+      .eq("user_id", userId)
+      .eq("status", "accepted")
+      .order("created_at", { ascending: false });
 
-    // 9. Return success response
     return NextResponse.json({
       success: true,
       message: `Successfully left "${room.name}"`,
-      roomLeft: {
-        id: room.id,
-        name: room.name
-      },
-      hasOtherRooms,
-      defaultRoom: hasOtherRooms ? {
-        id: defaultRoom?.room_id,
-        name: defaultRoom?.rooms?.name
-      } : null
+      roomLeft: { id: room.id, name: room.name },
+      hasOtherRooms: !!otherRooms?.length,
+      defaultRoom: otherRooms?.[0] ? { id: otherRooms[0].room_id, name: otherRooms[0].rooms.name } : null
     });
-
   } catch (error) {
-    console.error(`[Leave Room] Unexpected error for roomId: ${roomId}`, error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Internal server error",
-        code: "INTERNAL_ERROR",
-        details: error instanceof Error ? error.message : "Unknown error"
-      },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, error: "Internal server error", code: "INTERNAL_ERROR" }, { status: 500 });
   }
 }
 
-// Handle unsupported HTTP methods
-export async function GET(request: NextRequest) {
-  return NextResponse.json(
-    {
-      success: false,
-      error: "Method not allowed",
-      code: "METHOD_NOT_ALLOWED"
-    },
-    {
-      status: 405,
-      headers: { Allow: "PATCH" }
-    }
-  );
+export async function GET() {
+  return NextResponse.json({ success: false, error: "Method not allowed", code: "METHOD_NOT_ALLOWED" }, { status: 405, headers: { Allow: "PATCH" } });
 }
-
-export async function POST(request: NextRequest) {
-  return NextResponse.json(
-    {
-      success: false,
-      error: "Method not allowed",
-      code: "METHOD_NOT_ALLOWED"
-    },
-    {
-      status: 405,
-      headers: { Allow: "PATCH" }
-    }
-  );
+export async function POST() {
+  return NextResponse.json({ success: false, error: "Method not allowed", code: "METHOD_NOT_ALLOWED" }, { status: 405, headers: { Allow: "PATCH" } });
 }
-
-export async function PUT(request: NextRequest) {
-  return NextResponse.json(
-    {
-      success: false,
-      error: "Method not allowed",
-      code: "METHOD_NOT_ALLOWED"
-    },
-    {
-      status: 405,
-      headers: { Allow: "PATCH" }
-    }
-  );
+export async function PUT() {
+  return NextResponse.json({ success: false, error: "Method not allowed", code: "METHOD_NOT_ALLOWED" }, { status: 405, headers: { Allow: "PATCH" } });
 }
-
-export async function DELETE(request: NextRequest) {
-  return NextResponse.json(
-    {
-      success: false,
-      error: "Method not allowed",
-      code: "METHOD_NOT_ALLOWED"
-    },
-    {
-      status: 405,
-      headers: { Allow: "PATCH" }
-    }
-  );
+export async function DELETE() {
+  return NextResponse.json({ success: false, error: "Method not allowed", code: "METHOD_NOT_ALLOWED" }, { status: 405, headers: { Allow: "PATCH" } });
 }

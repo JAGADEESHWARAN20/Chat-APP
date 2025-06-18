@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useRef } from "react"; // Added useRef
 import { debounce } from "lodash";
 import { useRoomStore } from "@/lib/store/roomstore";
 import { supabaseBrowser } from "@/lib/supabase/browser";
@@ -8,7 +8,6 @@ import { useUser } from "@/lib/store/user";
 import { toast } from "sonner";
 import { Database } from "@/lib/types/supabase";
 import { useFetchRooms } from "@/hooks/useFetchRooms";
-import { useRef } from 'react';
 
 type Room = Database["public"]["Tables"]["rooms"]["Row"];
 type RoomWithMembership = Room & {
@@ -27,9 +26,7 @@ const transformRooms = async (
                .select("*")
                .eq("user_id", userId);
 
-          if (error) {
-               throw new Error("Failed to fetch room participations");
-          }
+          if (error) throw new Error("Failed to fetch room participations");
 
           return rooms.map((room) => ({
                ...room,
@@ -105,7 +102,9 @@ export default function RoomInitializer() {
 
           try {
                console.log("[RoomInitializer] Starting room initialization");
-               // First try to fetch any existing General Chat
+               const timestamp = new Date().toISOString();
+
+               // Check or create General Chat
                const { data: existingRoom, error: checkError } = await supabase
                     .from("rooms")
                     .select("*")
@@ -113,32 +112,22 @@ export default function RoomInitializer() {
                     .eq("is_private", false)
                     .single();
 
-               if (checkError) {
-                    // Log but don't throw for PGRST116 (not found)
-                    if (checkError.code !== 'PGRST116') {
-                         console.error("[RoomInitializer] Error checking for General Chat:", checkError);
-                         throw checkError;
-                    }
+               if (checkError && checkError.code !== "PGRST116") {
+                    console.error("[RoomInitializer] Error checking for General Chat:", checkError);
+                    throw checkError;
                }
 
-               const timestamp = new Date().toISOString();
-
+               let roomId: string;
                if (!existingRoom) {
                     console.log("[RoomInitializer] Creating General Chat room");
-                    // Create General Chat with upsert to handle race conditions
-                    const { data: newRoom, error: createError } = await supabase
-                         .from("rooms")
-                         .upsert({
-                              name: "General Chat",
-                              is_private: false,
-                              created_by: user.id,
-                              created_at: timestamp,
-                         })
-                         .select()
-                         .single();
-
+                    const { data: newRoom, error: createError } = await supabase.rpc("create_room_with_member", {
+                         p_name: "General Chat",
+                         p_is_private: false,
+                         p_user_id: user.id,
+                         p_timestamp: timestamp
+                    });
                     if (createError) {
-                         if (createError.code === '23505') { // Unique violation
+                         if (createError.code === "23505") {
                               console.log("[RoomInitializer] Room already exists, fetching rooms...");
                               await fetchAvailableRooms();
                               return;
@@ -146,57 +135,30 @@ export default function RoomInitializer() {
                          console.error("[RoomInitializer] Error creating General Chat:", createError);
                          throw createError;
                     }
-
-                    if (newRoom) {
-                         console.log("[RoomInitializer] Adding creator to room_members");
-                         const { error: memberError } = await supabase
-                              .from("room_members")
-                              .insert({
-                                   room_id: newRoom.id,
-                                   user_id: user.id,
-                                   status: "accepted",
-                                   joined_at: timestamp,
-                                   active: true,
-                              });
-
-                         if (memberError && memberError.code !== '23505') {
-                              console.error("[RoomInitializer] Error adding creator to room:", memberError);
-                              throw memberError;
-                         }
-
-                         console.log("[RoomInitializer] Initializing default room");
-                         await fetchAvailableRooms();
-                         if (initializeDefaultRoom) {
-                              initializeDefaultRoom();
-                         }
-                    }
+                    roomId = newRoom[0].id;
                } else {
-                    console.log("[RoomInitializer] General Chat exists, checking membership");
-                    const isMember = await checkRoomMembership(existingRoom.id);
+                    roomId = existingRoom.id;
+                    const isMember = await checkRoomMembership(roomId);
                     if (!isMember) {
                          const { error: joinError } = await supabase
                               .from("room_members")
                               .insert({
-                                   room_id: existingRoom.id,
+                                   room_id: roomId,
                                    user_id: user.id,
                                    status: "accepted",
                                    joined_at: timestamp,
                                    active: true,
                               });
-
-                         if (joinError && joinError.code !== '23505') {
+                         if (joinError && joinError.code !== "23505") {
                               console.error("[RoomInitializer] Error joining General Chat:", joinError);
                               throw joinError;
                          }
                     }
-
-                    console.log("[RoomInitializer] Fetching all available rooms");
-                    await fetchAvailableRooms();
-                    if (initializeDefaultRoom) {
-                         initializeDefaultRoom();
-                    }
                }
 
+               console.log("[RoomInitializer] Fetching all available rooms");
+               await fetchAvailableRooms();
+               if (initializeDefaultRoom) initializeDefaultRoom();
           } catch (error) {
                console.error("[RoomInitializer] Initialization error:", error);
                toast.error("Room initialization failed");
@@ -214,32 +176,28 @@ export default function RoomInitializer() {
                return;
           }
 
-          // Initial room setup with debounce
           const debouncedInit = debounce(() => {
-               if (isActive && user) {
-                    initializeRooms();
-               }
+               if (isActive && user) initializeRooms();
           }, 300);
 
           debouncedInit();
 
-          // Set up real-time subscription for room membership changes
-          const roomChannel = supabase.channel('room_members_changes')
-               .on('postgres_changes',
+          const roomChannel = supabase.channel("room_members_changes")
+               .on(
+                    "postgres_changes",
                     {
-                         event: '*',
-                         schema: 'public',
-                         table: 'room_members',
-                         filter: `user_id=eq.${user.id}`
+                         event: "*",
+                         schema: "public",
+                         table: "room_members",
+                         filter: `user_id=eq.${user.id}`,
                     },
                     (payload) => {
-                         console.log('Room membership change detected:', payload);
-                         if (isActive) {
-                              fetchAvailableRooms();
-                         }
-                    })
+                         console.log("Room membership change detected:", payload);
+                         if (isActive) fetchAvailableRooms();
+                    }
+               )
                .subscribe((status) => {
-                    console.log('Room subscription status:', status);
+                    console.log("Room subscription status:", status);
                });
 
           return () => {
