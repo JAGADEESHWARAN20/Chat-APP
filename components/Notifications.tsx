@@ -35,12 +35,12 @@ const transformRoom = (room: Room): RoomWithMembership => ({
 
 export default function Notifications({ isOpen, onClose }: NotificationsProps) {
   const user = useUser((state) => state.user) as SupabaseUser | undefined;
-  const { 
-    notifications, 
-    markAsRead, 
-    fetchNotifications, 
-    subscribeToNotifications, 
-    unsubscribeFromNotifications 
+  const {
+    notifications,
+    markAsRead,
+    fetchNotifications,
+    subscribeToNotifications,
+    unsubscribeFromNotifications
   } = useNotification();
   const { setSelectedRoom } = useRoomStore();
   const router = useRouter();
@@ -89,7 +89,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
 
       await markAsRead(notificationId);
 
-      if (type === "room_invite") {
+      if (type === "room_invite" || type === "join_request") {
         const { data: room } = await supabase
           .from("rooms")
           .select("*")
@@ -142,10 +142,12 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
 
   const getNotificationContent = useCallback((notification: any) => {
     const senderName = notification.users?.display_name || notification.users?.username || "Someone";
-    
+
     switch (notification.type) {
       case "room_invite":
         return `${senderName} invited you to join ${notification.rooms?.name || "a room"}`;
+      case "join_request":
+        return `${senderName} requested to join ${notification.rooms?.name || "a room"}`;
       case "message":
         return `New message from ${senderName} in ${notification.rooms?.name || "a room"}`;
       default:
@@ -154,7 +156,8 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
   }, []);
 
   const shouldShowActions = useCallback((notification: any) => {
-    return notification.type === "room_invite" && notification.status !== "read";
+    return (notification.type === "room_invite" || notification.type === "join_request") &&
+      notification.status !== "read";
   }, []);
 
   return (
@@ -185,19 +188,18 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
                 <Swipeable
                   key={notification.id}
                   onSwipeLeft={() => shouldShowActions(notification) && handleReject(notification.id)}
-                  onSwipeRight={() => 
+                  onSwipeRight={() =>
                     shouldShowActions(notification) &&
                     handleAccept(
-                      notification.id, 
-                      notification.room_id || null, 
+                      notification.id,
+                      notification.room_id || null,
                       notification.type
                     )
                   }
                 >
                   <div
-                    className={`p-4 flex items-start space-x-4 hover:bg-muted/50 relative ${
-                      notification.status === "read" ? "opacity-50" : ""
-                    }`}
+                    className={`p-4 flex items-start space-x-4 hover:bg-muted/50 relative ${notification.status === "read" ? "opacity-50" : ""
+                      }`}
                   >
                     <Avatar className="h-10 w-10">
                       <AvatarImage
