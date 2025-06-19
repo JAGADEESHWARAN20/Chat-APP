@@ -1,97 +1,9 @@
-// import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
-// import { cookies } from "next/headers";
-// import { NextRequest, NextResponse } from "next/server";
-// import { Database } from "@/lib/types/supabase";
-
-// type NotificationType = "join_request" | "room_invite" | "message";
-
-// type NotificationCore = {
-//   id: string;
-//   message: string;
-//   created_at: string | null;
-//   status: string | null;
-//   type: NotificationType;
-//   sender_id: string;
-//   user_id: string;
-//   room_id: string;
-//   join_status: string | null;
-//   direct_chat_id: string | null;
-// };
-
-// export async function POST(req: NextRequest, { params }: { params: { notificationId: string } }) {
-//   const supabase = createRouteHandlerClient<Database>({ cookies });
-//   const timestamp = new Date().toISOString();
-
-//   try {
-//     const notificationId = params.notificationId;
-
-//     if (!notificationId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(notificationId)) {
-//       return NextResponse.json({ error: "Invalid notification ID" }, { status: 400 });
-//     }
-
-//     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-//     if (sessionError || !session?.user) {
-//       return NextResponse.json({ error: "Authentication error" }, { status: 401 });
-//     }
-
-//     const { data: notification, error: notificationError } = await supabase
-//       .from("notifications")
-//       .select("*")
-//       .eq("id", notificationId)
-//       .single();
-
-//     if (notificationError || !notification) {
-//       return NextResponse.json({ error: "Notification not found" }, { status: 404 });
-//     }
-
-//     const targetUserId = notification.type === "join_request" ? notification.sender_id : notification.user_id;
-//     if (!targetUserId || !notification.room_id) {
-//       return NextResponse.json({ error: "Invalid notification data" }, { status: 400 });
-//     }
-
-//     const { error: updateError } = await supabase.rpc("accept_notification", {
-//       p_notification_id: notificationId,
-//       p_target_user_id: targetUserId,
-//       p_room_id: notification.room_id,
-//       p_timestamp: timestamp
-//     });
-
-//     if (updateError) {
-//       if (updateError.code === "23505") {
-//         return NextResponse.json({ error: "Already a member of this room" }, { status: 409 });
-//       }
-//       return NextResponse.json({ error: "Failed to accept request" }, { status: 500 });
-//     }
-
-//     return NextResponse.json({
-//       message: "Request accepted successfully",
-//       data: { notificationId, roomId: notification.room_id, userId: targetUserId, timestamp }
-//     });
-//   } catch (error) {
-//     return NextResponse.json({ error: "Failed to accept request", details: error instanceof Error ? error.message : "Unknown error" }, { status: 500 });
-//   }
-// }
-
-// export async function OPTIONS() {
-//   return new NextResponse(null, { status: 405, headers: { Allow: "POST", "Content-Type": "application/json" } });
-// }
-// export async function GET() {
-//   return new NextResponse(null, { status: 405, headers: { Allow: "POST", "Content-Type": "application/json" } });
-// }
-// export async function DELETE() {
-//   return new NextResponse(null, { status: 405, headers: { Allow: "POST", "Content-Type": "application/json" } });
-// }
-// export async function PUT() {
-//   return new NextResponse(null, { status: 405, headers: { Allow: "POST", "Content-Type": "application/json" } });
-// }
-
-
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { Database } from "@/lib/types/supabase";
 
-type NotificationType = "join_request" | "room_invite" | "message";
+type NotificationType = "join_request" | "new_message" | "room_switch" | "notification_unread" | "user_joined" | "join_request_rejected";
 
 type NotificationCore = {
   id: string;
@@ -113,18 +25,15 @@ export async function POST(req: NextRequest, { params }: { params: { notificatio
   try {
     const notificationId = params.notificationId;
 
-    // Validate notification ID
     if (!notificationId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(notificationId)) {
       return NextResponse.json({ error: "Invalid notification ID" }, { status: 400 });
     }
 
-    // Get session
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     if (sessionError || !session?.user) {
       return NextResponse.json({ error: "Authentication error" }, { status: 401 });
     }
 
-    // Fetch notification
     const { data: notification, error: notificationError } = await supabase
       .from("notifications")
       .select("*")
@@ -140,7 +49,11 @@ export async function POST(req: NextRequest, { params }: { params: { notificatio
       return NextResponse.json({ error: "Invalid notification data" }, { status: 400 });
     }
 
-    // Call the stored procedure to accept the notification
+    const currentUserId = session.user.id;
+    if (currentUserId !== targetUserId && currentUserId !== notification.sender_id) {
+      return NextResponse.json({ error: "Unauthorized action" }, { status: 403 });
+    }
+
     const { error: updateError } = await supabase.rpc("accept_notification", {
       p_notification_id: notificationId,
       p_target_user_id: targetUserId,
@@ -153,6 +66,17 @@ export async function POST(req: NextRequest, { params }: { params: { notificatio
         return NextResponse.json({ error: "Already a member of this room" }, { status: 409 });
       }
       return NextResponse.json({ error: "Failed to accept request", details: updateError.message }, { status: 500 });
+    }
+
+    const { data: updatedMember } = await supabase
+      .from("room_members")
+      .select("status")
+      .eq("room_id", notification.room_id)
+      .eq("user_id", targetUserId)
+      .single();
+
+    if (!updatedMember || updatedMember.status !== "accepted") {
+      return NextResponse.json({ error: "Membership status not updated" }, { status: 500 });
     }
 
     return NextResponse.json({
