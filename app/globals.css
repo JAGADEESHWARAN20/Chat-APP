@@ -136,7 +136,7 @@
 
 .gradient-border {
   background: transparent;
-  border-radius: 1vw;
+  border-radius: 2vw;
   position: relative;
   overflow: hidden;
 }
@@ -146,7 +146,7 @@
   position: absolute;
   inset: 0;
   padding: 1px; /* This controls border thickness */
-  background: linear-gradient(135deg, rgba(255,255,255,0.4), rgba(255,255,255,0.1));
+  background: linear-gradient(135deg, rgba(255,255,255,0.2), rgba(255,255,255,0.1));
   -webkit-mask: 
     linear-gradient(#fff 0 0) content-box, 
     linear-gradient(#fff 0 0);
@@ -159,7 +159,7 @@
   background: transparent;
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  border-radius: 1vw;
+  border-radius: 0vw;
   position: relative;
   overflow: hidden;
 }
@@ -169,12 +169,12 @@
   position: absolute;
   inset: 0;
   padding: 1px;
-  background: linear-gradient(135deg, rgba(255,255,255,0.4), rgba(255,255,255,0.1));
+  background: linear-gradient(135deg, rgba(255,255,255,0.2), rgba(255,255,255,0.1));
   -webkit-mask: 
     linear-gradient(#fff 0 0) content-box, 
     linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   pointer-events: none;
-  border-radius: 1vw;
+  border-radius: 0vw;
 }
