@@ -112,6 +112,53 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     [user, supabase]
   );
 
+const glassStyles = `
+.glass-header {
+  background: rgba(17, 24, 39, 0.75); /* bg-gray-900 with opacity */
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+
+.glass-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.8),
+    transparent
+  );
+}
+
+.glass-header::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 100%;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.8),
+    transparent,
+    rgba(255, 255, 255, 0.3)
+  );
+}
+`;
+
+
+
   const { fetchAvailableRooms } = useFetchRooms(
     user,
     checkRoomMembership,
@@ -455,7 +502,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   );
 
   return (
-    <header className="h-14 flex items-center justify-between px-4 relative backdrop-blur-md bg-gray-900/75 text-white shadow-sm before:absolute before:inset-0 before:border before:border-gradient-to-b before:from-white/20 before:to-transparent/5 before:rounded-none before:-z-10">
+    <header className="h-14 flex items-center justify-between px-4 glass-header text-white z-10">
       <h1 className="text-lg flex flex-col font-semibold py-2 items-start">
         {selectedRoom ? `#${selectedRoom.name}` : "Daily Chat"}
         <ChatPresence />
