@@ -28,9 +28,7 @@ export default async function Page() {
 					<div className="relative flex flex-col flex-1">
 						<ChatHeader user={data.session?.user} />
 						<div className="flex-1 border rounded-md overflow-hidden">
-							<div className="h-full overflow-y-auto scrollbar-hide">
-								<ClientChatContent user={data.session?.user} />
-							</div>
+							<ClientChatContent user={data.session?.user} />
 						</div>
 					</div>
 				</div>
