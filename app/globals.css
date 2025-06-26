@@ -169,7 +169,7 @@
   position: absolute;
   inset: 0;
   padding:0.02em;
-  background: linear-gradient(125deg, rgba(255,255,255,0.4), rgba(255,255,255,0));
+  background: linear-gradient(95deg, rgba(255,255,255,1), rgba(255,255,255,0));
   -webkit-mask: 
     linear-gradient(#fff 0 0) content-box, 
     linear-gradient(#fff 0 0);
