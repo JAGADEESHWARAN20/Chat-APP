@@ -176,3 +176,27 @@ glass-header {
     rgba(255, 255, 255, 0.3)
   );
 }
+
+.glass-gradient-header {
+  background: transparent;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-radius: 1vw;
+  position: relative;
+  overflow: hidden;
+}
+
+.glass-gradient-header::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.4), rgba(255,255,255,0.1));
+  -webkit-mask: 
+    linear-gradient(#fff 0 0) content-box, 
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  border-radius: 1vw;
+}
