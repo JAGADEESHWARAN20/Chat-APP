@@ -29,7 +29,7 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
      };
 
      return (
-          <div className="flex justify-end mb-4">
+          <div className="flex items-center justify-end mb-4">
                {user ? (
                     <Button onClick={handleLogout} variant="ghost" size="sm">
                          <LogOut className="h-4 w-4 mr-2" /> Logout
