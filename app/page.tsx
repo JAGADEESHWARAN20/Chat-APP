@@ -13,7 +13,7 @@ export default async function Page() {
 	return (
 		<div className="min-h-[90vh] flex flex-col overflow-hidden">
 			{/* Header section with fixed height */}
-			<div className="px-4 py-2 border-b">
+			<div className="px-4 py-2">
 				<div className="flex items-center justify-between max-w-7xl mx-auto w-full">
 					<div className="flex items-center gap-2">
 						<h1 className="text-xl font-bold">FlyChat</h1>
