@@ -80,7 +80,7 @@ export default function ChatPresence() {
 
     return (
         <div className="flex items-center gap-1 sm:text-[1vw] md:text-[3vw]">
-            <div className="h-[1em] w-[1em] bg-green-500 rounded-full animate-pulse" />
+            <div className="h-[3vw] w-[3vw] bg-green-500 rounded-full animate-pulse" />
             <h1 className="text-[2vw] text-gray-400">
                 {onlineUsers.size} {onlineUsers.size === 1 ? 'online' : 'online'}
             </h1>
