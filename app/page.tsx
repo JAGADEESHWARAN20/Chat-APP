@@ -4,29 +4,39 @@ import { supabaseServer } from "@/lib/supabase/server";
 import InitUser from "@/lib/store/InitUser";
 import ClientChatContent from "@/components/ClientChatContent";
 import LoginLogoutButton from "@/components/LoginLogoutButton";
-import Image from "next/image"; // Add this import
+import Image from "next/image";
 
 export default async function Page() {
 	const supabase = supabaseServer();
 	const { data } = await supabase.auth.getSession();
 
 	return (
-		<>
-			<div className="h-screen px-2 py-1">
-				<div className="flex items-center justify-between">
+		<div className="min-h-screen flex flex-col overflow-hidden">
+			{/* Header section with fixed height */}
+			<div className="px-4 py-2 border-b">
+				<div className="flex items-center justify-between max-w-7xl mx-auto w-full">
 					<div className="flex items-center gap-2">
 						<h1 className="text-xl font-bold">FlyChat</h1>
 					</div>
 					<LoginLogoutButton user={data.session?.user} />
 				</div>
-				<div className="max-w-3xl mx-auto">
-					<ChatHeader user={data.session?.user} />
-					<div className="h-[85dvh] border rounded-md flex flex-col relative">
-						<ClientChatContent user={data.session?.user} />
+			</div>
+
+			{/* Main content area that takes remaining height */}
+			<div className="flex-1 flex flex-col w-full overflow-hidden">
+				<div className="max-w-7xl w-full mx-auto px-4 flex flex-col flex-1">
+					<div className="relative flex flex-col flex-1">
+						<ChatHeader user={data.session?.user} />
+						<div className="flex-1 border rounded-md overflow-hidden">
+							<div className="h-full overflow-y-auto scrollbar-hide">
+								<ClientChatContent user={data.session?.user} />
+							</div>
+						</div>
 					</div>
 				</div>
-				<InitUser user={data.session?.user} />
 			</div>
-		</>
+			
+			<InitUser user={data.session?.user} />
+		</div>
 	);
 }
