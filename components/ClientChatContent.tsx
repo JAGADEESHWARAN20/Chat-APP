@@ -8,22 +8,28 @@ import { useRoomStore } from "@/lib/store/roomstore";
 import { User as SupabaseUser } from "@supabase/supabase-js";
 
 export default function ClientChatContent({ user }: { user: SupabaseUser | undefined }) {
-     const selectedRoom = useRoomStore((state) => state.selectedRoom);
+    const selectedRoom = useRoomStore((state) => state.selectedRoom);
 
-     return (
-          <>
-               {user ? (
-                    selectedRoom ? (
-                         <>
-                              <ChatMessages />
-                              <ChatInput />
-                         </>
-                    ) : (
-                         <ChatAbout />
-                    )
-               ) : (
+    return (
+        <div className="h-full flex flex-col">
+            {user ? (
+                selectedRoom ? (
+                    <>
+                        {/* Messages area - scrollable */}
+                        <div className="flex-1 overflow-y-auto">
+                            <ChatMessages />
+                        </div>
+                        {/* Input area - fixed at bottom */}
+                        <div className="flex-shrink-0">
+                            <ChatInput />
+                        </div>
+                    </>
+                ) : (
                     <ChatAbout />
-               )}
-          </>
-     );
+                )
+            ) : (
+                <ChatAbout />
+            )}
+        </div>
+    );
 }
