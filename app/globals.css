@@ -156,29 +156,38 @@
 }
 
 .glass-gradient-header {
-  background: rgba(255, 255, 255, 0.05); /* slight tint */
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border-radius: 8px;
   position: relative;
   overflow: hidden;
-  z-index: 10;
+  border-radius: 8px;
+  background: linear-gradient(
+    135deg,
+    rgba(255,255,255,0.15),
+    rgba(255,255,255,0.05)
+  ); /* gradient frosted tint */
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  box-shadow: inset 0 0 1px rgba(255,255,255,0.6),
+              0 4px 20px rgba(0,0,0,0.2);
 }
 
 .glass-gradient-header::before {
-  content: '';
+  content: "";
   position: absolute;
   inset: 0;
-  padding: 2px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0));
-  border-radius: 8px;
   pointer-events: none;
-  mask: 
-    linear-gradient(#fff 0 0) content-box, 
+  border-radius: inherit;
+  padding: 2px;
+  background: linear-gradient(
+    135deg,
+    rgba(255,255,255,0.8),
+    rgba(255,255,255,0)
+  );
+  mask:
+    linear-gradient(#fff 0 0) content-box,
     linear-gradient(#fff 0 0);
   -webkit-mask:
     linear-gradient(#fff 0 0) content-box,
     linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
   mask-composite: exclude;
+  -webkit-mask-composite: xor;
 }
