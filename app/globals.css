@@ -158,10 +158,11 @@
 .glass-gradient-header {
   position: relative;
   overflow: hidden;
+
   border-radius: 8px;
   background: linear-gradient(
     135deg,
-    rgba(255,255,255,0.15),
+    rgba(105, 97, 144, 0.569),
     rgba(255,255,255,0.05)
   ); /* gradient frosted tint */
   backdrop-filter: blur(20px) saturate(150%);
@@ -176,11 +177,12 @@
   inset: 0;
   pointer-events: none;
   border-radius: inherit;
-  padding:. 5px;
+  padding: .5px;
+  border: rgba(255, 255, 255, 0.8);
   background: linear-gradient(
     135deg,
-    rgba(255,255,255,0.2),
-    rgba(255,255,255,0)
+    rgba(255, 255, 255, 0.088),
+    rgba(0, 0, 0, 0)
   );
   mask:
     linear-gradient(#fff 0 0) content-box,

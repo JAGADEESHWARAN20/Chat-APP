@@ -39,7 +39,6 @@ import { useRoomStore } from "@/lib/store/roomstore";
 import { useDebounce } from "use-debounce";
 import Notifications from "./Notifications";
 import { useNotification } from "@/lib/store/notifications";
-import { useFetchRooms } from '@/hooks/useFetchRooms';
 
 type UserProfile = Database["public"]["Tables"]["users"]["Row"];
 type Room = Database["public"]["Tables"]["rooms"]["Row"];
@@ -83,13 +82,12 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         .select("status")
         .eq("room_id", roomId)
         .eq("user_id", user.id)
-        .eq("status", "accepted")
-        .single();
-      if (error && error.code !== "PGRST116") {
+        .eq("status", "accepted");
+      if (error) {
         console.error("Error checking room membership:", error);
         return false;
       }
-      return data?.status === "accepted";
+      return data && data.length > 0 && data[0].status === "accepted";
     },
     [user, supabase]
   );
@@ -98,30 +96,58 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     async (roomId: string) => {
       if (!user) return null;
       const { data, error } = await supabase
-        .from("room_participants")
+        .from("room_members")
         .select("status")
         .eq("room_id", roomId)
-        .eq("user_id", user.id)
-        .single();
-      if (error && error.code !== "PGRST116") {
+        .eq("user_id", user.id);
+      if (error) {
         console.error("Error checking room participation:", error);
         return null;
       }
-      return data?.status || null;
+      return data && data.length > 0 ? data[0].status : null;
     },
     [user, supabase]
   );
 
+  const fetchAvailableRooms = useCallback(async () => {
+    if (!user) return;
+    setIsLoading(true);
+    try {
+      const { data: rooms, error } = await supabase
+        .from("rooms")
+        .select("id, name, is_private, created_by, created_at")
+        .or(`is_private.eq.false, id.in.(select room_id from room_members where user_id.eq.${user.id} and status.eq.accepted)`);
 
-  const { fetchAvailableRooms } = useFetchRooms(
-    user,
-    checkRoomMembership,
-    checkRoomParticipation,
-    setAvailableRooms,
-    setRooms,
-    isMounted,
-    initializeDefaultRoom // Pass initializeDefaultRoom to the hook
-  );
+      if (error) {
+        toast.error(error.message || "Failed to fetch available rooms");
+        return;
+      }
+
+      if (isMounted.current) {
+        const roomsWithMembership = await Promise.all(
+          rooms.map(async (room: Room) => ({
+            ...room,
+            isMember: await checkRoomMembership(room.id),
+            participationStatus: await checkRoomParticipation(room.id),
+          }))
+        );
+        setAvailableRooms(roomsWithMembership);
+        setRooms(roomsWithMembership);
+        if (!selectedRoom && roomsWithMembership.length > 0) {
+          initializeDefaultRoom();
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching available rooms:", error);
+      if (isMounted.current) {
+        toast.error("An error occurred while fetching rooms");
+      }
+    } finally {
+      if (isMounted.current) {
+        setIsLoading(false);
+      }
+    }
+  }, [user, checkRoomMembership, checkRoomParticipation, setRooms, initializeDefaultRoom]);
 
   const handleRoomSwitch = useCallback(async (room: Room) => {
     if (!user) {
@@ -129,27 +155,19 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       return;
     }
     try {
-      const response = await fetch("/api/rooms/switch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roomId: room.id }),
-      });
-      const data = await response.json();
+      const { data, error } = await supabase
+        .from("room_members")
+        .upsert(
+          { room_id: room.id, user_id: user.id, status: "accepted" },
+          { onConflict: "room_id,user_id" } // Correct onConflict syntax
+        );
 
-      if (!response.ok) {
-        if (response.status === 403 && data.code === "ACCESS_DENIED") {
-          toast.error("You do not have permission to switch to this room.");
-        } else {
-          throw new Error(data.error || "Failed to switch room");
+      if (error) {
+        if (error.code === "23503") { // Foreign key violation
+          toast.error("Room or user does not exist.");
+          return;
         }
-        return;
-      }
-
-      if (data.status === "pending") {
-        toast.info(data.message || "Switch request sent to room owner for approval");
-        await fetchAvailableRooms();
-        setIsSwitchRoomPopoverOpen(false);
-        return;
+        throw new Error(error.message || "Failed to switch room");
       }
 
       const isMember = await checkRoomMembership(room.id);
@@ -163,7 +181,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       setSelectedRoom(roomWithMembership);
       setIsSwitchRoomPopoverOpen(false);
       setIsMember(isMember);
-      toast.success(data.message || `Switched to ${room.name}`);
+      toast.success(`Switched to ${room.name}`);
       await fetchAvailableRooms();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to switch room");
@@ -189,23 +207,27 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 
     try {
       setIsLeaving(true);
-      const response = await fetch(`/api/rooms/${encodeURIComponent(selectedRoom.id)}/leave`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-      });
+      const { data, error } = await supabase
+        .from("room_members") // Changed from direct_chats to room_members
+        .delete()
+        .eq("room_id", selectedRoom.id)
+        .eq("user_id", user.id);
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to leave room");
+      if (error) {
+        throw new Error(error.message || "Failed to leave room");
       }
 
-      const result = await response.json();
-      toast.success(result.message || "Successfully left the room");
-
+      toast.success("Successfully left the room");
       setIsMember(false);
       await fetchAvailableRooms();
 
-      if (!result.hasOtherRooms) {
+      const { data: remainingRooms } = await supabase
+        .from("room_members")
+        .select("room_id")
+        .eq("user_id", user.id)
+        .eq("status", "accepted");
+
+      if (remainingRooms && remainingRooms.length === 0) {
         setSelectedRoom(null);
         router.push("/");
       } else {
@@ -223,53 +245,58 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       setIsLeaving(false);
     }
   }, [user, selectedRoom, UUID_REGEX, setIsLeaving, setIsMember, fetchAvailableRooms, setSelectedRoom, router]);
-
+  
   const handleSearchInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     debouncedCallback(e.target.value);
   }, [debouncedCallback]);
-
   const fetchSearchResults = useCallback(async () => {
     if (!searchType) return;
     setIsLoading(true);
     try {
-      let url = "";
+      let query;
       if (searchType === "rooms") {
-        url = debouncedSearchQuery.trim()
-          ? `/api/rooms/search?query=${encodeURIComponent(debouncedSearchQuery)}`
-          : "/api/rooms/all";
+        query = supabase
+          .from("rooms")
+          .select("id, name, is_private, created_by, created_at")
+          .or(`is_private.eq.false,id.in.(select room_id from room_members where user_id.eq.${user?.id} and status.eq.accepted)`)
+          .ilike("name", `%${debouncedSearchQuery.trim()}%`)
+          .limit(10);
       } else if (searchType === "users") {
-        url = debouncedSearchQuery.trim()
-          ? `/api/users/search?query=${encodeURIComponent(debouncedSearchQuery)}`
-          : "/api/users/search?query=";
+        query = supabase
+          .from("users")
+          .select("id, username, display_name, avatar_url")
+          .ilike("display_name", `%${debouncedSearchQuery.trim()}%`)
+          .limit(10);
       }
 
-      const response = await fetch(url);
-      const data = await response.json();
-      if (isMounted.current) {
-        if (response.ok) {
-          if (searchType === "rooms") {
-            const results: Room[] = data.rooms || data;
-            const resultsWithMembership = await Promise.all(
-              results.map(async (room) => ({
-                ...room,
-                isMember: await checkRoomMembership(room.id),
-                participationStatus: await checkRoomParticipation(room.id),
-              }))
-            );
-            setSearchResults(resultsWithMembership);
-          } else if (searchType === "users") {
-            const results: UserProfile[] = data || [];
-            setSearchResults(results);
-          }
+      if (!query) return;
+
+      const response = await query;
+
+
+      if ("error" in response && response.error) {
+        console.error(`Search error for ${searchType}:`, response.error);
+        toast.error(response.error.message || `Failed to search ${searchType}`);
+        setSearchResults([]);
+      } else if ("data" in response && Array.isArray(response.data) && isMounted.current) {
+        if (searchType === "rooms") {
+          const rooms = response.data as Room[];
+          const roomsWithMembership = await Promise.all(
+            rooms.map(async (room) => ({
+              ...room,
+              isMember: await checkRoomMembership(room.id),
+              participationStatus: await checkRoomParticipation(room.id),
+            }))
+          );
+          setSearchResults(roomsWithMembership as SearchResult[]);
         } else {
-          toast.error(data.error || `Failed to search ${searchType}`);
-          setSearchResults([]);
+          setSearchResults(response.data as UserProfile[]);
         }
       }
     } catch (error) {
       console.error("Search error:", error);
       if (isMounted.current) {
-        toast.error("An error occurred while searching");
+        toast.error(error instanceof Error ? error.message : "An error occurred while searching");
         setSearchResults([]);
       }
     } finally {
@@ -277,7 +304,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         setIsLoading(false);
       }
     }
-  }, [debouncedSearchQuery, searchType, checkRoomMembership, checkRoomParticipation]);
+  }, [debouncedSearchQuery, searchType, user?.id, checkRoomMembership, checkRoomParticipation]);
 
   const handleJoinRoom = useCallback(
     async (roomId?: string) => {
@@ -295,37 +322,39 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         return;
       }
       try {
-        const response = await fetch(`/api/rooms/${encodeURIComponent(currentRoomId)}/join`, {
-          method: "POST",
-        });
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || "Failed to join room");
+        const { data, error } = await supabase
+          .from("room_members")
+          .upsert(
+            { room_id: currentRoomId, user_id: user.id, status: "accepted" },
+            { onConflict: "room_id,user_id" } // Correct onConflict syntax
+          );
+
+        if (error) {
+          throw new Error(error.message || "Failed to join room");
         }
-        const data = await response.json();
-        toast.success(data.message);
-        if (!data.status || data.status === "accepted") {
-          const { data: room, error: roomError } = await supabase
-            .from("rooms")
-            .select("*")
-            .eq("id", currentRoomId)
-            .single();
-          if (roomError || !room) {
-            throw new Error("Failed to fetch room details");
-          }
-          const isMember = await checkRoomMembership(room.id);
-          const participationStatus = await checkRoomParticipation(room.id);
-          const roomWithMembership: RoomWithMembership = {
-            ...room,
-            isMember,
-            participationStatus,
-          };
-          setSelectedRoom(roomWithMembership);
-          setIsMember(true);
+
+        const { data: room } = await supabase
+          .from("rooms")
+          .select("*")
+          .eq("id", currentRoomId)
+          .single();
+        if (!room) {
+          throw new Error("Failed to fetch room details");
         }
+
+        const isMember = await checkRoomMembership(room.id);
+        const participationStatus = await checkRoomParticipation(room.id);
+        const roomWithMembership: RoomWithMembership = {
+          ...room,
+          isMember,
+          participationStatus,
+        };
+        setSelectedRoom(roomWithMembership);
+        setIsMember(true);
         if (searchType) {
           await fetchSearchResults();
         }
+        toast.success("Joined room successfully");
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Failed to join room");
       }
@@ -344,19 +373,21 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     }
     setIsCreating(true);
     try {
-      const response = await fetch("/api/rooms", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: newRoomName.trim(),
-          is_private: isPrivate,
-        }),
-      });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to create room");
+      const { data, error } = await supabase
+        .from("rooms")
+        .insert({ name: newRoomName.trim(), is_private: isPrivate, created_by: user.id })
+        .select()
+        .single();
+
+      if (error) {
+        throw new Error(error.message || "Failed to create room");
       }
-      const newRoom = await response.json();
+
+      const newRoom = data;
+      await supabase
+        .from("room_members")
+        .insert({ room_id: newRoom.id, user_id: user.id, status: "accepted" });
+
       toast.success("Room created successfully!");
       setNewRoomName("");
       setIsPrivate(false);
@@ -457,7 +488,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 
   return (
     <header className="h-14 flex items-center justify-between px-4 glass-gradient-header text-white z-10">
-      <h1 className="text-[2vw] flex flex-col font-semibold py-2 items-start">
+      <h1 className="text-[2.5vw] lg:text-[1em] flex flex-col font-semibold py-2 lg:py-[2em] items-start">
         {selectedRoom ? `#${selectedRoom.name}` : "Daily Chat"}
         <ChatPresence />
       </h1>
