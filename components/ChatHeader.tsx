@@ -109,45 +109,69 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     [user, supabase]
   );
 
-  const fetchAvailableRooms = useCallback(async () => {
-    if (!user) return;
-    setIsLoading(true);
-    try {
-      const { data: rooms, error } = await supabase
-        .from("rooms")
-        .select("id, name, is_private, created_by, created_at")
-        .or(`is_private.eq.false, id.in.(select room_id from room_members where user_id.eq.${user.id} and status.eq.accepted)`);
+const fetchAvailableRooms = useCallback(async () => {
+  // Add an early exit if user is not defined
+  if (!user) {
+    setIsLoading(false); // Make sure loading state is reset
+    setAvailableRooms([]); // Clear previous results if needed
+    setRooms([]); // Clear store if needed
+    return;
+  }
 
-      if (error) {
-        toast.error(error.message || "Failed to fetch available rooms");
-        return;
-      }
+  setIsLoading(true);
+  try {
+    // 1. First, get the room_ids where the user is an accepted member
+    const { data: memberRooms, error: memberError } = await supabase
+      .from("room_members")
+      .select("room_id")
+      .eq("user_id", user.id) // <--- FIXED: user.id is now definitely a string
+      .eq("status", "accepted");
 
-      if (isMounted.current) {
-        const roomsWithMembership = await Promise.all(
-          rooms.map(async (room: Room) => ({
-            ...room,
-            isMember: await checkRoomMembership(room.id),
-            participationStatus: await checkRoomParticipation(room.id),
-          }))
-        );
-        setAvailableRooms(roomsWithMembership);
-        setRooms(roomsWithMembership);
-        if (!selectedRoom && roomsWithMembership.length > 0) {
-          initializeDefaultRoom();
-        }
-      }
-    } catch (error) {
-      console.error("Error fetching available rooms:", error);
-      if (isMounted.current) {
-        toast.error("An error occurred while fetching rooms");
-      }
-    } finally {
-      if (isMounted.current) {
-        setIsLoading(false);
+    if (memberError) {
+      console.error("Error fetching user's member rooms:", memberError);
+      toast.error(memberError.message || "Failed to fetch user's rooms");
+      setIsLoading(false);
+      return;
+    }
+
+    const memberRoomIds = memberRooms.map(m => m.room_id);
+
+    // 2. Then, fetch rooms that are either public OR the user is an accepted member of.
+    const { data: rooms, error: roomsError } = await supabase
+      .from("rooms")
+      .select("id, name, is_private, created_by, created_at")
+      .or(`is_private.eq.false,id.in.(${memberRoomIds.join(',')})`);
+
+    if (roomsError) {
+      toast.error(roomsError.message || "Failed to fetch available rooms");
+      return;
+    }
+
+    if (isMounted.current) {
+      const roomsWithMembership = await Promise.all(
+        rooms.map(async (room: Room) => ({
+          ...room,
+          isMember: await checkRoomMembership(room.id),
+          participationStatus: await checkRoomParticipation(room.id),
+        }))
+      );
+      setAvailableRooms(roomsWithMembership);
+      setRooms(roomsWithMembership);
+      if (!selectedRoom && roomsWithMembership.length > 0) {
+        initializeDefaultRoom();
       }
     }
-  }, [user, supabase, setRooms, selectedRoom, checkRoomMembership, checkRoomParticipation, initializeDefaultRoom]);
+  } catch (error) {
+    console.error("Error fetching available rooms:", error);
+    if (isMounted.current) {
+      toast.error("An error occurred while fetching rooms");
+    }
+  } finally {
+    if (isMounted.current) {
+      setIsLoading(false);
+    }
+  }
+}, [user, supabase, setRooms, selectedRoom, checkRoomMembership, checkRoomParticipation, initializeDefaultRoom]); // Make sure 'user' is in dependency array
 
   const handleRoomSwitch = useCallback(async (room: Room) => {
     if (!user) {
@@ -255,62 +279,85 @@ toast.success(`Switched to ${room.name}`, {
   const handleSearchInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     debouncedCallback(e.target.value);
   }, [debouncedCallback]);
-  const fetchSearchResults = useCallback(async () => {
-    if (!searchType) return;
-    setIsLoading(true);
-    try {
-      let query;
-      if (searchType === "rooms") {
-        query = supabase
-          .from("rooms")
-          .select("id, name, is_private, created_by, created_at")
-          .or(`is_private.eq.false,id.in.(select room_id from room_members where user_id.eq.${user?.id} and status.eq.accepted)`)
-          .ilike("name", `%${debouncedSearchQuery.trim()}%`)
-          .limit(10);
-      } else if (searchType === "users") {
-        query = supabase
-          .from("users")
-          .select("id, username, display_name, avatar_url")
-          .ilike("display_name", `%${debouncedSearchQuery.trim()}%`)
-          .limit(10);
-      }
+const fetchSearchResults = useCallback(async () => {
+  // Add an early exit if user is not defined
+  if (!user) {
+    setIsLoading(false); // Make sure loading state is reset
+    setSearchResults([]); // Clear previous results
+    return;
+  }
 
-      if (!query) return;
+  if (!searchType) return;
+  setIsLoading(true);
+  try {
+    let query;
+    if (searchType === "rooms") {
+      // First, get the room_ids where the user is an accepted member
+      // Now, user.id is guaranteed to be a string here
+      const { data: memberRooms, error: memberError } = await supabase
+        .from("room_members")
+        .select("room_id")
+        .eq("user_id", user.id) // <--- FIXED: user.id is now definitely a string
+        .eq("status", "accepted");
 
-      const response = await query;
-
-
-      if ("error" in response && response.error) {
-        console.error(`Search error for ${searchType}:`, response.error);
-        toast.error(response.error.message || `Failed to search ${searchType}`);
-        setSearchResults([]);
-      } else if ("data" in response && Array.isArray(response.data) && isMounted.current) {
-        if (searchType === "rooms") {
-          const rooms = response.data as Room[];
-          const roomsWithMembership = await Promise.all(
-            rooms.map(async (room) => ({
-              ...room,
-              isMember: await checkRoomMembership(room.id),
-              participationStatus: await checkRoomParticipation(room.id),
-            }))
-          );
-          setSearchResults(roomsWithMembership as SearchResult[]);
-        } else {
-          setSearchResults(response.data as UserProfile[]);
-        }
-      }
-    } catch (error) {
-      console.error("Search error:", error);
-      if (isMounted.current) {
-        toast.error(error instanceof Error ? error.message : "An error occurred while searching");
-        setSearchResults([]);
-      }
-    } finally {
-      if (isMounted.current) {
+      if (memberError) {
+        console.error("Error fetching user's member rooms for search:", memberError);
+        toast.error(memberError.message || "Failed to fetch user's rooms for search");
         setIsLoading(false);
+        return;
+      }
+      const memberRoomIds = memberRooms.map(m => m.room_id);
+
+      query = supabase
+        .from("rooms")
+        .select("id, name, is_private, created_by, created_at")
+        .or(`is_private.eq.false,id.in.(${memberRoomIds.join(',')})`)
+        .ilike("name", `%${debouncedSearchQuery.trim()}%`)
+        .limit(10);
+    } else if (searchType === "users") {
+      query = supabase
+        .from("users")
+        .select("id, username, display_name, avatar_url")
+        .ilike("display_name", `%${debouncedSearchQuery.trim()}%`)
+        .limit(10);
+    }
+
+    if (!query) return;
+
+    const response = await query;
+
+    if ("error" in response && response.error) {
+      console.error(`Search error for ${searchType}:`, response.error);
+      toast.error(response.error.message || `Failed to search ${searchType}`);
+      setSearchResults([]);
+    } else if ("data" in response && Array.isArray(response.data) && isMounted.current) {
+      if (searchType === "rooms") {
+        const rooms = response.data as Room[];
+        const roomsWithMembership = await Promise.all(
+          rooms.map(async (room) => ({
+            ...room,
+            isMember: await checkRoomMembership(room.id),
+            participationStatus: await checkRoomParticipation(room.id),
+          }))
+        );
+        setSearchResults(roomsWithMembership as SearchResult[]);
+      } else {
+        setSearchResults(response.data as UserProfile[]);
       }
     }
-  }, [searchType, supabase, user?.id, debouncedSearchQuery, checkRoomMembership, checkRoomParticipation]);
+  } catch (error) {
+    console.error("Search error:", error);
+    if (isMounted.current) {
+      toast.error(error instanceof Error ? error.message : "An error occurred while searching");
+      setSearchResults([]);
+    }
+  } finally {
+    if (isMounted.current) {
+      setIsLoading(false);
+    }
+  }
+}, [searchType, supabase, user, debouncedSearchQuery, checkRoomMembership, checkRoomParticipation]); // Make sure 'user' is in dependency array
+  
 
   const handleJoinRoom = useCallback(
     async (roomId?: string) => {
