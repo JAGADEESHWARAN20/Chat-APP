@@ -50,12 +50,11 @@ export async function POST(
 
   // 4. Check if already a member
   const { data: existingMember } = await supabase
-  .from("room_members")
-  .select("status")
-  .eq("room_id", roomId)
-  .eq("user_id", userId)
-  .maybeSingle();
-
+    .from("room_members")
+    .select("status")
+    .eq("room_id", roomId)
+    .eq("user_id", userId)
+    .maybeSingle();
 
   if (existingMember?.status === "accepted") {
     return NextResponse.json({
@@ -74,17 +73,19 @@ export async function POST(
     });
   }
 
-  // 5. Determine join status
+  // 5. Determine join status and joinedAt value
   const isPrivate = room.is_private;
   const joinStatus = isPrivate ? "pending" : "accepted";
-  const joinedAt = isPrivate ? null : new Date().toISOString();
+  
+  // Convert null to undefined if room is private, otherwise use ISO string
+  const joinedAtValue: string | undefined = isPrivate ? undefined : new Date().toISOString();
 
   // 6. Insert membership (via RPC or directly)
   const { error: joinError } = await supabase.rpc("join_room", {
     p_room_id: room.id,
     p_user_id: userId,
     p_status: joinStatus,
-    p_joined_at: joinedAt,
+    p_joined_at: joinedAtValue, // Use the converted value here
   });
 
   if (joinError) {
