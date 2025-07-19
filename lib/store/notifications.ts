@@ -36,9 +36,9 @@ export interface Inotification {
   room_id: string | null;
   join_status: string | null;
   direct_chat_id: string | null;
-  users: UserType | null;
+  users: UserType | null; // This maps to 'sender'
   recipient: UserType | null;
-  rooms: RoomType | null;
+  rooms: RoomType | null; // This maps to 'room'
 }
 
 interface NotificationState {
@@ -46,6 +46,8 @@ interface NotificationState {
   setNotifications: (notifications: Inotification[]) => void;
   addNotification: (notification: Inotification) => void;
   markAsRead: (notificationId: string) => Promise<void>;
+  // Add removeNotification to the interface
+  removeNotification: (notificationId: string) => void;
   fetchNotifications: (userId: string, page?: number, limit?: number, retries?: number) => Promise<void>;
   subscribeToNotifications: (userId: string) => void;
   unsubscribeFromNotifications: () => void;
@@ -66,9 +68,9 @@ export const useNotification = create<NotificationState>((set, get) => {
     room_id: n.room_id,
     join_status: n.join_status,
     direct_chat_id: n.direct_chat_id,
-    users: n.sender,
+    users: n.sender, // Correct mapping from 'sender' alias to 'users' in Inotification
     recipient: n.recipient,
-    rooms: n.room
+    rooms: n.room // Correct mapping from 'room' alias to 'rooms' in Inotification
   });
 
   return {
@@ -92,11 +94,12 @@ export const useNotification = create<NotificationState>((set, get) => {
 
         if (error) throw error;
 
+        // Update the status in the local state
         const notifications = get().notifications.map(n =>
           n.id === notificationId ? { ...n, status: "read" } : n
         );
         set({ notifications });
-        
+
         console.log("[Notifications Store] Successfully marked as read");
       } catch (error) {
         console.error("[Notifications Store] Error marking as read:", error);
@@ -104,10 +107,19 @@ export const useNotification = create<NotificationState>((set, get) => {
       }
     },
 
+    // Implementation for removeNotification
+    removeNotification: (notificationId) => {
+      console.log("[Notifications Store] Removing notification from state:", notificationId);
+      set((state) => ({
+        notifications: state.notifications.filter(n => n.id !== notificationId)
+      }));
+      console.log("[Notifications Store] Notification removed from state");
+    },
+
     fetchNotifications: async (userId: string, page = 1, limit = 50, retries = 3) => {
       try {
         console.log("[Notifications Store] Fetching notifications for user:", userId);
-        
+
         const { data, error } = await supabase
           .from("notifications")
           .select(`
@@ -148,7 +160,7 @@ export const useNotification = create<NotificationState>((set, get) => {
     subscribeToNotifications: (userId) => {
       try {
         console.log("[Notifications Store] Setting up notification subscription for user:", userId);
-        
+
         if (notificationChannel) {
           console.log("[Notifications Store] Cleaning up existing subscription");
           notificationChannel.unsubscribe();
@@ -158,13 +170,15 @@ export const useNotification = create<NotificationState>((set, get) => {
           .on(
             'postgres_changes',
             {
-              event: '*',
+              event: '*', // Listen for all events (INSERT, UPDATE, DELETE)
               schema: 'public',
               table: 'notifications',
               filter: `user_id=eq.${userId}`
             },
             async (payload) => {
               console.log("[Notifications Store] Received notification change:", payload);
+              // Instead of refetching all, you can optimize based on payload.eventType
+              // For simplicity and to ensure data consistency, we'll refetch for now.
               await get().fetchNotifications(userId);
             }
           )

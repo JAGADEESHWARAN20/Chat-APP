@@ -11,7 +11,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Avatar, AvatarImage, AvatarFallback } from "./ui/avatar";
 import { useRouter } from "next/navigation";
 import { User as SupabaseUser } from "@supabase/supabase-js";
-import { Check, X, ArrowLeft } from "lucide-react";
+import { Check, X, ArrowLeft, Trash2 } from "lucide-react"; // Import Trash2 icon
 import { Database } from "@/lib/types/supabase";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { Swipeable } from "./ui/swipeable";
@@ -31,7 +31,7 @@ type RoomWithMembership = Room & {
 const transformRoom = async (room: Room, userId: string, supabase: ReturnType<typeof supabaseBrowser>): Promise<RoomWithMembership> => {
   // Check actual membership status
   const { data: membership } = await supabase
-    .from("room_participants")
+    .from("room_members") // Corrected table name based on previous discussion for consistency
     .select("status")
     .eq("room_id", room.id)
     .eq("user_id", userId)
@@ -51,7 +51,8 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
     markAsRead,
     fetchNotifications,
     subscribeToNotifications,
-    unsubscribeFromNotifications
+    unsubscribeFromNotifications,
+    removeNotification // Assuming you'll add this to your store or create a new API call
   } = useNotification();
   const { setSelectedRoom } = useRoomStore();
   const router = useRouter();
@@ -67,7 +68,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
           console.log("[Notifications] Initializing notifications for user:", user.id);
           await fetchNotifications(user.id);
           console.log("[Notifications] Successfully fetched notifications");
-          
+
           console.log("[Notifications] Setting up real-time subscription");
           subscribeToNotifications(user.id);
           console.log("[Notifications] Real-time subscription established");
@@ -98,7 +99,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
     setIsLoading(true);
     try {
       console.log("[Notifications] Processing accept request:", { notificationId, roomId, type });
-      
+
       const response = await fetch(`/api/notifications/${notificationId}/accept`, {
         method: "POST",
       });
@@ -110,7 +111,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
       }
 
       console.log("[Notifications] Successfully processed accept request");
-      await markAsRead(notificationId);
+      await markAsRead(notificationId); // Mark as read after acceptance
 
       if (type === "room_invite" || type === "join_request") {
         console.log("[Notifications] Fetching updated room information");
@@ -160,7 +161,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
         throw new Error(error.message || "Failed to reject notification");
       }
 
-      await markAsRead(notificationId);
+      await markAsRead(notificationId); // Mark as read after rejection
       toast.success("Request rejected");
     } catch (error) {
       console.error("Error rejecting notification:", error);
@@ -169,6 +170,37 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
       setIsLoading(false);
     }
   };
+
+  // New function for handling deletion
+  const handleDeleteNotification = useCallback(async (notificationId: string) => {
+    if (!user) {
+      toast.error("You must be logged in to delete notifications.");
+      return;
+    }
+    setIsLoading(true);
+    try {
+      // Option 1: Mark as read (soft delete/hide from active view)
+      await markAsRead(notificationId);
+      toast.success("Notification dismissed.");
+
+      // Option 2 (If you implement a hard delete API endpoint):
+      // const response = await fetch(`/api/notifications/${notificationId}`, {
+      //   method: "DELETE",
+      // });
+      // if (!response.ok) {
+      //   const error = await response.json();
+      //   throw new Error(error.message || "Failed to delete notification");
+      // }
+      // await removeNotification(notificationId); // Remove from store immediately
+      // toast.success("Notification deleted.");
+
+    } catch (error) {
+      console.error("Error deleting notification:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to dismiss notification.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user, markAsRead]); // Include markAsRead in deps
 
   const getNotificationContent = useCallback((notification: Inotification) => {
     const senderName = notification.users?.display_name || notification.users?.username || "Someone";
@@ -195,16 +227,40 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
     <Sheet open={isOpen} onOpenChange={onClose}>
       <SheetContent side={isMobile ? "bottom" : "right"} className="p-0 flex flex-col h-full w-full sm:max-w-sm">
         <SheetHeader className="p-4 border-b">
-          <div className="flex items-center space-x-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onClose}
-              className="shrink-0"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <SheetTitle>Notifications</SheetTitle>
+          <div className="flex items-center justify-between"> {/* Added justify-between */}
+            <div className="flex items-center space-x-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onClose}
+                className="shrink-0"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+              <SheetTitle>Notifications</SheetTitle>
+            </div>
+            {/* Delete all / Clear All button */}
+            {notifications.length > 0 && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  // Implement clear all logic here, e.g., mark all as read
+                  // For simplicity, I'm adding a specific handler that you can expand
+                  // For now, it will mark ALL notifications as read
+                  notifications.forEach(n => {
+                    if (n.status !== 'read') {
+                      handleDeleteNotification(n.id); // Reusing the "delete" logic
+                    }
+                  });
+                  toast.info("All notifications marked as read.");
+                }}
+                disabled={isLoading}
+                className="text-gray-300 hover:text-red-500 transition-colors"
+              >
+                <Trash2 className="h-5 w-5" />
+              </Button>
+            )}
           </div>
         </SheetHeader>
 
@@ -218,19 +274,14 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
               {notifications.map((notification) => (
                 <Swipeable
                   key={notification.id}
-                  onSwipeLeft={() => shouldShowActions(notification) && handleReject(notification.id)}
-                  onSwipeRight={() =>
-                    shouldShowActions(notification) &&
-                    handleAccept(
-                      notification.id,
-                      notification.room_id || null,
-                      notification.type
-                    )
-                  }
+                  // Allow swiping to delete/dismiss any notification
+                  onSwipeLeft={() => handleDeleteNotification(notification.id)}
+                  onSwipeRight={() => handleDeleteNotification(notification.id)}
                 >
                   <div
-                    className={`p-4 flex items-start space-x-4 hover:bg-muted/50 relative ${notification.status === "read" ? "opacity-50" : ""
-                      }`}
+                    className={`p-4 flex items-start space-x-4 hover:bg-muted/50 relative ${
+                      notification.status === "read" ? "opacity-50" : ""
+                    }`}
                   >
                     <Avatar className="h-10 w-10">
                       <AvatarImage
@@ -275,6 +326,18 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
                         </Button>
                       </div>
                     )}
+                     {/* Individual notification delete/dismiss button */}
+                     {!shouldShowActions(notification) && notification.status !== 'read' && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDeleteNotification(notification.id)}
+                          disabled={isLoading}
+                          className="text-gray-400 hover:text-red-400"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                     )}
                   </div>
                 </Swipeable>
               ))}
