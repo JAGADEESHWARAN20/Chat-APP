@@ -1,3 +1,4 @@
+// rooms/search api
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
@@ -31,36 +32,38 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    // Fetch memberships first, as it's needed for both query and no-query scenarios
+    const { data: memberRooms, error: memberError } = await supabase
+      .from("room_members")
+      .select("room_id")
+      .eq("user_id", userId)
+      .eq("status", "accepted");
+
+    if (memberError) {
+      console.error("[Rooms Search] Error fetching memberships:", memberError);
+      return NextResponse.json({ error: "Failed to fetch memberships" }, { status: 500 });
+    }
+
+    const memberRoomIds = memberRooms.map((m) => m.room_id);
+    const memberRoomIdsString = memberRoomIds.length > 0 ? memberRoomIds.join(",") : '""'; // Handle empty array
+
     let supabaseQuery = supabase
       .from("rooms")
       .select("id, name, is_private, created_by, created_at", { count: "exact" })
       .order("created_at", { ascending: false })
       .range(offset, offset + limit - 1);
 
-    // If no query, fetch all accessible rooms (public or user is a member)
+    // Always apply the accessibility filter
     if (!query || query.trim() === "") {
       console.log("[Rooms Search] Fetching all accessible rooms");
-      const { data: memberRooms, error: memberError } = await supabase
-        .from("room_members")
-        .select("room_id")
-        .eq("user_id", userId)
-        .eq("status", "accepted");
-
-      if (memberError) {
-        console.error("[Rooms Search] Error fetching memberships:", memberError);
-        return NextResponse.json({ error: "Failed to fetch memberships" }, { status: 500 });
-      }
-
-      const memberRoomIds = memberRooms.map((m) => m.room_id);
-      supabaseQuery = supabase
-        .from("rooms")
-        .select("id, name, is_private, created_by, created_at", { count: "exact" })
-        .or(`is_private.eq.false, id.in.(${memberRoomIds.join(",")})`)
-        .order("created_at", { ascending: false })
-        .range(offset, offset + limit - 1);
+      supabaseQuery = supabaseQuery
+        .or(`is_private.eq.false, id.in.(${memberRoomIdsString})`);
     } else {
       console.log("[Rooms Search] Fetching rooms with query:", query.trim());
-      supabaseQuery = supabaseQuery.ilike("name", `%${query.trim()}%`);
+      // Apply the name filter AND the accessibility filter
+      supabaseQuery = supabaseQuery
+        .ilike("name", `%${query.trim()}%`)
+        .or(`is_private.eq.false, id.in.(${memberRoomIdsString})`); // Apply accessibility filter here too
     }
 
     const { data: rooms, error: roomsError, count } = await supabaseQuery;
