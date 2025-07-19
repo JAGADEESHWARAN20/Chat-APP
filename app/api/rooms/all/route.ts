@@ -1,9 +1,9 @@
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { Database } from "@/lib/types/supabase"; // Use your typed DB
+import { Database } from "@/lib/types/supabase";
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     const supabase = createRouteHandlerClient<Database>({ cookies });
 
@@ -20,11 +20,21 @@ export async function GET() {
 
     const userId = session.user.id;
 
-    // Fetch all rooms
-    const { data: rooms, error: roomsError } = await supabase
+    // Get search query from URL
+    const { searchParams } = new URL(req.url);
+    const searchQuery = searchParams.get("q")?.toLowerCase() || "";
+
+    // Fetch all rooms (filter by name if query present)
+    let query = supabase
       .from("rooms")
       .select("id, name, is_private, created_by, created_at")
       .order("created_at", { ascending: false });
+
+    if (searchQuery) {
+      query = query.ilike("name", `%${searchQuery}%`);
+    }
+
+    const { data: rooms, error: roomsError } = await query;
 
     if (roomsError) {
       console.error("[Rooms All] Rooms fetch error:", roomsError.message);
@@ -37,10 +47,10 @@ export async function GET() {
 
     const roomIds = rooms.map((room) => room.id);
 
-    // Fetch memberships
+    // Fetch memberships where user is accepted
     const { data: memberships, error: membershipError } = await supabase
       .from("room_members")
-      .select("room_id, status")
+      .select("room_id")
       .in("room_id", roomIds)
       .eq("user_id", userId)
       .eq("status", "accepted");
@@ -50,14 +60,12 @@ export async function GET() {
       return NextResponse.json({ error: "Failed to fetch memberships" }, { status: 500 });
     }
 
-    // Map memberships to room ids
-    const membershipMap = new Map<string, boolean>();
-    roomIds.forEach((id) => membershipMap.set(id, false));
-    memberships?.forEach((m) => membershipMap.set(m.room_id, true));
+    const joinedRoomIds = new Set(memberships?.map((m) => m.room_id));
 
+    // Attach membership flag to each room
     const roomsWithMembership = rooms.map((room) => ({
       ...room,
-      isMember: membershipMap.get(room.id) || false,
+      isMember: joinedRoomIds.has(room.id),
     }));
 
     return NextResponse.json({ success: true, rooms: roomsWithMembership });
