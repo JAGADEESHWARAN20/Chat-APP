@@ -1,3 +1,4 @@
+// api/rooms/[roomId]/join/route.ts
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
@@ -73,40 +74,50 @@ export async function POST(
     });
   }
 
-  // 5. Determine join status and joinedAt value
+  // 5. Determine join status and joined_at value
   const isPrivate = room.is_private;
   const joinStatus = isPrivate ? "pending" : "accepted";
-  
-  // Convert null to undefined if room is private, otherwise use ISO string
-  const joinedAtValue: string | undefined = isPrivate ? undefined : new Date().toISOString();
 
-  // 6. Insert membership (via RPC or directly)
+  // Use null for p_joined_at if pending, otherwise use ISO string
+  const pJoinedAtValue: string | null = isPrivate ? null : new Date().toISOString();
+
+  // 6. Insert membership (via RPC)
+  // Ensure your 'join_room' RPC can handle p_joined_at being NULL.
   const { error: joinError } = await supabase.rpc("join_room", {
     p_room_id: room.id,
     p_user_id: userId,
     p_status: joinStatus,
-    p_joined_at: joinedAtValue, // Use the converted value here
+    p_joined_at: pJoinedAtValue, // Use null for pending, actual timestamp for accepted
   });
 
   if (joinError) {
     console.error("Join RPC error:", joinError);
+    // Add specific error handling for unique constraint violation if user already exists
+    if (joinError.code === "23505") { // Example unique constraint error code
+        return NextResponse.json(
+            { success: false, error: "You are already a member or have a pending request for this room.", code: "ALREADY_MEMBER_OR_PENDING" },
+            { status: 409 }
+        );
+    }
     return NextResponse.json(
-      { success: false, error: "Failed to join room", code: "JOIN_FAILED" },
+      { success: false, error: "Failed to join room", code: "JOIN_FAILED", details: joinError.message },
       { status: 500 }
     );
   }
 
   // 7. Create notification
+  const notificationMessage = isPrivate
+    ? `${session.user.email} requested to join "${room.name}"`
+    : `You joined "${room.name}"`;
+
   const notification = {
-    user_id: isPrivate ? room.created_by! : userId,
-    sender_id: userId,
+    user_id: isPrivate ? room.created_by! : userId, // Recipient: owner for private, self for public
+    sender_id: userId, // Sender: always the current user
     room_id: room.id,
     type: isPrivate ? "join_request" : "room_joined",
-    message: isPrivate
-      ? `${session.user.email} requested to join "${room.name}"`
-      : `You joined "${room.name}"`,
+    message: notificationMessage,
     status: "unread",
-    join_status: isPrivate ? "pending" : null,
+    join_status: isPrivate ? "pending" : null, // Set join_status only for private room requests
   };
 
   const { error: notifError } = await supabase
@@ -114,7 +125,7 @@ export async function POST(
     .insert(notification);
 
   if (notifError) {
-    console.warn("Notification error (non-blocking):", notifError.message);
+    console.warn("Notification error (non-blocking, but log for debugging):", notifError.message);
   }
 
   return NextResponse.json({
