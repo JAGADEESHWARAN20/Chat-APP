@@ -382,7 +382,7 @@ export type Database = {
           p_room_id: string
           p_user_id: string
           p_status: string
-          p_joined_at?: string
+          p_joined_at?: string | null
         }
         Returns: undefined
       }
