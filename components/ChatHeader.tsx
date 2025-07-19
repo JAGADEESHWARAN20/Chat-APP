@@ -151,7 +151,10 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 
   const handleRoomSwitch = useCallback(async (room: Room) => {
     if (!user) {
-      toast.error("You must be logged in to switch rooms");
+      toast.error("You must be logged in to switch rooms", {
+        className: "text-red-600 bg-white border border-red-400 shadow-md",
+      });
+
       return;
     }
     try {
@@ -181,7 +184,10 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       setSelectedRoom(roomWithMembership);
       setIsSwitchRoomPopoverOpen(false);
       setIsMember(isMember);
-      toast.success(`Switched to ${room.name}`);
+toast.success(`Switched to ${room.name}`, {
+  className: "text-green-600 bg-white border border-green-400 shadow-md",
+});
+
       await fetchAvailableRooms();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to switch room");

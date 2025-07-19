@@ -58,33 +58,29 @@
 	}
 }
 
-
-/* Custom Scrollbar Styling */
 .custom-scrollbar {
   /* Firefox */
   scrollbar-width: thin;
-  scrollbar-color: #fff transparent; /* Thumb color, transparent track */
+  scrollbar-color: #fff transparent;
 }
 
-/* Webkit (Chrome, Edge, Safari) */
+/* Webkit Browsers */
 .custom-scrollbar::-webkit-scrollbar {
-  width: 8px; /* Slim scrollbar */
+  width: 8px;
 }
-
 .custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent; /* Hide the track */
+  background: transparent;
 }
-
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: linear-gradient(45deg, #4f46e5, transparent); /* Gradient from indigo to purple */
-  border-radius: 9999px; /* Fully rounded ends */
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); /* Subtle shadow for depth */
-  border: 1px solid rgba(255, 255, 255, 0.1); /* Subtle white border for elegance */
+  background: linear-gradient(45deg, #4f46e5, transparent);
+  border-radius: 9999px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(45deg, #c7c5ec, transparent);
 }
 
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(45deg, #c7c5ec, transparent); /* Slightly darker gradient on hover */
-}
 /* Center the toaster container */
 .center-toaster {
 	left: 53.6% !important;
@@ -95,18 +91,27 @@
 	right: auto !important;
 }
 
-/* Glass effect styles */
 .glass-toast {
-	background: linear-gradient(to bottom right,
-			rgba(255, 255, 255, 0.198),
-			rgba(255, 255, 255, 0.048)) !important;
-	backdrop-filter: blur(10px) saturate(180%) !important;
-	-webkit-backdrop-filter: blur(20px) saturate(180%) !important;
-	border: 1px solid rgba(255, 255, 255, 0.063) !important;
-	box-shadow:
-		0 4px 30px rgba(0, 0, 0, 0.1),
-		inset 0 0 10px rgba(255, 255, 255, 0.1) !important;
+  background: linear-gradient(to bottom right, rgba(255, 255, 255, 0.198), rgba(255, 255, 255, 0.048)) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+  backdrop-filter: blur(10px) saturate(180%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.063) !important;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1), inset 0 0 10px rgba(255, 255, 255, 0.1) !important;
+  color: white;
 }
+
+
+.toast-success {
+  @apply text-green-400;
+}
+.toast-error {
+  @apply text-red-400;
+}
+.toast-info {
+  @apply text-blue-400;
+}
+
+
 
 .dark .glass-toast {
 	background: linear-gradient(to bottom right,
@@ -119,8 +124,8 @@
 }
 
 .glass-button {
-	backdrop-filter: blur(10px) !important;
 	-webkit-backdrop-filter: blur(10px) !important;
+	backdrop-filter: blur(10px) !important;
 	transition: all 0.2s ease !important;
 	border-radius: 0.5rem !important;
 	padding: 0.35rem 0.75rem !important;
@@ -145,15 +150,21 @@
   content: '';
   position: absolute;
   inset: 0;
-  padding: 0; /* This controls border thickness */
+  padding: 0;
   background: linear-gradient(135deg, rgba(255,255,255,0.3), rgba(255,255,255,0));
-  -webkit-mask: 
-    linear-gradient(#fff 0 0) content-box, 
+
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
     linear-gradient(#fff 0 0);
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   pointer-events: none;
 }
+
 
 .glass-gradient-header {
   position: relative;
@@ -165,8 +176,8 @@
     rgba(105, 97, 144, 0.569),
     rgba(255,255,255,0.05)
   ); /* gradient frosted tint */
-  backdrop-filter: blur(20px) saturate(150%);
   -webkit-backdrop-filter: blur(20px) saturate(150%);
+  backdrop-filter: blur(20px) saturate(150%);
   box-shadow: inset 0 0 1px rgba(255,255,255,0.6),
               0 4px 20px rgba(0,0,0,0.2);
 }
@@ -179,17 +190,15 @@
   border-radius: inherit;
   padding: .5px;
   border: rgba(255, 255, 255, 0.8);
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.088),
-    rgba(0, 0, 0, 0)
-  );
-  mask:
-    linear-gradient(#fff 0 0) content-box,
-    linear-gradient(#fff 0 0);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.088), rgba(0, 0, 0, 0));
+
   -webkit-mask:
     linear-gradient(#fff 0 0) content-box,
     linear-gradient(#fff 0 0);
-  mask-composite: exclude;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+
   -webkit-mask-composite: xor;
+  mask-composite: exclude;
 }
