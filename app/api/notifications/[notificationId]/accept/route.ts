@@ -1,28 +1,38 @@
-// api/notifications/[notificationId]/route.ts (Accept API - POST)
+// /app/api/notifications/[notificationId]/route.ts
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { Database } from "@/lib/types/supabase";
 
-type NotificationType = "join_request" | "new_message" | "room_switch" | "notification_unread" | "user_joined" | "join_request_rejected";
-
-export async function POST(req: NextRequest, { params }: { params: { notificationId: string } }) {
+export async function POST(
+  req: NextRequest,
+  { params }: { params: { notificationId: string } }
+) {
   const supabase = createRouteHandlerClient<Database>({ cookies });
+  const notificationId = params.notificationId;
   const timestamp = new Date().toISOString();
 
   try {
-    const notificationId = params.notificationId;
-
-    if (!notificationId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(notificationId)) {
+    if (
+      !notificationId ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(notificationId)
+    ) {
       return NextResponse.json({ error: "Invalid notification ID" }, { status: 400 });
     }
 
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !session?.user) {
-      return NextResponse.json({ error: "Authentication error" }, { status: 401 });
-    }
-    const currentUserId = session.user.id; // The user making the request (room owner/admin)
+    // ✅ Auth check
+    const {
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession();
 
+    if (sessionError || !session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const currentUserId = session.user.id;
+
+    // ✅ Fetch the notification
     const { data: notification, error: notificationError } = await supabase
       .from("notifications")
       .select("*")
@@ -33,70 +43,87 @@ export async function POST(req: NextRequest, { params }: { params: { notificatio
       return NextResponse.json({ error: "Notification not found" }, { status: 404 });
     }
 
-    // For a join_request notification:
-    // notification.user_id is the recipient (room owner)
-    // notification.sender_id is the user requesting to join
-    const userToJoinRoom = notification.sender_id; // The user whose request is being accepted
-    const roomId = notification.room_id;
+    const { sender_id, room_id, type, user_id } = notification;
 
-    if (notification.type !== "join_request" || !userToJoinRoom || !roomId) {
-      return NextResponse.json({ error: "This notification is not a join request or is malformed" }, { status: 400 });
+    if (type !== "join_request" || !sender_id || !room_id) {
+      return NextResponse.json({ error: "Not a valid join request notification" }, { status: 400 });
     }
 
-    // Verify current user is the room owner (or an admin, if you have that concept)
+    if (user_id !== currentUserId) {
+      return NextResponse.json({ error: "Unauthorized to act on this notification" }, { status: 403 });
+    }
+
+    // ✅ Verify user is the owner of the room
     const { data: room, error: roomError } = await supabase
-        .from("rooms")
-        .select("created_by")
-        .eq("id", roomId)
-        .single();
+      .from("rooms")
+      .select("created_by")
+      .eq("id", room_id)
+      .single();
 
-    if (roomError || !room) {
-        return NextResponse.json({ error: "Room not found or inaccessible" }, { status: 404 });
+    if (roomError || !room || room.created_by !== currentUserId) {
+      return NextResponse.json({ error: "Not authorized to accept for this room" }, { status: 403 });
     }
 
-    // Authorization check: Only the room creator can accept join requests.
-    if (currentUserId !== room.created_by) {
-        return NextResponse.json({ error: "Unauthorized: Only the room owner can accept join requests" }, { status: 403 });
-    }
-
-    // Ensure the notification is for the current user (room owner)
-    if (notification.user_id !== currentUserId) {
-         return NextResponse.json({ error: "Unauthorized: Notification not addressed to current user" }, { status: 403 });
-    }
-
-
-    const { error: updateError } = await supabase.rpc("accept_notification", {
+    // ✅ Accept via RPC
+    const { error: rpcError } = await supabase.rpc("accept_notification", {
       p_notification_id: notificationId,
-      p_target_user_id: userToJoinRoom, // This is the user who wants to join the room
-      p_room_id: roomId,
-      p_timestamp: timestamp
+      p_target_user_id: sender_id,
+      p_room_id: room_id,
+      p_timestamp: timestamp,
     });
 
-    if (updateError) {
-      if (updateError.code === "23505") { // Unique violation, e.g., user already in room_members
-        return NextResponse.json({ error: "User is already a member of this room" }, { status: 409 });
+    if (rpcError) {
+      if (rpcError.code === "23505") {
+        return NextResponse.json(
+          { error: "User is already a member of this room" },
+          { status: 409 }
+        );
       }
-      console.error("[Accept API] RPC Error:", updateError.message);
-      return NextResponse.json({ error: "Failed to accept request", details: updateError.message }, { status: 500 });
+
+      console.error("[Accept API] RPC Error:", rpcError.message);
+      return NextResponse.json(
+        { error: "Failed to accept request", details: rpcError.message },
+        { status: 500 }
+      );
     }
 
-    // After RPC, the notification status should be updated by the RPC or a trigger
-    // and the room_members table should be updated.
-    // The client-side real-time listener will pick up these changes.
-
     return NextResponse.json({
-      message: "Request accepted successfully",
-      data: { notificationId, roomId: roomId, userId: userToJoinRoom, timestamp }
+      message: "Join request accepted successfully",
+      data: { notificationId, roomId: room_id, userId: sender_id, timestamp },
     });
   } catch (error) {
     console.error("[Accept API] Catch Error:", error);
-    return NextResponse.json({ error: "Failed to accept request", details: error instanceof Error ? error.message : "Unknown error" }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: "Failed to accept request",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 }
+    );
   }
 }
 
 export async function OPTIONS() {
-  return new NextResponse(null, { status: 200, headers: { Allow: "POST", "Content-Type": "application/json" } });
+  return new NextResponse(null, {
+    status: 200,
+    headers: { Allow: "POST", "Content-Type": "application/json" },
+  });
 }
-export async function GET() { return new NextResponse(null, { status: 405, headers: { Allow: "POST", "Content-Type": "application/json" } }); }
-export async function DELETE() { return new NextResponse(null, { status: 405, headers: { Allow: "POST", "Content-Type": "application/json" } }); }
-export async function PUT() { return new NextResponse(null, { status: 405, headers: { Allow: "POST", "Content-Type": "application/json" } }); }
+export async function GET() {
+  return new NextResponse(null, {
+    status: 405,
+    headers: { Allow: "POST", "Content-Type": "application/json" },
+  });
+}
+export async function DELETE() {
+  return new NextResponse(null, {
+    status: 405,
+    headers: { Allow: "POST", "Content-Type": "application/json" },
+  });
+}
+export async function PUT() {
+  return new NextResponse(null, {
+    status: 405,
+    headers: { Allow: "POST", "Content-Type": "application/json" },
+  });
+}
