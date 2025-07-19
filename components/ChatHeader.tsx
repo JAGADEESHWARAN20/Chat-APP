@@ -147,7 +147,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         setIsLoading(false);
       }
     }
-  }, [user, checkRoomMembership, checkRoomParticipation, setRooms, initializeDefaultRoom]);
+  }, [user, supabase, setRooms, selectedRoom, checkRoomMembership, checkRoomParticipation, initializeDefaultRoom]);
 
   const handleRoomSwitch = useCallback(async (room: Room) => {
     if (!user) {
@@ -193,7 +193,7 @@ toast.success(`Switched to ${room.name}`, {
       toast.error(err instanceof Error ? err.message : "Failed to switch room");
       await fetchAvailableRooms();
     }
-  }, [user, checkRoomMembership, checkRoomParticipation, fetchAvailableRooms, setSelectedRoom, setIsMember, setIsSwitchRoomPopoverOpen]);
+  }, [user, supabase, checkRoomMembership, checkRoomParticipation, setSelectedRoom, fetchAvailableRooms]);
 
   const handleLeaveRoom = useCallback(async () => {
     if (!user) {
@@ -250,7 +250,7 @@ toast.success(`Switched to ${room.name}`, {
     } finally {
       setIsLeaving(false);
     }
-  }, [user, selectedRoom, UUID_REGEX, setIsLeaving, setIsMember, fetchAvailableRooms, setSelectedRoom, router]);
+  }, [user, selectedRoom, UUID_REGEX, supabase, fetchAvailableRooms, setSelectedRoom, router]);
   
   const handleSearchInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     debouncedCallback(e.target.value);
@@ -310,7 +310,7 @@ toast.success(`Switched to ${room.name}`, {
         setIsLoading(false);
       }
     }
-  }, [debouncedSearchQuery, searchType, user?.id, checkRoomMembership, checkRoomParticipation]);
+  }, [searchType, supabase, user?.id, debouncedSearchQuery, checkRoomMembership, checkRoomParticipation]);
 
   const handleJoinRoom = useCallback(
     async (roomId?: string) => {
