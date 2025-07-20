@@ -154,6 +154,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       const { rooms: fetchedRooms } = await response.json();
+  
 
       if (isMounted.current) {
         const roomsWithDetailedStatus = await Promise.all(
