@@ -5,22 +5,21 @@ import { Database } from "@/lib/types/supabase";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export async function POST(req: NextRequest, { params }: { params: { roomId?: string } }) {
+export async function POST(
+  req: NextRequest,
+  { params }: { params: { roomId?: string } }
+) {
   const supabase = createRouteHandlerClient<Database>({ cookies });
   const roomId = params.roomId;
 
   // 1. Session check
-  const {
-    data: { session },
-    error: sessionError,
-  } = await supabase.auth.getSession();
+  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
   if (sessionError || !session?.user) {
     return NextResponse.json(
       { success: false, error: "Authentication required", code: "AUTH_REQUIRED" },
       { status: 401 }
     );
   }
-
   const userId = session.user.id;
 
   // 2. Room ID validation
@@ -81,6 +80,15 @@ export async function POST(req: NextRequest, { params }: { params: { roomId?: st
   const isPrivate = room.is_private;
 
   if (isPrivate) {
+    // Safety: owner must exist for private room
+    if (!room.created_by) {
+      return NextResponse.json({
+        success: false,
+        error: "Room owner information is missing.",
+        code: "ROOM_OWNER_MISSING"
+      }, { status: 500 });
+    }
+
     // Insert participant as pending
     const { error: pErr } = await supabase
       .from("room_participants")
@@ -88,9 +96,10 @@ export async function POST(req: NextRequest, { params }: { params: { roomId?: st
     if (pErr) {
       return NextResponse.json({ success: false, error: "Could not request join", details: pErr.message }, { status: 500 });
     }
+
     // Create join_request notification for owner
     const notifInsert = {
-      user_id: room.created_by,
+      user_id: room.created_by,      // definitely a string here
       sender_id: userId,
       room_id: roomId,
       type: "join_request",
