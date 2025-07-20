@@ -70,6 +70,10 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const [isMember, setIsMember] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
 
+  // Added state for limit and offset for pagination
+  const [limit, setLimit] = useState(10); // Default limit
+  const [offset, setOffset] = useState(0); // Default offset
+
   const [debouncedCallback] = useDebounce((value: string) => setSearchQuery(value), 300);
   const [debouncedSearchQuery] = useDebounce(searchQuery, 300);
   const UUID_REGEX = useMemo(() => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, []);
@@ -146,20 +150,19 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 
     setIsLoading(true);
     try {
-      // Fetch all rooms from the API route (which now returns all rooms)
-      const response = await fetch(`/api/rooms?limit=${limit}&offset=${offset}`); // Use API route
+      // Use the /api/rooms route which handles 'limit' and 'offset'
+      const response = await fetch(`/api/rooms?limit=${limit}&offset=${offset}`);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      const { rooms: fetchedRooms } = await response.json(); // Destructure to get 'rooms'
+      const { rooms: fetchedRooms } = await response.json();
 
       if (isMounted.current) {
-        // The API route already provides 'isMember' flag, so no need to re-check membership here
-        // We still need to check participationStatus as the API only gives 'isMember' (accepted in either)
         const roomsWithDetailedStatus = await Promise.all(
-          fetchedRooms.map(async (room: RoomWithMembership) => ({ // Cast to RoomWithMembership as API provides isMember
+          fetchedRooms.map(async (room: RoomWithMembership) => ({
             ...room,
-            participationStatus: await checkRoomParticipation(room.id), // Fetch detailed participation status
+            // API already provides isMember, so we only fetch participationStatus
+            participationStatus: await checkRoomParticipation(room.id),
           }))
         );
         setAvailableRooms(roomsWithDetailedStatus);
@@ -178,7 +181,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         setIsLoading(false);
       }
     }
-  }, [user, supabase, setRooms, selectedRoom, initializeDefaultRoom, checkRoomParticipation]); // Removed checkRoomMembership as API provides isMember
+  }, [user, setRooms, selectedRoom, initializeDefaultRoom, checkRoomParticipation, limit, offset]); // Added limit and offset to dependencies
 
   const handleRoomSwitch = useCallback(async (room: Room) => {
     if (!user) {
@@ -328,7 +331,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       let response;
       if (searchType === "rooms") {
         // Call the API route directly to get all rooms (filtered by query if present)
-        const apiQuery = debouncedSearchQuery.trim() ? `?query=${encodeURIComponent(debouncedSearchQuery.trim())}` : "";
+        const apiQuery = debouncedSearchQuery.trim() ? `?query=${encodeURIComponent(debouncedSearchQuery.trim())}&limit=${limit}&offset=${offset}` : `?limit=${limit}&offset=${offset}`;
         response = await fetch(`/api/rooms${apiQuery}`);
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
@@ -336,12 +339,11 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         const { rooms: fetchedRooms } = await response.json();
 
         if (isMounted.current) {
-          // The API route already provides 'isMember' flag
-          // We still need to check participationStatus as the API only gives 'isMember' (accepted in either)
           const roomsWithDetailedStatus = await Promise.all(
-            fetchedRooms.map(async (room: RoomWithMembership) => ({ // Cast to RoomWithMembership as API provides isMember
+            fetchedRooms.map(async (room: RoomWithMembership) => ({
               ...room,
-              participationStatus: await checkRoomParticipation(room.id), // Fetch detailed participation status
+              // API already provides isMember, so we only fetch participationStatus
+              participationStatus: await checkRoomParticipation(room.id),
             }))
           );
           setSearchResults(roomsWithDetailedStatus as SearchResult[]);
@@ -373,7 +375,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         setIsLoading(false);
       }
     }
-  }, [searchType, supabase, user, debouncedSearchQuery, checkRoomParticipation]); // Removed checkRoomMembership as API provides isMember
+  }, [searchType, supabase, user, debouncedSearchQuery, checkRoomParticipation, limit, offset]); // Added limit and offset to dependencies
 
 
   const handleJoinRoom = useCallback(
