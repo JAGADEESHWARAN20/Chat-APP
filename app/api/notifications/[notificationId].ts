@@ -1,26 +1,30 @@
+import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
+import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabase/server";
+import { Database } from "@/lib/types/supabase";
 
-export async function DELETE(req: NextRequest, { params }: { params: { notificationId: string } }) {
-     const supabase = supabaseServer();
-     const { notificationId } = params;
+// DELETE /api/notifications/[notificationId]
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: { notificationId: string } }
+) {
+  const supabase = createRouteHandlerClient<Database>({ cookies });
+  const notificationId = params.notificationId;
 
-     // Get the authenticated user
-     const { data: { user }, error: authError } = await supabase.auth.getUser();
-     if (authError || !user) {
-          return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-     }
+  // Auth check
+  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError || !session?.user)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-     // Delete the notification for the user
-     const { error } = await supabase
-          .from("notifications")
-          .delete()
-          .eq("id", notificationId)
-          .eq("user_id", user.id);
+  // Only allow deletion for your own notifications
+  const { error } = await supabase
+    .from("notifications")
+    .delete()
+    .eq("id", notificationId)
+    .eq("user_id", session.user.id);
 
-     if (error) {
-          return NextResponse.json({ error: error.message || "Failed to delete notification" }, { status: 500 });
-     }
+  if (error)
+    return NextResponse.json({ error: error.message }, { status: 500 });
 
-     return NextResponse.json({ message: "Notification deleted successfully" }, { status: 200 });
+  return NextResponse.json({ message: "Deleted." });
 }
