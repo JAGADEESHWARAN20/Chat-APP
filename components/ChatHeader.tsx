@@ -139,47 +139,46 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     [user, supabase]
   );
 
-  const fetchAvailableRooms = useCallback(async () => {
-    if (!user) {
-      setIsLoading(false);
-      setAvailableRooms([]);
-      setRooms([]);
+const fetchAvailableRooms = useCallback(async () => {
+  if (!user) {
+    setIsLoading(false);
+    setAvailableRooms([]);
+    setRooms([]);
+    return;
+  }
+
+  setIsLoading(true);
+  try {
+    // Only show rooms where user is a member
+    const { data: memberships, error } = await supabase
+      .from("room_members")
+      .select("room_id, rooms(id, name, is_private, created_by)")
+      .eq("user_id", user.id)
+      .eq("status", "accepted");
+
+    if (error) {
+      setAvailableRooms([]); setRooms([]); setIsLoading(false);
       return;
     }
+    const joinedRooms = (memberships || [])
+      .map(m => ({
+        ...(m.rooms as Room),
+        isMember: true,
+        participationStatus: "accepted",
+      }))
+      .filter(r => r && r.id);
 
-    setIsLoading(true);
-    try {
-      const response = await fetch(`/api/rooms/all?limit=${limit}&offset=${offset}`);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const { rooms: fetchedRooms } = await response.json();
-  
+    setAvailableRooms(joinedRooms);
+    setRooms(joinedRooms);
+  } catch (error) {
+    setAvailableRooms([]);
+    setRooms([]);
+    toast.error("An error occurred while fetching rooms");
+  } finally {
+    setIsLoading(false);
+  }
+}, [user, supabase, setRooms]);
 
-      if (isMounted.current) {
-        const roomsWithDetailedStatus = await Promise.all(
-          fetchedRooms.map(async (room: Room & { isMember: boolean }) => ({ // Ensure isMember is part of the API response type
-            ...room,
-            participationStatus: await checkRoomParticipation(room.id),
-          }))
-        );
-        setAvailableRooms(roomsWithDetailedStatus);
-        setRooms(roomsWithDetailedStatus);
-        if (!selectedRoom && roomsWithDetailedStatus.length > 0) {
-          initializeDefaultRoom();
-        }
-      }
-    } catch (error) {
-      console.error("Error fetching available rooms:", error);
-      if (isMounted.current) {
-        toast.error("An error occurred while fetching rooms");
-      }
-    } finally {
-      if (isMounted.current) {
-        setIsLoading(false);
-      }
-    }
-  }, [user, setRooms, selectedRoom, initializeDefaultRoom, checkRoomParticipation, limit, offset]);
 
   const handleRoomSwitch = useCallback(async (room: Room) => {
     if (!user) {
