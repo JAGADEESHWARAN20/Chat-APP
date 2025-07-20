@@ -3,6 +3,9 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { Database } from "@/lib/types/supabase";
 
+// Add this line to force dynamic rendering for this route
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: Request) {
   try {
     const supabase = createRouteHandlerClient<Database>({ cookies });
