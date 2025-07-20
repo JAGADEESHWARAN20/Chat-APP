@@ -1,4 +1,3 @@
-// api/rooms/[roomId]/join/route.ts
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
@@ -6,10 +5,7 @@ import { Database } from "@/lib/types/supabase";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: { roomId?: string } }
-) {
+export async function POST(req: NextRequest, { params }: { params: { roomId?: string } }) {
   const supabase = createRouteHandlerClient<Database>({ cookies });
   const roomId = params.roomId;
 
@@ -49,7 +45,7 @@ export async function POST(
     );
   }
 
-  // 4. Check if already a member
+  // 4. Check if already a member or participant
   const { data: existingMember } = await supabase
     .from("room_members")
     .select("status")
@@ -57,7 +53,14 @@ export async function POST(
     .eq("user_id", userId)
     .maybeSingle();
 
-  if (existingMember?.status === "accepted") {
+  const { data: existingParticipant } = await supabase
+    .from("room_participants")
+    .select("status")
+    .eq("room_id", roomId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (existingMember?.status === "accepted" || existingParticipant?.status === "accepted") {
     return NextResponse.json({
       success: true,
       status: "accepted",
@@ -66,7 +69,7 @@ export async function POST(
     });
   }
 
-  if (existingMember?.status === "pending") {
+  if (existingParticipant?.status === "pending" || existingMember?.status === "pending") {
     return NextResponse.json({
       success: true,
       status: "pending",
@@ -74,66 +77,56 @@ export async function POST(
     });
   }
 
-  // 5. Determine join status and joined_at value
+  // 5. Insert/Update participant/member, notify owner if private
   const isPrivate = room.is_private;
-  const joinStatus = isPrivate ? "pending" : "accepted";
 
-  // Use null for p_joined_at if pending, otherwise use ISO string
-  const pJoinedAtValue: string | null = isPrivate ? null : new Date().toISOString();
-
-  // 6. Insert membership (via RPC)
-  // Ensure your 'join_room' RPC can handle p_joined_at being NULL.
-  const { error: joinError } = await supabase.rpc("join_room", {
-    p_room_id: room.id,
-    p_user_id: userId,
-    p_status: joinStatus,
-    p_joined_at: pJoinedAtValue, // Use null for pending, actual timestamp for accepted
-  });
-
-  if (joinError) {
-    console.error("Join RPC error:", joinError);
-    // Add specific error handling for unique constraint violation if user already exists
-    if (joinError.code === "23505") { // Example unique constraint error code
-        return NextResponse.json(
-            { success: false, error: "You are already a member or have a pending request for this room.", code: "ALREADY_MEMBER_OR_PENDING" },
-            { status: 409 }
-        );
+  if (isPrivate) {
+    // Insert participant as pending
+    const { error: pErr } = await supabase
+      .from("room_participants")
+      .upsert([{ room_id: roomId, user_id: userId, status: "pending" }], { onConflict: "room_id,user_id" });
+    if (pErr) {
+      return NextResponse.json({ success: false, error: "Could not request join", details: pErr.message }, { status: 500 });
     }
-    return NextResponse.json(
-      { success: false, error: "Failed to join room", code: "JOIN_FAILED", details: joinError.message },
-      { status: 500 }
-    );
+    // Create join_request notification for owner
+    const notifInsert = {
+      user_id: room.created_by,
+      sender_id: userId,
+      room_id: roomId,
+      type: "join_request",
+      message: `${session.user.email} requested to join "${room.name}"`,
+      status: "unread",
+    };
+    const { error: notifError } = await supabase.from("notifications").insert(notifInsert);
+    if (notifError) {
+      // Non-blocking
+      console.warn("Notification error:", notifError.message);
+    }
+    return NextResponse.json({
+      success: true,
+      status: "pending",
+      message: "Join request sent to room owner",
+    });
+  } else {
+    // Public room: upsert accepted to both tables
+    const now = new Date().toISOString();
+    const { error: partErr } = await supabase
+      .from("room_participants")
+      .upsert([{ room_id: roomId, user_id: userId, status: "accepted", joined_at: now }], { onConflict: "room_id,user_id" });
+    const { error: memberErr } = await supabase
+      .from("room_members")
+      .upsert([{ room_id: roomId, user_id: userId, status: "accepted", joined_at: now, active: true }], { onConflict: "room_id,user_id" });
+
+    if (memberErr || partErr) {
+      return NextResponse.json(
+        { success: false, error: "Join failed", details: memberErr?.message || partErr?.message }, { status: 500 }
+      );
+    }
+    return NextResponse.json({
+      success: true,
+      status: "accepted",
+      message: "Joined room",
+      roomJoined: room,
+    });
   }
-
-  // 7. Create notification
-  const notificationMessage = isPrivate
-    ? `${session.user.email} requested to join "${room.name}"`
-    : `You joined "${room.name}"`;
-
-  const notification = {
-    user_id: isPrivate ? room.created_by! : userId, // Recipient: owner for private, self for public
-    sender_id: userId, // Sender: always the current user
-    room_id: room.id,
-    type: isPrivate ? "join_request" : "room_joined",
-    message: notificationMessage,
-    status: "unread",
-    join_status: isPrivate ? "pending" : null, // Set join_status only for private room requests
-  };
-
-  const { error: notifError } = await supabase
-    .from("notifications")
-    .insert(notification);
-
-  if (notifError) {
-    console.warn("Notification error (non-blocking, but log for debugging):", notifError.message);
-  }
-
-  return NextResponse.json({
-    success: true,
-    status: joinStatus,
-    message: isPrivate
-      ? "Join request sent to room owner"
-      : "Successfully joined room",
-    roomJoined: room,
-  });
 }
