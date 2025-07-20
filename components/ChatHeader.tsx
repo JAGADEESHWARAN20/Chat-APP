@@ -29,8 +29,8 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogFooter,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
@@ -95,124 +95,149 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const checkRoomParticipation = useCallback(
     async (roomId: string) => {
       if (!user) return null;
-      const { data, error } = await supabase
+      // Check both room_members and room_participants for user's status
+      const { data: memberStatus, error: memberError } = await supabase
         .from("room_members")
         .select("status")
         .eq("room_id", roomId)
         .eq("user_id", user.id);
-      if (error) {
-        console.error("Error checking room participation:", error);
-        return null;
+
+      if (memberError) {
+        console.error("Error checking room membership for participation status:", memberError);
+        // Do not return, continue to check room_participants
       }
-      return data && data.length > 0 ? data[0].status : null;
+
+      const { data: participantStatus, error: participantError } = await supabase
+        .from("room_participants")
+        .select("status")
+        .eq("room_id", roomId)
+        .eq("user_id", user.id);
+
+      if (participantError) {
+        console.error("Error checking room participation status:", participantError);
+        // Do not return, continue
+      }
+
+      // Prioritize accepted status, then pending, then null
+      if (memberStatus && memberStatus.length > 0 && memberStatus[0].status === "accepted") {
+        return "accepted";
+      }
+      if (participantStatus && participantStatus.length > 0 && participantStatus[0].status === "accepted") {
+        return "accepted";
+      }
+      if (memberStatus && memberStatus.length > 0 && memberStatus[0].status === "pending") {
+        return "pending";
+      }
+      if (participantStatus && participantStatus.length > 0 && participantStatus[0].status === "pending") {
+        return "pending";
+      }
+      return null; // Not a member or participant, or status is rejected
     },
     [user, supabase]
   );
 
-const fetchAvailableRooms = useCallback(async () => {
-  // Add an early exit if user is not defined
-  if (!user) {
-    setIsLoading(false); // Make sure loading state is reset
-    setAvailableRooms([]); // Clear previous results if needed
-    setRooms([]); // Clear store if needed
-    return;
-  }
-
-  setIsLoading(true);
-  try {
-    // 1. First, get the room_ids where the user is an accepted member
-    const { data: memberRooms, error: memberError } = await supabase
-      .from("room_members")
-      .select("room_id")
-      .eq("user_id", user.id) // <--- FIXED: user.id is now definitely a string
-      .eq("status", "accepted");
-
-    if (memberError) {
-      console.error("Error fetching user's member rooms:", memberError);
-      toast.error(memberError.message || "Failed to fetch user's rooms");
+  const fetchAvailableRooms = useCallback(async () => {
+    if (!user) {
       setIsLoading(false);
+      setAvailableRooms([]);
+      setRooms([]);
       return;
     }
 
-    const memberRoomIds = memberRooms.map(m => m.room_id);
+    setIsLoading(true);
+    try {
+      // Fetch all rooms from the API route (which now returns all rooms)
+      const response = await fetch(`/api/rooms?limit=${limit}&offset=${offset}`); // Use API route
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const { rooms: fetchedRooms } = await response.json(); // Destructure to get 'rooms'
 
-    // 2. Then, fetch rooms that are either public OR the user is an accepted member of.
-    const { data: rooms, error: roomsError } = await supabase
-      .from("rooms")
-      .select("id, name, is_private, created_by, created_at")
-      .or(`is_private.eq.false,id.in.(${memberRoomIds.join(',')})`);
-
-    if (roomsError) {
-      toast.error(roomsError.message || "Failed to fetch available rooms");
-      return;
-    }
-
-    if (isMounted.current) {
-      const roomsWithMembership = await Promise.all(
-        rooms.map(async (room: Room) => ({
-          ...room,
-          isMember: await checkRoomMembership(room.id),
-          participationStatus: await checkRoomParticipation(room.id),
-        }))
-      );
-      setAvailableRooms(roomsWithMembership);
-      setRooms(roomsWithMembership);
-      if (!selectedRoom && roomsWithMembership.length > 0) {
-        initializeDefaultRoom();
+      if (isMounted.current) {
+        // The API route already provides 'isMember' flag, so no need to re-check membership here
+        // We still need to check participationStatus as the API only gives 'isMember' (accepted in either)
+        const roomsWithDetailedStatus = await Promise.all(
+          fetchedRooms.map(async (room: RoomWithMembership) => ({ // Cast to RoomWithMembership as API provides isMember
+            ...room,
+            participationStatus: await checkRoomParticipation(room.id), // Fetch detailed participation status
+          }))
+        );
+        setAvailableRooms(roomsWithDetailedStatus);
+        setRooms(roomsWithDetailedStatus);
+        if (!selectedRoom && roomsWithDetailedStatus.length > 0) {
+          initializeDefaultRoom();
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching available rooms:", error);
+      if (isMounted.current) {
+        toast.error("An error occurred while fetching rooms");
+      }
+    } finally {
+      if (isMounted.current) {
+        setIsLoading(false);
       }
     }
-  } catch (error) {
-    console.error("Error fetching available rooms:", error);
-    if (isMounted.current) {
-      toast.error("An error occurred while fetching rooms");
-    }
-  } finally {
-    if (isMounted.current) {
-      setIsLoading(false);
-    }
-  }
-}, [user, supabase, setRooms, selectedRoom, checkRoomMembership, checkRoomParticipation, initializeDefaultRoom]); // Make sure 'user' is in dependency array
+  }, [user, supabase, setRooms, selectedRoom, initializeDefaultRoom, checkRoomParticipation]); // Removed checkRoomMembership as API provides isMember
 
   const handleRoomSwitch = useCallback(async (room: Room) => {
     if (!user) {
       toast.error("You must be logged in to switch rooms", {
         className: "text-red-600 bg-white border border-red-400 shadow-md",
       });
-
       return;
     }
     try {
-      const { data, error } = await supabase
-        .from("room_members")
-        .upsert(
-          { room_id: room.id, user_id: user.id, status: "accepted" },
-          { onConflict: "room_id,user_id" } // Correct onConflict syntax
-        );
+      // Check if the user is already an accepted member/participant
+      const isCurrentlyMember = await checkRoomMembership(room.id);
+      const currentParticipationStatus = await checkRoomParticipation(room.id);
 
-      if (error) {
-        if (error.code === "23503") { // Foreign key violation
-          toast.error("Room or user does not exist.");
-          return;
+      if (isCurrentlyMember || currentParticipationStatus === "accepted") {
+        // If already accepted, just switch the room without upserting
+        const roomWithMembership: RoomWithMembership = {
+          ...room,
+          isMember: true, // Already confirmed as member/accepted participant
+          participationStatus: "accepted",
+        };
+        setSelectedRoom(roomWithMembership);
+        setIsSwitchRoomPopoverOpen(false);
+        setIsMember(true); // Update local state for selected room
+        toast.success(`Switched to ${room.name}`, {
+          className: "text-green-600 bg-white border border-green-400 shadow-md",
+        });
+      } else {
+        // If not a member, attempt to join (upsert)
+        const { data, error } = await supabase
+          .from("room_members")
+          .upsert(
+            { room_id: room.id, user_id: user.id, status: "accepted" },
+            { onConflict: "room_id,user_id" }
+          );
+
+        if (error) {
+          if (error.code === "23503") {
+            toast.error("Room or user does not exist.");
+            return;
+          }
+          throw new Error(error.message || "Failed to switch room");
         }
-        throw new Error(error.message || "Failed to switch room");
+
+        const isMemberAfterJoin = await checkRoomMembership(room.id);
+        const participationStatusAfterJoin = await checkRoomParticipation(room.id);
+        const roomWithMembership: RoomWithMembership = {
+          ...room,
+          isMember: isMemberAfterJoin,
+          participationStatus: participationStatusAfterJoin,
+        };
+
+        setSelectedRoom(roomWithMembership);
+        setIsSwitchRoomPopoverOpen(false);
+        setIsMember(isMemberAfterJoin);
+        toast.success(`Switched to ${room.name}`, {
+          className: "text-green-600 bg-white border border-green-400 shadow-md",
+        });
       }
-
-      const isMember = await checkRoomMembership(room.id);
-      const participationStatus = await checkRoomParticipation(room.id);
-      const roomWithMembership: RoomWithMembership = {
-        ...room,
-        isMember,
-        participationStatus,
-      };
-
-      setSelectedRoom(roomWithMembership);
-      setIsSwitchRoomPopoverOpen(false);
-      setIsMember(isMember);
-toast.success(`Switched to ${room.name}`, {
-  className: "text-green-600 bg-white border border-green-400 shadow-md",
-});
-
-      await fetchAvailableRooms();
+      await fetchAvailableRooms(); // Refresh available rooms list
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to switch room");
       await fetchAvailableRooms();
@@ -237,20 +262,29 @@ toast.success(`Switched to ${room.name}`, {
 
     try {
       setIsLeaving(true);
-      const { data, error } = await supabase
-        .from("room_members") // Changed from direct_chats to room_members
+      // Delete from room_members
+      const { error: membersError } = await supabase
+        .from("room_members")
         .delete()
         .eq("room_id", selectedRoom.id)
         .eq("user_id", user.id);
 
-      if (error) {
-        throw new Error(error.message || "Failed to leave room");
+      // Delete from room_participants (if user is also a participant)
+      const { error: participantsError } = await supabase
+        .from("room_participants")
+        .delete()
+        .eq("room_id", selectedRoom.id)
+        .eq("user_id", user.id);
+
+      if (membersError || participantsError) {
+        throw new Error(membersError?.message || participantsError?.message || "Failed to leave room");
       }
 
       toast.success("Successfully left the room");
       setIsMember(false);
-      await fetchAvailableRooms();
+      await fetchAvailableRooms(); // Refresh the list of available rooms
 
+      // Logic to select a new room or redirect if no rooms left
       const { data: remainingRooms } = await supabase
         .from("room_members")
         .select("room_id")
@@ -261,9 +295,10 @@ toast.success(`Switched to ${room.name}`, {
         setSelectedRoom(null);
         router.push("/");
       } else {
-        const newSelectedRoom = useRoomStore.getState().selectedRoom;
-        if (newSelectedRoom) {
-          setSelectedRoom(newSelectedRoom);
+        // Try to select the default room if available, otherwise clear selection
+        const defaultRoom = availableRooms.find(room => room.name === "General Chat"); // Assuming 'General Chat' is default
+        if (defaultRoom) {
+          setSelectedRoom(defaultRoom);
         } else {
           setSelectedRoom(null);
           router.push("/");
@@ -274,90 +309,72 @@ toast.success(`Switched to ${room.name}`, {
     } finally {
       setIsLeaving(false);
     }
-  }, [user, selectedRoom, UUID_REGEX, supabase, fetchAvailableRooms, setSelectedRoom, router]);
-  
+  }, [user, selectedRoom, UUID_REGEX, supabase, fetchAvailableRooms, setSelectedRoom, router, availableRooms]);
+
   const handleSearchInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     debouncedCallback(e.target.value);
   }, [debouncedCallback]);
-const fetchSearchResults = useCallback(async () => {
-  // Add an early exit if user is not defined
-  if (!user) {
-    setIsLoading(false); // Make sure loading state is reset
-    setSearchResults([]); // Clear previous results
-    return;
-  }
 
-  if (!searchType) return;
-  setIsLoading(true);
-  try {
-    let query;
-    if (searchType === "rooms") {
-      // First, get the room_ids where the user is an accepted member
-      // Now, user.id is guaranteed to be a string here
-      const { data: memberRooms, error: memberError } = await supabase
-        .from("room_members")
-        .select("room_id")
-        .eq("user_id", user.id) // <--- FIXED: user.id is now definitely a string
-        .eq("status", "accepted");
-
-      if (memberError) {
-        console.error("Error fetching user's member rooms for search:", memberError);
-        toast.error(memberError.message || "Failed to fetch user's rooms for search");
-        setIsLoading(false);
-        return;
-      }
-      const memberRoomIds = memberRooms.map(m => m.room_id);
-
-      query = supabase
-        .from("rooms")
-        .select("id, name, is_private, created_by, created_at")
-        .or(`is_private.eq.false,id.in.(${memberRoomIds.join(',')})`)
-        .ilike("name", `%${debouncedSearchQuery.trim()}%`)
-        .limit(10);
-    } else if (searchType === "users") {
-      query = supabase
-        .from("users")
-        .select("id, username, display_name, avatar_url")
-        .ilike("display_name", `%${debouncedSearchQuery.trim()}%`)
-        .limit(10);
-    }
-
-    if (!query) return;
-
-    const response = await query;
-
-    if ("error" in response && response.error) {
-      console.error(`Search error for ${searchType}:`, response.error);
-      toast.error(response.error.message || `Failed to search ${searchType}`);
-      setSearchResults([]);
-    } else if ("data" in response && Array.isArray(response.data) && isMounted.current) {
-      if (searchType === "rooms") {
-        const rooms = response.data as Room[];
-        const roomsWithMembership = await Promise.all(
-          rooms.map(async (room) => ({
-            ...room,
-            isMember: await checkRoomMembership(room.id),
-            participationStatus: await checkRoomParticipation(room.id),
-          }))
-        );
-        setSearchResults(roomsWithMembership as SearchResult[]);
-      } else {
-        setSearchResults(response.data as UserProfile[]);
-      }
-    }
-  } catch (error) {
-    console.error("Search error:", error);
-    if (isMounted.current) {
-      toast.error(error instanceof Error ? error.message : "An error occurred while searching");
-      setSearchResults([]);
-    }
-  } finally {
-    if (isMounted.current) {
+  const fetchSearchResults = useCallback(async () => {
+    if (!user) {
       setIsLoading(false);
+      setSearchResults([]);
+      return;
     }
-  }
-}, [searchType, supabase, user, debouncedSearchQuery, checkRoomMembership, checkRoomParticipation]); // Make sure 'user' is in dependency array
-  
+
+    if (!searchType) return;
+    setIsLoading(true);
+    try {
+      let response;
+      if (searchType === "rooms") {
+        // Call the API route directly to get all rooms (filtered by query if present)
+        const apiQuery = debouncedSearchQuery.trim() ? `?query=${encodeURIComponent(debouncedSearchQuery.trim())}` : "";
+        response = await fetch(`/api/rooms${apiQuery}`);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const { rooms: fetchedRooms } = await response.json();
+
+        if (isMounted.current) {
+          // The API route already provides 'isMember' flag
+          // We still need to check participationStatus as the API only gives 'isMember' (accepted in either)
+          const roomsWithDetailedStatus = await Promise.all(
+            fetchedRooms.map(async (room: RoomWithMembership) => ({ // Cast to RoomWithMembership as API provides isMember
+              ...room,
+              participationStatus: await checkRoomParticipation(room.id), // Fetch detailed participation status
+            }))
+          );
+          setSearchResults(roomsWithDetailedStatus as SearchResult[]);
+        }
+      } else if (searchType === "users") {
+        // For users, we still query directly from the client as before
+        const { data, error } = await supabase
+          .from("users")
+          .select("id, username, display_name, avatar_url")
+          .ilike("display_name", `%${debouncedSearchQuery.trim()}%`)
+          .limit(10);
+
+        if (error) {
+          console.error(`Search error for ${searchType}:`, error);
+          toast.error(error.message || `Failed to search ${searchType}`);
+          setSearchResults([]);
+        } else if (data && isMounted.current) {
+          setSearchResults(data as UserProfile[]);
+        }
+      }
+    } catch (error) {
+      console.error("Search error:", error);
+      if (isMounted.current) {
+        toast.error(error instanceof Error ? error.message : "An error occurred while searching");
+        setSearchResults([]);
+      }
+    } finally {
+      if (isMounted.current) {
+        setIsLoading(false);
+      }
+    }
+  }, [searchType, supabase, user, debouncedSearchQuery, checkRoomParticipation]); // Removed checkRoomMembership as API provides isMember
+
 
   const handleJoinRoom = useCallback(
     async (roomId?: string) => {
@@ -379,7 +396,7 @@ const fetchSearchResults = useCallback(async () => {
           .from("room_members")
           .upsert(
             { room_id: currentRoomId, user_id: user.id, status: "accepted" },
-            { onConflict: "room_id,user_id" } // Correct onConflict syntax
+            { onConflict: "room_id,user_id" }
           );
 
         if (error) {
