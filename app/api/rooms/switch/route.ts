@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
     const isParticipantAccepted = existingParticipant?.status === "accepted";
     const isParticipantPending = existingParticipant?.status === "pending";
 
-    // Scenario A: User is already an accepted member or participant, or is the owner
+    // Scenario A: User is already an accepted member or participant, or is the owner, or room is public
     if (isMemberAccepted || isParticipantAccepted || isRoomOwner || !room.is_private) {
       // Upsert (insert or update) into room_members to ensure they are an accepted, active member
       const { error: upsertMemberError } = await supabase
@@ -115,7 +115,6 @@ export async function POST(req: NextRequest) {
           .eq("user_id", userId);
           // No need to throw error if this fails, it's a secondary update
       }
-
 
       return NextResponse.json({
         success: true,
@@ -148,10 +147,23 @@ export async function POST(req: NextRequest) {
     }
 
     // Send notification to room owner
+    // FIX: Ensure room.created_by is not null before using it.
+    // If room.created_by can be null, you need to decide how to handle the notification.
+    // For now, we'll check for null and return an error if it's critical,
+    // or skip notification if it's acceptable.
+    if (!room.created_by) {
+        console.warn(`Room ${room.id} has no creator. Skipping notification.`);
+        return NextResponse.json({
+            success: false,
+            message: "Join request sent, but room owner could not be notified.",
+            status: "pending",
+        });
+    }
+
     const { error: notifyError } = await supabase
       .from("notifications")
       .insert({
-        user_id: room.created_by,
+        user_id: room.created_by, // This is now guaranteed to be a string
         type: "room_switch", // Consider renaming to 'room_join_request' for clarity
         room_id: roomId,
         sender_id: userId,
