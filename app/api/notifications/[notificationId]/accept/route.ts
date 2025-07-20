@@ -3,7 +3,6 @@ import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { Database } from "@/lib/types/supabase";
 
-// POST /api/notifications/[notificationId]/accept
 export async function POST(
   req: NextRequest,
   { params }: { params: { notificationId: string } }
@@ -33,6 +32,11 @@ export async function POST(
 
   if (notif.user_id !== ownerUserId)
     return NextResponse.json({ error: "Not allowed" }, { status: 403 });
+
+  // -- This is the key fix --
+  if (!notif.sender_id || !notif.room_id) {
+    return NextResponse.json({ error: "Notification is missing sender_id or room_id." }, { status: 400 });
+  }
 
   // Accept the request by calling your Supabase function
   const now = new Date().toISOString();
