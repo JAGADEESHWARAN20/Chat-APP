@@ -2,7 +2,7 @@
 
 import React from "react";
 import { useUser } from "@/lib/store/user";
-import { useTypingStatus } from "@/lib/hooks/useTypingStatus";
+import { useTypingStatus } from "@/hooks/useTypingStatus";
 
 interface TypingIndicatorProps {
   roomId: string;
