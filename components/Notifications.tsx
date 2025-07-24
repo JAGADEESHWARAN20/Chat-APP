@@ -11,11 +11,17 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Avatar, AvatarImage, AvatarFallback } from "./ui/avatar";
 import { useRouter } from "next/navigation";
 import { User as SupabaseUser } from "@supabase/supabase-js";
-import { Check, X, ArrowLeft, Trash2 } from "lucide-react";
+import { Check, X, ArrowLeft, Trash2, MoreVertical } from "lucide-react";
 import { Database } from "@/lib/types/supabase";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { Swipeable } from "./ui/swipeable";
 import { Inotification } from "@/lib/store/notifications";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu";
 
 interface NotificationsProps {
   isOpen: boolean;
@@ -28,9 +34,11 @@ type RoomWithMembership = Room & {
   participationStatus: string | null;
 };
 
-// Helper function to transform a room object with membership status
-const transformRoom = async (room: Room, userId: string, supabase: ReturnType<typeof supabaseBrowser>): Promise<RoomWithMembership> => {
-  // Check actual membership status in room_members
+const transformRoom = async (
+  room: Room,
+  userId: string,
+  supabase: ReturnType<typeof supabaseBrowser>
+): Promise<RoomWithMembership> => {
   const { data: membership } = await supabase
     .from("room_members")
     .select("status")
@@ -38,7 +46,6 @@ const transformRoom = async (room: Room, userId: string, supabase: ReturnType<ty
     .eq("user_id", userId)
     .single();
 
-  // Check participation status in room_participants (for pending requests)
   const { data: participation } = await supabase
     .from("room_participants")
     .select("status")
@@ -47,16 +54,13 @@ const transformRoom = async (room: Room, userId: string, supabase: ReturnType<ty
     .single();
 
   let participationStatus: string | null = null;
-  if (membership) {
-    participationStatus = membership.status;
-  } else if (participation) {
-    participationStatus = participation.status;
-  }
+  if (membership) participationStatus = membership.status;
+  else if (participation) participationStatus = participation.status;
 
   return {
     ...room,
-    isMember: membership?.status === "accepted", // True if accepted in room_members
-    participationStatus: participationStatus // Overall status (accepted, pending, null)
+    isMember: membership?.status === "accepted",
+    participationStatus,
   };
 };
 
@@ -68,7 +72,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
     fetchNotifications,
     subscribeToNotifications,
     unsubscribeFromNotifications,
-    removeNotification // Assuming this function is available in your store for hard delete
+    removeNotification,
   } = useNotification();
   const { setSelectedRoom } = useRoomStore();
   const router = useRouter();
@@ -76,230 +80,136 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
   const supabase = supabaseBrowser();
   const isMobile = useMediaQuery("(max-width: 768px)");
 
-  // Initialize notifications and subscribe to updates
   useEffect(() => {
-    if (user?.id) {
-      const initNotifications = async () => {
-        try {
-          console.log("[Notifications] Initializing notifications for user:", user.id);
-          await fetchNotifications(user.id);
-          console.log("[Notifications] Successfully fetched notifications");
+    if (!user?.id) return;
 
-          console.log("[Notifications] Setting up real-time subscription");
-          subscribeToNotifications(user.id);
-          console.log("[Notifications] Real-time subscription established");
-        } catch (error) {
-          console.error("[Notifications] Error initializing notifications:", error);
-          toast.error("Failed to load notifications");
-        }
-      };
+    const init = async () => {
+      try {
+        await fetchNotifications(user.id);
+        subscribeToNotifications(user.id);
+      } catch (err) {
+        toast.error("Failed to load notifications.");
+      }
+    };
 
-      initNotifications();
-
-      // Cleanup subscription when component unmounts
-      return () => {
-        console.log("[Notifications] Cleaning up notification subscription");
-        unsubscribeFromNotifications();
-      };
-    } else {
-      console.log("[Notifications] No user found, skipping initialization");
-    }
+    init();
+    return () => unsubscribeFromNotifications();
   }, [user?.id, fetchNotifications, subscribeToNotifications, unsubscribeFromNotifications]);
 
-  const handleAccept = async (notificationId: string, roomId: string | null, type: string) => {
-    if (!user || !roomId) {
-      toast.error("Unable to process request: Missing user or room information");
-      return;
-    }
+  const handleAccept = async (id: string, roomId: string | null, type: string) => {
+    if (!user || !roomId) return toast.error("Missing data for action.");
 
     setIsLoading(true);
     try {
-      console.log("[Notifications] Processing accept request:", { notificationId, roomId, type });
+      const res = await fetch(`/api/notifications/${id}/accept`, { method: "POST" });
+      if (!res.ok) throw new Error("Failed to accept notification");
 
-      // Call the accept API route
-      const response = await fetch(`/api/notifications/${notificationId}/accept`, {
-        method: "POST",
-        // No body needed as notificationId is in params and other info fetched by API
-      });
+      await markAsRead(id);
 
-      if (!response.ok) {
-        const error = await response.json();
-        console.error("[Notifications] Accept request failed:", error);
-        throw new Error(error.error || "Failed to process notification");
-      }
-
-      console.log("[Notifications] Successfully processed accept request");
-      await markAsRead(notificationId); // Mark as read after acceptance
-
-      // If it was a room invite/join request, attempt to switch to that room
-      if (type === "room_invite" || type === "join_request") {
-        console.log("[Notifications] Fetching updated room information for switch");
-        const { data: room, error: roomError } = await supabase
+      if (["room_invite", "join_request"].includes(type)) {
+        const { data: room, error } = await supabase
           .from("rooms")
           .select("*")
           .eq("id", roomId)
           .single();
 
-        if (roomError) {
-          console.error("[Notifications] Error fetching room for switch:", roomError);
-          throw new Error("Failed to fetch room information after acceptance");
-        }
+        if (error || !room) throw new Error("Room fetch failed");
 
-        if (room) {
-          // Transform room to include current membership status
-          const roomWithMembership = await transformRoom(room, user.id, supabase);
-          console.log("[Notifications] Switching to room:", roomWithMembership);
-          setSelectedRoom(roomWithMembership);
-          onClose(); // Close notifications sheet
-          router.refresh(); // Refresh the page to update chat UI
-        }
+        const enrichedRoom = await transformRoom(room, user.id, supabase);
+        setSelectedRoom(enrichedRoom);
+        onClose();
+        router.refresh();
       }
 
-      toast.success("Request accepted successfully");
-    } catch (error) {
-      console.error("[Notifications] Error in accept flow:", error);
-      toast.error(error instanceof Error ? error.message : "Failed to process request");
+      toast.success("Request accepted.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error accepting.");
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleReject = async (notificationId: string, senderId: string, roomId: string) => {
-    if (!user) {
-      toast.error("Unable to process request: User not authenticated.");
-      return;
-    }
-    if (!senderId || !roomId) {
-      toast.error("Unable to process request: Missing sender or room ID.");
-      return;
-    }
+  const handleReject = async (id: string, senderId: string, roomId: string) => {
+    if (!user || !senderId || !roomId) return toast.error("Missing data for reject.");
 
     setIsLoading(true);
     try {
-      console.log("[Notifications] Processing reject request:", { notificationId, senderId, roomId });
-
-      // Call the reject API route
-      const response = await fetch(`/api/notifications/reject`, {
+      const res = await fetch(`/api/notifications/reject`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ notification_id: notificationId, sender_id: senderId, room_id: roomId }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notification_id: id, sender_id: senderId, room_id: roomId }),
       });
 
-      if (!response.ok) {
-        const error = await response.json();
-        console.error("[Notifications] Reject request failed:", error);
-        throw new Error(error.error || "Failed to reject notification");
-      }
-
-      console.log("[Notifications] Successfully processed reject request");
-      await markAsRead(notificationId); // Mark as read after rejection
-      toast.success("Request rejected");
-    } catch (error) {
-      console.error("Error rejecting notification:", error);
-      toast.error(error instanceof Error ? error.message : "Failed to reject request");
+      if (!res.ok) throw new Error("Reject failed");
+      await markAsRead(id);
+      toast.success("Request rejected.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Reject error.");
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Function for handling individual notification dismissal/deletion
-  const handleDeleteNotification = useCallback(async (notificationId: string) => {
-    if (!user) {
-      toast.error("You must be logged in to dismiss notifications.");
-      return;
-    }
-    setIsLoading(true);
-    try {
-      // Option 1: Mark as read (soft delete/hide from active view)
-      await markAsRead(notificationId);
-      toast.success("Notification dismissed.");
+  const handleDeleteNotification = useCallback(
+    async (id: string) => {
+      if (!user) return toast.error("Login required.");
 
-      // If you have a backend API for hard deleting notifications, you would call it here:
-      // const response = await fetch(`/api/notifications/${notificationId}`, {
-      //   method: "DELETE",
-      // });
-      // if (!response.ok) {
-      //   const error = await response.json();
-      //   throw new Error(error.message || "Failed to delete notification");
-      // }
-      // await removeNotification(notificationId); // Remove from store immediately
-      // toast.success("Notification deleted.");
+      setIsLoading(true);
+      try {
+        const res = await fetch(`/api/notifications/${id}`, { method: "DELETE" });
+        if (!res.ok) throw new Error("Delete failed");
 
-    } catch (error) {
-      console.error("Error dismissing notification:", error);
-      toast.error(error instanceof Error ? error.message : "Failed to dismiss notification.");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [user, markAsRead]);
+        await removeNotification(id);
+        toast.success("Notification deleted.");
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Error deleting.");
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [user, removeNotification]
+  );
 
-  // Determines the content message for each notification type
-  const getNotificationContent = useCallback((notification: Inotification) => {
-    const senderName = notification.users?.display_name || notification.users?.username || "Someone";
-    const roomName = notification.rooms?.name || "a room";
+  const getNotificationContent = useCallback((n: Inotification) => {
+    const sender = n.users?.display_name || n.users?.username || "Someone";
+    const room = n.rooms?.name || "a room";
 
-    switch (notification.type) {
+    switch (n.type) {
       case "room_invite":
-        return `${senderName} invited you to join ${roomName}`;
+        return `${sender} invited you to join ${room}`;
       case "join_request":
-        return `${senderName} requested to join ${roomName}`;
+        return `${sender} requested to join ${room}`;
       case "message":
-        return `New message from ${senderName} in ${roomName}`;
-      case "join_request_accepted": // New type for accepted requests
-        return notification.message || `Your request to join ${roomName} was accepted.`;
-      case "join_request_rejected": // New type for rejected requests
-        return notification.message || `Your request to join ${roomName} was rejected.`;
-      case "room_left": // Notification for user leaving a room
-        return notification.message || `${senderName} left ${roomName}.`;
+        return `New message from ${sender} in ${room}`;
+      case "join_request_accepted":
+        return n.message || `Your request to join ${room} was accepted.`;
+      case "join_request_rejected":
+        return n.message || `Your request to join ${room} was rejected.`;
+      case "room_left":
+        return n.message || `${sender} left ${room}.`;
       default:
-        return notification.message || "New notification";
+        return n.message || "New notification";
     }
   }, []);
 
-  // Determines if accept/reject actions should be shown
-  const shouldShowActions = useCallback((notification: Inotification) => {
-    return (notification.type === "room_invite" || notification.type === "join_request") &&
-           notification.status !== "read"; // Only show if not already read
+  const shouldShowActions = useCallback((n: Inotification) => {
+    return (n.type === "room_invite" || n.type === "join_request") && n.status !== "read";
   }, []);
 
   return (
     <Sheet open={isOpen} onOpenChange={onClose}>
-      <SheetContent side={isMobile ? "bottom" : "right"} className="p-0 flex flex-col h-full w-full sm:max-w-sm">
+      <SheetContent
+        side={isMobile ? "bottom" : "right"}
+        className="p-0 flex flex-col h-full w-full sm:max-w-sm"
+      >
         <SheetHeader className="p-4 border-b">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={onClose}
-                className="shrink-0"
-              >
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="icon" onClick={onClose}>
                 <ArrowLeft className="h-5 w-5" />
               </Button>
               <SheetTitle>Notifications</SheetTitle>
             </div>
-            {/* Delete all / Clear All button */}
-            {notifications.length > 0 && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => {
-                  // Mark all unread notifications as read
-                  notifications.forEach(n => {
-                    if (n.status !== 'read') {
-                      handleDeleteNotification(n.id); // Reusing the "dismiss" logic
-                    }
-                  });
-                  toast.info("All notifications marked as read.");
-                }}
-                disabled={isLoading}
-                className="text-gray-300 hover:text-red-500 transition-colors"
-              >
-                <Trash2 className="h-5 w-5" />
-              </Button>
-            )}
           </div>
         </SheetHeader>
 
@@ -310,46 +220,37 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
             </div>
           ) : (
             <div className="space-y-2">
-              {notifications.map((notification) => (
+              {notifications.map((n) => (
                 <Swipeable
-                  key={notification.id}
-                  onSwipeLeft={() => handleDeleteNotification(notification.id)}
-                  onSwipeRight={() => handleDeleteNotification(notification.id)}
+                  key={n.id}
+                  onSwipeLeft={() => handleAccept(n.id, n.room_id || null, n.type)}
+                  onSwipeRight={() => handleReject(n.id, n.sender_id!, n.room_id!)}
                 >
                   <div
                     className={`p-4 flex items-start space-x-4 hover:bg-muted/50 relative ${
-                      notification.status === "read" ? "opacity-50" : ""
+                      n.status === "read" ? "opacity-50" : ""
                     }`}
                   >
                     <Avatar className="h-10 w-10">
-                      <AvatarImage
-                        src={notification.users?.avatar_url || ""}
-                        alt={notification.users?.username || "User"}
-                      />
+                      <AvatarImage src={n.users?.avatar_url || ""} alt={n.users?.username || "User"} />
                       <AvatarFallback>
-                        {(notification.users?.username || "U")[0].toUpperCase()}
+                        {(n.users?.username || "U")[0].toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
+
                     <div className="flex-1 space-y-1">
-                      <p className="text-sm leading-none">
-                        {getNotificationContent(notification)}
-                      </p>
+                      <p className="text-sm">{getNotificationContent(n)}</p>
                       <p className="text-xs text-muted-foreground">
-                        {new Date(notification.created_at || "").toLocaleString()}
+                        {new Date(n.created_at || "").toLocaleString()}
                       </p>
                     </div>
-                    {shouldShowActions(notification) && (
+
+                    {shouldShowActions(n) ? (
                       <div className="flex space-x-2">
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() =>
-                              handleReject(
-                                  notification.id,
-                                  notification.sender_id!, // Non-null assertion as per API expectation
-                                  notification.room_id! // Non-null assertion as per API expectation
-                              )
-                          }
+                          onClick={() => handleReject(n.id, n.sender_id!, n.room_id!)}
                           disabled={isLoading}
                         >
                           <X className="h-4 w-4" />
@@ -357,30 +258,25 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() =>
-                            handleAccept(
-                              notification.id,
-                              notification.room_id || null, // roomId can be null for some notification types
-                              notification.type
-                            )
-                          }
+                          onClick={() => handleAccept(n.id, n.room_id || null, n.type)}
                           disabled={isLoading}
                         >
                           <Check className="h-4 w-4" />
                         </Button>
                       </div>
-                    )}
-                    {/* Individual notification delete/dismiss button for already read or non-actionable notifications */}
-                    {!shouldShowActions(notification) && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDeleteNotification(notification.id)}
-                        disabled={isLoading}
-                        className="text-gray-400 hover:text-red-400"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                    ) : (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon">
+                            <MoreVertical className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleDeleteNotification(n.id)}>
+                            <Trash2 className="mr-2 h-4 w-4" /> Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     )}
                   </div>
                 </Swipeable>
