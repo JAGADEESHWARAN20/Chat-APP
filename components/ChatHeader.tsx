@@ -869,14 +869,15 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
           <PopoverContent
             side="bottom"
             align="center"
-            sideOffset={8}
-            collisionPadding={{ left: 16 }}
+            sideOffset={0}
+            collisionPadding={{ left: 16,right:16 }}
             className="
               !w-[min(32em,96vw)]
               !h-[min(40em,90vh)]
               md:!w-[32em]
               md:!h-[40em]
               mx-[3vw]
+              mt-[1em]
               mb-[2vh]
               bg-gray-800/30
               backdrop-blur-xl
