@@ -40,7 +40,6 @@ import { useRoomStore } from "@/lib/store/roomstore";
 import { useDebounce } from "use-debounce";
 import Notifications from "./Notifications";
 import { useNotification } from "@/lib/store/notifications";
-import { Switch } from "@/components/ui/switch";
 
 
 type UserProfile = Database["public"]["Tables"]["users"]["Row"];
