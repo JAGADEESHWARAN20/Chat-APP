@@ -40,6 +40,8 @@ import { useRoomStore } from "@/lib/store/roomstore";
 import { useDebounce } from "use-debounce";
 import Notifications from "./Notifications";
 import { useNotification } from "@/lib/store/notifications";
+import { Switch } from "@/components/ui/switch";
+
 
 type UserProfile = Database["public"]["Tables"]["users"]["Row"];
 type Room = Database["public"]["Tables"]["rooms"]["Row"];
@@ -790,66 +792,60 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                 <ArrowRightLeft className="h-5 w-5" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent
-              side="bottom"
-              align="center"
-              sideOffset={0}
-              className="
-                !w-[min(27em,95vw)]
-                !h-[min(30em,85vh)]
-                md:!w-[32em]
-                md:!h-[32em]
-                mr-[5vw]
-                mt-[2vw]
-                mb-[2vh]
-                bg-gray-800/30
-                backdrop-blur-xl
-                rounded-2xl
-                p-[1.25em]
-                text-white
-                !max-w-[98vw]
-                !max-h-[92vh]
-              "
-            >
-              <div className="p-2">
-                <h3 className="font-semibold text-[1.1em] mb-2">Switch Room</h3>
-                {availableRooms.length === 0 ? (
-                  <p className="text-[1em] text-gray-400">No rooms available</p>
-                ) : (
-                  <ul className="space-y-2">
-                    {availableRooms.map((room) => (
-                      <li
-                        key={room.id}
-                        className="flex items-center justify-between"
-                      >
-                        <span className="text-[1em] flex gap-2 font-semibold text-white">
-                          {room.name} ({room.memberCount ?? 0}){" "}
-                          <span>{room.is_private && <LockIcon />}</span>
-                        </span>
-                        {room.participationStatus === "pending" ? (
-                          <span className="text-[1em] text-muted-foreground">
-                            Pending
-                          </span>
-                        ) : (
-                          <Button
-                            size="sm"
-                            variant={
-                              selectedRoom?.id === room.id ? "secondary" : "outline"
-                            }
-                            onClick={() => handleRoomSwitch(room)}
-                            className="text-white border-gray-600"
-                          >
-                            <span className="flex items-center gap-1">
-                              <ArrowRight className="h-4 w-4" /> Switch
-                            </span>
-                          </Button>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </PopoverContent>
+          <PopoverContent
+  side="bottom"
+  align="center"
+  sideOffset={0}
+  className="
+    !w-[min(27em,93vw)]
+    !h-[min(30em,85vh)]
+    md:!w-[32em]
+    md:!h-[32em]
+    mr-[5vw]
+    mt-[2vw]
+    mb-[2vh]
+    bg-gray-800/30
+    backdrop-blur-xl
+    rounded-2xl
+    p-[1.25em]
+    text-white
+    !max-w-[98vw]
+    !max-h-[92vh]
+  "
+>
+  <div className="p-2">
+    <h3 className="font-semibold text-[1.1em] mb-2">Switch Room</h3>
+    {availableRooms.length === 0 ? (
+      <p className="text-[1em] text-gray-400">No rooms available</p>
+    ) : (
+      <ul className="space-y-2">
+        {availableRooms.map((room) => (
+          <li
+            key={room.id}
+            className="flex items-center justify-between"
+          >
+            <span className="text-[1em] flex gap-2 font-semibold text-white">
+              {room.name} ({room.memberCount ?? 0}){" "}
+              <span>{room.is_private && <LockIcon />}</span>
+            </span>
+            {room.participationStatus === "pending" ? (
+              <span className="text-[1em] text-muted-foreground">
+                Pending
+              </span>
+            ) : (
+              <Switch
+                checked={selectedRoom?.id === room.id}
+                onCheckedChange={() => handleRoomSwitch(room)}
+                className="cursor-pointer"
+              />
+            )}
+          </li>
+        ))}
+      </ul>
+    )}
+  </div>
+</PopoverContent>
+
           </Popover>
         )}
 
