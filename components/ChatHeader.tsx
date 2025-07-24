@@ -790,6 +790,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                 md:!w-[32em]
                 md:!h-[32em]
                 mx-[2vw]
+                mt-[1vw]
                 mb-[2vh]
                 bg-gray-800/30
                 backdrop-blur-xl
@@ -876,7 +877,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
             md:!w-[24em]
             md:!h-[40em]
             mr-[1em]
-            mt-[1em]
+            mt-[1vw]
             mb-[2vh]
             bg-gray-800/30
             backdrop-blur-xl
