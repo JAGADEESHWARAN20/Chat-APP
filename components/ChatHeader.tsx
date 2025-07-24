@@ -871,7 +871,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
           align="center"
           sideOffset={0}
           className="
-            !w-[min(24em,85vw)]
+            !w-[min(24em,90vw)]
             !h-[min(40em,90vh)]
             md:!w-[24em]
             md:!h-[40em]
