@@ -795,12 +795,12 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
               align="center"
               sideOffset={0}
               className="
-                !w-[min(32em,95vw)]
+                !w-[min(32em,93vw)]
                 !h-[min(30em,85vh)]
                 md:!w-[32em]
                 md:!h-[32em]
-                mr-[2vw]
-                mt-[1vw]
+                mr-[3vw]
+                mt-[2vw]
                 mb-[2vh]
                 bg-gray-800/30
                 backdrop-blur-xl
@@ -882,11 +882,11 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
           align="center"
           sideOffset={0}
           className="
-            !w-[min(25em,97vw)]
+            !w-[min(32em,98vw)]
             !h-[min(40em,90vh)]
             md:!w-[24em]
             md:!h-[40em]
-            mr-[1em]
+            mr-[2vw]
             mt-[2vw]
             mb-[2vh]
             bg-gray-800/30
