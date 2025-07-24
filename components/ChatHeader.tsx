@@ -648,7 +648,7 @@ const fetchAvailableRooms = useCallback(async () => {
                 <ArrowRightLeft className="h-5 w-5" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-80 bg-gray-800 text-white">
+            <PopoverContent className="w-90 bg-gray-800/40 backdrop-blur-md text-white">
               <div className="p-4">
                 <h3 className="font-semibold text-lg mb-2">Switch Room</h3>
                 {availableRooms.length === 0 ? (
@@ -708,10 +708,10 @@ const fetchAvailableRooms = useCallback(async () => {
             align="end"
             sideOffset={8}
             collisionPadding={{ left: 16 }}
-            className="mr-2 sm:mr-4 md:mr-0"
+            className="mr-2 w-full sm:mr-2 md:mr-0"
           >
-            <div className="p-5">
-              <div className="flex justify-between items-center mb-4">
+            <div className="p-2">
+              <div className="flex justify-between items-center mb-1">
                 <h3 className="font-bold text-xl text-white">Search</h3>
                 <Button
                   variant="ghost"
@@ -730,9 +730,9 @@ const fetchAvailableRooms = useCallback(async () => {
                 placeholder={searchType === "users" ? "Search users..." : "Search rooms..."}
                 value={searchQuery}
                 onChange={handleSearchInputChange}
-                className="mb-4 bg-gray-700/50 border-gray-600/50 text-white placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+                className="mb-1 bg-gray-700/50 border-gray-600/50 text-white placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
               />
-              <div className="flex gap-3 mb-5">
+              <div className="flex gap-2 mb-5">
                 <Button
                   variant={searchType === "rooms" ? "default" : "outline"}
                   onClick={() => handleSearchByType("rooms")}
