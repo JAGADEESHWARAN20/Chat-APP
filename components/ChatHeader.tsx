@@ -76,7 +76,10 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 
   const [debouncedCallback] = useDebounce((value: string) => setSearchQuery(value), 300);
   const [debouncedSearchQuery] = useDebounce(searchQuery, 300);
-  const UUID_REGEX = useMemo(() => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, []);
+  const UUID_REGEX = useMemo(
+    () => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    []
+  );
 
   const checkRoomMembership = useCallback(
     async (roomId: string) => {
@@ -107,32 +110,53 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         .eq("user_id", user.id);
 
       if (memberError) {
-        console.error("Error checking room membership for participation status:", memberError);
-        // Do not return, continue to check room_participants
+        console.error(
+          "Error checking room membership for participation status:",
+          memberError
+        );
       }
 
-      const { data: participantStatus, error: participantError } = await supabase
-        .from("room_participants")
-        .select("status")
-        .eq("room_id", roomId)
-        .eq("user_id", user.id);
+      const { data: participantStatus, error: participantError } =
+        await supabase
+          .from("room_participants")
+          .select("status")
+          .eq("room_id", roomId)
+          .eq("user_id", user.id);
 
       if (participantError) {
-        console.error("Error checking room participation status:", participantError);
-        // Do not return, continue
+        console.error(
+          "Error checking room participation status:",
+          participantError
+        );
       }
 
       // Prioritize accepted status, then pending, then null
-      if (memberStatus && memberStatus.length > 0 && memberStatus[0].status === "accepted") {
+      if (
+        memberStatus &&
+        memberStatus.length > 0 &&
+        memberStatus[0].status === "accepted"
+      ) {
         return "accepted";
       }
-      if (participantStatus && participantStatus.length > 0 && participantStatus[0].status === "accepted") {
+      if (
+        participantStatus &&
+        participantStatus.length > 0 &&
+        participantStatus[0].status === "accepted"
+      ) {
         return "accepted";
       }
-      if (memberStatus && memberStatus.length > 0 && memberStatus[0].status === "pending") {
+      if (
+        memberStatus &&
+        memberStatus.length > 0 &&
+        memberStatus[0].status === "pending"
+      ) {
         return "pending";
       }
-      if (participantStatus && participantStatus.length > 0 && participantStatus[0].status === "pending") {
+      if (
+        participantStatus &&
+        participantStatus.length > 0 &&
+        participantStatus[0].status === "pending"
+      ) {
         return "pending";
       }
       return null; // Not a member or participant, or status is rejected
@@ -140,177 +164,216 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     [user, supabase]
   );
 
-const fetchAvailableRooms = useCallback(async () => {
-  if (!user) {
-    setIsLoading(false);
-    setAvailableRooms([]);
-    setRooms([]);
-    return;
-  }
-
-  setIsLoading(true);
-  try {
-    // Only show rooms where user is a member
-    const { data: memberships, error } = await supabase
-      .from("room_members")
-      .select("room_id, rooms(id, name, is_private, created_by)")
-      .eq("user_id", user.id)
-      .eq("status", "accepted");
-
-    if (error) {
-      setAvailableRooms([]); setRooms([]); setIsLoading(false);
-      return;
-    }
-    const joinedRooms = (memberships || [])
-      .map(m => ({
-        ...(m.rooms as Room),
-        isMember: true,
-        participationStatus: "accepted",
-      }))
-      .filter(r => r && r.id);
-
-    setAvailableRooms(joinedRooms);
-    setRooms(joinedRooms);
-  } catch (error) {
-    setAvailableRooms([]);
-    setRooms([]);
-    toast.error("An error occurred while fetching rooms");
-  } finally {
-    setIsLoading(false);
-  }
-}, [user, supabase, setRooms]);
-
-
-  const handleRoomSwitch = useCallback(async (room: Room) => {
+  const fetchAvailableRooms = useCallback(async () => {
     if (!user) {
-      toast.error("You must be logged in to switch rooms", {
-        className: "text-red-600 bg-white border border-red-400 shadow-md",
-      });
+      setIsLoading(false);
+      setAvailableRooms([]);
+      setRooms([]);
       return;
     }
+
+    setIsLoading(true);
     try {
-      const response = await fetch(`/api/rooms/switch`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ roomId: room.id }),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        // Handle specific error codes or messages from the backend
-        if (result.code === "AUTH_REQUIRED") {
-          toast.error("Authentication required to switch rooms.");
-        } else if (result.code === "ROOM_NOT_FOUND") {
-          toast.error("Room not found.");
-        } else if (result.status === "pending") { // This checks the 'status' field returned by your API
-          toast.info(result.message || "Switch request sent to room owner for approval.");
-        } else {
-          toast.error(result.message || "Failed to switch room.");
-        }
-        return; // Stop execution if there was an error or pending status
-      }
-
-      // If the API call was successful and not pending, assume accepted
-      let newParticipationStatus: string | null = "accepted";
-      let newIsMember = true;
-
-      if (result.status === "pending") {
-        newParticipationStatus = "pending";
-        newIsMember = false; // Not a member yet if pending
-      }
-
-      const updatedRoomWithMembership: RoomWithMembership = {
-        ...room,
-        isMember: newIsMember,
-        participationStatus: newParticipationStatus,
-      };
-
-      setSelectedRoom(updatedRoomWithMembership);
-      setIsSwitchRoomPopoverOpen(false);
-      setIsMember(newIsMember); // Update local state for selected room
-      toast.success(result.message || `Switched to ${room.name}`, {
-        className: "text-green-600 bg-white border border-green-400 shadow-md",
-      });
-      await fetchAvailableRooms(); // Refresh available rooms list
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to switch room");
-      await fetchAvailableRooms();
-    }
-  }, [user, setSelectedRoom, fetchAvailableRooms]);
-
-  const handleLeaveRoom = useCallback(async () => {
-    if (!user) {
-      toast.error("Please log in to leave a room");
-      return;
-    }
-
-    if (!selectedRoom) {
-      toast.error("No room selected");
-      return;
-    }
-
-    if (!selectedRoom.id || !UUID_REGEX.test(selectedRoom.id)) {
-      toast.error("Invalid room ID");
-      return;
-    }
-
-    try {
-      setIsLeaving(true);
-      // Delete from room_members
-      const { error: membersError } = await supabase
+      // Only show rooms where user is a member
+      const { data: memberships, error } = await supabase
         .from("room_members")
-        .delete()
-        .eq("room_id", selectedRoom.id)
-        .eq("user_id", user.id);
-
-      // Delete from room_participants (if user is also a participant)
-      const { error: participantsError } = await supabase
-        .from("room_participants")
-        .delete()
-        .eq("room_id", selectedRoom.id)
-        .eq("user_id", user.id);
-
-      if (membersError || participantsError) {
-        throw new Error(membersError?.message || participantsError?.message || "Failed to leave room");
-      }
-
-      toast.success("Successfully left the room");
-      setIsMember(false);
-      await fetchAvailableRooms(); // Refresh the list of available rooms
-
-      // Logic to select a new room or redirect if no rooms left
-      const { data: remainingRooms } = await supabase
-        .from("room_members")
-        .select("room_id")
+        .select("room_id, rooms(id, name, is_private, created_by)")
         .eq("user_id", user.id)
         .eq("status", "accepted");
 
-      if (remainingRooms && remainingRooms.length === 0) {
-        setSelectedRoom(null);
-        router.push("/");
-      } else {
-        // Try to select the default room if available, otherwise clear selection
-        const defaultRoom = availableRooms.find(room => room.name === "General Chat"); // Assuming 'General Chat' is default
-        if (defaultRoom) {
-          setSelectedRoom(defaultRoom);
-        } else {
+      if (error) {
+        setAvailableRooms([]);
+        setRooms([]);
+        setIsLoading(false);
+        return;
+      }
+      const joinedRooms = (memberships || [])
+        .map((m) => ({
+          ...(m.rooms as Room),
+          isMember: true,
+          participationStatus: "accepted",
+        }))
+        .filter((r) => r && r.id);
+
+      setAvailableRooms(joinedRooms);
+      setRooms(joinedRooms);
+    } catch (error) {
+      setAvailableRooms([]);
+      setRooms([]);
+      toast.error("An error occurred while fetching rooms");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user, supabase, setRooms]);
+
+  const handleRoomSwitch = useCallback(
+    async (room: Room) => {
+      if (!user) {
+        toast.error("You must be logged in to switch rooms", {
+          className: "text-red-600 bg-white border border-red-400 shadow-md",
+        });
+        return;
+      }
+      try {
+        const response = await fetch(`/api/rooms/switch`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ roomId: room.id }),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          // Handle specific error codes or messages from the backend
+          if (result.code === "AUTH_REQUIRED") {
+            toast.error("Authentication required to switch rooms.");
+          } else if (result.code === "ROOM_NOT_FOUND") {
+            toast.error("Room not found.");
+          } else if (result.status === "pending") {
+            toast.info(
+              result.message || "Switch request sent to room owner for approval."
+            );
+          } else {
+            toast.error(result.message || "Failed to switch room.");
+          }
+          return;
+        }
+
+        let newParticipationStatus: string | null = "accepted";
+        let newIsMember = true;
+
+        if (result.status === "pending") {
+          newParticipationStatus = "pending";
+          newIsMember = false;
+        }
+
+        const updatedRoomWithMembership: RoomWithMembership = {
+          ...room,
+          isMember: newIsMember,
+          participationStatus: newParticipationStatus,
+        };
+
+        setSelectedRoom(updatedRoomWithMembership);
+        setIsSwitchRoomPopoverOpen(false);
+        setIsMember(newIsMember);
+        toast.success(result.message || `Switched to ${room.name}`, {
+          className: "text-green-600 bg-white border border-green-400 shadow-md",
+        });
+        await fetchAvailableRooms();
+      } catch (err) {
+        toast.error(
+          err instanceof Error ? err.message : "Failed to switch room"
+        );
+        await fetchAvailableRooms();
+      }
+    },
+    [user, setSelectedRoom, fetchAvailableRooms]
+  );
+
+  // UPDATED: After leaving, also update searchResults in-place
+  const handleLeaveRoom = useCallback(
+    async () => {
+      if (!user) {
+        toast.error("Please log in to leave a room");
+        return;
+      }
+
+      if (!selectedRoom) {
+        toast.error("No room selected");
+        return;
+      }
+
+      if (!selectedRoom.id || !UUID_REGEX.test(selectedRoom.id)) {
+        toast.error("Invalid room ID");
+        return;
+      }
+
+      try {
+        setIsLeaving(true);
+        // Delete from room_members
+        const { error: membersError } = await supabase
+          .from("room_members")
+          .delete()
+          .eq("room_id", selectedRoom.id)
+          .eq("user_id", user.id);
+
+        // Delete from room_participants (if user is also a participant)
+        const { error: participantsError } = await supabase
+          .from("room_participants")
+          .delete()
+          .eq("room_id", selectedRoom.id)
+          .eq("user_id", user.id);
+
+        if (membersError || participantsError) {
+          throw new Error(
+            membersError?.message ||
+              participantsError?.message ||
+              "Failed to leave room"
+          );
+        }
+
+        toast.success("Successfully left the room");
+        setIsMember(false);
+        await fetchAvailableRooms();
+
+        // PATCH: Make the searchResults update for the left room--so UI instantly updates!
+        setSearchResults((results) =>
+          results.map((res) =>
+            "id" in res && res.id === selectedRoom.id
+              ? { ...res, isMember: false, participationStatus: null }
+              : res
+          )
+        );
+
+        // PATCH: Unset selectedRoom if the user just left it (or select a default)
+        const { data: remainingRooms } = await supabase
+          .from("room_members")
+          .select("room_id")
+          .eq("user_id", user.id)
+          .eq("status", "accepted");
+
+        if (remainingRooms && remainingRooms.length === 0) {
           setSelectedRoom(null);
           router.push("/");
+        } else {
+          const defaultRoom = availableRooms.find(
+            (room) => room.name === "General Chat"
+          );
+          if (defaultRoom) {
+            setSelectedRoom(defaultRoom);
+          } else {
+            setSelectedRoom(null);
+            router.push("/");
+          }
         }
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : "Failed to leave room"
+        );
+      } finally {
+        setIsLeaving(false);
       }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to leave room");
-    } finally {
-      setIsLeaving(false);
-    }
-  }, [user, selectedRoom, UUID_REGEX, supabase, fetchAvailableRooms, setSelectedRoom, router, availableRooms]);
+    },
+    [
+      user,
+      selectedRoom,
+      UUID_REGEX,
+      supabase,
+      fetchAvailableRooms,
+      setSelectedRoom,
+      router,
+      availableRooms,
+    ]
+  );
 
-  const handleSearchInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    debouncedCallback(e.target.value);
-  }, [debouncedCallback]);
+  const handleSearchInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      debouncedCallback(e.target.value);
+    },
+    [debouncedCallback]
+  );
 
   const fetchSearchResults = useCallback(async () => {
     if (!user) {
@@ -325,7 +388,9 @@ const fetchAvailableRooms = useCallback(async () => {
       let response;
       if (searchType === "rooms") {
         const apiQuery = debouncedSearchQuery.trim()
-          ? `?q=${encodeURIComponent(debouncedSearchQuery.trim())}&limit=${limit}&offset=${offset}`
+          ? `?q=${encodeURIComponent(
+              debouncedSearchQuery.trim()
+            )}&limit=${limit}&offset=${offset}`
           : `?limit=${limit}&offset=${offset}`;
         response = await fetch(`/api/rooms/all${apiQuery}`);
         if (!response.ok) {
@@ -335,7 +400,7 @@ const fetchAvailableRooms = useCallback(async () => {
 
         if (isMounted.current) {
           const roomsWithDetailedStatus = await Promise.all(
-            fetchedRooms.map(async (room: Room & { isMember: boolean }) => ({ // Ensure isMember is part of the API response type
+            fetchedRooms.map(async (room: Room & { isMember: boolean }) => ({
               ...room,
               participationStatus: await checkRoomParticipation(room.id),
             }))
@@ -360,7 +425,9 @@ const fetchAvailableRooms = useCallback(async () => {
     } catch (error) {
       console.error("Search error:", error);
       if (isMounted.current) {
-        toast.error(error instanceof Error ? error.message : "An error occurred while searching");
+        toast.error(
+          error instanceof Error ? error.message : "An error occurred while searching"
+        );
         setSearchResults([]);
       }
     } finally {
@@ -368,8 +435,15 @@ const fetchAvailableRooms = useCallback(async () => {
         setIsLoading(false);
       }
     }
-  }, [searchType, supabase, user, debouncedSearchQuery, checkRoomParticipation, limit, offset]);
-
+  }, [
+    searchType,
+    supabase,
+    user,
+    debouncedSearchQuery,
+    checkRoomParticipation,
+    limit,
+    offset,
+  ]);
 
   const handleJoinRoom = useCallback(
     async (roomId?: string) => {
@@ -387,54 +461,53 @@ const fetchAvailableRooms = useCallback(async () => {
         return;
       }
       try {
-        // Since you have a dedicated /api/rooms/switch, it's better to use it
-        // for consistency in joining and switching. The /api/rooms/switch
-        // handles the logic of upserting into room_members/participants.
+        // Use switch endpoint for join for consistency
         const response = await fetch(`/api/rooms/switch`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ roomId: currentRoomId }),
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ roomId: currentRoomId }),
         });
 
         const result = await response.json();
 
         if (!response.ok) {
-            if (result.code === "AUTH_REQUIRED") {
-                toast.error("Authentication required to join rooms.");
-            } else if (result.code === "ROOM_NOT_FOUND") {
-                toast.error("Room not found.");
-            } else if (result.status === "pending") {
-                toast.info(result.message || "Join request sent to room owner for approval.");
-            } else {
-                toast.error(result.message || "Failed to join room.");
-            }
-            return;
+          if (result.code === "AUTH_REQUIRED") {
+            toast.error("Authentication required to join rooms.");
+          } else if (result.code === "ROOM_NOT_FOUND") {
+            toast.error("Room not found.");
+          } else if (result.status === "pending") {
+            toast.info(
+              result.message || "Join request sent to room owner for approval."
+            );
+          } else {
+            toast.error(result.message || "Failed to join room.");
+          }
+          return;
         }
 
-        // If the API call was successful and not pending, assume accepted
         let newParticipationStatus: string | null = "accepted";
         let newIsMember = true;
 
         if (result.status === "pending") {
-            newParticipationStatus = "pending";
-            newIsMember = false; // Not a member yet if pending
+          newParticipationStatus = "pending";
+          newIsMember = false;
         }
 
         const { data: room } = await supabase
-            .from("rooms")
-            .select("*")
-            .eq("id", currentRoomId)
-            .single();
+          .from("rooms")
+          .select("*")
+          .eq("id", currentRoomId)
+          .single();
         if (!room) {
-            throw new Error("Failed to fetch room details after join.");
+          throw new Error("Failed to fetch room details after join.");
         }
 
         const roomWithMembership: RoomWithMembership = {
-            ...room,
-            isMember: newIsMember,
-            participationStatus: newParticipationStatus,
+          ...room,
+          isMember: newIsMember,
+          participationStatus: newParticipationStatus,
         };
         setSelectedRoom(roomWithMembership);
         setIsMember(newIsMember);
@@ -446,7 +519,16 @@ const fetchAvailableRooms = useCallback(async () => {
         toast.error(error instanceof Error ? error.message : "Failed to join room");
       }
     },
-    [user, selectedRoom, UUID_REGEX, setSelectedRoom, supabase, searchType, fetchSearchResults, setIsMember]
+    [
+      user,
+      selectedRoom,
+      UUID_REGEX,
+      setSelectedRoom,
+      supabase,
+      searchType,
+      fetchSearchResults,
+      setIsMember,
+    ]
   );
 
   const handleCreateRoom = async () => {
@@ -460,11 +542,10 @@ const fetchAvailableRooms = useCallback(async () => {
     }
     setIsCreating(true);
     try {
-      // Use the /api/rooms POST route for creating rooms
-      const response = await fetch('/api/rooms', { // This is your api/rooms/route.ts POST
-        method: 'POST',
+      const response = await fetch("/api/rooms", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({ name: newRoomName.trim(), isPrivate: isPrivate }),
       });
@@ -475,18 +556,17 @@ const fetchAvailableRooms = useCallback(async () => {
         throw new Error(newRoomResponse.error || "Failed to create room");
       }
 
-      const newRoom = newRoomResponse; // The API should return the created room object
+      const newRoom = newRoomResponse;
 
       toast.success("Room created successfully!");
       setNewRoomName("");
       setIsPrivate(false);
       setIsDialogOpen(false);
-      // The backend API for room creation should already add the creator as an accepted member/participant.
-      // So, we just need to select it and refresh rooms.
+
       const roomWithMembership: RoomWithMembership = {
         ...newRoom,
         isMember: true, // Creator is always a member
-        participationStatus: "accepted", // Creator is always accepted
+        participationStatus: "accepted",
       };
       setSelectedRoom(roomWithMembership);
       setIsMember(true);
@@ -539,11 +619,14 @@ const fetchAvailableRooms = useCallback(async () => {
     }
   }, [selectedRoom, availableRooms]);
 
-  const renderRoomSearchResult = (result: Room & { isMember: boolean; participationStatus: string | null }) => (
+  // Kept unchanged, uses correct logic to choose "Join", "Switch" and "Leave"
+  const renderRoomSearchResult = (
+    result: Room & { isMember: boolean; participationStatus: string | null }
+  ) => (
     <li key={result.id} className="flex items-center justify-between">
       <div className="flex items-center gap-2">
-        <span className="text-sm font-semibold text-white">
-          {result.name} {result.is_private && "🔒"}
+        <span className="text-[1em] font-semibold text-white">
+          {result.name} {result.is_private && <LockIcon />}
         </span>
       </div>
       {selectedRoom?.id === result.id && result.isMember && UUID_REGEX.test(result.id) ? (
@@ -570,7 +653,7 @@ const fetchAvailableRooms = useCallback(async () => {
           </span>
         </Button>
       ) : result.participationStatus === "pending" ? (
-        <span className="text-sm text-muted-foreground">Pending</span>
+        <span className="text-[1em] text-muted-foreground">Pending</span>
       ) : (
         <Button
           size="sm"
@@ -584,12 +667,12 @@ const fetchAvailableRooms = useCallback(async () => {
   );
 
   return (
-    <header className="h-14 flex items-center justify-between px-4 glass-gradient-header text-white z-10">
-      <h1 className="text-[2.5vw] lg:text-[1em] flex flex-col font-semibold py-2 lg:py-[2em] items-start">
+    <header className="h-[3.6em] flex items-center justify-between px-[2.5vw] glass-gradient-header text-white z-10">
+      <h1 className="text-[2.5vw] lg:text-[1em] flex flex-col font-semibold py-[0.8em] lg:py-[2em] items-start">
         {selectedRoom ? `#${selectedRoom.name}` : "Daily Chat"}
         <ChatPresence />
       </h1>
-      <div className="flex items-center space-x-4">
+      <div className="flex items-center space-x-[1.2vw]">
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button variant="ghost" size="icon">
@@ -598,11 +681,18 @@ const fetchAvailableRooms = useCallback(async () => {
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle className="text-2xl font-bold">Create New Room</DialogTitle>
+              <DialogTitle className="text-[2em] font-bold">
+                Create New Room
+              </DialogTitle>
             </DialogHeader>
-            <div className="grid gap-5 py-5">
-              <div className="space-y-3">
-                <Label htmlFor="roomName" className="text-sm font-medium text-gray-300">Room Name</Label>
+            <div className="grid gap-[1.2em] py-[1em]">
+              <div className="space-y-[0.6em]">
+                <Label
+                  htmlFor="roomName"
+                  className="text-[1em] font-medium text-gray-300"
+                >
+                  Room Name
+                </Label>
                 <Input
                   id="roomName"
                   placeholder="Enter room name"
@@ -612,7 +702,7 @@ const fetchAvailableRooms = useCallback(async () => {
                   className="bg-gray-700/50 border-gray-600/50 text-white placeholder-gray-400 rounded-lg focus:ring-0 focus:border-transparent transition-all"
                 />
               </div>
-              <div className="flex items-center space-x-3">
+              <div className="flex items-center space-x-[1em]">
                 <Switch
                   id="private"
                   checked={isPrivate}
@@ -620,7 +710,12 @@ const fetchAvailableRooms = useCallback(async () => {
                   disabled={isCreating}
                   className="data-[state=checked]:bg-indigo-600 data-[state=unchecked]:bg-gray-600"
                 />
-                <Label htmlFor="private" className="text-sm font-medium text-gray-300">Private Room</Label>
+                <Label
+                  htmlFor="private"
+                  className="text-[1em] font-medium text-gray-300"
+                >
+                  Private Room
+                </Label>
               </div>
             </div>
             <DialogFooter>
@@ -643,30 +738,64 @@ const fetchAvailableRooms = useCallback(async () => {
           </DialogContent>
         </Dialog>
         {selectedRoom && (
-          <Popover open={isSwitchRoomPopoverOpen} onOpenChange={setIsSwitchRoomPopoverOpen}>
+          <Popover
+            open={isSwitchRoomPopoverOpen}
+            onOpenChange={setIsSwitchRoomPopoverOpen}
+          >
             <PopoverTrigger asChild>
               <Button variant="ghost" size="icon">
                 <ArrowRightLeft className="h-5 w-5" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-[95vw] h-[95vh] bg-gray-800/30 backdrop-blur-sm text-white">
-              <div className="p-2 ">
-                <h3 className="font-semibold text-lg mb-2">Switch Room</h3>
+            <PopoverContent
+              side="bottom"
+              align="center"
+              sideOffset={8}
+              // Make switch popover take full width, margin, responsive height!
+              className="
+                !w-[min(32em,96vw)]
+                !h-[min(30em,85vh)]
+                md:!w-[32em]
+                md:!h-[32em]
+                mx-[2vw]
+                mb-[2vh]
+                bg-gray-800/30
+                backdrop-blur-xl
+                rounded-2xl
+                p-[1.25em]
+                text-white
+                !max-w-[98vw]
+                !max-h-[92vh]
+              "
+            >
+              <div className="p-2">
+                <h3 className="font-semibold text-[1.1em] mb-2">
+                  Switch Room
+                </h3>
                 {availableRooms.length === 0 ? (
-                  <p className="text-sm text-gray-400">No rooms available</p>
+                  <p className="text-[1em] text-gray-400">No rooms available</p>
                 ) : (
                   <ul className="space-y-2">
                     {availableRooms.map((room) => (
-                      <li key={room.id} className="flex items-center justify-between">
-                        <span className="text-sm font-semibold text-white">
-                          {room.name} {room.is_private && <LockIcon/>}
+                      <li
+                        key={room.id}
+                        className="flex items-center justify-between"
+                      >
+                        <span className="text-[1em] font-semibold text-white">
+                          {room.name} {room.is_private && <LockIcon />}
                         </span>
                         {room.participationStatus === "pending" ? (
-                          <span className="text-sm text-muted-foreground">Pending</span>
+                          <span className="text-[1em] text-muted-foreground">
+                            Pending
+                          </span>
                         ) : (
                           <Button
                             size="sm"
-                            variant={selectedRoom?.id === room.id ? "secondary" : "outline"}
+                            variant={
+                              selectedRoom?.id === room.id
+                                ? "secondary"
+                                : "outline"
+                            }
                             onClick={() => handleRoomSwitch(room)}
                             className="text-white border-gray-600"
                           >
@@ -696,9 +825,15 @@ const fetchAvailableRooms = useCallback(async () => {
               <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full"></span>
             )}
           </Button>
-          <Notifications isOpen={isNotificationsOpen} onClose={() => setIsNotificationsOpen(false)} />
+          <Notifications
+            isOpen={isNotificationsOpen}
+            onClose={() => setIsNotificationsOpen(false)}
+          />
         </div>
-        <Popover open={isSearchPopoverOpen} onOpenChange={setIsSearchPopoverOpen}>
+        <Popover
+          open={isSearchPopoverOpen}
+          onOpenChange={setIsSearchPopoverOpen}
+        >
           <PopoverTrigger asChild>
             <Button variant="ghost" size="icon">
               <Search className="h-5 w-5" />
@@ -709,11 +844,28 @@ const fetchAvailableRooms = useCallback(async () => {
             align="end"
             sideOffset={8}
             collisionPadding={{ left: 16 }}
-            className="mr-2 w-[90vw] h-[90vh] sm:mr-0  md:mr-0"
+            // Responsive popover width & height using vw/em, nicely padded
+            className="
+              !w-[min(32em,96vw)]
+              !h-[min(40em,90vh)]
+              md:!w-[32em]
+              md:!h-[40em]
+              mx-[2vw]
+              mb-[2vh]
+              bg-gray-800/30
+              backdrop-blur-xl
+              rounded-2xl
+              p-[1.25em]
+              text-white
+              !max-w-[98vw]
+              !max-h-[92vh]
+            "
           >
             <div className="p-1">
               <div className="flex justify-between items-center mb-[0.5em]">
-                <h3 className="font-bold text-xl text-white">Search</h3>
+                <h3 className="font-bold text-[1.5em] text-white">
+                  Search
+                </h3>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -728,30 +880,42 @@ const fetchAvailableRooms = useCallback(async () => {
               </div>
               <Input
                 type="text"
-                placeholder={searchType === "users" ? "Search users..." : "Search rooms..."}
+                placeholder={
+                  searchType === "users"
+                    ? "Search users..."
+                    : "Search rooms..."
+                }
                 value={searchQuery}
                 onChange={handleSearchInputChange}
                 className="mb-1 bg-gray-700/50 border-gray-600/50 text-white placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
               />
-              <div className="w-[100%] flex gap-1 mb-5">
+              <div className="w-[100%] flex gap-1 mb-[1.2em]">
                 <Button
                   variant={searchType === "rooms" ? "default" : "outline"}
                   onClick={() => handleSearchByType("rooms")}
-                  className={`${searchType === "rooms" ? "bg-indigo-600 hover:bg-indigo-700" : "bg-transparent border-gray-600 hover:bg-gray-700"} text-white rounded-lg transition-colors w-full`}
+                  className={`${
+                    searchType === "rooms"
+                      ? "bg-indigo-600 hover:bg-indigo-700"
+                      : "bg-transparent border-gray-600 hover:bg-gray-700"
+                  } text-white rounded-lg transition-colors w-full`}
                 >
                   Rooms
                 </Button>
                 <Button
                   variant={searchType === "users" ? "default" : "outline"}
                   onClick={() => handleSearchByType("users")}
-                  className={`${searchType === "users" ? "bg-indigo-600 hover:bg-indigo-700" : "bg-transparent border-gray-600 hover:bg-gray-700"} text-white rounded-lg transition-colors w-full`}
+                  className={`${
+                    searchType === "users"
+                      ? "bg-indigo-600 hover:bg-indigo-700"
+                      : "bg-transparent border-gray-600 hover:bg-gray-700"
+                  } text-white rounded-lg transition-colors w-full`}
                 >
                   Users
                 </Button>
               </div>
               {searchResults.length > 0 && (
                 <div className="mt-4">
-                  <h4 className="font-semibold text-sm text-gray-300 mb-3">
+                  <h4 className="font-semibold text-[1em] text-gray-300 mb-3">
                     {searchType === "users" ? "User Profiles" : "Rooms"}
                   </h4>
                   <ul className="space-y-3">
@@ -778,26 +942,41 @@ const fetchAvailableRooms = useCallback(async () => {
                               )}
                             </Avatar>
                             <div>
-                              <div className="text-xs text-gray-400">{result.username}</div>
-                              <div className="text-sm font-medium text-white">{result.display_name}</div>
+                              <div className="text-xs text-gray-400">
+                                {result.username}
+                              </div>
+                              <div className="text-[1em] font-medium text-white">
+                                {result.display_name}
+                              </div>
                             </div>
                           </div>
                           <UserIcon className="h-4 w-4 text-gray-400" />
                         </li>
                       ) : (
-                        renderRoomSearchResult(result as Room & { isMember: boolean; participationStatus: string | null })
+                        renderRoomSearchResult(
+                          result as Room & {
+                            isMember: boolean;
+                            participationStatus: string | null;
+                          }
+                        )
                       )
                     )}
                   </ul>
                 </div>
               )}
               {searchResults.length === 0 && searchQuery.length > 0 && (
-                <p className="text-sm text-gray-400 mt-3">No {searchType || "results"} found.</p>
+                <p className="text-[1em] text-gray-400 mt-3">
+                  No {searchType || "results"} found.
+                </p>
               )}
               {searchQuery.length === 0 && searchType && (
-                <p className="text-sm text-gray-400 mt-3">Showing all {searchType}...</p>
+                <p className="text-[1em] text-gray-400 mt-3">
+                  Showing all {searchType}...
+                </p>
               )}
-              {isLoading && <p className="text-sm text-gray-400 mt-3">Loading...</p>}
+              {isLoading && (
+                <p className="text-[1em] text-gray-400 mt-3">Loading...</p>
+              )}
             </div>
           </PopoverContent>
         </Popover>
