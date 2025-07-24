@@ -1,3 +1,4 @@
+// lib/hooks/useTypingStatus.ts
 import { useEffect, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 
@@ -29,7 +30,7 @@ export function useTypingStatus(roomId: string, currentUserId: string) {
           event: "*",
           schema: "public",
           table: "typing_status",
-          filter: `room_id=eq.${roomId}`,
+          filter: `room_id=eq.${roomId}`
         },
         (payload) => {
           const row = payload.new;
