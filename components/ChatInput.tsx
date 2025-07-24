@@ -1,28 +1,71 @@
 "use client";
 
-import React, { useState } from "react";
-import { Input } from "./ui/input";
+import React, { useEffect, useRef, useState } from "react";
+import debounce from "lodash.debounce";
 import { supabaseBrowser } from "@/lib/supabase/browser";
-import { toast } from "sonner";
-import { v4 as uuidv4 } from "uuid";
 import { useUser } from "@/lib/store/user";
-import { Imessage, useMessage } from "@/lib/store/messages";
 import { useRoomStore } from "@/lib/store/roomstore";
 import { useDirectChatStore } from "@/lib/store/directChatStore";
-import { Send } from "lucide-react"; // Import Lucide Send icon
+import { Send } from "lucide-react";
+import { toast } from "sonner";
+import { v4 as uuidv4 } from "uuid";
+import { Imessage, useMessage } from "@/lib/store/messages";
 
 export default function ChatInput() {
+  const supabase = supabaseBrowser();
   const user = useUser((state) => state.user);
-  const addMessage = useMessage((state) => state.addMessage);
-  const setOptimisticIds = useMessage((state) => state.setOptimisticIds);
   const selectedRoom = useRoomStore((state) => state.selectedRoom);
   const selectedDirectChat = useDirectChatStore((state) => state.selectedChat);
-  const supabase = supabaseBrowser();
 
-  // State to track input value
+  const roomId = selectedRoom?.id || selectedDirectChat?.id || null;
+  const userId = user?.id || null;
+
+  const addMessage = useMessage((state) => state.addMessage);
+  const setOptimisticIds = useMessage((state) => state.setOptimisticIds);
+
   const [inputValue, setInputValue] = useState("");
 
-  const handleSendMessage = async (text: string) => {
+  // Debounced function to mark user as typing
+  const sendTypingTrue = useRef(
+    debounce(async () => {
+      if (!roomId || !userId) return;
+      await supabase.from("typing_status").upsert({
+        room_id: roomId,
+        user_id: userId,
+        is_typing: true,
+        updated_at: new Date().toISOString(),
+      });
+    }, 300)
+  ).current;
+
+  // Function to mark user as stopped typing
+  const sendTypingFalse = async () => {
+    if (!roomId || !userId) return;
+    await supabase
+      .from("typing_status")
+      .update({ is_typing: false, updated_at: new Date().toISOString() })
+      .eq("room_id", roomId)
+      .eq("user_id", userId);
+  };
+
+  // Whenever inputValue changes, trigger typing true or false
+  useEffect(() => {
+    if (inputValue.length > 0) {
+      sendTypingTrue();
+    } else {
+      sendTypingFalse();
+    }
+  }, [inputValue, sendTypingTrue]);
+
+  // On component unmount, clear typing status
+  useEffect(() => {
+    return () => {
+      sendTypingFalse();
+    };
+  }, []);
+
+  // Your existing handleSendMessage: send message and reset typing
+  async function handleSendMessage(text: string) {
     if (!text.trim() || !user) {
       toast.error("Please log in and enter a message");
       return;
@@ -33,24 +76,15 @@ export default function ChatInput() {
     }
 
     const id = uuidv4();
-    const roomId = selectedRoom?.id;
-    const directChatId = selectedDirectChat?.id;
+    const roomIdValue = selectedRoom?.id;
+    const directChatIdValue = selectedDirectChat?.id;
 
-    if (roomId && !selectedRoom) {
-      toast.error("Room selection is invalid");
-      return;
-    }
-    if (directChatId && !selectedDirectChat) {
-      toast.error("Direct chat selection is invalid");
-      return;
-    }
-
-    const newMessage = {
+    const newMessage: Imessage = {
       id,
       text,
       sender_id: user.id,
-      room_id: roomId || null,
-      direct_chat_id: directChatId || null,
+      room_id: roomIdValue || null,
+      direct_chat_id: directChatIdValue || null,
       is_edited: false,
       dm_thread_id: null,
       created_at: new Date().toISOString(),
@@ -74,8 +108,8 @@ export default function ChatInput() {
         .insert({
           id,
           text,
-          room_id: roomId,
-          direct_chat_id: directChatId,
+          room_id: roomIdValue,
+          direct_chat_id: directChatIdValue,
           sender_id: user.id,
           created_at: new Date().toISOString(),
           status: "sent",
@@ -87,22 +121,25 @@ export default function ChatInput() {
       }
     } catch (error) {
       if (error instanceof Error) {
-        console.error("Error sending message:", error);
         toast.error(`Failed to send message: ${error.message}`);
       } else {
-        console.error("Unknown error sending message:", error);
         toast.error("Failed to send message due to an unknown error");
       }
+      // Rollback optimistic message
       useMessage.getState().optimisticDeleteMessage(id);
       return;
     }
 
     setInputValue(""); // Clear input after sending
-  };
+
+    // Notify typing stopped after message sent
+    await sendTypingFalse();
+  }
 
   return (
     <div className="p-1 flex items-center">
-      <Input
+      <input
+        type="text"
         placeholder={
           selectedRoom
             ? `Message #${selectedRoom.name}`
@@ -115,19 +152,17 @@ export default function ChatInput() {
         onKeyDown={(e) => {
           if (e.key === "Enter" && e.currentTarget.value.trim()) {
             handleSendMessage(e.currentTarget.value);
-            setInputValue("");
           }
         }}
         disabled={!selectedRoom && !selectedDirectChat}
-        className="flex-grow"
+        className="flex-grow rounded px-3 py-2 bg-gray-700 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
       />
       {inputValue.length > 0 && (
         <Send
-          className="ml-2 cursor-pointer"
+          className="ml-2 cursor-pointer text-indigo-400 hover:text-indigo-300"
           size={24}
           onClick={() => {
             handleSendMessage(inputValue);
-            setInputValue("");
           }}
         />
       )}
