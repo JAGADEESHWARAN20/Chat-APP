@@ -1022,6 +1022,4 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       </div>
     </header>
   );
-}
-
-export default YourComponent;
+};
