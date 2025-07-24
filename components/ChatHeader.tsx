@@ -20,6 +20,7 @@ import {
   LogOut,
   UserIcon,
   ArrowRightLeft,
+  LockIcon,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -648,8 +649,8 @@ const fetchAvailableRooms = useCallback(async () => {
                 <ArrowRightLeft className="h-5 w-5" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-90 bg-gray-800/40 backdrop-blur-md text-white">
-              <div className="p-4">
+            <PopoverContent className="w-[90vw] h-[70vh] bg-gray-800/30 backdrop-blur-sm text-white">
+              <div className="p-2 ">
                 <h3 className="font-semibold text-lg mb-2">Switch Room</h3>
                 {availableRooms.length === 0 ? (
                   <p className="text-sm text-gray-400">No rooms available</p>
@@ -658,7 +659,7 @@ const fetchAvailableRooms = useCallback(async () => {
                     {availableRooms.map((room) => (
                       <li key={room.id} className="flex items-center justify-between">
                         <span className="text-sm font-semibold text-white">
-                          {room.name} {room.is_private && "🔒"}
+                          {room.name} {room.is_private && <LockIcon/>}
                         </span>
                         {room.participationStatus === "pending" ? (
                           <span className="text-sm text-muted-foreground">Pending</span>
@@ -708,10 +709,10 @@ const fetchAvailableRooms = useCallback(async () => {
             align="end"
             sideOffset={8}
             collisionPadding={{ left: 16 }}
-            className="mr-2 w-full sm:mr-2 md:mr-0"
+            className="mr-2 w-[90vw] h-[80vh] sm:mr-1 bg-opacity-25 backdrop-blur-md md:mr-0"
           >
-            <div className="p-2">
-              <div className="flex justify-between items-center mb-1">
+            <div className="p-1">
+              <div className="flex justify-between items-center mb-[0.5em]">
                 <h3 className="font-bold text-xl text-white">Search</h3>
                 <Button
                   variant="ghost"
@@ -732,18 +733,18 @@ const fetchAvailableRooms = useCallback(async () => {
                 onChange={handleSearchInputChange}
                 className="mb-1 bg-gray-700/50 border-gray-600/50 text-white placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
               />
-              <div className="flex gap-2 mb-5">
+              <div className="w-[100%] flex gap-1 mb-5">
                 <Button
                   variant={searchType === "rooms" ? "default" : "outline"}
                   onClick={() => handleSearchByType("rooms")}
-                  className={`${searchType === "rooms" ? "bg-indigo-600 hover:bg-indigo-700" : "bg-transparent border-gray-600 hover:bg-gray-700"} text-white rounded-lg transition-colors`}
+                  className={`${searchType === "rooms" ? "bg-indigo-600 hover:bg-indigo-700" : "bg-transparent border-gray-600 hover:bg-gray-700"} text-white rounded-lg transition-colors w-full`}
                 >
                   Rooms
                 </Button>
                 <Button
                   variant={searchType === "users" ? "default" : "outline"}
                   onClick={() => handleSearchByType("users")}
-                  className={`${searchType === "users" ? "bg-indigo-600 hover:bg-indigo-700" : "bg-transparent border-gray-600 hover:bg-gray-700"} text-white rounded-lg transition-colors`}
+                  className={`${searchType === "users" ? "bg-indigo-600 hover:bg-indigo-700" : "bg-transparent border-gray-600 hover:bg-gray-700"} text-white rounded-lg transition-colors w-full`}
                 >
                   Users
                 </Button>
