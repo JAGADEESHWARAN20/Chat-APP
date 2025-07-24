@@ -95,7 +95,7 @@ export default function ChatInput() {
 	};
 
 	return (
-		<div className="p-[1vw] gradient-border" style={{ borderRadius: '1vw', background: 'rgba(30,30,60,0.5)', backdropFilter: 'blur(1em)' }}>
+		<div className="p-1">
 			<Input
 				placeholder={
 					selectedRoom
@@ -111,7 +111,6 @@ export default function ChatInput() {
 					}
 				}}
 				disabled={!selectedRoom && !selectedDirectChat}
-				className="text-[1em] px-[1vw] py-[0.5em] rounded-[0.5em] glass-button"
 			/>
 		</div>
 	);

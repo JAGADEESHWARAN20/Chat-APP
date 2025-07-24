@@ -1,193 +1,174 @@
 import { useCallback } from "react";
-import { supabaseBrowser } from "@/lib/supabase/browser";
 import { toast } from "sonner";
+
+import { supabaseBrowser } from "@/lib/supabase/browser";
 import { Database } from "@/lib/types/supabase";
 
 type Room = Database["public"]["Tables"]["rooms"]["Row"];
 type RoomWithMembership = Room & {
-     isMember: boolean;
-     participationStatus: string | null;
+  isMember: boolean;
+  participationStatus: string | null;
 };
 
 export const useFetchRooms = (
-     user: { id: string } | undefined,
-     checkRoomMembership: (roomId: string) => Promise<boolean>,
-     checkRoomParticipation: (roomId: string) => Promise<string | null>,
-     setAvailableRooms: (rooms: RoomWithMembership[]) => void,
-     setRooms: (rooms: RoomWithMembership[]) => void,
-     isMounted: React.MutableRefObject<boolean>,
-     initializeDefaultRoom?: () => void
+  user: { id: string } | undefined,
+  checkRoomMembership: (roomId: string) => Promise<boolean>,
+  checkRoomParticipation: (roomId: string) => Promise<string | null>,
+  setAvailableRooms: (rooms: RoomWithMembership[]) => void,
+  setRooms: (rooms: RoomWithMembership[]) => void,
+  isMounted: React.MutableRefObject<boolean>,
+  initializeDefaultRoom?: () => void
 ) => {
-     const supabase = supabaseBrowser();
+  const supabase = supabaseBrowser();
 
-     const fetchAvailableRooms = useCallback(async () => {
-          if (!user) {
-               setAvailableRooms([]);
-               setRooms([]);
-               return;
+  const fetchAvailableRooms = useCallback(async () => {
+    if (!user) {
+      setAvailableRooms([]);
+      setRooms([]);
+      return;
+    }
+
+    try {
+      let rooms: Room[] = [];
+
+      const { data: memberships, error: memberError } = await supabase
+        .from("room_members")
+        .select("room_id")
+        .eq("user_id", user.id)
+        .eq("status", "accepted");
+
+      if (memberError && memberError.code !== "42P17") {
+        toast.error("Failed to fetch room memberships");
+        console.error("Room membership fetch error:", memberError);
+        if (isMounted.current) {
+          setAvailableRooms([]);
+          setRooms([]);
+        }
+        return;
+      }
+
+      const roomIds = memberships?.map((m) => m.room_id) ?? [];
+
+      if (roomIds.length > 0) {
+        const { data: joinedRooms, error: joinedError } = await supabase
+          .from("rooms")
+          .select("*")
+          .in("id", roomIds);
+
+        if (joinedError) {
+          toast.error("Failed to fetch rooms");
+          console.error("Error fetching joined rooms:", joinedError);
+          if (isMounted.current) {
+            setAvailableRooms([]);
+            setRooms([]);
+          }
+          return;
+        }
+
+        rooms = joinedRooms || [];
+      }
+
+      // Fallback: ensure General Chat exists if no rooms were returned
+      if (rooms.length === 0) {
+        const { data: generalRoom, error: generalError } = await supabase
+          .from("rooms")
+          .select("*")
+          .eq("name", "General Chat")
+          .eq("is_private", false)
+          .single();
+
+        let roomToUse: Room | null = generalRoom ?? null;
+
+        // Create General Chat if it doesn't exist
+        if (!roomToUse && generalError?.code === "PGRST116") {
+          const { data: newRoom, error: createError } = await supabase
+            .from("rooms")
+            .upsert(
+              {
+                name: "General Chat",
+                is_private: false,
+                created_by: user.id,
+                created_at: new Date().toISOString()
+              },
+              { onConflict: "name,is_private" }
+            )
+            .select()
+            .single();
+
+          if (createError || !newRoom) {
+            toast.error("Failed to create General Chat room");
+            console.error("Error creating General Chat:", createError);
+            if (isMounted.current) {
+              setAvailableRooms([]);
+              setRooms([]);
+            }
+            return;
           }
 
-          try {
-               let rooms: Room[] = [];
+          roomToUse = newRoom;
+        }
 
-               // Fetch rooms the user is a member of
-               const { data: memberships, error: memberError } = await supabase
-                    .from("room_members")
-                    .select("room_id")
-                    .eq("user_id", user.id)
-                    .eq("status", "accepted");
+        if (roomToUse) {
+          // Join General Chat if not already a member
+          const isMember = await checkRoomMembership(roomToUse.id);
+          if (!isMember) {
+            const { error: joinError } = await supabase
+              .from("room_members")
+              .insert({
+                room_id: roomToUse.id,
+                user_id: user.id,
+                status: "accepted",
+                joined_at: new Date().toISOString(),
+                active: true
+              });
 
-               if (memberError) {
-                    console.error("Error fetching room memberships:", memberError);
-                    // If the error is due to RLS recursion, log it and proceed to fetch public rooms
-                    if (memberError.code === "42P17") {
-                         console.warn("RLS policy issue detected while fetching memberships. Proceeding to fetch public rooms.");
-                    } else {
-                         toast.error("Failed to fetch room memberships");
-                         if (isMounted.current) {
-                              setAvailableRooms([]);
-                              setRooms([]);
-                         }
-                         return;
-                    }
-               }
-
-               if (memberships && memberships.length > 0) {
-                    const roomIds = memberships.map((m) => m.room_id);
-                    const { data: roomsData, error: roomsError } = await supabase
-                         .from("rooms")
-                         .select("*")
-                         .in("id", roomIds);
-
-                    if (roomsError) {
-                         console.error("Error fetching rooms:", roomsError);
-                         toast.error("Failed to fetch rooms");
-                         if (isMounted.current) {
-                              setAvailableRooms([]);
-                              setRooms([]);
-                         }
-                         return;
-                    }
-
-                    rooms = roomsData || [];
-               }
-
-               // If no rooms are found via memberships, fetch the default public "General Chat" room
-               if (rooms.length === 0) {
-                    const { data: generalChat, error: generalChatError } = await supabase
-                         .from("rooms")
-                         .select("*")
-                         .eq("name", "General Chat")
-                         .eq("is_private", false)
-                         .single();
-
-                    if (generalChatError && generalChatError.code !== "PGRST116") {
-                         console.error("Error fetching General Chat:", generalChatError);
-                         toast.error("Failed to fetch default room");
-                         if (isMounted.current) {
-                              setAvailableRooms([]);
-                              setRooms([]);
-                         }
-                         return;
-                    }
-
-                    if (!generalChat) {
-                         const { data: newRoom, error: createError } = await supabase
-                              .from("rooms")
-                              .upsert(
-                                   {
-                                        name: "General Chat",
-                                        is_private: false,
-                                        created_by: user.id,
-                                        created_at: new Date().toISOString(),
-                                   },
-                                   { onConflict: "name,is_private" }
-                              )
-                              .select()
-                              .single();
-
-                         if (createError || !newRoom) {
-                              console.error("Error creating General Chat:", createError);
-                              toast.error("Failed to create default room");
-                              if (isMounted.current) {
-                                   setAvailableRooms([]);
-                                   setRooms([]);
-                              }
-                              return;
-                         }
-
-                         const { error: joinError } = await supabase
-                              .from("room_members")
-                              .insert({
-                                   room_id: newRoom.id,
-                                   user_id: user.id,
-                                   status: "accepted",
-                                   joined_at: new Date().toISOString(),
-                                   active: true,
-                              });
-
-                         if (joinError) {
-                              console.error("Error joining General Chat:", joinError);
-                              toast.error("Failed to join default room");
-                              if (isMounted.current) {
-                                   setAvailableRooms([]);
-                                   setRooms([]);
-                              }
-                              return;
-                         }
-
-                         rooms = [newRoom];
-                    } else {
-                         const isMember = await checkRoomMembership(generalChat.id);
-                         if (!isMember) {
-                              const { error: joinError } = await supabase
-                                   .from("room_members")
-                                   .insert({
-                                        room_id: generalChat.id,
-                                        user_id: user.id,
-                                        status: "accepted",
-                                        joined_at: new Date().toISOString(),
-                                        active: true,
-                                   });
-
-                              if (joinError) {
-                                   console.error("Error joining General Chat:", joinError);
-                                   toast.error("Failed to join default room");
-                                   if (isMounted.current) {
-                                        setAvailableRooms([]);
-                                        setRooms([]);
-                                   }
-                                   return;
-                              }
-                         }
-                         rooms = [generalChat];
-                    }
-               }
-
-               const roomsWithMembership = await Promise.all(
-                    rooms.map(async (room) => ({
-                         ...room,
-                         isMember: await checkRoomMembership(room.id),
-                         participationStatus: await checkRoomParticipation(room.id),
-                    }))
-               );
-
-               if (isMounted.current) {
-                    setAvailableRooms(roomsWithMembership);
-                    setRooms(roomsWithMembership);
-                    if (initializeDefaultRoom) {
-                         initializeDefaultRoom();
-                    }
-               }
-          } catch (error) {
-               console.error("Error fetching rooms:", error);
-               toast.error("Failed to fetch rooms");
-               if (isMounted.current) {
-                    setAvailableRooms([]);
-                    setRooms([]);
-               }
+            if (joinError && joinError.code !== "23505") {
+              toast.error("Failed to join General Chat");
+              console.error("Join General Chat error:", joinError);
+              if (isMounted.current) {
+                setAvailableRooms([]);
+                setRooms([]);
+              }
+              return;
+            }
           }
-     }, [user, supabase, checkRoomMembership, checkRoomParticipation, setAvailableRooms, setRooms, isMounted, initializeDefaultRoom]);
 
-     return { fetchAvailableRooms };
+          rooms = [roomToUse];
+        }
+      }
+
+      // Enrich each room with membership/participation details
+      const enrichedRooms: RoomWithMembership[] = await Promise.all(
+        rooms.map(async (room) => ({
+          ...room,
+          isMember: await checkRoomMembership(room.id),
+          participationStatus: await checkRoomParticipation(room.id)
+        }))
+      );
+
+      if (isMounted.current) {
+        setAvailableRooms(enrichedRooms);
+        setRooms(enrichedRooms);
+        if (initializeDefaultRoom) initializeDefaultRoom();
+      }
+    } catch (error) {
+      toast.error("Something went wrong while fetching rooms");
+      console.error("Room fetch error:", error);
+      if (isMounted.current) {
+        setAvailableRooms([]);
+        setRooms([]);
+      }
+    }
+  }, [
+    user,
+    supabase,
+    checkRoomMembership,
+    checkRoomParticipation,
+    setAvailableRooms,
+    setRooms,
+    isMounted,
+    initializeDefaultRoom
+  ]);
+
+  return { fetchAvailableRooms };
 };

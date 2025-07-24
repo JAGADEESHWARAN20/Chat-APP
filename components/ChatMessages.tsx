@@ -82,9 +82,7 @@ export default function ChatMessages() {
 
   return (
     <Suspense fallback={<div>Loading messages...</div>}>
-      <div className="gradient-border" style={{ borderRadius: '1vw', background: 'rgba(30,30,60,0.5)', backdropFilter: 'blur(1em)', padding: '2vw', fontSize: '1.1em' }}>
-        <ListMessages />
-      </div>
+      <ListMessages />
     </Suspense>
   );
 }

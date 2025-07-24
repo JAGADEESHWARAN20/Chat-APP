@@ -9,7 +9,7 @@ import { ArrowDown } from "lucide-react";
 import LoadMoreMessages from "./LoadMoreMessages";
 import { Database } from "@/lib/types/supabase";
 import { useRoomStore } from "@/lib/store/roomstore";
-import { LIMIT_MESSAGE } from "@/lib/constant";
+
 
 type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
 type UserRow = Database["public"]["Tables"]["users"]["Row"];

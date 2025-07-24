@@ -8,14 +8,12 @@ import { toast } from "sonner";
 import { useUser } from "@/lib/store/user";
 import { IRoom, IRoomParticipant } from "@/lib/types/rooms";
 import { ArrowRight, LogOut } from "lucide-react";
-import { useUIContext } from "@/components/UIContext";
 
 export default function RoomList() {
   const [userParticipations, setUserParticipations] = useState<IRoomParticipant[]>([]);
   const { rooms, setRooms, selectedRoom, setSelectedRoom } = useRoomStore();
   const supabase = supabaseBrowser();
   const user = useUser((state) => state.user);
-  const { joiningRoomId, switchingRoomId, leavingRoomId, setJoiningRoomId, setSwitchingRoomId, setLeavingRoomId } = useUIContext();
 
   const refreshRooms = async () => {
     if (!user) {
@@ -50,17 +48,19 @@ export default function RoomList() {
       toast.error("You must be logged in to switch rooms");
       return;
     }
-    setSwitchingRoomId(room.id);
+
     try {
       const response = await fetch("/api/rooms/switch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ roomId: room.id }),
       });
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || "Failed to switch room");
       }
+
       setSelectedRoom({
         ...room,
         isMember: userParticipations.some(p => p.room_id === room.id && p.status === 'accepted'),
@@ -69,17 +69,15 @@ export default function RoomList() {
       toast.success("Successfully switched room");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to switch room");
-    } finally {
-      setSwitchingRoomId(null);
     }
-  }, [user, setSelectedRoom, userParticipations, setSwitchingRoomId]);
+  }, [user, setSelectedRoom, userParticipations]);
 
   const handleLeaveRoom = async (roomId: string) => {
     if (!user) {
       toast.error("You must be logged in to leave a room");
       return;
     }
-    setLeavingRoomId(roomId);
+
     try {
       const response = await fetch(`/api/rooms/${roomId}/leave`, {
         method: "PATCH",
@@ -88,6 +86,7 @@ export default function RoomList() {
         const errorData = await response.json();
         throw new Error(errorData.error || "Failed to leave room");
       }
+
       const { hasOtherRooms } = await response.json();
       toast.success("Left room successfully");
       if (!hasOtherRooms) {
@@ -96,8 +95,6 @@ export default function RoomList() {
       await refreshRooms();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to leave room");
-    } finally {
-      setLeavingRoomId(null);
     }
   };
 
@@ -106,7 +103,7 @@ export default function RoomList() {
       toast.error("You must be logged in to join a room");
       return;
     }
-    setJoiningRoomId(roomId);
+
     try {
       const response = await fetch(`/api/rooms/${roomId}/join`, {
         method: "POST",
@@ -115,6 +112,7 @@ export default function RoomList() {
         const errorData = await response.json();
         throw new Error(errorData.error || "Failed to join room");
       }
+
       const data = await response.json();
       toast.success(data.message);
       if (!data.status || data.status === "accepted") {
@@ -131,8 +129,6 @@ export default function RoomList() {
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to join room");
-    } finally {
-      setJoiningRoomId(null);
     }
   };
 
@@ -280,10 +276,10 @@ export default function RoomList() {
   }
 
   return (
-    <div className="w-[20vw] min-w-[15em] max-w-[30vw] border-r p-[2vw] gradient-border" style={{ borderRadius: '1vw', fontSize: '1.1em', background: 'rgba(30,30,60,0.5)', backdropFilter: 'blur(1em)' }}>
-      <div className="flex justify-between items-center mb-[1.5em]">
-        <h2 className="text-[1.5em] font-bold">Rooms</h2>
-        <Button size="sm" variant="glass" onClick={refreshRooms}>
+    <div className="w-64 border-r p-4">
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-bold">Rooms</h2>
+        <Button size="sm" onClick={refreshRooms}>
           Refresh
         </Button>
       </div>
@@ -296,8 +292,8 @@ export default function RoomList() {
           return (
             <div key={room.id} className="flex justify-between items-center gap-2">
               <Button
-                variant={selectedRoom?.id === room.id ? "secondary" : "glass"}
-                className="w-full justify-start text-[1em]"
+                variant={selectedRoom?.id === room.id ? "secondary" : "ghost"}
+                className="w-full justify-start"
                 onClick={() => {
                   if (isMember) {
                     handleRoomSwitch(room);
@@ -305,21 +301,18 @@ export default function RoomList() {
                     handleJoinRoom(room.id);
                   }
                 }}
-                disabled={isPending || switchingRoomId === room.id || joiningRoomId === room.id}
+                disabled={isPending}
               >
                 <span className="truncate flex items-center gap-2">
                   {room.name}
                   {room.is_private && " 🔒"}
-                  {isMember && <ArrowRight className="h-[1em] w-[1em]" />}
-                  {(switchingRoomId === room.id || joiningRoomId === room.id) && (
-                    <span className="ml-2 animate-spin">⏳</span>
-                  )}
+                  {isMember && <ArrowRight className="h-4 w-4" />}
                 </span>
               </Button>
 
               {!isMember && !isPending && (
-                <Button size="sm" variant="glass" onClick={() => handleJoinRoom(room.id)} disabled={joiningRoomId === room.id}>
-                  {joiningRoomId === room.id ? "Joining..." : "Join"}
+                <Button size="sm" onClick={() => handleJoinRoom(room.id)}>
+                  Join
                 </Button>
               )}
 
@@ -329,10 +322,13 @@ export default function RoomList() {
                   variant="destructive"
                   onClick={() => handleLeaveRoom(room.id)}
                   className="bg-red-600 hover:bg-red-700"
-                  disabled={leavingRoomId === room.id}
                 >
-                  {leavingRoomId === room.id ? "Leaving..." : <LogOut className="h-[1em] w-[1em]" />}
+                  <LogOut className="h-4 w-4" />
                 </Button>
+              )}
+
+              {isPending && (
+                <span className="text-sm text-muted-foreground">Pending</span>
               )}
             </div>
           );
