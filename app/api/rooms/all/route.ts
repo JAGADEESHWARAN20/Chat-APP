@@ -65,10 +65,29 @@ export async function GET(req: Request) {
 
     const joinedRoomIds = new Set(memberships?.map((m) => m.room_id));
 
-    // Attach membership flag to each room
+    // Fetch all accepted members for rooms to count them client-side
+    const { data: membersData, error: membersError } = await supabase
+      .from("room_members")
+      .select("room_id")
+      .in("room_id", roomIds)
+      .eq("status", "accepted");
+
+    if (membersError) {
+      console.error("[Rooms All] Member counts fetch error:", membersError.message);
+      // Optionally you can continue with zero counts here
+    }
+
+    // Calculate member counts
+    const countsMap = new Map<string, number>();
+    membersData?.forEach((m) => {
+      countsMap.set(m.room_id, (countsMap.get(m.room_id) ?? 0) + 1);
+    });
+
+    // Attach membership flag and member count to each room
     const roomsWithMembership = rooms.map((room) => ({
       ...room,
       isMember: joinedRoomIds.has(room.id),
+      memberCount: countsMap.get(room.id) ?? 0,
     }));
 
     return NextResponse.json({ success: true, rooms: roomsWithMembership });

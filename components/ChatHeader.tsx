@@ -43,19 +43,22 @@ import { useNotification } from "@/lib/store/notifications";
 
 type UserProfile = Database["public"]["Tables"]["users"]["Row"];
 type Room = Database["public"]["Tables"]["rooms"]["Row"];
-type SearchResult = UserProfile | Room;
 
-type RoomWithMembership = Room & {
+// Extended Room type including memberCount, isMember, participationStatus
+type RoomWithMembershipCount = Room & {
   isMember: boolean;
   participationStatus: string | null;
+  memberCount: number;
 };
+
+type SearchResult = UserProfile | RoomWithMembershipCount;
 
 export default function ChatHeader({ user }: { user: SupabaseUser | undefined }) {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [searchType, setSearchType] = useState<"rooms" | "users" | null>(null);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
-  const [availableRooms, setAvailableRooms] = useState<RoomWithMembership[]>([]);
+  const [availableRooms, setAvailableRooms] = useState<RoomWithMembershipCount[]>([]);
   const supabase = supabaseBrowser();
   const [isSearchPopoverOpen, setIsSearchPopoverOpen] = useState(false);
   const [isSwitchRoomPopoverOpen, setIsSwitchRoomPopoverOpen] = useState(false);
@@ -81,6 +84,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     []
   );
 
+  // Check if current user is a member of given room
   const checkRoomMembership = useCallback(
     async (roomId: string) => {
       if (!user) return false;
@@ -99,10 +103,10 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     [user, supabase]
   );
 
+  // Check participation status for a given room (can be accepted or pending)
   const checkRoomParticipation = useCallback(
     async (roomId: string) => {
       if (!user) return null;
-      // Check both room_members and room_participants for user's status
       const { data: memberStatus, error: memberError } = await supabase
         .from("room_members")
         .select("status")
@@ -130,7 +134,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         );
       }
 
-      // Prioritize accepted status, then pending, then null
       if (
         memberStatus &&
         memberStatus.length > 0 &&
@@ -159,11 +162,12 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       ) {
         return "pending";
       }
-      return null; // Not a member or participant, or status is rejected
+      return null;
     },
     [user, supabase]
   );
 
+  // Fetch all available rooms where user is a member with memberCount included
   const fetchAvailableRooms = useCallback(async () => {
     if (!user) {
       setIsLoading(false);
@@ -174,10 +178,10 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 
     setIsLoading(true);
     try {
-      // Only show rooms where user is a member
+      // Fetch accepted memberships for user + associated rooms
       const { data: memberships, error } = await supabase
         .from("room_members")
-        .select("room_id, rooms(id, name, is_private, created_by)")
+        .select("room_id, rooms(id, name, is_private, created_by, created_at)")
         .eq("user_id", user.id)
         .eq("status", "accepted");
 
@@ -187,13 +191,41 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         setIsLoading(false);
         return;
       }
-      const joinedRooms = (memberships || [])
-        .map((m) => ({
-          ...(m.rooms as Room),
-          isMember: true,
-          participationStatus: "accepted",
-        }))
-        .filter((r) => r && r.id);
+
+      const joinedRoomsRaw = (memberships || [])
+        .map((m) => m.rooms as Room)
+        .filter(Boolean);
+
+      // Collect room IDs for count query
+      const roomIds = joinedRoomsRaw.map((r) => r.id);
+      let countsMap = new Map<string, number>();
+
+      if (roomIds.length > 0) {
+        const { data: membersData, error: membersError } = await supabase
+          .from("room_members")
+          .select("room_id")
+          .in("room_id", roomIds)
+          .eq("status", "accepted");
+
+        if (membersError) {
+          console.error("Error fetching member counts:", membersError);
+        }
+
+        // Aggregate counts client-side
+        const countsMap = new Map<string, number>();
+        membersData?.forEach((m) => {
+          countsMap.set(m.room_id, (countsMap.get(m.room_id) ?? 0) + 1);
+        });
+
+      }
+
+      // Attach memberCount and isMember:true, participationStatus to each room
+      const joinedRooms: RoomWithMembershipCount[] = joinedRoomsRaw.map((room) => ({
+        ...room,
+        memberCount: countsMap.get(room.id) ?? 0,
+        isMember: true,
+        participationStatus: "accepted",
+      }));
 
       setAvailableRooms(joinedRooms);
       setRooms(joinedRooms);
@@ -206,8 +238,10 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     }
   }, [user, supabase, setRooms]);
 
+  // Handler functions: handleRoomSwitch, handleLeaveRoom, handleJoinRoom, handleCreateRoom remain largely unchanged but work with RoomWithMembershipCount type
+
   const handleRoomSwitch = useCallback(
-    async (room: Room) => {
+    async (room: RoomWithMembershipCount) => {
       if (!user) {
         toast.error("You must be logged in to switch rooms", {
           className: "text-red-600 bg-white border border-red-400 shadow-md",
@@ -226,7 +260,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         const result = await response.json();
 
         if (!response.ok) {
-          // Handle specific error codes or messages from the backend
           if (result.code === "AUTH_REQUIRED") {
             toast.error("Authentication required to switch rooms.");
           } else if (result.code === "ROOM_NOT_FOUND") {
@@ -249,10 +282,11 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
           newIsMember = false;
         }
 
-        const updatedRoomWithMembership: RoomWithMembership = {
+        const updatedRoomWithMembership: RoomWithMembershipCount = {
           ...room,
           isMember: newIsMember,
           participationStatus: newParticipationStatus,
+          memberCount: room.memberCount, // keep existing count
         };
 
         setSelectedRoom(updatedRoomWithMembership);
@@ -263,16 +297,13 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         });
         await fetchAvailableRooms();
       } catch (err) {
-        toast.error(
-          err instanceof Error ? err.message : "Failed to switch room"
-        );
+        toast.error(err instanceof Error ? err.message : "Failed to switch room");
         await fetchAvailableRooms();
       }
     },
     [user, setSelectedRoom, fetchAvailableRooms]
   );
 
-  // UPDATED: After leaving, also update searchResults in-place
   const handleLeaveRoom = useCallback(
     async () => {
       if (!user) {
@@ -292,14 +323,12 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 
       try {
         setIsLeaving(true);
-        // Delete from room_members
         const { error: membersError } = await supabase
           .from("room_members")
           .delete()
           .eq("room_id", selectedRoom.id)
           .eq("user_id", user.id);
 
-        // Delete from room_participants (if user is also a participant)
         const { error: participantsError } = await supabase
           .from("room_participants")
           .delete()
@@ -318,7 +347,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         setIsMember(false);
         await fetchAvailableRooms();
 
-        // PATCH: Make the searchResults update for the left room--so UI instantly updates!
+        // Update searchResults so UI instantly shows Join button for this room
         setSearchResults((results) =>
           results.map((res) =>
             "id" in res && res.id === selectedRoom.id
@@ -327,7 +356,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
           )
         );
 
-        // PATCH: Unset selectedRoom if the user just left it (or select a default)
         const { data: remainingRooms } = await supabase
           .from("room_members")
           .select("room_id")
@@ -349,9 +377,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
           }
         }
       } catch (error) {
-        toast.error(
-          error instanceof Error ? error.message : "Failed to leave room"
-        );
+        toast.error(error instanceof Error ? error.message : "Failed to leave room");
       } finally {
         setIsLeaving(false);
       }
@@ -399,10 +425,12 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         const { rooms: fetchedRooms } = await response.json();
 
         if (isMounted.current) {
+          // fetchedRooms already include memberCount and isMember from API
           const roomsWithDetailedStatus = await Promise.all(
-            fetchedRooms.map(async (room: Room & { isMember: boolean }) => ({
+            fetchedRooms.map(async (room: RoomWithMembershipCount) => ({
               ...room,
               participationStatus: await checkRoomParticipation(room.id),
+              memberCount: room.memberCount, // preserve count
             }))
           );
           setSearchResults(roomsWithDetailedStatus as SearchResult[]);
@@ -461,7 +489,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         return;
       }
       try {
-        // Use switch endpoint for join for consistency
         const response = await fetch(`/api/rooms/switch`, {
           method: "POST",
           headers: {
@@ -504,11 +531,14 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
           throw new Error("Failed to fetch room details after join.");
         }
 
-        const roomWithMembership: RoomWithMembership = {
+        // Member count unknown at this point, you may fetch or set as 0 and refresh elsewhere
+        const roomWithMembership: RoomWithMembershipCount = {
           ...room,
           isMember: newIsMember,
           participationStatus: newParticipationStatus,
+          memberCount: 0,
         };
+
         setSelectedRoom(roomWithMembership);
         setIsMember(newIsMember);
         if (searchType) {
@@ -563,10 +593,11 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       setIsPrivate(false);
       setIsDialogOpen(false);
 
-      const roomWithMembership: RoomWithMembership = {
+      const roomWithMembership: RoomWithMembershipCount = {
         ...newRoom,
-        isMember: true, // Creator is always a member
+        isMember: true,
         participationStatus: "accepted",
+        memberCount: 1, // Creator is the first member
       };
       setSelectedRoom(roomWithMembership);
       setIsMember(true);
@@ -619,15 +650,16 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     }
   }, [selectedRoom, availableRooms]);
 
-  // Kept unchanged, uses correct logic to choose "Join", "Switch" and "Leave"
+  // Render a room result with memberCount shown
   const renderRoomSearchResult = (
-    result: Room & { isMember: boolean; participationStatus: string | null }
+    result: RoomWithMembershipCount
   ) => (
     <li key={result.id} className="flex items-center justify-between">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1">
         <span className="text-[1em] font-semibold text-white">
-          {result.name} {result.is_private && <LockIcon />}
+          {result.name} ({result.memberCount ?? 0})
         </span>
+        {result.is_private && <LockIcon />}
       </div>
       {selectedRoom?.id === result.id && result.isMember && UUID_REGEX.test(result.id) ? (
         <Button
@@ -737,6 +769,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
         {selectedRoom && (
           <Popover
             open={isSwitchRoomPopoverOpen}
@@ -751,7 +784,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
               side="bottom"
               align="center"
               sideOffset={8}
-              // Make switch popover take full width, margin, responsive height!
               className="
                 !w-[min(32em,96vw)]
                 !h-[min(30em,85vh)]
@@ -769,9 +801,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
               "
             >
               <div className="p-2">
-                <h3 className="font-semibold text-[1.1em] mb-2">
-                  Switch Room
-                </h3>
+                <h3 className="font-semibold text-[1.1em] mb-2">Switch Room</h3>
                 {availableRooms.length === 0 ? (
                   <p className="text-[1em] text-gray-400">No rooms available</p>
                 ) : (
@@ -782,7 +812,8 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                         className="flex items-center justify-between"
                       >
                         <span className="text-[1em] font-semibold text-white">
-                          {room.name} {room.is_private && <LockIcon />}
+                          {room.name} ({room.memberCount ?? 0}){" "}
+                          {room.is_private && <LockIcon />}
                         </span>
                         {room.participationStatus === "pending" ? (
                           <span className="text-[1em] text-muted-foreground">
@@ -792,16 +823,13 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                           <Button
                             size="sm"
                             variant={
-                              selectedRoom?.id === room.id
-                                ? "secondary"
-                                : "outline"
+                              selectedRoom?.id === room.id ? "secondary" : "outline"
                             }
                             onClick={() => handleRoomSwitch(room)}
                             className="text-white border-gray-600"
                           >
                             <span className="flex items-center gap-1">
-                              <ArrowRight className="h-4 w-4" />
-                              Switch
+                              <ArrowRight className="h-4 w-4" /> Switch
                             </span>
                           </Button>
                         )}
@@ -813,6 +841,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
             </PopoverContent>
           </Popover>
         )}
+
         <div className="relative">
           <Button
             variant="ghost"
@@ -830,10 +859,8 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
             onClose={() => setIsNotificationsOpen(false)}
           />
         </div>
-        <Popover
-          open={isSearchPopoverOpen}
-          onOpenChange={setIsSearchPopoverOpen}
-        >
+
+        <Popover open={isSearchPopoverOpen} onOpenChange={setIsSearchPopoverOpen}>
           <PopoverTrigger asChild>
             <Button variant="ghost" size="icon">
               <Search className="h-5 w-5" />
@@ -841,16 +868,15 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
           </PopoverTrigger>
           <PopoverContent
             side="bottom"
-            align="end"
+            align="center"
             sideOffset={8}
             collisionPadding={{ left: 16 }}
-            // Responsive popover width & height using vw/em, nicely padded
             className="
               !w-[min(32em,96vw)]
               !h-[min(40em,90vh)]
               md:!w-[32em]
               md:!h-[40em]
-              mx-[2vw]
+              mx-[3vw]
               mb-[2vh]
               bg-gray-800/30
               backdrop-blur-xl
@@ -863,9 +889,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
           >
             <div className="p-1">
               <div className="flex justify-between items-center mb-[0.5em]">
-                <h3 className="font-bold text-[1.5em] text-white">
-                  Search
-                </h3>
+                <h3 className="font-bold text-[1.5em] text-white">Search</h3>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -881,9 +905,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
               <Input
                 type="text"
                 placeholder={
-                  searchType === "users"
-                    ? "Search users..."
-                    : "Search rooms..."
+                  searchType === "users" ? "Search users..." : "Search rooms..."
                 }
                 value={searchQuery}
                 onChange={handleSearchInputChange}
@@ -953,12 +975,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                           <UserIcon className="h-4 w-4 text-gray-400" />
                         </li>
                       ) : (
-                        renderRoomSearchResult(
-                          result as Room & {
-                            isMember: boolean;
-                            participationStatus: string | null;
-                          }
-                        )
+                        renderRoomSearchResult(result as RoomWithMembershipCount)
                       )
                     )}
                   </ul>
