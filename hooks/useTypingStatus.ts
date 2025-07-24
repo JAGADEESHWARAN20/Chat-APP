@@ -3,12 +3,11 @@ import { supabaseBrowser } from "@/lib/supabase/browser";
 
 export function useTypingStatus(roomId: string, currentUserId: string) {
   const supabase = supabaseBrowser();
-  const [typingUsers, setTypingUsers] = useState<string[]>([]); // user IDs who are typing
+  const [typingUsers, setTypingUsers] = useState<string[]>([]);
 
   useEffect(() => {
     if (!roomId) return;
 
-    // 1. Fetch initial typing users on mount
     async function fetchTypingUsers() {
       const { data, error } = await supabase
         .from("typing_status")
@@ -22,7 +21,6 @@ export function useTypingStatus(roomId: string, currentUserId: string) {
     }
     fetchTypingUsers();
 
-    // 2. Subscribe to realtime changes on typing_status for this room
     const channel = supabase
       .channel(`public:typing_status:room_id=eq.${roomId}`)
       .on(
@@ -35,9 +33,7 @@ export function useTypingStatus(roomId: string, currentUserId: string) {
         },
         (payload) => {
           const row = payload.new;
-
           if (row && row.is_typing) {
-            // Someone started typing
             setTypingUsers((prev) => {
               if (!prev.includes(row.user_id) && row.user_id !== currentUserId) {
                 return [...prev, row.user_id];
@@ -45,7 +41,6 @@ export function useTypingStatus(roomId: string, currentUserId: string) {
               return prev;
             });
           } else {
-            // Someone stopped typing or row deleted
             const userIdToRemove = payload.old?.user_id || row?.user_id;
             setTypingUsers((prev) => prev.filter((id) => id !== userIdToRemove));
           }
@@ -53,11 +48,10 @@ export function useTypingStatus(roomId: string, currentUserId: string) {
       )
       .subscribe();
 
-    // Cleanup subscription on unmount
     return () => {
       supabase.removeChannel(channel);
     };
   }, [roomId, currentUserId, supabase]);
 
-  return typingUsers; // array of user IDs typing other than current user
+  return typingUsers;
 }
