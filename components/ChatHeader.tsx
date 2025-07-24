@@ -81,7 +81,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsFaded(true);
-    }, 2000); // 2-second delay
+    }, 2); // 2-second delay
 
     return () => clearTimeout(timer); // Cleanup timeout on unmount
   }, []);
