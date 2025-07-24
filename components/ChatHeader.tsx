@@ -795,11 +795,11 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
               align="center"
               sideOffset={0}
               className="
-                !w-[min(29em,95vw)]
+                !w-[min(27em,95vw)]
                 !h-[min(30em,85vh)]
                 md:!w-[32em]
                 md:!h-[32em]
-                mr-[3vw]
+                mr-[5vw]
                 mt-[2vw]
                 mb-[2vh]
                 bg-gray-800/30
@@ -886,7 +886,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
             !h-[min(40em,90vh)]
             md:!w-[24em]
             md:!h-[40em]
-            mr-[3vw]
+            mr-[5vw]
             mt-[2vw]
             mb-[2vh]
             bg-gray-800/30
