@@ -22,7 +22,7 @@ export default function ChatInput() {
   // State to track input value
   const [inputValue, setInputValue] = useState("");
 
-  const handleSendMessage = async (text) => {
+  const handleSendMessage = async (text: string) => {
     if (!text.trim() || !user) {
       toast.error("Please log in and enter a message");
       return;
