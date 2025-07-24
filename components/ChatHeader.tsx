@@ -800,19 +800,19 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     !h-[min(30em,85vh)]
     md:!w-[32em]
     md:!h-[32em]
-    mr-[5vw]
+    mr-[3vw]
     mt-[2vw]
     mb-[2vh]
     bg-gray-800/30
     backdrop-blur-xl
     rounded-2xl
-    p-[1.25em]
+    p-[1em]
     text-white
     !max-w-[98vw]
     !max-h-[92vh]
   "
 >
-  <div className="p-2">
+  <div className="p-[.3vw]">
     <h3 className="font-semibold text-[1.1em] mb-2">Switch Room</h3>
     {availableRooms.length === 0 ? (
       <p className="text-[1em] text-gray-400">No rooms available</p>
@@ -833,10 +833,9 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
               </span>
             ) : (
               <Switch
-                checked={selectedRoom?.id === room.id}
-                onCheckedChange={() => handleRoomSwitch(room)}
-                className="cursor-pointer"
-              />
+  checked={selectedRoom?.id === room.id}
+  onCheckedChange={() => handleRoomSwitch(room)}
+  className="data-[state=checked]:bg-indigo-400 data-[state=unchecked]:bg-gray-200" />
             )}
           </li>
         ))}
