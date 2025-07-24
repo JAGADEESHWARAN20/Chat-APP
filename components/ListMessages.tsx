@@ -1,4 +1,5 @@
 "use client";
+
 import { Imessage, useMessage } from "@/lib/store/messages";
 import React, { useEffect, useRef, useState } from "react";
 import Message from "./Message";
@@ -9,7 +10,8 @@ import { ArrowDown } from "lucide-react";
 import LoadMoreMessages from "./LoadMoreMessages";
 import { Database } from "@/lib/types/supabase";
 import { useRoomStore } from "@/lib/store/roomstore";
-
+import TypingIndicator from "./TypingIndicator"; // import TypingIndicator
+import { useUser } from "@/lib/store/user";
 
 type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
 type UserRow = Database["public"]["Tables"]["users"]["Row"];
@@ -24,6 +26,8 @@ export default function ListMessages() {
   const [notification, setNotification] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const selectedRoom = useRoomStore((state) => state.selectedRoom);
+  const user = useUser((state) => state.user);
+
   const {
     messages,
     setMessages,
@@ -37,9 +41,14 @@ export default function ListMessages() {
   const handleOnScroll = () => {
     if (!scrollRef.current) return;
     const scrollContainer = scrollRef.current;
-    const isScroll = scrollContainer.scrollTop < scrollContainer.scrollHeight - scrollContainer.clientHeight - 10;
+    const isScroll =
+      scrollContainer.scrollTop <
+      scrollContainer.scrollHeight - scrollContainer.clientHeight - 10;
     setUserScrolled(isScroll);
-    if (scrollContainer.scrollTop === scrollContainer.scrollHeight - scrollContainer.clientHeight) {
+    if (
+      scrollContainer.scrollTop ===
+      scrollContainer.scrollHeight - scrollContainer.clientHeight
+    ) {
       setNotification(0);
     }
   };
@@ -66,13 +75,15 @@ export default function ListMessages() {
         if (messages) {
           const formattedMessages = messages.map((msg: any) => ({
             ...msg,
-            users: msg.users ? {
-              id: msg.users.id,
-              avatar_url: msg.users.avatar_url || "",
-              display_name: msg.users.display_name || "",
-              username: msg.users.username || "",
-              created_at: msg.users.created_at,
-            } : null
+            users: msg.users
+              ? {
+                  id: msg.users.id,
+                  avatar_url: msg.users.avatar_url || "",
+                  display_name: msg.users.display_name || "",
+                  username: msg.users.username || "",
+                  created_at: msg.users.created_at,
+                }
+              : null,
           }));
           setMessages(formattedMessages);
         }
@@ -103,7 +114,10 @@ export default function ListMessages() {
         (payload) => {
           try {
             const messagePayload = payload.new as MessageRow;
-            if (payload.eventType === "INSERT" && !optimisticIds.includes(messagePayload.id)) {
+            if (
+              payload.eventType === "INSERT" &&
+              !optimisticIds.includes(messagePayload.id)
+            ) {
               if (messagePayload.room_id !== selectedRoom.id) return;
 
               supabase
@@ -137,7 +151,13 @@ export default function ListMessages() {
                     };
                     addMessage(newMessage);
 
-                    if (scrollRef.current && scrollRef.current.scrollTop < scrollRef.current.scrollHeight - scrollRef.current.clientHeight - 10) {
+                    if (
+                      scrollRef.current &&
+                      scrollRef.current.scrollTop <
+                        scrollRef.current.scrollHeight -
+                          scrollRef.current.clientHeight -
+                          10
+                    ) {
                       setNotification((prev) => prev + 1);
                     }
                   }
@@ -171,7 +191,6 @@ export default function ListMessages() {
       )
       .subscribe();
 
-    // Subscribe to global notifications for cross-room messages
     const notificationChannel = supabase
       .channel("global-notifications")
       .on(
@@ -179,7 +198,6 @@ export default function ListMessages() {
         { event: "new-message" },
         (payload) => {
           const newNotification = payload.payload as Notification;
-          // Only show toast if the message is from a different room
           if (newNotification.room_id !== selectedRoom.id) {
             toast.info(newNotification.message);
           }
@@ -201,7 +219,14 @@ export default function ListMessages() {
       supabase.removeChannel(messageChannel);
       supabase.removeChannel(notificationChannel);
     };
-  }, [selectedRoom, optimisticIds, addMessage, optimisticUpdateMessage, optimisticDeleteMessage, supabase]);
+  }, [
+    selectedRoom,
+    optimisticIds,
+    addMessage,
+    optimisticUpdateMessage,
+    optimisticDeleteMessage,
+    supabase,
+  ]);
 
   useEffect(() => {
     if (scrollRef.current && !userScrolled) {
@@ -209,7 +234,9 @@ export default function ListMessages() {
     }
   }, [messages, userScrolled]);
 
-  const filteredMessages = messages.filter((msg) => msg.room_id === selectedRoom?.id);
+  const filteredMessages = messages.filter(
+    (msg) => msg.room_id === selectedRoom?.id
+  );
 
   const SkeletonMessage = () => (
     <div className="flex gap-2 animate-pulse">
@@ -221,6 +248,14 @@ export default function ListMessages() {
     </div>
   );
 
+  // Optional: prepare userMap from messages (to pass to TypingIndicator showing names)
+  const userMap = filteredMessages.reduce((acc, msg) => {
+    if (msg.users && !acc[msg.users.id]) {
+      acc[msg.users.id] = { display_name: msg.users.display_name };
+    }
+    return acc;
+  }, {} as Record<string, { display_name: string }>);
+
   return (
     <>
       <div
@@ -229,19 +264,31 @@ export default function ListMessages() {
         onScroll={handleOnScroll}
       >
         {isLoading ? (
-          Array.from({ length: 3 }).map((_, index) => <SkeletonMessage key={index} />)
+          Array.from({ length: 3 }).map((_, index) => (
+            <SkeletonMessage key={index} />
+          ))
         ) : (
           <>
             <div className="flex-1 pb-5">
               <LoadMoreMessages />
             </div>
-              <div className="space-y-2">
-                {[...filteredMessages]
-                  .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-                  .map((value) => (
-                    <Message key={value.id} message={value} />
-                  ))}
-              </div>
+
+            {/* Typing Indicator shown here */}
+            {selectedRoom?.id && (
+              <TypingIndicator roomId={selectedRoom.id} userMap={userMap} />
+            )}
+
+            <div className="space-y-2">
+              {[...filteredMessages]
+                .sort(
+                  (a, b) =>
+                    new Date(a.created_at).getTime() -
+                    new Date(b.created_at).getTime()
+                )
+                .map((value) => (
+                  <Message key={value.id} message={value} />
+                ))}
+            </div>
           </>
         )}
 
