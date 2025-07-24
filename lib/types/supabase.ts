@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -328,6 +328,27 @@ export type Database = {
         }
         Relationships: []
       }
+      typing_status: {
+        Row: {
+          is_typing: boolean | null
+          room_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          is_typing?: boolean | null
+          room_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          is_typing?: boolean | null
+          room_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       users: {
         Row: {
           avatar_url: string
@@ -382,7 +403,7 @@ export type Database = {
           p_room_id: string
           p_user_id: string
           p_status: string
-          p_joined_at?: string | null
+          p_joined_at?: string
         }
         Returns: undefined
       }
@@ -391,18 +412,11 @@ export type Database = {
         Returns: undefined
       }
       reject_notification: {
-        Args:
-          | {
-              p_notification_id: string
-              p_sender_id: string
-              p_room_id: string
-            }
-          | {
-              p_notification_id: string
-              p_sender_id: string
-              p_room_id: string
-              p_timestamp: string
-            }
+        Args: {
+          p_notification_id: string
+          p_sender_id: string
+          p_room_id: string
+        }
         Returns: undefined
       }
       transfer_room_ownership: {
