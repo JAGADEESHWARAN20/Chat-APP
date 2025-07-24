@@ -812,9 +812,9 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                         key={room.id}
                         className="flex items-center justify-between"
                       >
-                        <span className="text-[1em] font-semibold text-white">
+                        <span className="text-[1em] flex font-semibold text-white">
                           {room.name} ({room.memberCount ?? 0}){" "}
-                          {room.is_private && <LockIcon />}
+                          <span>{room.is_private && <LockIcon />}</span>
                         </span>
                         {room.participationStatus === "pending" ? (
                           <span className="text-[1em] text-muted-foreground">
