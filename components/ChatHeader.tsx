@@ -866,27 +866,28 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
               <Search className="h-5 w-5" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent
-            side="bottom"
-            align="center"
-            sideOffset={0}
-            className="
-              !w-[min(32em,96vw)]
-              !h-[min(40em,90vh)]
-              md:!w-[32em]
-              md:!h-[40em]
-              mr-[1em]
-              mt-[1em]
-              mb-[2vh]
-              bg-gray-800/30
-              backdrop-blur-xl
-              rounded-2xl
-              p-[1.25em]
-              text-white
-              !max-w-[98vw]
-              !max-h-[92vh]
-            "
-          >
+       <PopoverContent
+          side="bottom"
+          align="center"
+          sideOffset={0}
+          className="
+            !w-[min(24em,85vw)]
+            !h-[min(40em,90vh)]
+            md:!w-[24em]
+            md:!h-[40em]
+            mr-[1em]
+            mt-[1em]
+            mb-[2vh]
+            bg-gray-800/30
+            backdrop-blur-xl
+            rounded-2xl
+            p-[1.25em]
+            text-white
+            !max-w-[90vw]
+            !max-h-[92vh]
+          "
+        >
+
             <div className="p-1">
               <div className="flex justify-between items-center mb-[0.5em]">
                 <h3 className="font-bold text-[1.5em] text-white">Search</h3>
