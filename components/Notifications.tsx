@@ -11,7 +11,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Avatar, AvatarImage, AvatarFallback } from "./ui/avatar";
 import { useRouter } from "next/navigation";
 import { User as SupabaseUser } from "@supabase/supabase-js";
-import { Check, X, ArrowLeft, Trash2, MoreVertical } from "lucide-react";
+import { Check, X, Trash2, MoreVertical, ArrowRight } from "lucide-react";
 import { Database } from "@/lib/types/supabase";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { Swipeable } from "./ui/swipeable";
@@ -199,14 +199,14 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
   return (
     <Sheet open={isOpen} onOpenChange={onClose}>
       <SheetContent
-        side={isMobile ? "bottom" : "right"}
+        side={isMobile ? "right" : "right"}
         className="p-0 flex flex-col h-full w-full sm:max-w-sm"
       >
         <SheetHeader className="p-4 border-b">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Button variant="ghost" size="icon" onClick={onClose}>
-                <ArrowLeft className="h-5 w-5" />
+                <ArrowRight className="h-5 w-5" />
               </Button>
               <SheetTitle>Notifications</SheetTitle>
             </div>

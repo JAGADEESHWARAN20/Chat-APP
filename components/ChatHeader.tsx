@@ -649,7 +649,7 @@ const fetchAvailableRooms = useCallback(async () => {
                 <ArrowRightLeft className="h-5 w-5" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-[90vw] h-[70vh] bg-gray-800/30 backdrop-blur-sm text-white">
+            <PopoverContent className="w-[95vw] h-[95vh] bg-gray-800/30 backdrop-blur-sm text-white">
               <div className="p-2 ">
                 <h3 className="font-semibold text-lg mb-2">Switch Room</h3>
                 {availableRooms.length === 0 ? (
@@ -709,7 +709,7 @@ const fetchAvailableRooms = useCallback(async () => {
             align="end"
             sideOffset={8}
             collisionPadding={{ left: 16 }}
-            className="mr-2 w-[90vw] h-[80vh] sm:mr-1 bg-opacity-25 backdrop-blur-md md:mr-0"
+            className="mr-2 w-[90vw] h-[90vh] sm:mr-0  md:mr-0"
           >
             <div className="p-1">
               <div className="flex justify-between items-center mb-[0.5em]">
