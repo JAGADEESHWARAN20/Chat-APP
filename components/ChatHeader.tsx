@@ -76,6 +76,16 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 
   const [limit] = useState(100);
   const [offset] = useState(0);
+  const [isFaded, setIsFaded] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsFaded(true);
+    }, 2000); // 2-second delay
+
+    return () => clearTimeout(timer); // Cleanup timeout on unmount
+  }, []);
+
 
   const [debouncedCallback] = useDebounce((value: string) => setSearchQuery(value), 300);
   const [debouncedSearchQuery] = useDebounce(searchQuery, 300);
@@ -783,13 +793,14 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
             <PopoverContent
               side="bottom"
               align="center"
-              sideOffset={8}
+              sideOffset={0}
               className="
-                !w-[min(32em,92vw)]
+                !w-[min(32em,95vw)]
                 !h-[min(30em,85vh)]
                 md:!w-[32em]
                 md:!h-[32em]
                 mx-[2vw]
+																	 mr-[3vw]
                 mt-[1vw]
                 mb-[2vh]
                 bg-gray-800/30
@@ -812,7 +823,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                         key={room.id}
                         className="flex items-center justify-between"
                       >
-                        <span className="text-[1em] flex font-semibold text-white">
+                        <span className="text-[1em] flex gap-2 font-semibold text-white">
                           {room.name} ({room.memberCount ?? 0}){" "}
                           <span>{room.is_private && <LockIcon />}</span>
                         </span>
@@ -988,13 +999,23 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                   No {searchType || "results"} found.
                 </p>
               )}
-              {searchQuery.length === 0 && searchType && (
-                <p className="text-[1em] text-gray-400 mt-3">
+             {searchQuery.length === 0 && searchType && (
+                <p
+                  className={`text-[1em] text-gray-400 mt-3 transition-opacity duration-500 ${
+                    isFaded ? 'opacity-0' : 'opacity-100'
+                  }`}
+                >
                   Showing all {searchType}...
                 </p>
               )}
               {isLoading && (
-                <p className="text-[1em] text-gray-400 mt-3">Loading...</p>
+                <p
+                  className={`text-[1em] text-gray-400 mt-3 transition-opacity duration-500 ${
+                    isFaded ? 'opacity-0' : 'opacity-100'
+                  }`}
+                >
+                  Loading...
+                </p>
               )}
             </div>
           </PopoverContent>
@@ -1003,3 +1024,5 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     </header>
   );
 }
+
+export default YourComponent;
