@@ -935,7 +935,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                   Users
                 </Button>
               </div>
-                        {/* Conditional rendering for search results and skeletons */}
+                        
               {isLoading ? (
                 <div className="mt-4">
                   <h4 className="font-semibold text-[1em] text-gray-300 mb-3">
@@ -991,7 +991,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                 </div>
               ) : searchQuery.length > 0 && searchType ? (
                 <p className="text-[1em] text-gray-400 mt-3">
-                  No {searchType} found for "{searchQuery}".
+                  No {searchType} found for &quot;{searchQuery}&quot;.
                 </p>
               ) : searchQuery.length === 0 && searchType && (
                 <p className="text-[1em] text-gray-400 mt-3">
