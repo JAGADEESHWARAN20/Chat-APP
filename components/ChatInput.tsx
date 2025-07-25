@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import debounce from "lodash.debounce";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { useUser } from "@/lib/store/user";
@@ -39,30 +39,32 @@ export default function ChatInput() {
   ).current;
 
   // Function to mark user as stopped typing
-  const sendTypingFalse = async () => {
-    if (!roomId || !userId) return;
-    await supabase
-      .from("typing_status")
-      .update({ is_typing: false, updated_at: new Date().toISOString() })
-      .eq("room_id", roomId)
-      .eq("user_id", userId);
-  };
+  const sendTypingFalse = useCallback(async () => {
+  if (!roomId || !userId) return;
+  await supabase
+    .from("typing_status")
+    .update({ is_typing: false, updated_at: new Date().toISOString() })
+    .eq("room_id", roomId)
+    .eq("user_id", userId);
+}, [roomId, userId, supabase]);
+
 
   // Whenever inputValue changes, trigger typing true or false
-  useEffect(() => {
-    if (inputValue.length > 0) {
-      sendTypingTrue();
-    } else {
-      sendTypingFalse();
-    }
-  }, [inputValue, sendTypingTrue]);
+useEffect(() => {
+  if (inputValue.length > 0) {
+    sendTypingTrue();
+  } else {
+    sendTypingFalse();
+  }
+}, [inputValue, sendTypingTrue, sendTypingFalse]);
 
-  // On component unmount, clear typing status
-  useEffect(() => {
-    return () => {
-      sendTypingFalse();
-    };
-  }, []);
+
+useEffect(() => {
+  return () => {
+    sendTypingFalse();
+  };
+}, [sendTypingFalse]);
+
 
   // Your existing handleSendMessage: send message and reset typing
   async function handleSendMessage(text: string) {
@@ -155,17 +157,27 @@ export default function ChatInput() {
           }
         }}
         disabled={!selectedRoom && !selectedDirectChat}
-        className="flex-grow rounded px-3 py-2 bg-gray-700 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        className="
+        flex-grow rounded px-3 py-2
+        bg-background
+        text-foreground
+        placeholder:text-muted-foreground
+        focus:outline-none focus:ring-2 focus:ring-ring
+        transition-colors
+        dark:bg-background
+        dark:text-foreground
+        dark:placeholder:text-muted-foreground
+      "
       />
-      {inputValue.length > 0 && (
-        <Send
-          className="ml-2 cursor-pointer text-indigo-400 hover:text-indigo-300"
-          size={24}
-          onClick={() => {
-            handleSendMessage(inputValue);
-          }}
-        />
-      )}
+       {inputValue.length > 0 && (
+      <Send
+        className="ml-2 cursor-pointer text-primary hover:text-primary/90 transition-colors"
+        size={24}
+        onClick={() => {
+          handleSendMessage(inputValue);
+        }}
+      />
+    )}
     </div>
   );
 }

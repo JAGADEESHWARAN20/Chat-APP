@@ -30,12 +30,18 @@ export default function Message({ message }: { message: Imessage }) {
       <div className="flex-1 flex-col">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <h1 className="font-semibold darK:text-white text-black  text-sm sm:text-base">
+           <h1 className="font-semibold text-foreground text-sm sm:text-base">
               {message.users?.display_name}
             </h1>
-            <h1 className="text-xs dark:text-gray-400 text-black/60 truncate">
+
+            <h1 className="text-xs text-muted-foreground truncate">
               {new Date(message.created_at).toDateString()}
             </h1>
+
+            <p className="text-foreground text-[1.22em] break-words">
+              {message.text}
+            </p>
+
           </div>
           {message.users?.id === user?.id && (
             <MessageMenu message={message} />
