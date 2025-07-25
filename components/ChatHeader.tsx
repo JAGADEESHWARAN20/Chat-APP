@@ -803,7 +803,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     bg-gray-800/30
     backdrop-blur-xl
     rounded-2xl
-    p-[.8em]
+    p-[.7em]
     text-white
     !max-w-[98vw]
     !max-h-[92vh]
@@ -878,12 +878,12 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
             md:!w-[24em]
             md:!h-[40em]
             mr-[4vw]
-            mt-[2vw]
+            mt-[3vw]
             mb-[2vh]
             bg-gray-800/30
             backdrop-blur-xl
             rounded-2xl
-            p-[.7em]
+            p-[.8em]
             text-white
             !max-w-[90vw]
             !max-h-[92vh]
