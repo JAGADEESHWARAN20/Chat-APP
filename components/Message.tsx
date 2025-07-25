@@ -38,10 +38,7 @@ export default function Message({ message }: { message: Imessage }) {
               {new Date(message.created_at).toDateString()}
             </h1>
 
-            <p className="text-foreground text-[1.22em] break-words">
-              {message.text}
-            </p>
-
+            
           </div>
           {message.users?.id === user?.id && (
             <MessageMenu message={message} />
