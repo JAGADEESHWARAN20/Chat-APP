@@ -32,7 +32,6 @@ export function useTypingStatus(roomId: string, currentUserId: string) {
         .eq("is_typing", true);
 
       if (!error && data) {
-        // Cast data to array of TypingStatusRow objects (only user_id is used)
         const typedData = data as TypingStatusRow[];
         setTypingUsers(
           typedData.map((row) => row.user_id).filter((id) => id !== currentUserId)

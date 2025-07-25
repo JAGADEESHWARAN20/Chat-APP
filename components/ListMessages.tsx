@@ -259,7 +259,7 @@ export default function ListMessages() {
   return (
     <>
       <div
-        className="flex-1 flex flex-col p-1 h-full overflow-y-auto"
+        className="flex-1 flex flex-col p-1 h-auto  overflow-y-auto"
         ref={scrollRef}
         onScroll={handleOnScroll}
       >

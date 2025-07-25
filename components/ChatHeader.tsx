@@ -707,7 +707,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   );
 
   return (
-    <header className="h-[3.6em] flex items-center justify-between px-[2.5vw] glass-gradient-header text-white z-10">
+    <header className="h-[3.6em] lg:w-[50vw] w-[95vw] flex items-center justify-between px-[1.5vw] glass-gradient-header dark:text-white text-black z-10">
       <h1 className="text-[2.5vw] lg:text-[1em] flex flex-col font-semibold py-[0.8em] lg:py-[2em] items-start">
         {selectedRoom ? `#${selectedRoom.name}` : "Daily Chat"}
         <ChatPresence />
@@ -792,21 +792,23 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   side="bottom"
   align="center"
   sideOffset={0}
+  withOverlay wide
   className="
-    !w-[min(27em,93vw)]
+    !w-[min(32em,95vw)]
     !h-[min(30em,85vh)]
     md:!w-[32em]
     md:!h-[32em]
-    mr-[3vw]
-    mt-[3vw]
+    mr-[2.3vw]
+    lg:mt-[1vw]
+    mt-[1em]
     mb-[2vh]
-    bg-gray-800/30
+    bg-gray-800/70
     backdrop-blur-xl
     rounded-2xl
     p-[.7em]
     text-white
-    !max-w-[98vw]
-    !max-h-[92vh]
+    !max-w-[95vw]
+    !max-h-[99vh]
   "
 >
   <div className="p-[.3vw]">
@@ -873,19 +875,20 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
           align="center"
           sideOffset={0}
           className="
-            !w-[min(28em,96vw)]
+            !w-[min(32em,98vw)]
             !h-[min(40em,90vh)]
             md:!w-[24em]
             md:!h-[40em]
-            mr-[4vw]
-            mt-[3vw]
+            mr-[2.3vw]
+            lg:mt-[1vw]
+            mt-[1em]
             mb-[2vh]
             bg-gray-800/30
             backdrop-blur-xl
             rounded-2xl
             p-[.8em]
             text-white
-            !max-w-[90vw]
+            !max-w-[94vw]
             !max-h-[92vh]
           "
         >

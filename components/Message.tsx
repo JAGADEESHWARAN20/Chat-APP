@@ -17,7 +17,7 @@ export default function Message({ message }: { message: Imessage }) {
   const user = useUser((state) => state.user);
 
   return (
-    <div className="flex gap-3 p-3 rounded-lg hover:bg-gray-800/50 transition-colors">
+    <div className="flex gap-2 p-3 rounded-lg hover:bg-gray-800/50 transition-colors">
       <div className="flex-shrink-0">
         <Image
           src={message.users?.avatar_url!}
@@ -27,13 +27,13 @@ export default function Message({ message }: { message: Imessage }) {
           className="rounded-full ring-2 ring-indigo-500/50"
         />
       </div>
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 flex-col">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <h1 className="font-semibold text-white text-sm sm:text-base">
+            <h1 className="font-semibold darK:text-white text-black  text-sm sm:text-base">
               {message.users?.display_name}
             </h1>
-            <h1 className="text-xs text-gray-400 truncate">
+            <h1 className="text-xs dark:text-gray-400 text-black/60 truncate">
               {new Date(message.created_at).toDateString()}
             </h1>
           </div>
@@ -41,7 +41,7 @@ export default function Message({ message }: { message: Imessage }) {
             <MessageMenu message={message} />
           )}
         </div>
-        <p className="text-gray-200 text-sm sm:text-base mt-1 break-words">
+        <p className="dark:text-gray-200 text-black   text-[1.22em]   break-words">
           {message.text}
         </p>
       </div>
