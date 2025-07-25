@@ -793,17 +793,17 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   align="center"
   sideOffset={0}
   className="
-    !w-[min(27em,93vw)]
+    !w-[min(27em,94vw)]
     !h-[min(30em,85vh)]
     md:!w-[32em]
     md:!h-[32em]
-    mr-[3vw]
-    mt-[2vw]
+    mr-[5vw]
+    mt-[3vw]
     mb-[2vh]
     bg-gray-800/30
     backdrop-blur-xl
     rounded-2xl
-    p-[1em]
+    p-[.9em]
     text-white
     !max-w-[98vw]
     !max-h-[92vh]
@@ -873,7 +873,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
           align="center"
           sideOffset={0}
           className="
-            !w-[min(28em,95vw)]
+            !w-[min(28em,96vw)]
             !h-[min(40em,90vh)]
             md:!w-[24em]
             md:!h-[40em]
@@ -883,7 +883,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
             bg-gray-800/30
             backdrop-blur-xl
             rounded-2xl
-            p-[1.25em]
+            p-[.9em]
             text-white
             !max-w-[90vw]
             !max-h-[92vh]
