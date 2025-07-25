@@ -685,16 +685,13 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         </Button>
       ) : result.isMember ? (
         <Button
-          size="sm"
-          variant="outline"
-          onClick={() => handleRoomSwitch(result)}
-          className="flex items-center gap-1 text-white border-gray-600"
-        >
-          <span className="flex items-center gap-1">
-            <ArrowRight className="h-4 w-4" />
-            Switch
-          </span>
-        </Button>
+  size="sm"
+  variant="ghost"
+  onClick={() => router.push(`/rooms/${result.id}/settings`)}
+  className="flex items-center gap-1 text-white"
+>
+  <Settings className="h-4 w-4" />
+</Button>
       ) : result.participationStatus === "pending" ? (
         <span className="text-[1em] text-muted-foreground">Pending</span>
       ) : (
