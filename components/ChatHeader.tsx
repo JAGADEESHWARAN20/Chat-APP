@@ -40,6 +40,8 @@ import { useRoomStore } from "@/lib/store/roomstore";
 import { useDebounce } from "use-debounce";
 import Notifications from "./Notifications";
 import { useNotification } from "@/lib/store/notifications";
+import { Skeleton, RoomSkeleton, UserSkeleton, SkeletonList } from "./ui/skeleton"; // Adjust path as needed
+
 
 
 type UserProfile = Database["public"]["Tables"]["users"]["Row"];
@@ -77,15 +79,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 
   const [limit] = useState(100);
   const [offset] = useState(0);
-  const [isFaded, setIsFaded] = useState(false);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsFaded(true);
-    }, 2); // 2-second delay
-
-    return () => clearTimeout(timer); // Cleanup timeout on unmount
-  }, []);
+  
 
 
   const [debouncedCallback] = useDebounce((value: string) => setSearchQuery(value), 300);
@@ -941,7 +935,16 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                   Users
                 </Button>
               </div>
-              {searchResults.length > 0 && (
+                        {/* Conditional rendering for search results and skeletons */}
+              {isLoading ? (
+                <div className="mt-4">
+                  <h4 className="font-semibold text-[1em] text-gray-300 mb-3">
+                    {searchType === "users" ? "Searching Users..." : "Searching Rooms..."}
+                  </h4>
+                  {/* Show skeleton list based on search type */}
+                  <SkeletonList count={5} type={searchType === "users" ? "user" : "room"} />
+                </div>
+              ) : searchResults.length > 0 ? (
                 <div className="mt-4">
                   <h4 className="font-semibold text-[1em] text-gray-300 mb-3">
                     {searchType === "users" ? "User Profiles" : "Rooms"}
@@ -986,28 +989,13 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                     )}
                   </ul>
                 </div>
-              )}
-              {searchResults.length === 0 && searchQuery.length > 0 && (
+              ) : searchQuery.length > 0 && searchType ? (
                 <p className="text-[1em] text-gray-400 mt-3">
-                  No {searchType || "results"} found.
+                  No {searchType} found for "{searchQuery}".
                 </p>
-              )}
-             {searchQuery.length === 0 && searchType && (
-                <p
-                  className={`text-[1em] text-gray-400 mt-3 transition-opacity duration-500 ${
-                    isFaded ? 'opacity-0' : 'opacity-100'
-                  }`}
-                >
-                  Showing all {searchType}...
-                </p>
-              )}
-              {isLoading && (
-                <p
-                  className={`text-[1em] text-gray-400 mt-3 transition-opacity duration-500 ${
-                    isFaded ? 'opacity-0' : 'opacity-100'
-                  }`}
-                >
-                  Loading...
+              ) : searchQuery.length === 0 && searchType && (
+                <p className="text-[1em] text-gray-400 mt-3">
+                  Start typing to search {searchType}.
                 </p>
               )}
             </div>
