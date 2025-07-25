@@ -4,7 +4,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 import InitUser from "@/lib/store/InitUser";
 import ClientChatContent from "@/components/ClientChatContent";
 import LoginLogoutButton from "@/components/LoginLogoutButton";
-
+import ThemeToggle from "@/components/ThemeToggle";
 
 export default async function Page() {
   const supabase = supabaseServer();
@@ -17,8 +17,11 @@ export default async function Page() {
   <div className="flex items-center justify-between max-w-7xl mx-auto w-full">
     <div className="flex items-center gap-2">
       <h1 className="text-xl font-bold">FlyChat</h1>
-    </div>
+          </div>
+          <div>
+    <ThemeToggle />
     <LoginLogoutButton user={data.session?.user} />
+          </div>
   </div>
 </div>
 
