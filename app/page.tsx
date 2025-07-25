@@ -18,7 +18,7 @@ export default async function Page() {
     <div className="flex items-center gap-2">
       <h1 className="text-xl font-bold">FlyChat</h1>
           </div>
-          <div>
+          <div className="flex items-center gap-1">
     <ThemeToggle />
     <LoginLogoutButton user={data.session?.user} />
           </div>
