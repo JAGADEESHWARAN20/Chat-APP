@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRoomStore } from "@/lib/store/roomstore";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { Button } from "./ui/button";
@@ -8,12 +8,19 @@ import { toast } from "sonner";
 import { useUser } from "@/lib/store/user";
 import { IRoom, IRoomParticipant } from "@/lib/types/rooms";
 import { ArrowRight, LogOut } from "lucide-react";
+import debounce from "lodash.debounce";
 
 export default function RoomList() {
   const [userParticipations, setUserParticipations] = useState<IRoomParticipant[]>([]);
   const { rooms, setRooms, selectedRoom, setSelectedRoom } = useRoomStore();
   const supabase = supabaseBrowser();
   const user = useUser((state) => state.user);
+
+  const refreshDebounced = useRef(
+    debounce(async () => {
+      await refreshRooms();
+    }, 500)
+  ).current;
 
   const refreshRooms = async () => {
     if (!user) {
@@ -27,15 +34,25 @@ export default function RoomList() {
         throw new Error("Failed to fetch rooms");
       }
 
-      const { success, rooms } = await response.json();
-      if (success && rooms) {
-        const transformedRooms = rooms.map((room: IRoom) => ({
-          ...room,
-          isMember: userParticipations.some(p => p.room_id === room.id && p.status === 'accepted'),
-          participationStatus: userParticipations.find(p => p.room_id === room.id)?.status || null
-        }));
-        setRooms(transformedRooms);
-        toast.success("Rooms refreshed");
+      const { success, rooms: fetchedRooms } = await response.json();
+      if (success && fetchedRooms) {
+        const roomsWithMemberCount = await Promise.all(
+          fetchedRooms.map(async (room: IRoom) => {
+            const { count, error } = await supabase
+              .from("room_members")
+              .select("id", { count: "exact" })
+              .eq("room_id", room.id)
+              .eq("status", "accepted");
+            const memberCount = error ? 0 : (count || 0);
+            return {
+              ...room,
+              isMember: userParticipations.some((p) => p.room_id === room.id && p.status === "accepted"),
+              participationStatus: userParticipations.find((p) => p.room_id === room.id)?.status || null,
+              memberCount,
+            };
+          })
+        );
+        setRooms(roomsWithMemberCount);
       }
     } catch (err) {
       toast.error("Failed to refresh rooms");
@@ -43,34 +60,39 @@ export default function RoomList() {
     }
   };
 
-  const handleRoomSwitch = useCallback(async (room: IRoom) => {
-    if (!user) {
-      toast.error("You must be logged in to switch rooms");
-      return;
-    }
-
-    try {
-      const response = await fetch("/api/rooms/switch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roomId: room.id }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to switch room");
+  const handleRoomSwitch = useCallback(
+    async (room: IRoom) => {
+      if (!user) {
+        toast.error("You must be logged in to switch rooms");
+        return;
       }
 
-      setSelectedRoom({
-        ...room,
-        isMember: userParticipations.some(p => p.room_id === room.id && p.status === 'accepted'),
-        participationStatus: userParticipations.find(p => p.room_id === room.id)?.status || null
-      });
-      toast.success("Successfully switched room");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to switch room");
-    }
-  }, [user, setSelectedRoom, userParticipations]);
+      try {
+        const response = await fetch("/api/rooms/switch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ roomId: room.id }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "Failed to switch room");
+        }
+
+        const updatedRoom = rooms.find((r) => r.id === room.id) || {
+          ...room,
+          isMember: userParticipations.some((p) => p.room_id === room.id && p.status === "accepted"),
+          participationStatus: userParticipations.find((p) => p.room_id === room.id)?.status || null,
+          memberCount: 0,
+        };
+        setSelectedRoom(updatedRoom);
+        toast.success("Successfully switched room");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Failed to switch room");
+      }
+    },
+    [user, setSelectedRoom, userParticipations, rooms]
+  );
 
   const handleLeaveRoom = async (roomId: string) => {
     if (!user) {
@@ -92,7 +114,7 @@ export default function RoomList() {
       if (!hasOtherRooms) {
         setSelectedRoom(null);
       }
-      await refreshRooms();
+      refreshDebounced();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to leave room");
     }
@@ -116,11 +138,7 @@ export default function RoomList() {
       const data = await response.json();
       toast.success(data.message);
       if (!data.status || data.status === "accepted") {
-        const { data: room } = await supabase
-          .from("rooms")
-          .select("*")
-          .eq("id", roomId)
-          .single();
+        const { data: room } = await supabase.from("rooms").select("*").eq("id", roomId).single();
         if (room) {
           await handleRoomSwitch(room);
         }
@@ -158,7 +176,7 @@ export default function RoomList() {
       toast.error("Unexpected error fetching participations");
       console.error("Unexpected error:", err);
     }
-  }, [user, supabase, setUserParticipations]);
+  }, [user, supabase]);
 
   useEffect(() => {
     if (!user) return;
@@ -172,12 +190,23 @@ export default function RoomList() {
 
         const { success, rooms: fetchedRooms } = await response.json();
         if (success && fetchedRooms) {
-          const transformedRooms = fetchedRooms.map((room: IRoom) => ({
-            ...room,
-            isMember: userParticipations.some(p => p.room_id === room.id && p.status === 'accepted'),
-            participationStatus: userParticipations.find(p => p.room_id === room.id)?.status || null
-          }));
-          setRooms(transformedRooms);
+          const roomsWithMemberCount = await Promise.all(
+            fetchedRooms.map(async (room: IRoom) => {
+              const { count, error } = await supabase
+                .from("room_members")
+                .select("id", { count: "exact" })
+                .eq("room_id", room.id)
+                .eq("status", "accepted");
+              const memberCount = error ? 0 : (count || 0);
+              return {
+                ...room,
+                isMember: userParticipations.some((p) => p.room_id === room.id && p.status === "accepted"),
+                participationStatus: userParticipations.find((p) => p.room_id === room.id)?.status || null,
+                memberCount,
+              };
+            })
+          );
+          setRooms(roomsWithMemberCount);
         }
       } catch (err) {
         toast.error("Unexpected error fetching rooms");
@@ -186,46 +215,26 @@ export default function RoomList() {
     };
 
     const initializeActiveRoom = async () => {
+      if (selectedRoom) return; // Skip if already selected
       const { data: activeRooms, error: activeRoomsError } = await supabase
         .from("room_members")
         .select("room_id")
         .eq("user_id", user.id)
-        .eq("active", true);
+        .eq("active", true)
+        .limit(1); // Ensure only one active room
       if (activeRoomsError) {
         console.error("Error fetching active rooms:", activeRoomsError.message);
         toast.error("Failed to initialize active room");
         return;
       }
 
-      if (!activeRooms || activeRooms.length === 0) {
+      if (activeRooms && activeRooms.length > 0) {
+        const activeRoom = rooms.find((r) => r.id === activeRooms[0].room_id);
+        if (activeRoom) setSelectedRoom(activeRoom);
+      } else {
         const generalChat = rooms.find((r) => r.name === "General Chat");
         if (generalChat && generalChat.created_by === user.id) {
-          await handleRoomSwitch(generalChat);
-        } else {
-          setSelectedRoom(null);
-        }
-      } else if (activeRooms.length > 1) {
-        const firstActiveRoomId = activeRooms[0].room_id;
-        const { error: fixError } = await supabase
-          .from("room_members")
-          .update({ active: false })
-          .eq("user_id", user.id)
-          .neq("room_id", firstActiveRoomId);
-        if (fixError) {
-          console.error("Error fixing multiple active rooms:", fixError.message);
-          toast.error("Failed to fix active room state");
-          return;
-        }
-        const activeRoom = rooms.find((r) => r.id === firstActiveRoomId);
-        if (activeRoom) {
-          setSelectedRoom(activeRoom);
-        } else {
-          setSelectedRoom(null);
-        }
-      } else {
-        const activeRoom = rooms.find((r) => r.id === activeRooms[0].room_id);
-        if (activeRoom) {
-          setSelectedRoom(activeRoom);
+          setSelectedRoom(generalChat);
         } else {
           setSelectedRoom(null);
         }
@@ -239,47 +248,46 @@ export default function RoomList() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "rooms" },
-        () => fetchRooms()
+        (payload) => {
+          if (payload.eventType === "INSERT" || payload.eventType === "UPDATE") {
+            refreshDebounced();
+          }
+        }
+      )
+      .subscribe();
+
+    const participantsChannel = supabase
+      .channel("room_participants_changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "room_participants" },
+        (payload) => {
+          if (payload.eventType === "INSERT" || payload.eventType === "UPDATE") {
+            fetchParticipations();
+          }
+        }
       )
       .subscribe();
 
     return () => {
       supabase.removeChannel(roomChannel);
+      supabase.removeChannel(participantsChannel);
     };
-  }, [user, supabase, setRooms, setSelectedRoom, rooms, handleRoomSwitch, userParticipations]);
-
-  useEffect(() => {
-    if (!user) return;
-
-    fetchParticipations();
-
-    const channel = supabase
-      .channel("room_participants_changes")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "room_participants" },
-        () => fetchParticipations()
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user, supabase, fetchParticipations]);
+  }, [user, supabase, setRooms, setSelectedRoom, rooms, userParticipations,selectedRoom, fetchParticipations, refreshDebounced]);
 
   if (!user) {
     return (
-      <div className="w-64 border-r p-4">
+      <div className="w-64 border-r p-4 bg-white dark:bg-gray-800">
         <p className="text-muted-foreground">Please login to view rooms</p>
       </div>
     );
   }
 
   return (
-    <div className="w-64 border-r p-4">
+    <div className="w-64 border-r p-4 bg-white dark:bg-gray-800">
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-bold">Rooms</h2>
-        <Button size="sm" onClick={refreshRooms}>
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white">Rooms</h2>
+        <Button size="sm" variant="outline" onClick={refreshRooms}>
           Refresh
         </Button>
       </div>
@@ -290,14 +298,17 @@ export default function RoomList() {
           const isPending = participation?.status === "pending";
 
           return (
-            <div key={room.id} className="flex justify-between items-center gap-2">
+            <div
+              key={room.id}
+              className="flex justify-between items-center gap-2 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            >
               <Button
                 variant={selectedRoom?.id === room.id ? "secondary" : "ghost"}
-                className="w-full justify-start"
+                className="w-full justify-start text-gray-900 dark:text-white"
                 onClick={() => {
                   if (isMember) {
                     handleRoomSwitch(room);
-                  } else if (!isPending) {
+                  } else if (canJoinRoom(room)) {
                     handleJoinRoom(room.id);
                   }
                 }}
@@ -311,7 +322,7 @@ export default function RoomList() {
               </Button>
 
               {!isMember && !isPending && (
-                <Button size="sm" onClick={() => handleJoinRoom(room.id)}>
+                <Button size="sm" variant="outline" onClick={() => handleJoinRoom(room.id)}>
                   Join
                 </Button>
               )}
@@ -321,7 +332,7 @@ export default function RoomList() {
                   size="sm"
                   variant="destructive"
                   onClick={() => handleLeaveRoom(room.id)}
-                  className="bg-red-600 hover:bg-red-700"
+                  className="bg-red-600 hover:bg-red-700 text-white"
                 >
                   <LogOut className="h-4 w-4" />
                 </Button>

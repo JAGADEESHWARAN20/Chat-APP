@@ -32,36 +32,49 @@ type Room = Database["public"]["Tables"]["rooms"]["Row"];
 type RoomWithMembership = Room & {
   isMember: boolean;
   participationStatus: string | null;
+  memberCount: number;
 };
 
+// Corrected transformRoom function in Notifications.tsx
 const transformRoom = async (
-  room: Room,
-  userId: string,
-  supabase: ReturnType<typeof supabaseBrowser>
+    room: Room,
+    userId: string,
+    supabase: ReturnType<typeof supabaseBrowser>
 ): Promise<RoomWithMembership> => {
-  const { data: membership } = await supabase
-    .from("room_members")
-    .select("status")
-    .eq("room_id", room.id)
-    .eq("user_id", userId)
-    .single();
+    // Fetch membership and participation status as before
+    const { data: membership } = await supabase
+        .from("room_members")
+        .select("status")
+        .eq("room_id", room.id)
+        .eq("user_id", userId)
+        .single();
 
-  const { data: participation } = await supabase
-    .from("room_participants")
-    .select("status")
-    .eq("room_id", room.id)
-    .eq("user_id", userId)
-    .single();
+    const { data: participation } = await supabase
+        .from("room_participants")
+        .select("status")
+        .eq("room_id", room.id)
+        .eq("user_id", userId)
+        .single();
+    
+    // Fetch member count
+    const { count: memberCount, error: countError } = await supabase
+        .from("room_members")
+        .select("*", { count: "exact", head: true })
+        .eq("room_id", room.id)
+        .eq("status", "accepted");
+    
+    if (countError) console.error("Error fetching member count:", countError);
 
-  let participationStatus: string | null = null;
-  if (membership) participationStatus = membership.status;
-  else if (participation) participationStatus = participation.status;
+    let participationStatus: string | null = null;
+    if (membership) participationStatus = membership.status;
+    else if (participation) participationStatus = participation.status;
 
-  return {
-    ...room,
-    isMember: membership?.status === "accepted",
-    participationStatus,
-  };
+    return {
+        ...room,
+        isMember: membership?.status === "accepted",
+        participationStatus,
+        memberCount: memberCount ?? 0, // Add the member count here
+    };
 };
 
 export default function Notifications({ isOpen, onClose }: NotificationsProps) {
@@ -222,10 +235,17 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
             <div className="space-y-2">
               {notifications.map((n) => (
                 <Swipeable
-                  key={n.id}
-                  onSwipeLeft={() => handleAccept(n.id, n.room_id || null, n.type)}
-                  onSwipeRight={() => handleReject(n.id, n.sender_id!, n.room_id!)}
-                >
+                  key={n.id}
+                  onSwipeLeft={() => handleAccept(n.id, n.room_id, n.type)}
+                  onSwipeRight={() => {
+                    // Check if sender_id and room_id are available
+                    if (n.sender_id && n.room_id) {
+                      handleReject(n.id, n.sender_id, n.room_id);
+                    } else {
+                      toast.error("Cannot reject this notification.");
+                    }
+                  }}
+                >
                   <div
                     className={`p-4 flex items-start space-x-4 hover:bg-muted/50 relative ${
                       n.status === "read" ? "opacity-50" : ""

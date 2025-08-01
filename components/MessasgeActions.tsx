@@ -62,7 +62,7 @@ export function DeleteAlert() {
 	return (
 		<AlertDialog>
 			<AlertDialogTrigger asChild>
-				<button id="trigger-delete"></button>
+				<Button id="trigger-delete"></Button>
 			</AlertDialogTrigger>
 			<AlertDialogContent>
 				<AlertDialogHeader>
@@ -127,7 +127,7 @@ export function EditAlert() {
 	return (
 		<Dialog>
 			<DialogTrigger asChild>
-				<button id="trigger-edit"></button>
+				<Button id="trigger-edit"></Button>
 			</DialogTrigger>
 			<DialogContent className="w-full">
 				<DialogHeader>

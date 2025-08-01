@@ -6,6 +6,7 @@ type IRoom = Database["public"]["Tables"]["rooms"]["Row"];
 type RoomWithMembership = IRoom & {
      isMember: boolean;
      participationStatus: string | null;
+     memberCount: number;
 };
 
 interface RoomState {

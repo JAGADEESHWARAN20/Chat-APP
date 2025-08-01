@@ -1,45 +1,47 @@
+
 import React from "react";
 import ChatHeader from "@/components/ChatHeader";
 import { supabaseServer } from "@/lib/supabase/server";
 import InitUser from "@/lib/store/InitUser";
-import ClientChatContent from "@/components/ClientChatContent";
+import ChatMessages from "@/components/ChatMessages";
+import ChatInput from "@/components/ChatInput";
 import LoginLogoutButton from "@/components/LoginLogoutButton";
 import ThemeToggle from "@/components/ThemeToggle";
+import NavigationHeader from "@/components/NavigationHeader";
+import RoomList from "@/components/RoomList";
 
 export default async function Page() {
   const supabase = supabaseServer();
   const { data } = await supabase.auth.getSession();
+  const user = data.session?.user;
 
   return (
-    <div className="min-h-[90vh] flex flex-col overflow-hidden">
-      {/* Header section with fixed height */}
-<div className="px-4 py-[.2em] flex items-center"> 
-  <div className="flex items-center justify-between max-w-7xl mx-auto w-full">
-    <div className="flex items-center gap-2">
-      <h1 className="text-xl font-bold">FlyChat</h1>
+    <div className="min-h-screen flex flex-col bg-gray-100 dark:bg-gray-900">
+      {/* Header section */}
+      <header className="px-4 py-3 border-b bg-white dark:bg-gray-800 shadow-sm">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-6">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">FlyChat</h1>
+            <NavigationHeader user={user} />
           </div>
-          <div className="flex items-center gap-1">
-    <ThemeToggle />
-    <LoginLogoutButton user={data.session?.user} />
-          </div>
-  </div>
-</div>
-
-      {/* Main content area that takes remaining height */}
-      <div className=" flex flex-col w-[100vw] overflow-hidden">
-        <div className="lg:max-w-[100vw]  w-[95vw] mx-auto px-4 flex flex-col flex-1">
-          <div className="relative flex flex-col items-center flex-1">
-            <ChatHeader user={data.session?.user} />
-            <div className="flex-1 flex-row flex w-[100vw] lg:justify-evenly lg:gap-[5em] gradient-border overflow-hidden"> {/* Changed this line */}
-              <div className="hidden lg:block">hi</div>
-              <ClientChatContent user={data.session?.user} />
-             <div className="hidden lg:block">hi</div>
-            </div>
+          <div className="flex items-center gap-4">
+            <ThemeToggle />
+            <LoginLogoutButton user={user} />
           </div>
         </div>
-      </div>
-      
-      <InitUser user={data.session?.user} />
+      </header>
+
+      {/* Main content area */}
+      <main className="flex-1 max-w-7xl mx-auto p-4 flex gap-4">
+        {user && <RoomList />}
+        <div className="flex-1 flex flex-col">
+          <ChatHeader user={user} />
+          <ChatMessages />
+          <ChatInput />
+        </div>
+      </main>
+
+      <InitUser user={user} />
     </div>
   );
 }
