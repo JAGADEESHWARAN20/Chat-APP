@@ -1,0 +1,29 @@
+{
+  "version": "0.2",
+  "language": "en",
+  "words": [
+    "broadcast",
+    "byonm",
+    "denoland",
+    "ffi",
+    "flychatapp",
+    "imgrep",
+    "kv",
+    "Messasge",
+    "participations",
+    "Participations",
+    "roomid",
+    "roomstore",
+    "sloppy",
+    "sonner",
+    "supabase",
+    "webgpu"
+  ],
+  "ignorePaths": [
+    "node_modules/**",
+    ".next/**",
+    ".dist/**",
+    "*.lock",
+    "package-lock.json"
+  ]
+}

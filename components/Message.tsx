@@ -24,7 +24,7 @@ export default function Message({ message }: { message: Imessage }) {
           alt={message.users?.display_name!}
           width={40}
           height={40}
-          className="rounded-full ring-2 ring-indigo-500/50"
+          className="rounded-full ring-2 ring-gray-500/50"
         />
       </div>
       <div className="flex-1 flex-col">
@@ -44,7 +44,7 @@ export default function Message({ message }: { message: Imessage }) {
             <MessageMenu message={message} />
           )}
         </div>
-        <p className="dark:text-gray-200 text-black   text-[1.22em]   break-words">
+        <p className="dark:text-gray-200 text-black text-[1.22em] break-words">
           {message.text}
         </p>
       </div>
@@ -55,9 +55,25 @@ export default function Message({ message }: { message: Imessage }) {
 const MessageMenu = ({ message }: { message: Imessage }) => {
   const setActionMessage = useMessage((state) => state.setActionMessage);
 
+  const handleEdit = () => {
+    setActionMessage(message);
+    // Trigger the edit dialog
+    setTimeout(() => {
+      document.getElementById("trigger-edit")?.click();
+    }, 100);
+  };
+
+  const handleDelete = () => {
+    setActionMessage(message);
+    // Trigger the delete dialog
+    setTimeout(() => {
+      document.getElementById("trigger-delete")?.click();
+    }, 100);
+  };
+
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="text-gray-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-full p-1 transition-colors">
+      <DropdownMenuTrigger className="text-gray-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-gray-500 rounded-full p-1 transition-colors">
         <MoreHorizontal className="h-5 w-5" />
       </DropdownMenuTrigger>
       <DropdownMenuContent 
@@ -65,22 +81,16 @@ const MessageMenu = ({ message }: { message: Imessage }) => {
         sideOffset={8}
         className="bg-gray-800 border-gray-700/50 text-white rounded-lg shadow-lg"
       >
-        <DropdownMenuLabel className="text-gray-300">Action</DropdownMenuLabel>
+        <DropdownMenuLabel className="text-gray-300">Message Actions</DropdownMenuLabel>
         <DropdownMenuSeparator className="bg-gray-700/50" />
         <DropdownMenuItem
-          onClick={() => {
-            document.getElementById("trigger-edit")?.click();
-            setActionMessage(message);
-          }}
+          onClick={handleEdit}
           className="text-gray-200 hover:bg-gray-700 hover:text-white focus:bg-gray-700 focus:text-white rounded-md transition-colors"
         >
           Edit
         </DropdownMenuItem>
         <DropdownMenuItem
-          onClick={() => {
-            document.getElementById("trigger-delete")?.click();
-            setActionMessage(message);
-          }}
+          onClick={handleDelete}
           className="text-gray-200 hover:bg-gray-700 hover:text-white focus:bg-gray-700 focus:text-white rounded-md transition-colors"
         >
           Delete

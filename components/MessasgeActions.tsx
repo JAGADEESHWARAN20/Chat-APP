@@ -25,14 +25,15 @@ import {
 	DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 
 export function DeleteAlert() {
 	const actionMessage = useMessage((state) => state.actionMessage);
 	const optimisticDeleteMessage = useMessage(
 		(state) => state.optimisticDeleteMessage
 	);
+	const setActionMessage = useMessage((state) => state.setActionMessage);
+	const [isOpen, setIsOpen] = useState(false);
 
 	const handleDeleteMessage = async () => {
 		if (!actionMessage?.id) {
@@ -57,12 +58,22 @@ export function DeleteAlert() {
 			console.log("[DeleteAlert] Message deleted successfully");
 			toast.success("Successfully deleted a message");
 		}
+		
+		setIsOpen(false);
+		setActionMessage(undefined);
+	};
+
+	const handleOpenChange = (open: boolean) => {
+		setIsOpen(open);
+		if (!open) {
+			setActionMessage(undefined);
+		}
 	};
 
 	return (
-		<AlertDialog>
+		<AlertDialog open={isOpen} onOpenChange={handleOpenChange}>
 			<AlertDialogTrigger asChild>
-				<Button id="trigger-delete"></Button>
+				<Button id="trigger-delete" className="hidden"></Button>
 			</AlertDialogTrigger>
 			<AlertDialogContent>
 				<AlertDialogHeader>
@@ -88,7 +99,8 @@ export function EditAlert() {
 	const optimisticUpdateMessage = useMessage(
 		(state) => state.optimisticUpdateMessage
 	);
-
+	const setActionMessage = useMessage((state) => state.setActionMessage);
+	const [isOpen, setIsOpen] = useState(false);
 	const inputRef = useRef() as React.MutableRefObject<HTMLInputElement>;
 
 	const handleEdit = async () => {
@@ -116,18 +128,30 @@ export function EditAlert() {
 				console.log("[EditAlert] Message updated successfully");
 				toast.success("Update Successfully");
 			}
-			document.getElementById("trigger-edit")?.click();
+			setIsOpen(false);
+			setActionMessage(undefined);
 		} else {
 			console.log("[EditAlert] Empty message text, triggering delete");
-			document.getElementById("trigger-edit")?.click();
-			document.getElementById("trigger-delete")?.click();
+			setIsOpen(false);
+			setActionMessage(undefined);
+			// Trigger delete dialog
+			setTimeout(() => {
+				document.getElementById("trigger-delete")?.click();
+			}, 100);
+		}
+	};
+
+	const handleOpenChange = (open: boolean) => {
+		setIsOpen(open);
+		if (!open) {
+			setActionMessage(undefined);
 		}
 	};
 
 	return (
-		<Dialog>
+		<Dialog open={isOpen} onOpenChange={handleOpenChange}>
 			<DialogTrigger asChild>
-				<Button id="trigger-edit"></Button>
+				<Button id="trigger-edit" className="hidden"></Button>
 			</DialogTrigger>
 			<DialogContent className="w-full">
 				<DialogHeader>

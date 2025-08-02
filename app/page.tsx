@@ -8,7 +8,6 @@ import ChatInput from "@/components/ChatInput";
 import LoginLogoutButton from "@/components/LoginLogoutButton";
 import ThemeToggle from "@/components/ThemeToggle";
 import NavigationHeader from "@/components/NavigationHeader";
-import RoomList from "@/components/RoomList";
 
 export default async function Page() {
   const supabase = supabaseServer();
@@ -31,15 +30,15 @@ export default async function Page() {
         </div>
       </header>
 
-      {/* Main content area */}
-      <main className="flex-1 max-w-7xl mx-auto p-4 flex gap-4">
-        {user && <RoomList />}
-        <div className="flex-1 flex flex-col">
-          <ChatHeader user={user} />
+      {/* Main content area - centered chat interface */}
+      <main className="flex-1 flex flex-col items-center">
+        <div className="w-full max-w-4xl flex flex-col h-[calc(100vh-80px)]">
+          <ChatHeader user={user} />        
           <ChatMessages />
           <ChatInput />
         </div>
       </main>
+
 
       <InitUser user={user} />
     </div>

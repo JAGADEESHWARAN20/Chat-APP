@@ -10,7 +10,6 @@ import { ArrowDown } from "lucide-react";
 import LoadMoreMessages from "./LoadMoreMessages";
 import { Database } from "@/lib/types/supabase";
 import { useRoomStore } from "@/lib/store/roomstore";
-import TypingIndicator from "./TypingIndicator"; // import TypingIndicator
 import { useUser } from "@/lib/store/user";
 
 type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
@@ -248,18 +247,10 @@ export default function ListMessages() {
     </div>
   );
 
-  // Optional: prepare userMap from messages (to pass to TypingIndicator showing names)
-  const userMap = filteredMessages.reduce((acc, msg) => {
-    if (msg.users && !acc[msg.users.id]) {
-      acc[msg.users.id] = { display_name: msg.users.display_name };
-    }
-    return acc;
-  }, {} as Record<string, { display_name: string }>);
-
   return (
     <>
       <div
-        className="flex-1 flex flex-col p-1 h-auto  overflow-y-auto"
+        className="flex-1 flex flex-col p-1 h-auto overflow-y-auto"
         ref={scrollRef}
         onScroll={handleOnScroll}
       >
@@ -272,11 +263,6 @@ export default function ListMessages() {
             <div className="flex-1 pb-5">
               <LoadMoreMessages />
             </div>
-
-            {/* Typing Indicator shown here */}
-            {selectedRoom?.id && (
-              <TypingIndicator roomId={selectedRoom.id} userMap={userMap} />
-            )}
 
             <div className="space-y-2">
               {[...filteredMessages]
@@ -299,7 +285,7 @@ export default function ListMessages() {
         <div className="absolute bottom-20 w-full">
           {notification ? (
             <div
-              className="w-36 mx-auto bg-indigo-500 p-1 rounded-md cursor-pointer"
+              className="w-36 mx-auto bg-blue-500 p-1 rounded-md cursor-pointer text-white text-center"
               onClick={scrollDown}
             >
               <h1>New {notification} messages</h1>

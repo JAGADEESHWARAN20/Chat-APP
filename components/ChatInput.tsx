@@ -10,6 +10,7 @@ import { Send } from "lucide-react";
 import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
 import { Imessage, useMessage } from "@/lib/store/messages";
+import { Button } from "./ui/button";
 
 export default function ChatInput() {
   const supabase = supabaseBrowser();
@@ -138,46 +139,54 @@ useEffect(() => {
     await sendTypingFalse();
   }
 
+  const handleSend = () => {
+    if (inputValue.trim()) {
+      handleSendMessage(inputValue);
+    }
+  };
+
   return (
-    <div className="p-1 flex items-center">
-      <input
-        type="text"
-        placeholder={
-          selectedRoom
-            ? `Message #${selectedRoom.name}`
-            : selectedDirectChat
-            ? "Send direct message"
-            : "Select a room or user to start chatting"
-        }
-        value={inputValue}
-        onChange={(e) => setInputValue(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && e.currentTarget.value.trim()) {
-            handleSendMessage(e.currentTarget.value);
+    <div className="p-4 border-t bg-white dark:bg-gray-800">
+      <div className="flex items-center gap-2">
+        <input
+          type="text"
+          placeholder={
+            selectedRoom
+              ? `Message #${selectedRoom.name}`
+              : selectedDirectChat
+              ? "Send direct message"
+              : "Select a room or user to start chatting"
           }
-        }}
-        disabled={!selectedRoom && !selectedDirectChat}
-        className="
-        flex-grow rounded px-3 py-2
-        bg-background
-        text-foreground
-        placeholder:text-muted-foreground
-        focus:outline-none focus:ring-2 focus:ring-ring
-        transition-colors
-        dark:bg-background
-        dark:text-foreground
-        dark:placeholder:text-muted-foreground
-      "
-      />
-       {inputValue.length > 0 && (
-      <Send
-        className="ml-2 cursor-pointer text-primary hover:text-primary/90 transition-colors"
-        size={24}
-        onClick={() => {
-          handleSendMessage(inputValue);
-        }}
-      />
-    )}
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && e.currentTarget.value.trim()) {
+              handleSendMessage(e.currentTarget.value);
+            }
+          }}
+          disabled={!selectedRoom && !selectedDirectChat}
+          className="
+            flex-grow rounded-lg px-3 py-2
+            bg-background
+            text-foreground
+            placeholder:text-muted-foreground
+            focus:outline-none focus:ring-2 focus:ring-ring
+            transition-colors
+            dark:bg-gray-700
+            dark:text-foreground
+            dark:placeholder:text-muted-foreground
+            border border-gray-300 dark:border-gray-600
+          "
+        />
+        <Button
+          onClick={handleSend}
+          disabled={!inputValue.trim() || (!selectedRoom && !selectedDirectChat)}
+          size="icon"
+          className="rounded-lg bg-blue-600 hover:bg-blue-700 text-white disabled:bg-gray-400 disabled:cursor-not-allowed"
+        >
+          <Send className="h-4 w-4" />
+        </Button>
+      </div>
     </div>
   );
 }

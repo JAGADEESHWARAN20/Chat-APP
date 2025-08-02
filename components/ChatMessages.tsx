@@ -7,6 +7,7 @@ import { useDirectChatStore } from "@/lib/store/directChatStore";
 import { useMessage } from "@/lib/store/messages";
 import { toast } from "sonner";
 import { Imessage } from "@/lib/store/messages";
+import TypingIndicator from "./TypingIndicator";
 
 export default function ChatMessages() {
   const selectedRoom = useRoomStore((state) => state.selectedRoom);
@@ -80,9 +81,16 @@ export default function ChatMessages() {
     };
   }, [fetchMessages, unsubscribeFromRoom]);
 
+  const roomId = selectedRoom?.id || selectedDirectChat?.id || "";
+
   return (
-    <Suspense fallback={<div>Loading messages...</div>}>
-      <ListMessages />
-    </Suspense>
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 overflow-y-auto">
+        <Suspense fallback={<div className="p-4 text-center text-gray-500">Loading messages...</div>}>
+          <ListMessages />
+        </Suspense>
+      </div>
+      {roomId && <TypingIndicator roomId={roomId} />}
+    </div>
   );
 }
