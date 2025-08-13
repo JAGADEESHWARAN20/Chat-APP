@@ -10,7 +10,7 @@ import ThemeToggle from "@/components/ThemeToggle";
 import NavigationHeader from "@/components/NavigationHeader";
 
 export default async function Page() {
-  const supabase = supabaseServer();
+  const supabase = await supabaseServer();
   const { data } = await supabase.auth.getSession();
   const user = data.session?.user;
 
@@ -33,7 +33,7 @@ export default async function Page() {
       {/* Main content area - centered chat interface */}
       <main className="flex-1 flex flex-col items-center">
         <div className="w-full max-w-4xl flex flex-col h-[calc(100vh-80px)]">
-          <ChatHeader user={user} />        
+          <ChatHeader user={user} />
           <ChatMessages />
           <ChatInput />
         </div>

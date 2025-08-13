@@ -111,7 +111,8 @@ export async function POST(req: NextRequest) {
     }
 
     // Broadcast real-time notification
-    await supabaseServer()
+    const supabaseRealtime = await supabaseServer();
+    await supabaseRealtime
       .channel(`room-${roomId}-notifications`)
       .send({
         type: "broadcast",
