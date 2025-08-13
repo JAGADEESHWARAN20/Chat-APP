@@ -8,7 +8,14 @@ export async function GET(
   { params }: { params: { roomId: string } }
 ) {
   try {
-    const supabase = createRouteHandlerClient<Database>({ cookies });
+    const cookieStore = await cookies();
+    const supabase = createRouteHandlerClient<Database>({ 
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value;
+        },
+      }
+    });
     const roomId = params.roomId;
 
     // Validate roomId

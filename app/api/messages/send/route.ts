@@ -1,12 +1,10 @@
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
-import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { Database } from "@/lib/types/supabase";
 import { supabaseServer } from "@/lib/supabase/server";
 
 export async function POST(req: NextRequest) {
   try {
-    const supabase = createRouteHandlerClient<Database>({ cookies });
+    const supabase = await supabaseServer();
     const { content, roomId } = await req.json();
 
     console.log("[Messages] Sending message to room:", roomId);
@@ -63,6 +61,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Failed to send message" }, { status: 500 });
     }
 
+    if (!message) {
+      console.error("[Messages] No message returned after insert");
+      return NextResponse.json({ error: "Failed to send message" }, { status: 500 });
+    }
+
     console.log("[Messages] Message inserted successfully:", message.id);
 
     // Get room details for notification
@@ -85,7 +88,7 @@ export async function POST(req: NextRequest) {
 
     if (membersError) {
       console.error("[Messages] Error fetching room members:", membersError);
-    } else if (roomMembers) {
+    } else if (roomMembers && roomMembers.length > 0) {
       console.log("[Messages] Creating notifications for members:", roomMembers.length);
 
       // Create notifications for all room members
@@ -111,7 +114,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Broadcast real-time notification
-    await supabaseServer()
+    await supabase
       .channel(`room-${roomId}-notifications`)
       .send({
         type: "broadcast",
