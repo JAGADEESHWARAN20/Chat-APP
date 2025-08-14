@@ -7,7 +7,9 @@ import { Button } from "./ui/button";
 import { toast } from "sonner";
 import { useUser } from "@/lib/store/user";
 import { IRoom, IRoomParticipant } from "@/lib/types/rooms";
-import { ArrowRight, LogOut } from "lucide-react";
+import { ArrowRight, LogOut, Lock, Users } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { RoomCard } from "./ui/room-card";
 
 export default function RoomList() {
   const [userParticipations, setUserParticipations] = useState<IRoomParticipant[]>([]);
@@ -276,60 +278,35 @@ export default function RoomList() {
   }
 
   return (
-    <div className="w-64 border-r p-4">
+    <div className="w-[320px] p-4 flex flex-col h-full">
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-xl font-bold">Rooms</h2>
-        <Button size="sm" onClick={refreshRooms}>
-          Refresh
+        <Button size="sm" onClick={refreshRooms} variant="ghost">
+          <ArrowRight className="h-4 w-4" />
         </Button>
       </div>
-      <div className="space-y-2">
+      <div className="space-y-3 overflow-y-auto flex-grow">
         {rooms.map((room) => {
           const participation = userParticipations.find((p) => p.room_id === room.id);
-          const isMember = participation?.status === "accepted";
-          const isPending = participation?.status === "pending";
-
+          const isSelected = selectedRoom?.id === room.id;
+          
           return (
-            <div key={room.id} className="flex justify-between items-center gap-2">
-              <Button
-                variant={selectedRoom?.id === room.id ? "secondary" : "ghost"}
-                className="w-full justify-start"
-                onClick={() => {
-                  if (isMember) {
-                    handleRoomSwitch(room);
-                  } else if (!isPending) {
-                    handleJoinRoom(room.id);
-                  }
-                }}
-                disabled={isPending}
-              >
-                <span className="truncate flex items-center gap-2">
-                  {room.name}
-                  {room.is_private && " 🔒"}
-                  {isMember && <ArrowRight className="h-4 w-4" />}
-                </span>
-              </Button>
-
-              {!isMember && !isPending && (
-                <Button size="sm" onClick={() => handleJoinRoom(room.id)}>
-                  Join
-                </Button>
+            <div
+              key={room.id}
+              onClick={() => participation?.status === "accepted" && handleRoomSwitch(room)}
+              className={cn(
+                "cursor-pointer transition-transform duration-200",
+                participation?.status === "accepted" && "hover:scale-[1.02]"
               )}
-
-              {isMember && (
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={() => handleLeaveRoom(room.id)}
-                  className="bg-red-600 hover:bg-red-700"
-                >
-                  <LogOut className="h-4 w-4" />
-                </Button>
-              )}
-
-              {isPending && (
-                <span className="text-sm text-muted-foreground">Pending</span>
-              )}
+            >
+              <RoomCard
+                room={room}
+                isSelected={isSelected}
+                onJoin={() => handleJoinRoom(room.id)}
+                onLeave={() => handleLeaveRoom(room.id)}
+                participationStatus={participation?.status || null}
+                userCount={room.participant_count || 0}
+              />
             </div>
           );
         })}

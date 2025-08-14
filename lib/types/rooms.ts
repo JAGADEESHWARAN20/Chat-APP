@@ -4,6 +4,7 @@ export interface IRoom {
      is_private: boolean;
      created_at: string;
      created_by: string | null;
+     participant_count?: number;
 }
 
 export interface IRoomParticipant {
