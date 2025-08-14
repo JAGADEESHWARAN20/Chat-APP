@@ -40,6 +40,7 @@ import { useRoomStore } from "@/lib/store/roomstore";
 import { useDebounce } from "use-debounce";
 import Notifications from "./Notifications";
 import { useNotification } from "@/lib/store/notifications";
+import { SearchTabs } from "./ui/search-tabs";
 
 
 type UserProfile = Database["public"]["Tables"]["users"]["Row"];
@@ -58,7 +59,8 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [searchType, setSearchType] = useState<"rooms" | "users" | null>(null);
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [roomResults, setRoomResults] = useState<RoomWithMembershipCount[]>([]);
+  const [userResults, setUserResults] = useState<UserProfile[]>([]);
   const [availableRooms, setAvailableRooms] = useState<RoomWithMembershipCount[]>([]);
   const supabase = supabaseBrowser();
   const [isSearchPopoverOpen, setIsSearchPopoverOpen] = useState(false);
@@ -358,12 +360,12 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         setIsMember(false);
         await fetchAvailableRooms();
 
-        // Update searchResults so UI instantly shows Join button for this room
-        setSearchResults((results) =>
-          results.map((res) =>
-            "id" in res && res.id === selectedRoom.id
-              ? { ...res, isMember: false, participationStatus: null }
-              : res
+        // Update room results to show Join button for this room
+        setRoomResults((rooms) =>
+          rooms.map((room) =>
+            room.id === selectedRoom.id
+              ? { ...room, isMember: false, participationStatus: null }
+              : room
           )
         );
 
@@ -415,21 +417,21 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const fetchSearchResults = useCallback(async () => {
     if (!user) {
       setIsLoading(false);
-      setSearchResults([]);
+      setRoomResults([]);
+      setUserResults([]);
       return;
     }
 
     if (!searchType) return;
     setIsLoading(true);
     try {
-      let response;
       if (searchType === "rooms") {
         const apiQuery = debouncedSearchQuery.trim()
           ? `?q=${encodeURIComponent(
               debouncedSearchQuery.trim()
             )}&limit=${limit}&offset=${offset}`
           : `?limit=${limit}&offset=${offset}`;
-        response = await fetch(`/api/rooms/all${apiQuery}`);
+        const response = await fetch(`/api/rooms/all${apiQuery}`);
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -444,21 +446,21 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
               memberCount: room.memberCount, // preserve count
             }))
           );
-          setSearchResults(roomsWithDetailedStatus as SearchResult[]);
+          setRoomResults(roomsWithDetailedStatus);
         }
       } else if (searchType === "users") {
         const { data, error } = await supabase
           .from("users")
-          .select("id, username, display_name, avatar_url")
+          .select("id, username, display_name, avatar_url, created_at")
           .ilike("display_name", `%${debouncedSearchQuery.trim()}%`)
           .limit(10);
 
         if (error) {
           console.error(`Search error for ${searchType}:`, error);
           toast.error(error.message || `Failed to search ${searchType}`);
-          setSearchResults([]);
+          setUserResults([]);
         } else if (data && isMounted.current) {
-          setSearchResults(data as UserProfile[]);
+          setUserResults(data);
         }
       }
     } catch (error) {
@@ -467,7 +469,8 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         toast.error(
           error instanceof Error ? error.message : "An error occurred while searching"
         );
-        setSearchResults([]);
+        setRoomResults([]);
+        setUserResults([]);
       }
     } finally {
       if (isMounted.current) {
@@ -475,13 +478,13 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       }
     }
   }, [
-    searchType,
     supabase,
     user,
     debouncedSearchQuery,
     checkRoomParticipation,
     limit,
     offset,
+    searchType,
   ]);
 
   const handleJoinRoom = useCallback(
@@ -623,14 +626,16 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const handleSearchByType = (type: "rooms" | "users") => {
     setSearchType(type);
     setSearchQuery("");
-    setSearchResults([]);
+    setRoomResults([]);
+    setUserResults([]);
   };
 
   useEffect(() => {
     if (searchType) {
       fetchSearchResults();
     } else {
-      setSearchResults([]);
+      setRoomResults([]);
+      setUserResults([]);
     }
   }, [debouncedSearchQuery, searchType, fetchSearchResults]);
 
@@ -870,28 +875,20 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
               <Search className="h-5 w-5" />
             </Button>
           </PopoverTrigger>
-       <PopoverContent
-          side="bottom"
-          align="center"
-          sideOffset={0}
-          className="
-            !w-[min(32em,98vw)]
-            !h-[min(40em,90vh)]
-            md:!w-[24em]
-            md:!h-[40em]
-            mr-[2.3vw]
-            lg:mt-[1vw]
-            mt-[1em]
-            mb-[2vh]
-            bg-gray-800/30
-            backdrop-blur-xl
-            rounded-2xl
-            p-[.8em]
-            text-white
-            !max-w-[94vw]
-            !max-h-[92vh]
-          "
-        >
+          <PopoverContent 
+            side="bottom" 
+            align="center" 
+            sideOffset={0}
+            className="
+              w-[400px]
+              p-4
+              bg-background/95
+              backdrop-blur-lg
+              border-none
+              shadow-xl
+              rounded-xl
+            "
+          >
 
             <div className="p-1">
               <div className="flex justify-between items-center mb-[0.5em]">
@@ -941,57 +938,65 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                   Users
                 </Button>
               </div>
-              {searchResults.length > 0 && (
+              {searchType === "users" && userResults.length > 0 && (
                 <div className="mt-4">
                   <h4 className="font-semibold text-[1em] text-gray-300 mb-3">
-                    {searchType === "users" ? "User Profiles" : "Rooms"}
+                    User Profiles
                   </h4>
                   <ul className="space-y-3">
-                    {searchResults.map((result) =>
-                      "display_name" in result ? (
-                        <li
-                          key={result.id}
-                          className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-700/50 transition-colors"
-                        >
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-10 w-10">
-                              {result.avatar_url ? (
-                                <AvatarImage
-                                  src={result.avatar_url}
-                                  alt={result.username || "Avatar"}
-                                  className="rounded-full"
-                                />
-                              ) : (
-                                <AvatarFallback className="bg-indigo-500 text-white rounded-full">
-                                  {result.username?.charAt(0).toUpperCase() ||
-                                    result.display_name?.charAt(0).toUpperCase() ||
-                                    "?"}
-                                </AvatarFallback>
-                              )}
-                            </Avatar>
-                            <div>
-                              <div className="text-xs text-gray-400">
-                                {result.username}
-                              </div>
-                              <div className="text-[1em] font-medium text-white">
-                                {result.display_name}
-                              </div>
+                    {userResults.map((result) => (
+                      <li
+                        key={result.id}
+                        className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-700/50 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-10 w-10">
+                            {result.avatar_url ? (
+                              <AvatarImage
+                                src={result.avatar_url}
+                                alt={result.username || "Avatar"}
+                                className="rounded-full"
+                              />
+                            ) : (
+                              <AvatarFallback className="bg-indigo-500 text-white rounded-full">
+                                {result.username?.charAt(0).toUpperCase() ||
+                                  result.display_name?.charAt(0).toUpperCase() ||
+                                  "?"}
+                              </AvatarFallback>
+                            )}
+                          </Avatar>
+                          <div>
+                            <div className="text-xs text-gray-400">
+                              {result.username}
+                            </div>
+                            <div className="text-[1em] font-medium text-white">
+                              {result.display_name}
                             </div>
                           </div>
-                          <UserIcon className="h-4 w-4 text-gray-400" />
-                        </li>
-                      ) : (
-                        renderRoomSearchResult(result as RoomWithMembershipCount)
-                      )
-                    )}
+                        </div>
+                        <UserIcon className="h-4 w-4 text-gray-400" />
+                      </li>
+                    ))}
                   </ul>
                 </div>
               )}
-              {searchResults.length === 0 && searchQuery.length > 0 && (
-                <p className="text-[1em] text-gray-400 mt-3">
-                  No {searchType || "results"} found.
-                </p>
+              {searchType === "rooms" && roomResults.length > 0 && (
+                <div className="mt-4">
+                  <h4 className="font-semibold text-[1em] text-gray-300 mb-3">
+                    Rooms
+                  </h4>
+                  <ul className="space-y-3">
+                    {roomResults.map((result) => renderRoomSearchResult(result))}
+                  </ul>
+                </div>
               )}
+              {((searchType === "users" && userResults.length === 0) ||
+                (searchType === "rooms" && roomResults.length === 0)) &&
+                searchQuery.length > 0 && (
+                  <p className="text-[1em] text-gray-400 mt-3">
+                    No {searchType} found.
+                  </p>
+                )}
              {searchQuery.length === 0 && searchType && (
                 <p
                   className={`text-[1em] text-gray-400 mt-3 transition-opacity duration-500 ${
