@@ -707,44 +707,59 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const renderRoomSearchResult = (
     result: RoomWithMembershipCount
   ) => (
-    <li key={result.id} className="flex items-center justify-between">
-      <div className="flex items-center gap-1">
-        <span className="text-[1em] font-semibold text-white">
-          {result.name} ({result.memberCount ?? 0})
-        </span>
-        {result.is_private && <LockIcon />}
+    <li key={result.id} className="flex items-center justify-between p-2 rounded-lg bg-gray-800/50 hover:bg-gray-700/50 transition-colors">
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-500/10">
+          <span className="text-lg font-semibold text-indigo-400">
+            {result.name.charAt(0).toUpperCase()}
+          </span>
+        </div>
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-white">{result.name}</span>
+            {result.is_private && (
+              <LockIcon className="h-3.5 w-3.5 text-gray-400" />
+            )}
+          </div>
+          <div className="text-sm text-gray-400">
+            {result.memberCount} {result.memberCount === 1 ? 'member' : 'members'}
+          </div>
+        </div>
       </div>
-      {selectedRoom?.id === result.id && result.isMember && UUID_REGEX.test(result.id) ? (
-        <Button
-          size="sm"
-          variant="destructive"
-          onClick={handleLeaveRoom}
-          className="bg-red-600 hover:bg-red-700"
-          disabled={isLeaving}
-        >
-          <LogOut className="h-4 w-4" />
-          {isLeaving ? "Leaving..." : "Leave"}
-        </Button>
-      ) : result.isMember ? (
-        <Button
-  size="sm"
-  variant="ghost"
-  onClick={() => router.push(`/rooms/${result.id}/settings`)}
-  className="flex items-center gap-1 text-white"
->
-  <Settings className="h-4 w-4" />
-</Button>
-      ) : result.participationStatus === "pending" ? (
-        <span className="text-[1em] text-muted-foreground">Pending</span>
-      ) : (
-        <Button
-          size="sm"
-          onClick={() => handleJoinRoom(result.id)}
-          disabled={!user}
-        >
-          Join
-        </Button>
-      )}
+      <div className="flex items-center gap-2">
+        {selectedRoom?.id === result.id && result.isMember && UUID_REGEX.test(result.id) ? (
+          <Button
+            size="sm"
+            variant="destructive"
+            onClick={handleLeaveRoom}
+            className="bg-red-600/10 text-red-400 hover:bg-red-600/20 hover:text-red-300"
+            disabled={isLeaving}
+          >
+            <LogOut className="h-4 w-4 mr-1" />
+            {isLeaving ? "Leaving..." : "Leave"}
+          </Button>
+        ) : result.isMember ? (
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => router.push(`/rooms/${result.id}/settings`)}
+            className="text-indigo-400 hover:text-indigo-300"
+          >
+            <Settings className="h-4 w-4" />
+          </Button>
+        ) : result.participationStatus === "pending" ? (
+          <span className="text-sm text-yellow-400">Pending</span>
+        ) : (
+          <Button
+            size="sm"
+            onClick={() => handleJoinRoom(result.id)}
+            disabled={!user}
+            className="bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 hover:text-indigo-300"
+          >
+            Join
+          </Button>
+        )}
+      </div>
     </li>
   );
 
@@ -862,21 +877,34 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         {availableRooms.map((room) => (
           <li
             key={room.id}
-            className="flex items-center justify-between"
+            className="flex items-center justify-between p-2 rounded-lg bg-gray-800/50 hover:bg-gray-700/50 transition-colors"
           >
-            <span className="text-[1em] flex gap-2 font-semibold text-white">
-              {room.name} ({room.memberCount ?? 0}){" "}
-              <span>{room.is_private && <LockIcon />}</span>
-            </span>
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-500/10">
+                <span className="text-lg font-semibold text-indigo-400">
+                  {room.name.charAt(0).toUpperCase()}
+                </span>
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-white">{room.name}</span>
+                  {room.is_private && (
+                    <LockIcon className="h-3.5 w-3.5 text-gray-400" />
+                  )}
+                </div>
+                <div className="text-sm text-gray-400">
+                  {room.memberCount} {room.memberCount === 1 ? 'member' : 'members'}
+                </div>
+              </div>
+            </div>
             {room.participationStatus === "pending" ? (
-              <span className="text-[1em] text-muted-foreground">
-                Pending
-              </span>
+              <span className="text-sm text-yellow-400">Pending</span>
             ) : (
               <Switch
-  checked={selectedRoom?.id === room.id}
-  onCheckedChange={() => handleRoomSwitch(room)}
-  className="data-[state=checked]:bg-indigo-400 data-[state=unchecked]:bg-gray-200" />
+                checked={selectedRoom?.id === room.id}
+                onCheckedChange={() => handleRoomSwitch(room)}
+                className="data-[state=checked]:bg-indigo-500 data-[state=unchecked]:bg-gray-600/50"
+              />
             )}
           </li>
         ))}
