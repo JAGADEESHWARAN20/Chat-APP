@@ -51,6 +51,7 @@ type RoomWithMembershipCount = Room & {
   isMember: boolean;
   participationStatus: string | null;
   memberCount: number;
+  activeUsers?: number;
 };
 
 type SearchResult = UserProfile | RoomWithMembershipCount;
@@ -232,10 +233,35 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 
       }
 
-      // Attach memberCount and isMember:true, participationStatus to each room
+      // For each room, get presence data
+      const presencePromises = roomIds.map(async (roomId) => {
+        const { data: roomMembers } = await supabase
+          .from('room_members')
+          .select('user_id')
+          .eq('room_id', roomId)
+          .eq('status', 'accepted');
+
+        const { data: presenceData } = await supabase
+          .from('typing_status')
+          .select('user_id')
+          .eq('room_id', roomId)
+          .in('user_id', roomMembers?.map(member => member.user_id) || [])
+          .eq('is_typing', true);
+
+        return {
+          roomId,
+          activeUsers: presenceData?.length || 0
+        };
+      });
+
+      const presenceResults = await Promise.all(presencePromises);
+      const activeUsersMap = new Map(presenceResults.map(r => [r.roomId, r.activeUsers]));
+
+      // Attach memberCount, activeUsers, and isMember:true, participationStatus to each room
       const joinedRooms: RoomWithMembershipCount[] = joinedRoomsRaw.map((room) => ({
         ...room,
         memberCount: countsMap.get(room.id) ?? 0,
+        activeUsers: activeUsersMap.get(room.id) ?? 0,
         isMember: true,
         participationStatus: "accepted",
       }));
@@ -707,7 +733,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const renderRoomSearchResult = (
     result: RoomWithMembershipCount
   ) => (
-    <li key={result.id} className="flex items-center border-b border-white/10 justify-between rounded-lg  transition-colors">
+    <li key={result.id} className="flex items-center justify-between rounded-lg  transition-colors">
       <div className="flex items-center gap-3">
         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-500/30">
           <span className="text-lg font-semibold text-indigo-400">
@@ -722,7 +748,8 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
             )}
           </div>
           <div className="text-sm text-gray-400">
-            {result.memberCount} {result.memberCount === 1 ? 'member' : 'members'}
+            {result.memberCount} {result.memberCount === 1 ? 'member' : 'members'} 
+            {(result.activeUsers ?? 0) > 0 && ` • ${result.activeUsers ?? 0} active`}
           </div>
         </div>
       </div>
@@ -892,8 +919,13 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                     <LockIcon className="h-3.5 w-3.5 text-gray-400" />
                   )}
                 </div>
-                <div className="text-sm text-gray-400">
-                  {room.memberCount} {room.memberCount === 1 ? 'member' : 'members'}
+                <div className="text-sm flex items-center gap-2">
+                  <span className="text-gray-400">
+                    {room.memberCount} {room.memberCount === 1 ? 'member' : 'members'}
+                  </span>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/10 text-green-400">
+                    {room.activeUsers ?? 0} active
+                  </span>
                 </div>
               </div>
             </div>
@@ -1050,7 +1082,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                   <h4 className="font-semibold text-[1em] text-gray-300 mb-3">
                     Rooms
                   </h4>
-                  <ul className="space-y-[.1em] border px-[1em] py-[1.2em] rounded-lg">
+                  <ul className="space-y-[.1em] border px-[.2em] overflow-y-auto max-h-[440px] py-[1.2em] rounded-lg scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
                     {roomResults.map((result) => renderRoomSearchResult(result))}
                   </ul>
                 </div>
