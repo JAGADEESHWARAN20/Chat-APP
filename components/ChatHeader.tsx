@@ -438,12 +438,26 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         const { rooms: fetchedRooms } = await response.json();
 
         if (isMounted.current) {
-          // fetchedRooms already include memberCount and isMember from API
+          // Get member counts for all rooms
+          const roomIds = fetchedRooms.map((room: Room) => room.id);
+          const { data: membersData } = await supabase
+            .from("room_members")
+            .select("room_id")
+            .in("room_id", roomIds)
+            .eq("status", "accepted");
+
+          // Calculate member counts
+          const memberCounts = new Map<string, number>();
+          membersData?.forEach(m => {
+            memberCounts.set(m.room_id, (memberCounts.get(m.room_id) ?? 0) + 1);
+          });
+
           const roomsWithDetailedStatus = await Promise.all(
-            fetchedRooms.map(async (room: RoomWithMembershipCount) => ({
+            fetchedRooms.map(async (room: Room) => ({
               ...room,
               participationStatus: await checkRoomParticipation(room.id),
-              memberCount: room.memberCount, // preserve count
+              memberCount: memberCounts.get(room.id) ?? 0,
+              isMember: await checkRoomMembership(room.id)
             }))
           );
           setRoomResults(roomsWithDetailedStatus);
@@ -482,6 +496,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     user,
     debouncedSearchQuery,
     checkRoomParticipation,
+    checkRoomMembership,
     limit,
     offset,
     searchType,
