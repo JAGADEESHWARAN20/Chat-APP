@@ -438,25 +438,47 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         const { rooms: fetchedRooms } = await response.json();
 
         if (isMounted.current) {
-          // Get member counts for all rooms
+          // Get member counts for all rooms from both tables
           const roomIds = fetchedRooms.map((room: Room) => room.id);
+          
+          // Get accepted room members
           const { data: membersData } = await supabase
             .from("room_members")
-            .select("room_id")
+            .select("room_id, user_id")
             .in("room_id", roomIds)
             .eq("status", "accepted");
 
-          // Calculate member counts
-          const memberCounts = new Map<string, number>();
+          // Get accepted room participants
+          const { data: participantsData } = await supabase
+            .from("room_participants")
+            .select("room_id, user_id")
+            .in("room_id", roomIds)
+            .eq("status", "accepted");
+
+          // Combine both sets of users and count unique users per room
+          const memberCounts = new Map<string, Set<string>>();
+          
+          // Add members
           membersData?.forEach(m => {
-            memberCounts.set(m.room_id, (memberCounts.get(m.room_id) ?? 0) + 1);
+            if (!memberCounts.has(m.room_id)) {
+              memberCounts.set(m.room_id, new Set());
+            }
+            memberCounts.get(m.room_id)?.add(m.user_id);
+          });
+          
+          // Add participants
+          participantsData?.forEach(p => {
+            if (!memberCounts.has(p.room_id)) {
+              memberCounts.set(p.room_id, new Set());
+            }
+            memberCounts.get(p.room_id)?.add(p.user_id);
           });
 
           const roomsWithDetailedStatus = await Promise.all(
             fetchedRooms.map(async (room: Room) => ({
               ...room,
               participationStatus: await checkRoomParticipation(room.id),
-              memberCount: memberCounts.get(room.id) ?? 0,
+              memberCount: memberCounts.get(room.id)?.size ?? 0,
               isMember: await checkRoomMembership(room.id)
             }))
           );
