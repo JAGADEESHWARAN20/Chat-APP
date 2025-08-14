@@ -41,6 +41,7 @@ import { useDebounce } from "use-debounce";
 import Notifications from "./Notifications";
 import { useNotification } from "@/lib/store/notifications";
 import { SearchTabs } from "./ui/search-tabs";
+import { useActiveUsers } from "@/hooks/useActiveUsers";
 
 
 type UserProfile = Database["public"]["Tables"]["users"]["Row"];
@@ -81,6 +82,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const [limit] = useState(100);
   const [offset] = useState(0);
   const [isFaded, setIsFaded] = useState(false);
+  const activeUsersCount = useActiveUsers(selectedRoom?.id ?? null);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -245,12 +247,14 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
           .from('typing_status')
           .select('user_id')
           .eq('room_id', roomId)
-          .in('user_id', roomMembers?.map(member => member.user_id) || [])
-          .eq('is_typing', true);
+          .in('user_id', roomMembers?.map(member => member.user_id) || []);
+
+        // Get unique active users (filter out duplicates)
+        const uniqueActiveUsers = new Set(presenceData?.map(p => p.user_id));
 
         return {
           roomId,
-          activeUsers: presenceData?.length || 0
+          activeUsers: uniqueActiveUsers.size
         };
       });
 
@@ -733,7 +737,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const renderRoomSearchResult = (
     result: RoomWithMembershipCount
   ) => (
-    <li key={result.id} className="flex items-center justify-between rounded-lg  transition-colors">
+    <li key={result.id} className="flex items-center justify-between pb-[1em] rounded-lg  transition-colors">
       <div className="flex items-center gap-3">
         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-500/30">
           <span className="text-lg font-semibold text-indigo-400">
@@ -924,7 +928,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                     {room.memberCount} {room.memberCount === 1 ? 'member' : 'members'}
                   </span>
                   <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/10 text-green-400">
-                    {room.activeUsers ?? 0} active
+                    {room.id === selectedRoom?.id ? activeUsersCount : (room.activeUsers ?? 0)} active
                   </span>
                 </div>
               </div>
@@ -1077,13 +1081,31 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                   </ul>
                 </div>
               )}
-              {searchType === "rooms" && roomResults.length > 0 && (
+              {searchType === "rooms" && (
                 <div className="mt-4">
                   <h4 className="font-semibold text-[1em] text-gray-300 mb-3">
                     Rooms
                   </h4>
-                  <ul className="space-y-[.1em] border px-[.2em] overflow-y-auto max-h-[440px] py-[1.2em] rounded-lg scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
-                    {roomResults.map((result) => renderRoomSearchResult(result))}
+                  <ul className="space-y-[.1em] overflow-y-auto max-h-[440px] py-[.2em] rounded-lg scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
+                    {isLoading ? (
+                      // Loading skeletons
+                      Array(3).fill(0).map((_, i) => (
+                        <li key={i} className="flex items-center justify-between p-2 rounded-lg bg-gray-800/50 animate-pulse">
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-lg bg-gray-700"></div>
+                            <div>
+                              <div className="h-4 w-32 bg-gray-700 rounded mb-2"></div>
+                              <div className="h-3 w-24 bg-gray-700 rounded"></div>
+                            </div>
+                          </div>
+                          <div className="h-8 w-16 bg-gray-700 rounded"></div>
+                        </li>
+                      ))
+                    ) : roomResults.length > 0 ? (
+                      roomResults.map((result) => renderRoomSearchResult(result))
+                    ) : (
+                      <li className="text-[1em] text-gray-400 p-2">No rooms found</li>
+                    )}
                   </ul>
                 </div>
               )}
