@@ -17,7 +17,7 @@ export default function Message({ message }: { message: Imessage }) {
   const user = useUser((state) => state.user);
 
   return (
-    <div className="flex gap-2 p-3 rounded-lg">
+    <div className="flex gap-2 p-[.5em] rounded-lg">
       <div className="flex-shrink-0">
         <Image
           src={message.users?.avatar_url!}

@@ -278,7 +278,7 @@ export default function ListMessages() {
               <TypingIndicator roomId={selectedRoom.id} userMap={userMap} />
             )}
 
-            <div className="space-y-2">
+            <div className="space-y-[.5em]">
               {[...filteredMessages]
                 .sort(
                   (a, b) =>
