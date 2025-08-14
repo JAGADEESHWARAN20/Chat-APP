@@ -1,22 +1,13 @@
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
-import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
-import { Database } from "@/lib/types/supabase";
+import { supabaseServer } from "@/lib/supabase/server";
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { roomId: string } }
+  { params }: { params: Promise<{ roomId: string }> }
 ) {
   try {
-    const cookieStore = await cookies();
-    const supabase = createRouteHandlerClient<Database>({ 
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value;
-        },
-      }
-    });
-    const roomId = params.roomId;
+    const supabase = await supabaseServer();
+    const { roomId } = await params;
 
     // Validate roomId
     if (!roomId || typeof roomId !== "string") {
