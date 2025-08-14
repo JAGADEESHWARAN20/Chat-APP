@@ -17,7 +17,7 @@ export default function Message({ message }: { message: Imessage }) {
   const user = useUser((state) => state.user);
 
   return (
-    <div className="flex gap-2 p-3 rounded-lg hover:bg-gray-800/50 transition-colors">
+    <div className="flex gap-2 p-3 rounded-lg">
       <div className="flex-shrink-0">
         <Image
           src={message.users?.avatar_url!}
@@ -25,6 +25,7 @@ export default function Message({ message }: { message: Imessage }) {
           width={40}
           height={40}
           className="rounded-full ring-2 ring-indigo-500/50"
+          priority
         />
       </div>
       <div className="flex-1 flex-col">

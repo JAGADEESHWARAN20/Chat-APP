@@ -904,7 +904,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     {availableRooms.length === 0 ? (
       <p className="text-[1em] text-gray-400">No rooms available</p>
     ) : (
-      <ul className="space-y-2">
+      <ul className="space-y-2 overflow-y-auto max-h-[calc(100vh-200px)] scrollbar-none lg:scrollbar-custom">
         {availableRooms.map((room) => (
           <li
             key={room.id}
@@ -1044,7 +1044,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                   <h4 className="font-semibold text-[1em] text-gray-300 mb-3">
                     User Profiles
                   </h4>
-                  <ul className="space-y-3">
+                  <ul className="space-y-3 overflow-y-auto max-h-[440px] scrollbar-none lg:scrollbar-custom">
                     {userResults.map((result) => (
                       <li
                         key={result.id}
@@ -1086,7 +1086,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                   <h4 className="font-semibold text-[1em] text-gray-300 mb-3">
                     Rooms
                   </h4>
-                  <ul className="space-y-[.1em] overflow-y-auto max-h-[440px] py-[.2em] rounded-lg scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
+                  <ul className="space-y-[.1em] overflow-y-auto max-h-[440px] py-[.2em] rounded-lg scrollbar-none lg:scrollbar-custom">
                     {isLoading ? (
                       // Loading skeletons
                       Array(3).fill(0).map((_, i) => (
