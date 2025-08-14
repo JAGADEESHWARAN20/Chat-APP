@@ -707,9 +707,9 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const renderRoomSearchResult = (
     result: RoomWithMembershipCount
   ) => (
-    <li key={result.id} className="flex items-center justify-between p-2 rounded-lg bg-gray-800/50 hover:bg-gray-700/50 transition-colors">
+    <li key={result.id} className="flex items-center justify-between p-2 rounded-lg  transition-colors">
       <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-500/10">
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg">
           <span className="text-lg font-semibold text-indigo-400">
             {result.name.charAt(0).toUpperCase()}
           </span>
@@ -1050,7 +1050,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                   <h4 className="font-semibold text-[1em] text-gray-300 mb-3">
                     Rooms
                   </h4>
-                  <ul className="space-y-3">
+                  <ul className="space-y-[.1em]">
                     {roomResults.map((result) => renderRoomSearchResult(result))}
                   </ul>
                 </div>
