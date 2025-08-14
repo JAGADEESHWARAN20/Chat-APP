@@ -707,7 +707,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const renderRoomSearchResult = (
     result: RoomWithMembershipCount
   ) => (
-    <li key={result.id} className="flex items-center justify-between p-2 rounded-lg  transition-colors">
+    <li key={result.id} className="flex items-center justify-between rounded-lg  transition-colors">
       <div className="flex items-center gap-3">
         <div className="flex h-10 w-10 items-center justify-center rounded-lg">
           <span className="text-lg font-semibold text-indigo-400">
