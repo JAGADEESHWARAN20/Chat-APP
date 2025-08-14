@@ -1050,7 +1050,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                   <h4 className="font-semibold text-[1em] text-gray-300 mb-3">
                     Rooms
                   </h4>
-                  <ul className="space-y-[.1em] border rouneded-lg">
+                  <ul className="space-y-[.1em] border px-[1em] py-[1.2em] rounded-lg">
                     {roomResults.map((result) => renderRoomSearchResult(result))}
                   </ul>
                 </div>
