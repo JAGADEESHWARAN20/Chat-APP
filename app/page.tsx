@@ -13,17 +13,19 @@ export default async function Page() {
   return (
     <div className="min-h-[90vh] flex flex-col overflow-hidden">
       {/* Header section with fixed height */}
-      <div className="px-4 py-2  flex items-center"> {/* Added h-16 and flex items-center */}
+      <header className="px-4 py-3 border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex items-center justify-between max-w-7xl mx-auto w-full">
           <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold">FlyChat</h1>
+            <h1 className="text-xl font-bold bg-gradient-to-r from-blue-500 to-green-500 bg-clip-text text-transparent">
+              FlyChat
+            </h1>
           </div>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-4">
             <ThemeToggle />
             <LoginLogoutButton user={data.session?.user} />
           </div>
         </div>
-      </div>
+      </header>
 
       {/* Main content area that takes remaining height */}
       <div className=" flex flex-col w-[100vw] overflow-hidden">
