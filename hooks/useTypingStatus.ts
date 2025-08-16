@@ -49,7 +49,7 @@ export function useTypingStatus(roomId: string, currentUserId: string) {
     const newChannel = supabase.channel(`typing_presence:${roomId}`, {
       config: {
         presence: {
-          key: roomId,
+          key: currentUserId,   // Each user has unique key
         },
       },
     });
