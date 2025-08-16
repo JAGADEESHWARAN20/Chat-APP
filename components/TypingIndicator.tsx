@@ -7,7 +7,9 @@ import { useTypingStatus } from "@/hooks/useTypingStatus";
 interface TypingIndicatorProps {
   roomId: string;
   userMap?: Record<string, { display_name: string }>;
+  currentUserId?: string;
 }
+
 
 export default function TypingIndicator({ roomId, userMap = {} }: TypingIndicatorProps) {
   const user = useUser((state) => state.user);

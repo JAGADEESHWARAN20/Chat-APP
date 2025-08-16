@@ -1,7 +1,7 @@
 "use client";
 
 import { Imessage, useMessage } from "@/lib/store/messages";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import Message from "./Message";
 import { DeleteAlert, EditAlert } from "./MessasgeActions";
 import { supabaseBrowser } from "@/lib/supabase/browser";
@@ -10,7 +10,7 @@ import { ArrowDown } from "lucide-react";
 import LoadMoreMessages from "./LoadMoreMessages";
 import { Database } from "@/lib/types/supabase";
 import { useRoomStore } from "@/lib/store/roomstore";
-import TypingIndicator from "./TypingIndicator"; // import TypingIndicator
+import TypingIndicator from "./TypingIndicator";
 import { useUser } from "@/lib/store/user";
 
 type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
@@ -38,7 +38,7 @@ export default function ListMessages() {
   } = useMessage((state) => state);
   const supabase = supabaseBrowser();
 
-  const handleOnScroll = () => {
+  const handleOnScroll = useCallback(() => {
     if (!scrollRef.current) return;
     const scrollContainer = scrollRef.current;
     const isScroll =
@@ -51,15 +51,17 @@ export default function ListMessages() {
     ) {
       setNotification(0);
     }
-  };
+  }, []);
 
-  const scrollDown = () => {
+  const scrollDown = useCallback(() => {
     setNotification(0);
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  };
+    scrollRef.current?.scrollTo({
+      top: scrollRef.current.scrollHeight,
+      behavior: "smooth",
+    });
+  }, []);
 
+  // Load initial messages
   useEffect(() => {
     if (!selectedRoom?.id) return;
 
@@ -67,23 +69,19 @@ export default function ListMessages() {
       setIsLoading(true);
       try {
         const res = await fetch(`/api/messages/${selectedRoom.id}`);
-        if (!res.ok) {
-          throw new Error(await res.text());
-        }
+        if (!res.ok) throw new Error(await res.text());
+        
         const { messages } = await res.json();
-
         if (messages) {
           const formattedMessages = messages.map((msg: any) => ({
             ...msg,
-            users: msg.users
-              ? {
-                  id: msg.users.id,
-                  avatar_url: msg.users.avatar_url || "",
-                  display_name: msg.users.display_name || "",
-                  username: msg.users.username || "",
-                  created_at: msg.users.created_at,
-                }
-              : null,
+            users: msg.users ? {
+              id: msg.users.id,
+              avatar_url: msg.users.avatar_url || "",
+              display_name: msg.users.display_name || "",
+              username: msg.users.username || "",
+              created_at: msg.users.created_at,
+            } : null,
           }));
           setMessages(formattedMessages);
         }
@@ -98,6 +96,7 @@ export default function ListMessages() {
     loadInitialMessages();
   }, [selectedRoom?.id, setMessages]);
 
+  // Set up real-time subscriptions
   useEffect(() => {
     if (!selectedRoom) return;
 
@@ -114,12 +113,9 @@ export default function ListMessages() {
         (payload) => {
           try {
             const messagePayload = payload.new as MessageRow;
-            if (
-              payload.eventType === "INSERT" &&
-              !optimisticIds.includes(messagePayload.id)
-            ) {
-              if (messagePayload.room_id !== selectedRoom.id) return;
+            if (messagePayload.room_id !== selectedRoom.id) return;
 
+            if (payload.eventType === "INSERT" && !optimisticIds.includes(messagePayload.id)) {
               supabase
                 .from("users")
                 .select("*")
@@ -163,24 +159,18 @@ export default function ListMessages() {
                   }
                 });
             } else if (payload.eventType === "UPDATE") {
-              const updatedMessage = payload.new as MessageRow;
-              if (updatedMessage.room_id !== selectedRoom.id) return;
-
-              optimisticUpdateMessage(updatedMessage.id, {
-                id: updatedMessage.id,
-                text: updatedMessage.text,
-                is_edited: updatedMessage.is_edited,
-                created_at: updatedMessage.created_at,
-                sender_id: updatedMessage.sender_id,
-                room_id: updatedMessage.room_id,
-                direct_chat_id: updatedMessage.direct_chat_id,
-                dm_thread_id: updatedMessage.dm_thread_id,
-                status: updatedMessage.status,
+              optimisticUpdateMessage(messagePayload.id, {
+                id: messagePayload.id,
+                text: messagePayload.text,
+                is_edited: messagePayload.is_edited,
+                created_at: messagePayload.created_at,
+                sender_id: messagePayload.sender_id,
+                room_id: messagePayload.room_id,
+                direct_chat_id: messagePayload.direct_chat_id,
+                dm_thread_id: messagePayload.dm_thread_id,
+                status: messagePayload.status,
               });
             } else if (payload.eventType === "DELETE") {
-              const deletedMessage = payload.old as MessageRow;
-              if (deletedMessage.room_id !== selectedRoom.id) return;
-
               optimisticDeleteMessage(payload.old.id);
             }
           } catch (err) {
@@ -191,52 +181,34 @@ export default function ListMessages() {
       )
       .subscribe();
 
-    const notificationChannel = supabase
-      .channel("global-notifications")
-      .on(
-        "broadcast",
-        { event: "new-message" },
-        (payload) => {
-          const newNotification = payload.payload as Notification;
-          if (newNotification.room_id !== selectedRoom.id) {
-            toast.info(newNotification.message);
-          }
-        }
-      )
-      .on(
-        "broadcast",
-        { event: "user_joined" },
-        (payload) => {
-          const newNotification = payload.payload as Notification;
-          if (newNotification.room_id !== selectedRoom.id) {
-            toast.info(newNotification.message);
-          }
-        }
-      )
-      .subscribe();
-
     return () => {
       supabase.removeChannel(messageChannel);
-      supabase.removeChannel(notificationChannel);
     };
-  }, [
-    selectedRoom,
-    optimisticIds,
-    addMessage,
-    optimisticUpdateMessage,
-    optimisticDeleteMessage,
-    supabase,
-  ]);
+  }, [selectedRoom, optimisticIds, addMessage, optimisticUpdateMessage, optimisticDeleteMessage, supabase]);
 
+  // Auto-scroll when new messages arrive
   useEffect(() => {
     if (scrollRef.current && !userScrolled) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, userScrolled]);
 
-  const filteredMessages = messages.filter(
-    (msg) => msg.room_id === selectedRoom?.id
-  );
+  // Memoized filtered messages
+  const filteredMessages = useMemo(() => {
+    return messages
+      .filter((msg) => msg.room_id === selectedRoom?.id)
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  }, [messages, selectedRoom?.id]);
+
+  // Memoized user map for typing indicators
+  const userMap = useMemo(() => {
+    return filteredMessages.reduce((acc, msg) => {
+      if (msg.users && !acc[msg.users.id]) {
+        acc[msg.users.id] = { display_name: msg.users.display_name };
+      }
+      return acc;
+    }, {} as Record<string, { display_name: string }>);
+  }, [filteredMessages]);
 
   const SkeletonMessage = () => (
     <div className="flex gap-2 animate-pulse">
@@ -248,18 +220,10 @@ export default function ListMessages() {
     </div>
   );
 
-  // Optional: prepare userMap from messages (to pass to TypingIndicator showing names)
-  const userMap = filteredMessages.reduce((acc, msg) => {
-    if (msg.users && !acc[msg.users.id]) {
-      acc[msg.users.id] = { display_name: msg.users.display_name };
-    }
-    return acc;
-  }, {} as Record<string, { display_name: string }>);
-
   return (
     <>
       <div
-        className="flex-1 flex flex-col p-1 h-auto  overflow-y-auto"
+        className="flex-1 flex flex-col p-1 h-auto overflow-y-auto"
         ref={scrollRef}
         onScroll={handleOnScroll}
       >
@@ -273,21 +237,19 @@ export default function ListMessages() {
               <LoadMoreMessages />
             </div>
 
-            {/* Typing Indicator shown here */}
+            {/* Typing Indicator - positioned right above messages */}
             {selectedRoom?.id && (
-              <TypingIndicator roomId={selectedRoom.id} userMap={userMap} />
+              <TypingIndicator 
+                roomId={selectedRoom.id} 
+                userMap={userMap}
+                currentUserId={user?.id}
+              />
             )}
 
             <div className="space-y-[.5em]">
-              {[...filteredMessages]
-                .sort(
-                  (a, b) =>
-                    new Date(a.created_at).getTime() -
-                    new Date(b.created_at).getTime()
-                )
-                .map((value) => (
-                  <Message key={value.id} message={value} />
-                ))}
+              {filteredMessages.map((value) => (
+                <Message key={value.id} message={value} />
+              ))}
             </div>
           </>
         )}
@@ -295,6 +257,7 @@ export default function ListMessages() {
         <DeleteAlert />
         <EditAlert />
       </div>
+
       {userScrolled && (
         <div className="absolute bottom-20 w-full">
           {notification ? (
