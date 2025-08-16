@@ -11,12 +11,19 @@ interface TypingIndicatorProps {
 
 export default function TypingIndicator({ roomId, userMap = {} }: TypingIndicatorProps) {
   const user = useUser((state) => state.user);
-  const typingUsers = useTypingStatus(roomId, user?.id ?? "");
+  const { typingUsers } = useTypingStatus(roomId, user?.id ?? "");
 
-  if (typingUsers.length === 0) return null;
+  // Don't show if no one is typing or if it's just the current user
+  if (typingUsers.length === 0 || (typingUsers.length === 1 && typingUsers[0] === user?.id)) {
+    return null;
+  }
 
-  // Map userIds to display names, fallback to 'Someone'
-  const names = typingUsers.map((id) => userMap[id]?.display_name || "Someone");
+  // Map userIds to display names, excluding current user
+  const names = typingUsers
+    .filter(id => id !== user?.id)
+    .map((id) => userMap[id]?.display_name || "Someone");
+
+  if (names.length === 0) return null;
 
   const displayNames =
     names.length === 1
@@ -24,8 +31,8 @@ export default function TypingIndicator({ roomId, userMap = {} }: TypingIndicato
       : names.slice(0, -1).join(", ") + " and " + names[names.length - 1];
 
   return (
-    <div className="text-gray-400 italic text-sm px-4 py-2">
-      {displayNames} {typingUsers.length === 1 ? "is" : "are"} typing...
+    <div className="text-gray-400 italic text-sm px-4 py-2 animate-pulse">
+      {displayNames} {names.length === 1 ? "is" : "are"} typing...
     </div>
   );
 }
