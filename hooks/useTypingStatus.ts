@@ -15,40 +15,35 @@ type TypingPresence = {
 export function useTypingStatus(roomId: string, currentUserId: string) {
   const supabase = createClientComponentClient<Database>();
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
+  const [channel, setChannel] = useState<any>(null);
 
-  // Memoize the debounced function to prevent recreation on every render
-  const debouncedSetTyping = useMemo(() => {
-    return debounce(async (isTyping: boolean) => {
-      if (!roomId || !currentUserId) return;
+// First, memoize the debounced function separately
+const debouncedUpdate = useMemo(() => {
+  return debounce(async (isTyping: boolean) => {
+    if (!roomId || !currentUserId || !channel) return;
+    
+    try {
+      await channel.track({
+        user_id: currentUserId,
+        is_typing: isTyping,
+        room_id: roomId,
+        last_updated: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error("Error updating typing status:", error);
+    }
+  }, 500);
+}, [roomId, currentUserId, channel]);
 
-      try {
-        const channel = supabase.channel(`room:${roomId}`);
-        await channel.track({
-          user_id: currentUserId,
-          is_typing: isTyping,
-          room_id: roomId,
-          last_updated: new Date().toISOString(),
-        });
-      } catch (error) {
-        console.error("Error updating typing status:", error);
-      }
-    }, 500);
-  }, [roomId, currentUserId, supabase]);
-
-  const setIsTyping = useCallback((isTyping: boolean) => {
-    debouncedSetTyping(isTyping);
-  }, [debouncedSetTyping]);
-
-  useEffect(() => {
-    return () => {
-      debouncedSetTyping.cancel();
-    };
-  }, [debouncedSetTyping]);
+// Then use it in your callback
+const setIsTyping = useCallback((isTyping: boolean) => {
+  debouncedUpdate(isTyping);
+}, [debouncedUpdate]);
 
   useEffect(() => {
     if (!roomId || !currentUserId) return;
 
-    const channel = supabase.channel(`room:${roomId}`, {
+    const newChannel = supabase.channel(`room_presence:${roomId}`, {
       config: {
         presence: {
           key: roomId,
@@ -57,7 +52,7 @@ export function useTypingStatus(roomId: string, currentUserId: string) {
     });
 
     const handlePresenceSync = () => {
-      const state = channel.presenceState<TypingPresence>();
+      const state = newChannel.presenceState<TypingPresence>();
       const now = new Date();
       
       const typingUserIds = Object.values(state)
@@ -76,23 +71,26 @@ export function useTypingStatus(roomId: string, currentUserId: string) {
       setTypingUsers(typingUserIds);
     };
 
-    const subscription = channel
+    newChannel
       .on("presence", { event: "sync" }, handlePresenceSync)
+      .on("presence", { event: "join" }, handlePresenceSync)
+      .on("presence", { event: "leave" }, handlePresenceSync)
       .subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
-          await channel.track({
+          // Initial sync - mark as not typing
+          await newChannel.track({
             user_id: currentUserId,
             is_typing: false,
             room_id: roomId,
             last_updated: new Date().toISOString(),
           });
+          setChannel(newChannel);
         }
       });
 
     return () => {
-      subscription.unsubscribe();
-      channel.untrack().catch(console.error);
-      supabase.removeChannel(channel).catch(console.error);
+      newChannel.unsubscribe();
+      supabase.removeChannel(newChannel);
     };
   }, [roomId, currentUserId, supabase]);
 
