@@ -34,8 +34,10 @@ export function useTypingStatus(roomId: string, currentUserId: string) {
   }, 500), [roomId, currentUserId, channel]);
 
   const setIsTyping = useCallback((isTyping: boolean) => {
+    if (!channel) return;
     debouncedUpdate(isTyping);
-  }, [debouncedUpdate]);
+  }, [debouncedUpdate, channel]);
+
 
   useEffect(() => {
     return () => {
