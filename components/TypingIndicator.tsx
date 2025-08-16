@@ -11,15 +11,17 @@ interface TypingIndicatorProps {
 }
 
 
-export default function TypingIndicator({ roomId, userMap = {} }: TypingIndicatorProps) {
+export default function TypingIndicator({ 
+  roomId, 
+  userMap = {}, 
+  currentUserId 
+}: TypingIndicatorProps) {
   const user = useUser((state) => state.user);
-  const { typingUsers } = useTypingStatus(roomId, user?.id ?? "");
+   const { typingUsers } = useTypingStatus(roomId, currentUserId || "");
 
-  // Don't show if no one is typing or if it's just the current user
-  if (typingUsers.length === 0 || (typingUsers.length === 1 && typingUsers[0] === user?.id)) {
-    return null;
-  }
 
+  const filteredTypers = typingUsers.filter(id => id !== currentUserId);
+  if (filteredTypers.length === 0) return null;
   // Map userIds to display names, excluding current user
   const names = typingUsers
     .filter(id => id !== user?.id)

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import type { Database } from "@/database.types";
 import debounce from "lodash.debounce";
@@ -16,9 +16,9 @@ export function useTypingStatus(roomId: string, currentUserId: string) {
   const supabase = createClientComponentClient<Database>();
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
 
-  // Debounced function to update typing status
-  const setIsTyping = useCallback((isTyping: boolean) => {
-    const debouncedUpdate = debounce(async () => {
+  // Memoize the debounced function to prevent recreation on every render
+  const debouncedSetTyping = useMemo(() => {
+    return debounce(async (isTyping: boolean) => {
       if (!roomId || !currentUserId) return;
 
       try {
@@ -33,9 +33,17 @@ export function useTypingStatus(roomId: string, currentUserId: string) {
         console.error("Error updating typing status:", error);
       }
     }, 500);
-
-    debouncedUpdate();
   }, [roomId, currentUserId, supabase]);
+
+  const setIsTyping = useCallback((isTyping: boolean) => {
+    debouncedSetTyping(isTyping);
+  }, [debouncedSetTyping]);
+
+  useEffect(() => {
+    return () => {
+      debouncedSetTyping.cancel();
+    };
+  }, [debouncedSetTyping]);
 
   useEffect(() => {
     if (!roomId || !currentUserId) return;
@@ -48,7 +56,6 @@ export function useTypingStatus(roomId: string, currentUserId: string) {
       },
     });
 
-    // Handle presence state changes
     const handlePresenceSync = () => {
       const state = channel.presenceState<TypingPresence>();
       const now = new Date();
@@ -56,7 +63,6 @@ export function useTypingStatus(roomId: string, currentUserId: string) {
       const typingUserIds = Object.values(state)
         .flat()
         .filter((presence) => {
-          // Filter out current user and stale entries (older than 3 seconds)
           const isRecent = !presence.last_updated || 
             new Date(presence.last_updated) > new Date(now.getTime() - 3000);
           return (
@@ -70,11 +76,10 @@ export function useTypingStatus(roomId: string, currentUserId: string) {
       setTypingUsers(typingUserIds);
     };
 
-    channel
+    const subscription = channel
       .on("presence", { event: "sync" }, handlePresenceSync)
       .subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
-          // Initial sync - mark as not typing
           await channel.track({
             user_id: currentUserId,
             is_typing: false,
@@ -85,7 +90,7 @@ export function useTypingStatus(roomId: string, currentUserId: string) {
       });
 
     return () => {
-      // Cleanup
+      subscription.unsubscribe();
       channel.untrack().catch(console.error);
       supabase.removeChannel(channel).catch(console.error);
     };
