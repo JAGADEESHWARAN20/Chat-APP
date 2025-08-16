@@ -1,82 +1,67 @@
-import { useEffect, useState } from "react";
-import { supabaseBrowser } from "@/lib/supabase/browser";
+"use client";
 
-import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
-import type { Database } from "@/lib/types/supabase";
+import { useEffect, useState, useCallback } from "react";
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import type { Database } from "@/database.types";
 
-type TypingStatusRow = Database["public"]["Tables"]["typing_status"]["Row"];
-
-function isTypingStatusRow(obj: any): obj is TypingStatusRow {
-  return (
-    obj !== null &&
-    typeof obj === "object" &&
-    "user_id" in obj &&
-    "is_typing" in obj &&
-    typeof obj.user_id === "string"
-  );
-}
+type TypingPresence = {
+  user_id: string;
+  is_typing: boolean;
+};
 
 export function useTypingStatus(roomId: string, currentUserId: string) {
-  const supabase = supabaseBrowser();
+  const supabase = createClientComponentClient<Database>();
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
 
-  useEffect(() => {
-    if (!roomId) return;
+  const updateTypingStatus = useCallback(async (isTyping: boolean) => {
+    if (!roomId || !currentUserId) return;
 
-    async function fetchTypingUsers() {
-      // no generic on .from(), so supabase infers any
-      const { data, error } = await supabase
-        .from("typing_status")
-        .select("user_id")
-        .eq("room_id", roomId)
-        .eq("is_typing", true);
-
-      if (!error && data) {
-        const typedData = data as TypingStatusRow[];
-        setTypingUsers(
-          typedData.map((row) => row.user_id).filter((id) => id !== currentUserId)
-        );
-      }
-    }
-    fetchTypingUsers();
-
-   const channel = supabase
-  .channel(`public:typing_status:room_id=eq.${roomId}`)
- .on(
-  "postgres_changes",
-  {
-    event: "*",
-    schema: "public",
-    table: "typing_status",
-    filter: `room_id=eq.${roomId}`,
-  },
-  (payload: RealtimePostgresChangesPayload<TypingStatusRow>) => {
-    const row = payload.new;
-    if (isTypingStatusRow(row) && row.is_typing) {
-      setTypingUsers((prev) => {
-        if (!prev.includes(row.user_id) && row.user_id !== currentUserId) {
-          return [...prev, row.user_id];
-        }
-        return prev;
-      });
-    } else {
-      const userIdToRemove = isTypingStatusRow(payload.old)
-        ? payload.old.user_id
-        : isTypingStatusRow(row)
-        ? row.user_id
-        : undefined;
-
-      if (userIdToRemove) {
-        setTypingUsers((prev) => prev.filter((id) => id !== userIdToRemove));
-      }
-    }
-  }  // <-- closing the arrow function here
-)    // <-- closing the .on() call here
-.subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    const channel = supabase.channel(`room:${roomId}`);
+    await channel.track({
+      user_id: currentUserId,
+      is_typing: isTyping,
+      room_id: roomId,
+    });
   }, [roomId, currentUserId, supabase]);
 
-  return typingUsers;
+  useEffect(() => {
+    if (!roomId || !currentUserId) return;
+
+    // Set up the real-time subscription using presence
+    const channel = supabase.channel(`room:${roomId}`)
+      .on(
+        'presence',
+        { event: 'sync' },
+        () => {
+          const state = channel.presenceState<TypingPresence>();
+          const typingUserIds = Object.values(state)
+            .flat()
+            .filter(presence => presence.is_typing && presence.user_id !== currentUserId)
+            .map(presence => presence.user_id);
+          
+          setTypingUsers(typingUserIds);
+        }
+      )
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await channel.track({
+            user_id: currentUserId,
+            is_typing: false,
+            room_id: roomId,
+          });
+        }
+      });
+
+    // Cleanup: Remove typing status when unmounting
+    return () => {
+      updateTypingStatus(false).catch(console.error);
+      channel.untrack().catch(console.error);
+      supabase.removeChannel(channel).catch(console.error);
+    };
+  }, [roomId, currentUserId, supabase, updateTypingStatus]);
+
+  return {
+    typingUsers,
+    setIsTyping: updateTypingStatus,
+  };
 }

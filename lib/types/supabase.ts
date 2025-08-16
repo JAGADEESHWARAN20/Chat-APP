@@ -7,7 +7,7 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instanciate createClient with right options
+  // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "12.2.3 (519615d)"
@@ -381,29 +381,46 @@ export type Database = {
       accept_notification: {
         Args: {
           p_notification_id: string
-          p_target_user_id: string
           p_room_id: string
+          p_target_user_id: string
           p_timestamp: string
         }
         Returns: undefined
       }
+      clear_stale_typing_status: {
+        Args: { p_room_id: string; p_stale_threshold?: unknown }
+        Returns: {
+          is_typing: boolean | null
+          room_id: string
+          updated_at: string | null
+          user_id: string
+        }[]
+      }
       create_room_with_member: {
         Args: {
-          p_name: string
           p_is_private: boolean
-          p_user_id: string
+          p_name: string
           p_timestamp: string
+          p_user_id: string
         }
         Returns: {
           id: string
         }[]
       }
+      get_typing_users: {
+        Args: { p_room_id: string; p_stale_threshold?: unknown }
+        Returns: {
+          is_typing: boolean
+          updated_at: string
+          user_id: string
+        }[]
+      }
       join_room: {
         Args: {
-          p_room_id: string
-          p_user_id: string
-          p_status: string
           p_joined_at?: string
+          p_room_id: string
+          p_status: string
+          p_user_id: string
         }
         Returns: undefined
       }
@@ -414,18 +431,27 @@ export type Database = {
       reject_notification: {
         Args: {
           p_notification_id: string
-          p_sender_id: string
           p_room_id: string
+          p_sender_id: string
         }
         Returns: undefined
       }
       transfer_room_ownership: {
         Args: {
-          p_room_id: string
-          p_new_owner_id: string
           p_current_owner_id: string
+          p_new_owner_id: string
+          p_room_id: string
         }
         Returns: undefined
+      }
+      upsert_typing_status: {
+        Args: { p_is_typing: boolean; p_room_id: string; p_user_id: string }
+        Returns: {
+          is_typing: boolean | null
+          room_id: string
+          updated_at: string | null
+          user_id: string
+        }
       }
     }
     Enums: {
