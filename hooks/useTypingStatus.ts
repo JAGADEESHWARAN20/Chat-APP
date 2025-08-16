@@ -17,9 +17,8 @@ export function useTypingStatus(roomId: string, currentUserId: string) {
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [channel, setChannel] = useState<any>(null);
 
-// First, memoize the debounced function separately
-const debouncedUpdate = useMemo(() => {
-  return debounce(async (isTyping: boolean) => {
+  // Memoize debounce function
+  const debouncedUpdate = useMemo(() => debounce(async (isTyping: boolean) => {
     if (!roomId || !currentUserId || !channel) return;
     
     try {
@@ -32,18 +31,22 @@ const debouncedUpdate = useMemo(() => {
     } catch (error) {
       console.error("Error updating typing status:", error);
     }
-  }, 500);
-}, [roomId, currentUserId, channel]);
+  }, 500), [roomId, currentUserId, channel]);
 
-// Then use it in your callback
-const setIsTyping = useCallback((isTyping: boolean) => {
-  debouncedUpdate(isTyping);
-}, [debouncedUpdate]);
+  const setIsTyping = useCallback((isTyping: boolean) => {
+    debouncedUpdate(isTyping);
+  }, [debouncedUpdate]);
+
+  useEffect(() => {
+    return () => {
+      debouncedUpdate.cancel();
+    };
+  }, [debouncedUpdate]);
 
   useEffect(() => {
     if (!roomId || !currentUserId) return;
 
-    const newChannel = supabase.channel(`room_presence:${roomId}`, {
+    const newChannel = supabase.channel(`typing_presence:${roomId}`, {
       config: {
         presence: {
           key: roomId,
@@ -77,7 +80,6 @@ const setIsTyping = useCallback((isTyping: boolean) => {
       .on("presence", { event: "leave" }, handlePresenceSync)
       .subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
-          // Initial sync - mark as not typing
           await newChannel.track({
             user_id: currentUserId,
             is_typing: false,
@@ -91,6 +93,7 @@ const setIsTyping = useCallback((isTyping: boolean) => {
     return () => {
       newChannel.unsubscribe();
       supabase.removeChannel(newChannel);
+      setChannel(null);
     };
   }, [roomId, currentUserId, supabase]);
 
