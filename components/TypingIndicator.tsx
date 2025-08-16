@@ -16,7 +16,7 @@ export default function TypingIndicator({
   currentUserId 
 }: TypingIndicatorProps) {
   const user = useUser((state) => state.user);
-  const { typingUsers, setIsTyping } = useTypingStatus(
+  const { typingUsers } = useTypingStatus( // Remove setIsTyping since we don't use it here
     roomId, 
     currentUserId || user?.id || ""
   );
