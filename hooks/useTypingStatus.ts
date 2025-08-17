@@ -5,97 +5,135 @@ import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import type { Database } from "@/database.types";
 import debounce from "lodash.debounce";
 
-type TypingPresence = {
-  user_id: string;
-  is_typing: boolean;
-  last_updated: string;
-  room_id: string;
-};
+type TypingStatus = Database["public"]["Tables"]["typing_status"]["Row"];
 
 export function useTypingStatus(roomId: string, currentUserId: string) {
   const supabase = createClientComponentClient<Database>();
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
-  const [channel, setChannel] = useState<any>(null);
 
-  // Memoize debounce function
-  const debouncedUpdate = useMemo(() => debounce(async (isTyping: boolean) => {
-    if (!roomId || !currentUserId || !channel) return;
-    
-    try {
-      await channel.track({
-        user_id: currentUserId,
-        is_typing: isTyping,
-        room_id: roomId,
-        last_updated: new Date().toISOString(),
-      });
-    } catch (error) {
-      console.error("Error updating typing status:", error);
-    }
-  }, 500), [roomId, currentUserId, channel]);
+  // Debounced function to update typing status
+  const debouncedUpdate = useMemo(
+    () =>
+      debounce(async (isTyping: boolean) => {
+        if (!roomId || !currentUserId) return;
 
-  const setIsTyping = useCallback((isTyping: boolean) => {
-    if (!channel) return;
-    debouncedUpdate(isTyping);
-  }, [debouncedUpdate, channel]);
+        try {
+          const { error } = await supabase
+            .rpc("upsert_typing_status", {
+              p_room_id: roomId,
+              p_user_id: currentUserId,
+              p_is_typing: isTyping,
+            });
 
+          if (error) {
+            console.error("Error updating typing status:", error);
+          }
+        } catch (error) {
+          console.error("Unexpected error updating typing status:", error);
+        }
+      }, 500),
+    [roomId, currentUserId, supabase]
+  );
 
+  const setIsTyping = useCallback(
+    (isTyping: boolean) => {
+      debouncedUpdate(isTyping);
+    },
+    [debouncedUpdate]
+  );
+
+  // Cleanup debounce on unmount
   useEffect(() => {
     return () => {
       debouncedUpdate.cancel();
+      // Clear typing status on unmount
+      if (roomId && currentUserId) {
+        supabase
+          .rpc("upsert_typing_status", {
+            p_room_id: roomId,
+            p_user_id: currentUserId,
+            p_is_typing: false,
+          })
+          .catch((error) => console.error("Error clearing typing status:", error));
+      }
     };
-  }, [debouncedUpdate]);
+  }, [debouncedUpdate, roomId, currentUserId, supabase]);
 
+  // Real-time subscription to typing_status table
   useEffect(() => {
-    if (!roomId || !currentUserId) return;
+    if (!roomId || !currentUserId) {
+      setTypingUsers([]);
+      return;
+    }
 
-    const newChannel = supabase.channel(`typing_presence:${roomId}`, {
-      config: {
-        presence: {
-          key: currentUserId,   // Each user has unique key
-        },
-      },
-    });
+    // Initial fetch of typing users
+    const fetchTypingUsers = async () => {
+      try {
+        const { data, error } = await supabase
+          .rpc("get_typing_users", {
+            p_room_id: roomId,
+            p_stale_threshold: "3 seconds",
+          });
 
-    const handlePresenceSync = () => {
-      const state = newChannel.presenceState<TypingPresence>();
-      const now = new Date();
-      
-      const typingUserIds = Object.values(state)
-        .flat()
-        .filter((presence) => {
-          const isRecent = !presence.last_updated || 
-            new Date(presence.last_updated) > new Date(now.getTime() - 3000);
-          return (
-            presence.user_id !== currentUserId &&
-            presence.is_typing &&
-            isRecent
-          );
-        })
-        .map((presence) => presence.user_id);
+        if (error) {
+          console.error("Error fetching typing users:", error);
+          return;
+        }
 
-      setTypingUsers(typingUserIds);
+        const typingUserIds = data
+          .filter((status: { user_id: string; is_typing: boolean }) => {
+            return status.is_typing && status.user_id !== currentUserId;
+          })
+          .map((status: { user_id: string }) => status.user_id);
+
+        setTypingUsers(typingUserIds);
+      } catch (error) {
+        console.error("Unexpected error fetching typing users:", error);
+      }
     };
 
-    newChannel
-      .on("presence", { event: "sync" }, handlePresenceSync)
-      .on("presence", { event: "join" }, handlePresenceSync)
-      .on("presence", { event: "leave" }, handlePresenceSync)
-      .subscribe(async (status) => {
-        if (status === "SUBSCRIBED") {
-          await newChannel.track({
-            user_id: currentUserId,
-            is_typing: false,
-            room_id: roomId,
-            last_updated: new Date().toISOString(),
-          });
-          setChannel(newChannel);
+    fetchTypingUsers();
+
+    // Subscribe to real-time changes
+    const channel = supabase
+      .channel(`typing_status:${roomId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "typing_status",
+          filter: `room_id=eq.${roomId}`,
+        },
+        async (payload) => {
+          try {
+            const { data, error } = await supabase
+              .rpc("get_typing_users", {
+                p_room_id: roomId,
+                p_stale_threshold: "3 seconds",
+              });
+
+            if (error) {
+              console.error("Error fetching typing users on update:", error);
+              return;
+            }
+
+            const typingUserIds = data
+              .filter((status: { user_id: string; is_typing: boolean }) => {
+                return status.is_typing && status.user_id !== currentUserId;
+              })
+              .map((status: { user_id: string }) => status.user_id);
+
+            setTypingUsers(typingUserIds);
+          } catch (error) {
+            console.error("Unexpected error processing typing update:", error);
+          }
         }
-      });
+      )
+      .subscribe();
 
     return () => {
-      newChannel.unsubscribe();
-      supabase.removeChannel(newChannel);
-      setChannel(null);
+      supabase.removeChannel(channel);
     };
   }, [roomId, currentUserId, supabase]);
 
