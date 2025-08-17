@@ -28,33 +28,40 @@ export default function ChatInput() {
 
   const { typingUsers, setIsTyping } = useTypingStatus(roomId, userId);
 
- const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-  const value = e.target.value;
-  setInputValue(value);
+  const handleInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const value = e.target.value;
+      setInputValue(value);
 
-  // User is typing - set status to true
-  setIsTyping(true);
+      // User is typing - set status to true
+      try {
+        setIsTyping(true);
 
-  // Clear any existing timeout
-  if (typingTimeoutRef.current) {
-    clearTimeout(typingTimeoutRef.current);
-  }
+        // Clear any existing timeout
+        if (typingTimeoutRef.current) {
+          clearTimeout(typingTimeoutRef.current);
+        }
 
-  // Set timeout to mark as not typing after 1 second of inactivity
-  typingTimeoutRef.current = setTimeout(() => {
-    setIsTyping(false);
-  }, 1000);
-};
+        // Set timeout to mark as not typing after 1 second of inactivity
+        typingTimeoutRef.current = setTimeout(() => {
+          setIsTyping(false);
+        }, 1000);
+      } catch (error) {
+        console.error("Error setting typing status:", error);
+      }
+    },
+    [setIsTyping]
+  );
 
-  // Cleanup timeout on unmount
+  // Cleanup on room change or unmount
   useEffect(() => {
     return () => {
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
       }
-      setIsTyping(false); // Ensure we mark as not typing when leaving
+      setIsTyping(false);
     };
-  }, [setIsTyping]);
+  }, [setIsTyping, roomId]);
 
   async function handleSendMessage(text: string) {
     if (!text.trim() || !user) {
@@ -111,9 +118,7 @@ export default function ChatInput() {
 
       if (error) throw error;
     } catch (error) {
-      if (error instanceof Error) {
-        toast.error(`Failed to send message: ${error.message}`);
-      }
+      toast.error(`Failed to send message: ${error instanceof Error ? error.message : "Unknown error"}`);
       useMessage.getState().optimisticDeleteMessage(id); // Rollback
     }
   }
