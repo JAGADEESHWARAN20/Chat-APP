@@ -1,47 +1,70 @@
 "use client";
 
-import React, { useEffect } from "react";
-import { useUser } from "@/lib/store/user";
-import { useTypingStatus } from "@/hooks/useTypingStatus";
+import React, { useEffect, useState } from "react";
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import type { Database } from "@/database.types";
 
 interface TypingIndicatorProps {
   roomId: string;
-  userMap?: Record<string, { display_name: string }>;
   currentUserId?: string;
 }
 
-export default function TypingIndicator({ 
-  roomId, 
-  userMap = {}, 
-  currentUserId 
-}: TypingIndicatorProps) {
-  const user = useUser((state) => state.user);
-  const { typingUsers } = useTypingStatus( // Remove setIsTyping since we don't use it here
-    roomId, 
-    currentUserId || user?.id || ""
-  );
+export default function TypingIndicator({ roomId, currentUserId }: TypingIndicatorProps) {
+  const supabase = createClientComponentClient<Database>();
+  const [userNames, setUserNames] = useState<Record<string, string>>({});
+  const { typingUsers, setIsTyping } = useTypingStatus(roomId, currentUserId || "");
 
-  // Debugging - log typing users
+  // Fetch display names for typing users
   useEffect(() => {
-    console.log('Typing users:', typingUsers);
-  }, [typingUsers]);
+    if (typingUsers.length === 0) {
+      setUserNames({});
+      return;
+    }
 
-  // Filter out current user and empty states
-  const filteredTypers = typingUsers.filter(id => id !== (currentUserId || user?.id));
-  
+    const fetchUserNames = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("users")
+          .select("id, display_name")
+          .in("id", typingUsers);
+
+        if (error) {
+          console.error("Error fetching user names:", error);
+          return;
+        }
+
+        const nameMap = data.reduce((acc, user) => {
+          acc[user.id] = user.display_name || "Someone";
+          return acc;
+        }, {} as Record<string, string>);
+
+        setUserNames(nameMap);
+      } catch (error) {
+        console.error("Unexpected error fetching user names:", error);
+      }
+    };
+
+    fetchUserNames();
+  }, [typingUsers, supabase]);
+
+  // Debugging
+  useEffect(() => {
+    console.log("Typing users:", typingUsers, "User names:", userNames);
+  }, [typingUsers, userNames]);
+
+  // Filter out current user
+  const filteredTypers = typingUsers.filter((id) => id !== currentUserId);
+
   if (filteredTypers.length === 0) {
-    console.log('No typers to display after filtering');
     return null;
   }
 
-  // Map userIds to display names
-  const names = filteredTypers.map((id) => 
-    userMap[id]?.display_name || "Someone"
-  );
-
-  const displayNames = names.length === 1
-    ? names[0]
-    : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  // Map user IDs to display names
+  const names = filteredTypers.map((id) => userNames[id] || "Someone");
+  const displayNames =
+    names.length === 1
+      ? names[0]
+      : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 
   return (
     <div className="text-gray-400 italic text-sm px-4 py-2 animate-pulse">
