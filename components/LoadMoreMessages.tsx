@@ -8,6 +8,7 @@ import { getFromAndTo } from "@/lib/utils";
 import { Imessage, useMessage } from "@/lib/store/messages";
 import { toast } from "sonner";
 import { useRoomStore } from "@/lib/store/roomstore";
+import { MESSAGE_WITH_PROFILE_SELECT } from "@/lib/queries/messages";
 
 export default function LoadMoreMessages() {
   const page = useMessage((state) => state.page);
@@ -28,12 +29,14 @@ export default function LoadMoreMessages() {
       const supabase = supabaseBrowser();
 
       console.log("[LoadMoreMessages] Fetching messages for room:", selectedRoom.id, { from, to });
+
       const { data, error } = await supabase
         .from("messages")
-        .select("*, profiles(*)") // ✅ directly load related profile
+        .select(MESSAGE_WITH_PROFILE_SELECT)
         .eq("room_id", selectedRoom.id)
         .range(from, to)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .returns<Imessage[]>(); // ✅ ensures correct typing
 
       if (error) {
         console.error("[LoadMoreMessages] Supabase Query Error:", error);
@@ -43,9 +46,8 @@ export default function LoadMoreMessages() {
       console.log("[LoadMoreMessages] Messages fetched:", data);
 
       if (data && data.length > 0) {
-        // ✅ No need to remap `msg.users`
-        const mapped = data as Imessage[];
-        setMessages(mapped.reverse());
+        // ✅ Reverse so oldest comes first
+        setMessages(data.reverse());
       } else {
         toast.info("No more messages to load.");
       }

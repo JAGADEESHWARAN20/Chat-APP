@@ -4,10 +4,12 @@ import { Database } from "@/lib/types/supabase";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { toast } from "sonner";
 
-// Derive Imessage type from Database
-export type Imessage = Database["public"]["Tables"]["messages"]["Row"] & {
-  profiles: Database["public"]["Tables"]["profiles"]["Row"] | null;
-};
+type MessageWithProfile =
+  Database["public"]["Tables"]["messages"]["Row"] & {
+    profiles: Database["public"]["Tables"]["profiles"]["Row"];
+  };
+export type Imessage = MessageWithProfile;
+
 
 // Zustand state and actions
 interface MessageState {
@@ -115,23 +117,24 @@ export const useMessage = create<MessageState>()((set, get) => ({
 
             // Fetch the complete message data including user details
             const { data: messageWithUser, error } = await supabaseBrowser()
-			.from("messages")
-			.select(
-			`
-				*,
-				profiles:profiles!messages_sender_id_fkey (
-				id,
-				display_name,
-				avatar_url,
-				username,
-				bio,
-				created_at,
-				updated_at
+				.from("messages")
+				.select(
+				`
+					*,
+					profiles:profiles!messages_sender_id_fkey (
+					id,
+					display_name,
+					avatar_url,
+					username,
+					bio,
+					created_at,
+					updated_at
+					)
+				`
 				)
-			`
-			)
-			.eq("id", newMessage.id)
-			.single();
+				.eq("id", newMessage.id)
+				.single<MessageWithProfile>();
+
 
 
             if (error) {
