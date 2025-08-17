@@ -13,7 +13,7 @@ interface TypingIndicatorProps {
 export default function TypingIndicator({ roomId, currentUserId }: TypingIndicatorProps) {
   const supabase = createClientComponentClient<Database>();
   const [userNames, setUserNames] = useState<Record<string, string>>({});
-  const { typingUsers, setIsTyping } = useTypingStatus(roomId, currentUserId || "");
+  const { typingUsers } = useTypingStatus(roomId, currentUserId || "");
 
   // Fetch display names for typing users
   useEffect(() => {
@@ -24,10 +24,11 @@ export default function TypingIndicator({ roomId, currentUserId }: TypingIndicat
 
     const fetchUserNames = async () => {
       try {
+        const userIds = typingUsers.map((u) => u.user_id);
         const { data, error } = await supabase
           .from("users")
           .select("id, display_name")
-          .in("id", typingUsers);
+          .in("id", userIds);
 
         if (error) {
           console.error("Error fetching user names:", error);
@@ -54,7 +55,9 @@ export default function TypingIndicator({ roomId, currentUserId }: TypingIndicat
   }, [typingUsers, userNames]);
 
   // Filter out current user
-  const filteredTypers = typingUsers.filter((id) => id !== currentUserId);
+  const filteredTypers = typingUsers
+    .filter((u) => u.user_id !== currentUserId)
+    .map((u) => u.user_id);
 
   if (filteredTypers.length === 0) {
     return null;

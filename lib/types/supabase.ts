@@ -87,6 +87,38 @@ export type Database = {
         }
         Relationships: []
       }
+      direct_messages_typing: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_typing: boolean | null
+          room_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_typing?: boolean | null
+          room_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_typing?: boolean | null
+          room_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "direct_messages_typing_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "direct_chats"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           created_at: string
