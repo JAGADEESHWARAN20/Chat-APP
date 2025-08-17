@@ -1,7 +1,7 @@
 "use client";
 
 import { Imessage, useMessage } from "@/lib/store/messages";
-import React, { useEffect, useRef, useState, useMemo, useCallback } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import Message from "./Message";
 import { DeleteAlert, EditAlert } from "./MessasgeActions";
 import { supabaseBrowser } from "@/lib/supabase/browser";
@@ -15,10 +15,6 @@ import { useUser } from "@/lib/store/user";
 
 type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
 type UserRow = Database["public"]["Tables"]["users"]["Row"];
-type Notification = Database["public"]["Tables"]["notifications"]["Row"] & {
-  rooms?: { name: string };
-  users?: { username: string };
-};
 
 export default function ListMessages() {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -70,18 +66,20 @@ export default function ListMessages() {
       try {
         const res = await fetch(`/api/messages/${selectedRoom.id}`);
         if (!res.ok) throw new Error(await res.text());
-        
+
         const { messages } = await res.json();
         if (messages) {
           const formattedMessages = messages.map((msg: any) => ({
             ...msg,
-            users: msg.users ? {
-              id: msg.users.id,
-              avatar_url: msg.users.avatar_url || "",
-              display_name: msg.users.display_name || "",
-              username: msg.users.username || "",
-              created_at: msg.users.created_at,
-            } : null,
+            users: msg.users
+              ? {
+                  id: msg.users.id,
+                  avatar_url: msg.users.avatar_url || "",
+                  display_name: msg.users.display_name || "",
+                  username: msg.users.username || "",
+                  created_at: msg.users.created_at,
+                }
+              : null,
           }));
           setMessages(formattedMessages);
         }
@@ -200,16 +198,6 @@ export default function ListMessages() {
       .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
   }, [messages, selectedRoom?.id]);
 
-  // Memoized user map for typing indicators
-  const userMap = useMemo(() => {
-    return filteredMessages.reduce((acc, msg) => {
-      if (msg.users && !acc[msg.users.id]) {
-        acc[msg.users.id] = { display_name: msg.users.display_name };
-      }
-      return acc;
-    }, {} as Record<string, { display_name: string }>);
-  }, [filteredMessages]);
-
   const SkeletonMessage = () => (
     <div className="flex gap-2 animate-pulse">
       <div className="w-10 h-10 rounded-full bg-gray-700" />
@@ -237,13 +225,9 @@ export default function ListMessages() {
               <LoadMoreMessages />
             </div>
 
-            {/* Typing Indicator - positioned right above messages */}
-            {selectedRoom?.id && (
-              <TypingIndicator 
-                roomId={selectedRoom.id} 
-                userMap={userMap}
-                currentUserId={user?.id}
-              />
+            {/* Typing Indicator */}
+            {selectedRoom?.id && user?.id && (
+              <TypingIndicator roomId={selectedRoom.id} currentUserId={user.id} />
             )}
 
             <div className="space-y-[.5em]">
