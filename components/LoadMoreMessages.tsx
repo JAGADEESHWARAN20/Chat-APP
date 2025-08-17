@@ -30,7 +30,7 @@ export default function LoadMoreMessages() {
       console.log("[LoadMoreMessages] Fetching messages for room:", selectedRoom.id, { from, to });
       const { data, error } = await supabase
         .from("messages")
-        .select("*, profiles(*)") // ✅ fetch messages with related profile
+        .select("*, profiles(*)") // ✅ directly load related profile
         .eq("room_id", selectedRoom.id)
         .range(from, to)
         .order("created_at", { ascending: false });
@@ -43,12 +43,8 @@ export default function LoadMoreMessages() {
       console.log("[LoadMoreMessages] Messages fetched:", data);
 
       if (data && data.length > 0) {
-        // ✅ map directly to profiles, no users anymore
-        const mapped = data.map((msg) => ({
-          ...msg,
-          profiles: msg.profiles, // 👈 correct relation
-        })) as Imessage[];
-
+        // ✅ No need to remap `msg.users`
+        const mapped = data as Imessage[];
         setMessages(mapped.reverse());
       } else {
         toast.info("No more messages to load.");
