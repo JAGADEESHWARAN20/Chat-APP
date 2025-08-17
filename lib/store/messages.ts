@@ -3,7 +3,6 @@ import { LIMIT_MESSAGE } from "../constant";
 import { Database } from "@/lib/types/supabase";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { toast } from "sonner";
-import { RealtimeChannel } from "@supabase/supabase-js";
 
 // Derive Imessage type from Database
 export type Imessage = Database["public"]["Tables"]["messages"]["Row"] & {
@@ -17,7 +16,7 @@ interface MessageState {
   messages: Imessage[];
   actionMessage: Imessage | undefined;
   optimisticIds: string[];
-  currentSubscription: RealtimeChannel | null;
+  currentSubscription: any | null;
   addMessage: (message: Imessage) => void;
   setActionMessage: (message: Imessage | undefined) => void;
   optimisticDeleteMessage: (messageId: string) => void;
@@ -38,18 +37,15 @@ export const useMessage = create<MessageState>()((set, get) => ({
   actionMessage: undefined,
   currentSubscription: null,
 
-  // --- REFACTOR: setMessages now handles pagination logic
   setMessages: (newMessages) =>
     set((state) => {
-      // Sort the new messages to ensure they are in chronological order
-      const sortedNewMessages = [...newMessages].sort(
-        (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-      );
-      
+      const existingIds = new Set(state.messages.map((msg) => msg.id));
+      const filteredNew = newMessages.filter((msg) => !existingIds.has(msg.id));
+
       return {
-        messages: sortedNewMessages,
+        messages: [...filteredNew, ...state.messages],
         page: state.page + 1,
-        hasMore: newMessages.length === LIMIT_MESSAGE,
+        hasMore: newMessages.length >= LIMIT_MESSAGE,
       };
     }),
 
@@ -58,9 +54,8 @@ export const useMessage = create<MessageState>()((set, get) => ({
       const existingMessage = state.messages.find((msg) => msg.id === message.id);
       if (existingMessage) return state;
 
-      // Add the new message to the end of the array to maintain correct order
       return {
-        messages: [...state.messages, message],
+        messages: [message, ...state.messages],
       };
     }),
 
@@ -98,7 +93,6 @@ export const useMessage = create<MessageState>()((set, get) => ({
       hasMore: true,
     })),
 
-  // --- REFACTOR: Subscription logic is simplified and now fetches joined data
   subscribeToRoom: (roomId) =>
     set((state) => {
       // Clean up existing subscription if any
@@ -118,33 +112,36 @@ export const useMessage = create<MessageState>()((set, get) => ({
           },
           async (payload: { new: Database["public"]["Tables"]["messages"]["Row"] }) => {
             const { new: newMessage } = payload;
-            
-            // Check if the message is already in our optimistic state
-            if (get().optimisticIds.includes(newMessage.id)) {
-              return;
-            }
 
-            // Fetch the complete message data with the associated user profile
+            // Fetch the complete message data including user details
             const { data: messageWithUser, error } = await supabaseBrowser()
-              .from("messages")
-              .select(
-                `*,
-                profiles:profiles!sender_id (
-                  id, display_name, avatar_url, username, bio, created_at, updated_at
-                )`
-              )
-              .eq("id", newMessage.id)
-              .single();
+			.from("messages")
+			.select(
+			`
+				*,
+				profiles:profiles!messages_sender_id_fkey (
+				id,
+				display_name,
+				avatar_url,
+				username,
+				bio,
+				created_at,
+				updated_at
+				)
+			`
+			)
+			.eq("id", newMessage.id)
+			.single();
+
 
             if (error) {
               toast.error("Error fetching message details");
-              console.error(error);
               return;
             }
 
-            // Add the new message to the state
-            if (messageWithUser) {
-              get().addMessage(messageWithUser as Imessage);
+            // ✅ Cast Supabase response to Imessage
+            if (messageWithUser && !state.optimisticIds.includes(messageWithUser.id)) {
+              get().addMessage(messageWithUser as unknown as Imessage);
             }
           }
         )
@@ -156,8 +153,9 @@ export const useMessage = create<MessageState>()((set, get) => ({
             table: "messages",
             filter: `room_id=eq.${roomId}`,
           },
-          (payload) => {
-            get().optimisticUpdateMessage(payload.new.id, payload.new as Partial<Imessage>);
+          (payload: { new: Database["public"]["Tables"]["messages"]["Row"] }) => {
+            const { new: updatedMessage } = payload;
+            get().optimisticUpdateMessage(updatedMessage.id, updatedMessage);
           }
         )
         .on(
@@ -169,7 +167,8 @@ export const useMessage = create<MessageState>()((set, get) => ({
             filter: `room_id=eq.${roomId}`,
           },
           (payload) => {
-            get().optimisticDeleteMessage(payload.old.id);
+            const { old: deletedMessage } = payload;
+            get().optimisticDeleteMessage(deletedMessage.id);
           }
         )
         .subscribe();
