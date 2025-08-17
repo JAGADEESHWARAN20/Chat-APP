@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import type { Database } from "@/database.types";
+import { useTypingStatus } from "@/hooks/useTypingStatus";
 
 interface TypingIndicatorProps {
   roomId: string;
