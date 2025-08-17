@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { useUser } from "@/lib/store/user";
 import { useRoomStore } from "@/lib/store/roomstore";
@@ -54,7 +54,6 @@ export default function ChatInput() {
       return;
     }
 
-    // ✅ no need to manually setIsTyping(false)
     setInputValue("");
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
@@ -71,12 +70,14 @@ export default function ChatInput() {
       dm_thread_id: null,
       created_at: new Date().toISOString(),
       status: "sent",
-      users: {
+      profiles: {
         id: user.id,
         avatar_url: user.user_metadata.avatar_url || "",
         created_at: user.created_at || new Date().toISOString(),
-        display_name: user.user_metadata.user_name || "Anonymous",
-        username: user.user_metadata.user_name || "anonymous",
+        display_name: user.user_metadata.display_name || "Anonymous",
+        username: user.user_metadata.username || "anonymous",
+        bio: null,
+        updated_at: new Date().toISOString(),
       },
     };
 
@@ -85,16 +86,14 @@ export default function ChatInput() {
     setOptimisticIds(id);
 
     try {
-      const { error } = await supabase
-        .from("messages")
-        .insert({
-          id,
-          text,
-          room_id: selectedRoom?.id,
-          direct_chat_id: selectedDirectChat?.id,
-          sender_id: user.id,
-          status: "sent",
-        });
+      const { error } = await supabase.from("messages").insert({
+        id,
+        text,
+        room_id: selectedRoom?.id,
+        direct_chat_id: selectedDirectChat?.id,
+        sender_id: user.id,
+        status: "sent",
+      });
 
       if (error) throw error;
     } catch (error) {

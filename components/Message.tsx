@@ -20,8 +20,8 @@ export default function Message({ message }: { message: Imessage }) {
     <div className="flex gap-2 p-[.5em] rounded-lg">
       <div className="flex-shrink-0">
         <Image
-          src={message.users?.avatar_url!}
-          alt={message.users?.display_name!}
+          src={message.profiles?.avatar_url!}
+          alt={message.profiles?.display_name!}
           width={40}
           height={40}
           className="rounded-full ring-2 ring-indigo-500/50"
@@ -32,7 +32,7 @@ export default function Message({ message }: { message: Imessage }) {
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
            <h1 className="font-semibold text-foreground text-sm sm:text-base">
-              {message.users?.display_name}
+              {message.profiles?.display_name}
             </h1>
 
             <h1 className="text-xs text-muted-foreground truncate">
@@ -41,7 +41,7 @@ export default function Message({ message }: { message: Imessage }) {
 
 
           </div>
-          {message.users?.id === user?.id && (
+          {message.profiles?.id === user?.id && (
             <MessageMenu message={message} />
           )}
         </div>

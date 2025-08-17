@@ -14,7 +14,7 @@ import TypingIndicator from "./TypingIndicator";
 import { useUser } from "@/lib/store/user";
 
 type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
-type UserRow = Database["public"]["Tables"]["users"]["Row"];
+type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 
 export default function ListMessages() {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -71,15 +71,19 @@ export default function ListMessages() {
         if (messages) {
           const formattedMessages = messages.map((msg: any) => ({
             ...msg,
-            users: msg.users
-              ? {
-                  id: msg.users.id,
-                  avatar_url: msg.users.avatar_url || "",
-                  display_name: msg.users.display_name || "",
-                  username: msg.users.username || "",
-                  created_at: msg.users.created_at,
-                }
-              : null,
+            profiles: msg.profiles
+                ? {
+                    id: msg.profiles.id,
+                    avatar_url: msg.profiles.avatar_url || null,
+                    display_name: msg.profiles.display_name || null,
+                    username: msg.profiles.username || null,
+                    created_at: msg.profiles.created_at || null,
+                    bio: msg.profiles.bio || null,
+                    updated_at: msg.profiles.updated_at || null,
+                  }
+                : null,
+
+
           }));
           setMessages(formattedMessages);
         }
@@ -115,10 +119,10 @@ export default function ListMessages() {
 
             if (payload.eventType === "INSERT" && !optimisticIds.includes(messagePayload.id)) {
               supabase
-                .from("users")
+               .from("profiles")
                 .select("*")
                 .eq("id", messagePayload.sender_id)
-                .single<UserRow>()
+                .single<ProfileRow>()
                 .then(({ data: user, error }) => {
                   if (error) {
                     toast.error(error.message);
@@ -135,13 +139,17 @@ export default function ListMessages() {
                       dm_thread_id: messagePayload.dm_thread_id,
                       status: messagePayload.status,
                       text: messagePayload.text,
-                      users: {
-                        id: user.id,
-                        avatar_url: user.avatar_url || "",
-                        display_name: user.display_name || "",
-                        username: user.username || "",
-                        created_at: user.created_at,
-                      },
+                      profiles: {
+                          id: user.id,
+                          avatar_url: user.avatar_url || null,
+                          display_name: user.display_name || null,
+                          username: user.username || null,
+                          created_at: user.created_at || null,
+                          bio: user.bio || null,
+                          updated_at: user.updated_at || null,
+                        },
+
+
                     };
                     addMessage(newMessage);
 
