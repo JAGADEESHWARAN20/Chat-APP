@@ -15,7 +15,11 @@ export async function GET(
     }
 
     // Check if user is authenticated
-    const { data: { user }, error: sessionError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: sessionError,
+    } = await supabase.auth.getUser();
+
     if (sessionError || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -32,10 +36,11 @@ export async function GET(
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 
-    // Fetch messages for the specific room
+    // ✅ Fetch messages with related profiles (sender info)
     const { data: messages, error: fetchError } = await supabase
       .from("messages")
-      .select(`
+      .select(
+        `
         id,
         text,
         sender_id,
@@ -45,14 +50,17 @@ export async function GET(
         direct_chat_id,
         dm_thread_id,
         status,
-        users:users!sender_id (
+        profiles:profiles!sender_id (
           id,
           username,
           display_name,
           avatar_url,
-          created_at
+          created_at,
+          updated_at,
+          bio
         )
-      `)
+      `
+      )
       .eq("room_id", roomId)
       .order("created_at", { ascending: false })
       .limit(50);
