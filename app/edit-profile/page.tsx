@@ -115,32 +115,63 @@ export default function EditProfilePage() {
                 }
               />
 
-              {/* Avatar with Popover */}
+   
               <Popover>
                 <PopoverTrigger asChild>
                   <Button variant="outline">Change Avatar</Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-80">
                   <div className="space-y-2">
+                    {/* File upload instead of manual URL */}
                     <Input
-                      placeholder="Avatar URL"
-                      value={profile?.avatar_url ?? ""}
-                      onChange={(e) =>
-                        setProfile((prev) =>
-                          prev ? { ...prev, avatar_url: e.target.value } : prev
-                        )
-                      }
+                      type="file"
+                      accept="image/*"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file || !profile) return;
+
+                        const fileExt = file.name.split(".").pop();
+                        const filePath = `avatars/${profile.id}-${Date.now()}.${fileExt}`;
+
+                        const { error: uploadError } = await supabase.storage
+                          .from("avatars")
+                          .upload(filePath, file, {
+                            cacheControl: "3600",
+                            upsert: true,
+                          });
+
+                        if (uploadError) {
+                          toast.error("Failed to upload avatar");
+                          return;
+                        }
+
+                        // Get public URL
+                        const { data: urlData } = supabase.storage
+                          .from("avatars")
+                          .getPublicUrl(filePath);
+
+                        if (urlData?.publicUrl) {
+                          setProfile((prev) =>
+                            prev ? { ...prev, avatar_url: urlData.publicUrl } : prev
+                          );
+                          toast.success("Avatar uploaded!");
+                        }
+                      }}
                     />
+
                     {profile?.avatar_url && (
                       <Image
                         src={profile.avatar_url}
                         alt="Avatar Preview"
+                        width={80}
+                        height={80}
                         className="w-20 h-20 rounded-full object-cover"
                       />
                     )}
                   </div>
                 </PopoverContent>
               </Popover>
+
             </TabsContent>
 
             {/* Settings */}
