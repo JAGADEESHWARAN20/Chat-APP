@@ -33,28 +33,38 @@ export async function POST(req: NextRequest) {
 
     // Insert the message with user details
     const { data: message, error: messageError } = await supabase
-      .from("messages")
-      .insert({
-        text: content,
-        room_id: roomId,
-        sender_id: userId,
-        created_at: new Date().toISOString(),
-        status: "sent",
-        is_edited: false,
-        direct_chat_id: null,
-        dm_thread_id: null
-      })
-      .select(`
-        *,
-        users:users!sender_id (
-          id,
-          username,
-          display_name,
-          avatar_url,
-          created_at
-        )
-      `)
-      .single();
+    .from("messages")
+    .insert({
+      text: content,               // ✅ make sure column matches schema
+      room_id: roomId,
+      sender_id: userId,           // ✅ consistent with profiles relation
+      created_at: new Date().toISOString(),
+      status: "sent",
+      is_edited: false,
+      direct_chat_id: null,
+      dm_thread_id: null,
+    })
+    .select(`
+      id,
+      text,
+      sender_id,
+      created_at,
+      is_edited,
+      room_id,
+      direct_chat_id,
+      dm_thread_id,
+      status,
+      profiles:profiles!sender_id (
+        id,
+        username,
+        display_name,
+        avatar_url,
+        created_at,
+        updated_at,
+        bio
+      )
+    `)
+    .single();
 
     if (messageError) {
       console.error("[Messages] Error inserting message:", messageError);
