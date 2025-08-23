@@ -734,65 +734,74 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   }, [selectedRoom, availableRooms]);
 
   // Render a room result with memberCount shown
-  const renderRoomSearchResult = (
-    result: RoomWithMembershipCount
-  ) => (
-    <li key={result.id} className="flex items-center justify-between pb-[1em] rounded-lg  transition-colors">
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-500/30">
-          <span className="text-lg font-semibold text-indigo-400">
-            {result.name.charAt(0).toUpperCase()}
-          </span>
-        </div>
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-white">{result.name}</span>
-            {result.is_private && (
-              <LockIcon className="h-3.5 w-3.5 text-gray-400" />
-            )}
-          </div>
-          <div className="text-sm text-gray-400">
-            {result.memberCount} {result.memberCount === 1 ? 'member' : 'members'} 
-            {(result.activeUsers ?? 0) > 0 && ` • ${result.activeUsers ?? 0} active`}
-          </div>
-        </div>
+  // Render a room result with only active count
+const renderRoomSearchResult = (result: RoomWithMembershipCount) => (
+  <li
+    key={result.id}
+    className="flex items-center justify-between p-2 rounded-lg 
+               bg-gray-800/60 hover:bg-gray-700/60 transition-colors"
+  >
+    <div className="flex items-center gap-3">
+      {/* Room icon */}
+      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-500/10">
+        <span className="text-lg font-semibold text-indigo-400">
+          {result.name.charAt(0).toUpperCase()}
+        </span>
       </div>
-      <div className="flex items-center gap-2">
-        {selectedRoom?.id === result.id && result.isMember && UUID_REGEX.test(result.id) ? (
-          <Button
-            size="sm"
-            variant="destructive"
-            onClick={handleLeaveRoom}
-            className="bg-red-600/10 text-red-400 hover:bg-red-600/20 hover:text-red-300"
-            disabled={isLeaving}
-          >
-            <LogOut className="h-4 w-4 mr-1" />
-            {isLeaving ? "Leaving..." : "Leave"}
-          </Button>
-        ) : result.isMember ? (
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => router.push(`/rooms/${result.id}/settings`)}
-            className="text-indigo-400 hover:text-indigo-300"
-          >
-            <Settings className="h-4 w-4" />
-          </Button>
-        ) : result.participationStatus === "pending" ? (
-          <span className="text-sm text-yellow-400">Pending</span>
-        ) : (
-          <Button
-            size="sm"
-            onClick={() => handleJoinRoom(result.id)}
-            disabled={!user}
-            className="bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 hover:text-indigo-300"
-          >
-            Join
-          </Button>
-        )}
+
+      {/* Room info */}
+      <div>
+        <div className="flex items-center gap-2">
+          <span className="font-semibold text-white">{result.name}</span>
+          {result.is_private && (
+            <LockIcon className="h-3.5 w-3.5 text-gray-400" />
+          )}
+        </div>
+        {/* ✅ Only active users, no member count */}
+        <p className="text-sm text-green-400">
+          {result.activeUsers ?? 0} active
+        </p>
       </div>
-    </li>
-  );
+    </div>
+
+    {/* Actions (same as before) */}
+    <div className="flex items-center gap-2">
+      {selectedRoom?.id === result.id && result.isMember && UUID_REGEX.test(result.id) ? (
+        <Button
+          size="sm"
+          variant="destructive"
+          onClick={handleLeaveRoom}
+          className="bg-red-600/10 text-red-400 hover:bg-red-600/20 hover:text-red-300"
+          disabled={isLeaving}
+        >
+          <LogOut className="h-4 w-4 mr-1" />
+          {isLeaving ? "Leaving..." : "Leave"}
+        </Button>
+      ) : result.isMember ? (
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => router.push(`/rooms/${result.id}/settings`)}
+          className="text-indigo-400 hover:text-indigo-300"
+        >
+          <Settings className="h-4 w-4" />
+        </Button>
+      ) : result.participationStatus === "pending" ? (
+        <span className="text-sm text-yellow-400">Pending</span>
+      ) : (
+        <Button
+          size="sm"
+          onClick={() => handleJoinRoom(result.id)}
+          disabled={!user}
+          className="bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 hover:text-indigo-300"
+        >
+          Join
+        </Button>
+      )}
+    </div>
+  </li>
+);
+
 
   return (
     <header className="h-[3.6em] lg:w-[50vw] w-[95vw] flex items-center justify-between px-[1.5vw] glass-gradient-header text-foreground bg-background z-10 dark:text-foreground dark:bg-background">
@@ -905,60 +914,45 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       <p className="text-[1em] text-gray-400">No rooms available</p>
     ) : (
       <ul className="space-y-2 overflow-y-auto max-h-[calc(100vh-200px)] scrollbar-none lg:scrollbar-custom">
-        {availableRooms.map((room) => (
-          <li
-            key={room.id}
-            className="flex items-center justify-between p-2 rounded-lg bg-gray-800/50 hover:bg-gray-700/50 transition-colors"
-          >
-            <div className="flex items-center gap-3">
-              {/* Room icon */}
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-500/10">
-                <span className="text-lg font-semibold text-indigo-400">
-                  {room.name.charAt(0).toUpperCase()}
-                </span>
-              </div>
+  {availableRooms.map((room) => (
+    <li
+      key={room.id}
+      className="flex items-center justify-between p-2 rounded-lg 
+                 bg-gray-800/60 hover:bg-gray-700/60 transition-colors"
+    >
+      <div className="flex items-center gap-3">
+        {/* Room icon */}
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-500/10">
+          <span className="text-lg font-semibold text-indigo-400">
+            {room.name.charAt(0).toUpperCase()}
+          </span>
+        </div>
 
-              {/* Room info */}
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold text-white">{room.name}</span>
-                  {room.is_private && (
-                    <LockIcon className="h-3.5 w-3.5 text-gray-400" />
-                  )}
-                </div>
-                <div className="text-sm flex items-center gap-2">
-                  <span className="text-gray-400">
-                    {room.memberCount} {room.memberCount === 1 ? "member" : "members"}
-                  </span>
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/10 text-green-400">
-                    {room.id === selectedRoom?.id
-                      ? activeUsersCount
-                      : room.activeUsers ?? 0}{" "}
-                    active
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Actions */}
-            {room.participationStatus === "pending" ? (
-              <span className="text-sm text-yellow-400">Pending</span>
-            ) : (
-              <Switch
-                checked={selectedRoom?.id === room.id}
-                onCheckedChange={(checked) => {
-                  if (checked) {
-                    handleRoomSwitch(room);
-                  } else if (selectedRoom?.id === room.id) {
-                    handleLeaveRoom();
-                  }
-                }}
-                className="data-[state=checked]:bg-indigo-600 data-[state=unchecked]:bg-gray-600"
-              />
+        {/* Room info */}
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-white">{room.name}</span>
+            {room.is_private && (
+              <LockIcon className="h-3.5 w-3.5 text-gray-400" />
             )}
-          </li>
-        ))}
-      </ul>
+          </div>
+          {/* ✅ Only keep active indicator */}
+          <p className="text-sm text-green-400">
+            {room.activeUsers ?? 0} active
+          </p>
+        </div>
+      </div>
+
+      {/* Toggle switch */}
+      <Switch
+        checked={selectedRoom?.id === room.id}
+        onCheckedChange={() => handleRoomSwitch(room)}
+        className="data-[state=checked]:bg-indigo-600 data-[state=unchecked]:bg-gray-600"
+      />
+    </li>
+  ))}
+</ul>
+
     )}
   </div>
 </PopoverContent>
