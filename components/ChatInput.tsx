@@ -11,6 +11,8 @@ import { v4 as uuidv4 } from "uuid";
 import { Imessage, useMessage } from "@/lib/store/messages";
 import { useTypingStatus } from "@/hooks/useTypingStatus";
 
+
+
 export default function ChatInput() {
   const supabase = supabaseBrowser();
   const user = useUser((state) => state.user);

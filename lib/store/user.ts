@@ -13,19 +13,21 @@ export type ProfileRow = {
 };
 
 type UserState = {
-  authUser: any | null;        // raw Supabase auth user
-  profile: ProfileRow | null;  // row from profiles table
+  authUser: any | null;
+  profile: ProfileRow | null;
+  user: any | null; // 👈 computed
   setUser: (authUser: any) => Promise<void>;
   clearUser: () => void;
 };
 
-export const useUser = create<UserState>((set) => ({
+export const useUser = create<UserState>((set, get) => ({
   authUser: null,
   profile: null,
+  user: null,
 
   setUser: async (authUser) => {
     if (!authUser) {
-      set({ authUser: null, profile: null });
+      set({ authUser: null, profile: null, user: null });
       return;
     }
 
@@ -37,8 +39,8 @@ export const useUser = create<UserState>((set) => ({
       .eq("id", authUser.id)
       .single();
 
-    set({ authUser, profile });
+    set({ authUser, profile, user: { ...authUser, profile } }); // 👈 expose combined object
   },
 
-  clearUser: () => set({ authUser: null, profile: null }),
+  clearUser: () => set({ authUser: null, profile: null, user: null }),
 }));
