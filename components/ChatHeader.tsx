@@ -880,7 +880,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   side="bottom"
   align="center"
   sideOffset={0}
-  withOverlay wide
   className="
     !w-[min(32em,95vw)]
     !h-[min(30em,85vh)]
@@ -901,6 +900,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 >
   <div className="p-[.3vw]">
     <h3 className="font-semibold text-[1.1em] mb-2">Switch Room</h3>
+
     {availableRooms.length === 0 ? (
       <p className="text-[1em] text-gray-400">No rooms available</p>
     ) : (
@@ -911,11 +911,14 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
             className="flex items-center justify-between p-2 rounded-lg bg-gray-800/50 hover:bg-gray-700/50 transition-colors"
           >
             <div className="flex items-center gap-3">
+              {/* Room icon */}
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-500/10">
                 <span className="text-lg font-semibold text-indigo-400">
                   {room.name.charAt(0).toUpperCase()}
                 </span>
               </div>
+
+              {/* Room info */}
               <div>
                 <div className="flex items-center gap-2">
                   <span className="font-semibold text-white">{room.name}</span>
@@ -925,21 +928,32 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                 </div>
                 <div className="text-sm flex items-center gap-2">
                   <span className="text-gray-400">
-                    {room.memberCount} {room.memberCount === 1 ? 'member' : 'members'}
+                    {room.memberCount} {room.memberCount === 1 ? "member" : "members"}
                   </span>
                   <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/10 text-green-400">
-                    {room.id === selectedRoom?.id ? activeUsersCount : (room.activeUsers ?? 0)} active
+                    {room.id === selectedRoom?.id
+                      ? activeUsersCount
+                      : room.activeUsers ?? 0}{" "}
+                    active
                   </span>
                 </div>
               </div>
             </div>
+
+            {/* Actions */}
             {room.participationStatus === "pending" ? (
               <span className="text-sm text-yellow-400">Pending</span>
             ) : (
               <Switch
                 checked={selectedRoom?.id === room.id}
-                onCheckedChange={() => handleRoomSwitch(room)}
-                className="data-[state=checked]:bg-indigo-500 data-[state=unchecked]:bg-gray-600/50"
+                onCheckedChange={(checked) => {
+                  if (checked) {
+                    handleRoomSwitch(room);
+                  } else if (selectedRoom?.id === room.id) {
+                    handleLeaveRoom();
+                  }
+                }}
+                className="data-[state=checked]:bg-indigo-600 data-[state=unchecked]:bg-gray-600"
               />
             )}
           </li>

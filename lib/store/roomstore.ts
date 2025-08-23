@@ -3,7 +3,7 @@ import { Database } from "@/lib/types/supabase";
 
 type IRoom = Database["public"]["Tables"]["rooms"]["Row"];
 // In roomstore.ts
-type RoomWithMembership = IRoom & {
+export type RoomWithMembership = IRoom & {
      isMember: boolean;
      participationStatus: string | null;
      participant_count?: number;
