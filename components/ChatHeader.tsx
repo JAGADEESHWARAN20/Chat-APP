@@ -808,62 +808,94 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
             </Button>
           </DialogTrigger>
           <DialogContent>
-            <DialogHeader>
-              <DialogTitle className="text-[2em] font-bold">
-                Create New Room
-              </DialogTitle>
-            </DialogHeader>
-            <div className="grid gap-[1.2em] py-[1em]">
-              <div className="space-y-[0.6em]">
-                <Label
-                  htmlFor="roomName"
-                  className="text-[1em] font-medium text-gray-300"
-                >
-                  Room Name
-                </Label>
-                <Input
-                  id="roomName"
-                  placeholder="Enter room name"
-                  value={newRoomName}
-                  onChange={(e) => setNewRoomName(e.target.value)}
-                  disabled={isCreating}
-                  className="bg-gray-700/50 border-gray-600/50 text-white placeholder-gray-400 rounded-lg focus:ring-0 focus:border-transparent transition-all"
-                />
-              </div>
-              <div className="flex items-center space-x-[1em]">
-                <Switch
-                  id="private"
-                  checked={isPrivate}
-                  onCheckedChange={setIsPrivate}
-                  disabled={isCreating}
-                  className="data-[state=checked]:bg-indigo-600 data-[state=unchecked]:bg-gray-600"
-                />
-                <Label
-                  htmlFor="private"
-                  className="text-[1em] font-medium text-gray-300"
-                >
-                  Private Room
-                </Label>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setIsDialogOpen(false)}
-                disabled={isCreating}
-                className="bg-transparent border-gray-600 text-gray-300 hover:bg-gray-700 hover:text-white rounded-lg transition-colors"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleCreateRoom}
-                disabled={isCreating}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors"
-              >
-                {isCreating ? "Creating..." : "Create Room"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
+  <DialogHeader>
+    <DialogTitle className="text-[2em] font-bold">
+      Create New Room
+    </DialogTitle>
+  </DialogHeader>
+
+  <div className="grid gap-[1.2em] py-[1em]">
+    <div className="space-y-[0.6em]">
+      <Label
+        htmlFor="roomName"
+        className="text-[1em] font-medium text-foreground"
+      >
+        Room Name
+      </Label>
+      <Input
+        id="roomName"
+        placeholder="Enter room name"
+        value={newRoomName}
+        onChange={(e) => setNewRoomName(e.target.value)}
+        disabled={isCreating}
+        className="
+          bg-background
+          border
+          border-border
+          text-foreground
+          placeholder:text-muted-foreground
+          rounded-lg
+          focus-visible:ring-1
+          focus-visible:ring-indigo-500
+          focus-visible:border-indigo-500
+          transition-all
+        "
+      />
+    </div>
+
+    <div className="flex items-center space-x-[1em]">
+      <Switch
+        id="private"
+        checked={isPrivate}
+        onCheckedChange={setIsPrivate}
+        disabled={isCreating}
+        className="
+          data-[state=checked]:bg-indigo-600
+          data-[state=unchecked]:bg-muted
+        "
+      />
+      <Label
+        htmlFor="private"
+        className="text-[1em] font-medium text-foreground"
+      >
+        Private Room
+      </Label>
+    </div>
+  </div>
+
+  <DialogFooter>
+    <Button
+      variant="outline"
+      onClick={() => setIsDialogOpen(false)}
+      disabled={isCreating}
+      className="
+        bg-transparent
+        border-border
+        text-foreground
+        hover:bg-muted
+        hover:text-foreground
+        rounded-lg
+        transition-colors
+      "
+    >
+      Cancel
+    </Button>
+    <Button
+      onClick={handleCreateRoom}
+      disabled={isCreating}
+      className="
+        bg-indigo-600
+        hover:bg-indigo-700
+        text-white
+        rounded-lg
+        transition-colors
+      "
+    >
+      {isCreating ? "Creating..." : "Create Room"}
+    </Button>
+  </DialogFooter>
+</DialogContent>
+
         </Dialog>
 
         {selectedRoom && (
@@ -889,15 +921,18 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     lg:mt-[1vw]
     mt-[1em]
     mb-[2vh]
-    bg-gray-800/70
+    bg-popover
+    text-popover-foreground
     backdrop-blur-xl
     rounded-2xl
     p-[.7em]
-    text-white
+    border
+    border-border
     !max-w-[95vw]
     !max-h-[99vh]
   "
 >
+
   <div className="p-[.3vw]">
     <h3 className="font-semibold text-[1.1em] mb-2">Switch Room</h3>
 
@@ -975,20 +1010,23 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
               <Search className="h-5 w-5" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent 
-            side="bottom" 
-            align="center" 
-            sideOffset={0}
-            className="
-              w-[400px]
-              p-4
-              bg-background/95
-              backdrop-blur-lg
-              border-none
-              shadow-xl
-              rounded-xl
-            "
-          >
+         <PopoverContent
+  side="bottom"
+  align="center"
+  sideOffset={0}
+  className="
+    w-[400px]
+    p-4
+    bg-popover
+    text-popover-foreground
+    backdrop-blur-lg
+    border
+    border-border
+    shadow-xl
+    rounded-xl
+  "
+>
+
 
             <div className="p-1">
               <div className="flex justify-between items-center mb-[0.5em]">
