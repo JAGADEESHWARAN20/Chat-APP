@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import Image from "next/image";
+import { ChevronLeft } from "lucide-react"; // 👈 import chevron
 
 export default function EditProfilePage() {
   const supabase = createClientComponentClient<Database>();
@@ -97,6 +98,15 @@ export default function EditProfilePage() {
 
   return (
     <div className="max-w-lg mx-auto p-6">
+      {/* 👇 Chevron left button */}
+      <button
+        onClick={() => router.back()}
+        className="flex items-center text-gray-600 hover:text-black mb-4"
+      >
+        <ChevronLeft className="w-5 h-5 mr-1" />
+        Back
+      </button>
+
       <h1 className="text-2xl font-bold mb-4">Edit Profile</h1>
       <form onSubmit={handleSave} className="space-y-4">
         <div>
@@ -129,6 +139,8 @@ export default function EditProfilePage() {
               src={avatarUrl}
               alt="avatar preview"
               className="w-16 h-16 rounded-full mt-2"
+              width={64}
+              height={64}
             />
           )}
         </div>
