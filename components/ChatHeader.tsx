@@ -81,7 +81,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const [limit] = useState(100);
   const [offset] = useState(0);
   const [isFaded, setIsFaded] = useState(false);
-  const activeUsersCount = useActiveUsers(selectedRoom?.id ?? null);
+  // const activeUsersCount = useActiveUsers(selectedRoom?.id ?? null);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -279,6 +279,52 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       setIsLoading(false);
     }
   }, [user, supabase, setRooms]);
+  useEffect(() => {
+  if (!user) return;
+
+  const channel = supabase
+    .channel("typing-status-listener")
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "typing_status" },
+      async (payload) => {
+        const { room_id } = payload.new || payload.old;
+        if (!room_id) return;
+
+        // Recalculate active users for only this room
+        const { data: roomMembers } = await supabase
+          .from("room_members")
+          .select("user_id")
+          .eq("room_id", room_id)
+          .eq("status", "accepted");
+
+        const { data: presenceData } = await supabase
+          .from("typing_status")
+          .select("user_id")
+          .eq("room_id", room_id)
+          .in("user_id", roomMembers?.map((m) => m.user_id) || []);
+
+        const uniqueActiveUsers = new Set(presenceData?.map((p) => p.user_id));
+
+        // Update only that room in availableRooms
+        setAvailableRooms((prev) =>
+          prev.map((room) =>
+            room.id === room_id
+              ? { ...room, activeUsers: uniqueActiveUsers.size }
+              : room
+          )
+        );
+      }
+    )
+    .subscribe();
+
+  return () => {
+    channel.unsubscribe();
+  };
+}, [supabase, user]);
+
+
+
 
   // Handler functions: handleRoomSwitch, handleLeaveRoom, handleJoinRoom, handleCreateRoom remain largely unchanged but work with RoomWithMembershipCount type
 
