@@ -11,6 +11,7 @@ export async function POST(req: NextRequest) {
   const { data: { session }, error: sessionError } = await supabase.auth.getSession();
   if (sessionError || !session?.user)
     return NextResponse.json({ code: "AUTH_REQUIRED", error: "Authentication required" }, { status: 401 });
+
   const userId = session.user.id;
 
   // Fetch room info
@@ -23,8 +24,14 @@ export async function POST(req: NextRequest) {
   if (roomError || !room)
     return NextResponse.json({ code: "ROOM_NOT_FOUND", error: "Room not found" }, { status: 404 });
 
+  // --- Deactivate user in other rooms ---
+  await supabase
+    .from("room_members")
+    .update({ active: false })
+    .eq("user_id", userId);
+
   if (room.is_private) {
-    // For private rooms: check if already pending or accepted
+    // Check if already pending or accepted
     const { data: participant } = await supabase
       .from("room_participants")
       .select("status")
@@ -38,17 +45,27 @@ export async function POST(req: NextRequest) {
         message: "Join/switch request already sent."
       });
     }
+
     if (participant?.status === "accepted") {
+      // Reactivate in room_members if exists
+      await supabase
+        .from("room_members")
+        .upsert([{ room_id: roomId, user_id: userId, status: "accepted", active: true }], {
+          onConflict: "room_id,user_id",
+        });
+
       return NextResponse.json({
         status: "accepted",
-        message: "Already a member of this room."
+        message: "Switched back to private room.",
       });
     }
 
     // Insert to room_participants as pending
     await supabase
       .from("room_participants")
-      .upsert([{ room_id: roomId, user_id: userId, status: "pending" }], { onConflict: "room_id,user_id" });
+      .upsert([{ room_id: roomId, user_id: userId, status: "pending" }], {
+        onConflict: "room_id,user_id",
+      });
 
     // Safety check
     if (!room.created_by) {
@@ -62,7 +79,7 @@ export async function POST(req: NextRequest) {
       room_id: roomId,
       type: "join_request",
       message: `${session.user.email} wants to join "${room.name}"`,
-      status: "unread"
+      status: "unread",
     });
 
     return NextResponse.json({
@@ -70,18 +87,41 @@ export async function POST(req: NextRequest) {
       message: "Switch request sent to room owner for approval.",
     });
   } else {
-    // Public room: upsert as accepted member + participant
+    // Public room: upsert as accepted + active
     const now = new Date().toISOString();
+
     await supabase
       .from("room_members")
-      .upsert([{ room_id: roomId, user_id: userId, status: "accepted", joined_at: now, active: true }], { onConflict: "room_id,user_id" });
+      .upsert(
+        [
+          {
+            room_id: roomId,
+            user_id: userId,
+            status: "accepted",
+            joined_at: now,
+            active: true,
+          },
+        ],
+        { onConflict: "room_id,user_id" }
+      );
+
     await supabase
       .from("room_participants")
-      .upsert([{ room_id: roomId, user_id: userId, status: "accepted", joined_at: now }], { onConflict: "room_id,user_id" });
+      .upsert(
+        [
+          {
+            room_id: roomId,
+            user_id: userId,
+            status: "accepted",
+            joined_at: now,
+          },
+        ],
+        { onConflict: "room_id,user_id" }
+      );
 
     return NextResponse.json({
       status: "accepted",
-      message: "Switched to public room"
+      message: "Switched to public room.",
     });
   }
 }
