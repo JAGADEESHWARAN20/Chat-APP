@@ -11,21 +11,17 @@ export function useActiveUsers(roomId: string | null) {
     if (!roomId) return;
 
     const fetchActiveUsers = async () => {
-      // Count only members with "accepted" AND "online" (or active) status
-      const { data } = await supabase
+      const { count } = await supabase
         .from("room_members")
-        .select("user_id")
+        .select("*", { count: "exact", head: true })
         .eq("room_id", roomId)
         .eq("status", "accepted")
-        .eq("is_online", true); // <-- requires you to maintain online/offline in DB
-
-      setActiveUsers(data?.length || 0);
+        .eq("active", true); // only active ones
+      setActiveUsers(count || 0);
     };
 
-    // Initial fetch
     fetchActiveUsers();
 
-    // Subscribe to changes in room_members
     const channel = supabase
       .channel(`room-members-${roomId}`)
       .on(

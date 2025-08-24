@@ -332,67 +332,59 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 
   // Handler functions: handleRoomSwitch, handleLeaveRoom, handleJoinRoom, handleCreateRoom remain largely unchanged but work with RoomWithMembershipCount type
 
-  const handleRoomSwitch = useCallback(
-    async (room: RoomWithMembershipCount) => {
-      if (!user) {
-        toast.error("You must be logged in to switch rooms", {
-          className: "text-red-600 bg-white border border-red-400 shadow-md",
-        });
+const handleRoomSwitch = useCallback(
+  async (newRoomId: string, prevRoomId: string | null) => {
+    if (!user) {
+      toast.error("You must be logged in to switch rooms");
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/rooms/switch`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roomId: newRoomId }), // ✅ remove prevRoomId
+      });
+
+      const result = await response.json();
+      if (!response.ok) {
+        toast.error(result.message || "Failed to switch room");
         return;
       }
-      try {
-        const response = await fetch(`/api/rooms/switch`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ roomId: room.id }),
-        });
 
-        const result = await response.json();
+      // Find the switched room from availableRooms
+      const switchedRoom = availableRooms.find((r) => r.id === newRoomId);
 
-        if (!response.ok) {
-          if (result.code === "AUTH_REQUIRED") {
-            toast.error("Authentication required to switch rooms.");
-          } else if (result.code === "ROOM_NOT_FOUND") {
-            toast.error("Room not found.");
-          } else if (result.status === "pending") {
-            toast.info(result.message || "Switch request sent to room owner for approval.");
-          } else {
-            toast.error(result.message || "Failed to switch room.");
-          }
-          return;
-        }
+      if (switchedRoom) {
+        // ✅ Update selected room immediately
+        setSelectedRoom({ ...switchedRoom, isMember: true });
 
-        let newParticipationStatus: string | null = "accepted";
-        let newIsMember = true;
-
-        if (result.status === "pending") {
-          newParticipationStatus = "pending";
-          newIsMember = false;
-        }
-
-        const updatedRoomWithMembership: RoomWithMembershipCount = {
-          ...room,
-          isMember: newIsMember,
-          participationStatus: newParticipationStatus,
-          memberCount: room.memberCount, // keep existing count
-        };
-
-        setSelectedRoom(updatedRoomWithMembership);
-        setIsSwitchRoomPopoverOpen(false);
-        setIsMember(newIsMember);
-        toast.success(result.message || `Switched to ${room.name}`, {
-          className: "text-green-600 bg-white border border-green-400 shadow-md",
-        });
-        await fetchAvailableRooms();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Failed to switch room");
-        await fetchAvailableRooms();
+        // ✅ Locally patch availableRooms so popover shows updated status
+        setAvailableRooms((prev) =>
+          prev.map((room) =>
+            room.id === newRoomId
+              ? { ...room, isMember: true, participationStatus: "accepted" }
+              : room.id === prevRoomId
+              ? { ...room, isMember: false } // mark old one as inactive
+              : room
+          )
+        );
       }
-    },
-    [user, setSelectedRoom, fetchAvailableRooms]
-  );
+
+      setIsSwitchRoomPopoverOpen(false);
+      toast.success(`Switched to ${switchedRoom?.name || "room"}`);
+
+      // ✅ Refresh full list in background
+      await fetchAvailableRooms();
+    } catch (err) {
+      console.error("Room switch failed:", err);
+      toast.error("Failed to switch room");
+    }
+  },
+  [user, availableRooms, setSelectedRoom, setAvailableRooms, fetchAvailableRooms]
+);
+
+
 
   const handleLeaveRoom = useCallback(
     async () => {
@@ -1001,7 +993,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                         {/* Toggle switch */}
                         <Switch
                           checked={selectedRoom?.id === room.id}
-                          onCheckedChange={() => handleRoomSwitch(room)}
+                          onCheckedChange={() => handleRoomSwitch(room.id,selectedRoom?.id)}
                           className="
                             data-[state=checked]:bg-indigo-600 
                             data-[state=unchecked]:bg-muted
