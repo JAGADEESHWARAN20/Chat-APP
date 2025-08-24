@@ -1,45 +1,85 @@
-"use client";
+"use client"
 
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
-import { Database } from "@/database.types";
-import { Button } from "@/components/ui/button";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState } from "react"
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import type { Database } from "@/lib/types/supabase"
+import Image from "next/image"
 
-export default function ProfilePage({ params }: { params: { id: string } }) {
-  const supabase = createClientComponentClient<Database>();
-  const [profile, setProfile] = useState<any>(null);
+type Profile = Database["public"]["Tables"]["profiles"]["Row"]
+
+export default function ProfilePage() {
+  const supabase = createClientComponentClient<Database>()
+  const [profile, setProfile] = useState<Profile | null>(null)
 
   useEffect(() => {
-    const fetchProfile = async () => {
-      const { data } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", params.id)
-        .single();
-      setProfile(data);
-    };
-    fetchProfile();
-  }, [params.id, supabase]);
+    const getProfile = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
 
-  if (!profile) return <div>Loading...</div>;
+      if (user) {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("id, username, display_name, bio, created_at, updated_at, avatar_url")
+          .eq("id", user.id)
+          .single()
+
+
+        if (error) {
+          console.error("Error fetching profile:", error)
+        } else {
+          setProfile({
+            id: data.id,
+            username: data.username,
+            display_name: data.display_name,
+            bio: data.bio,
+            created_at: data.created_at,
+            updated_at: data.updated_at ?? null, // <-- Fix here
+            avatar_url: data.avatar_url
+          });
+
+        }
+      }
+    }
+
+    getProfile()
+  }, [supabase])
+
+  if (!profile) return <div className="p-4">Loading profile...</div>
 
   return (
-    <div className="max-w-xl mx-auto p-6">
-      <div className="flex flex-col items-center">
-        <Avatar className="w-24 h-24">
-          <AvatarImage src={profile.avatar_url || ""} />
-          <AvatarFallback>{profile.display_name?.[0] || "U"}</AvatarFallback>
-        </Avatar>
-        <h1 className="mt-4 text-xl font-semibold">
-          {profile.display_name || profile.email}
-        </h1>
-        <p className="text-muted-foreground">{profile.bio || "No bio yet"}</p>
-        <Link href="/edit-profile">
-          <Button className="mt-4">Edit Profile</Button>
-        </Link>
+    <div className="max-w-xl mx-auto mt-10 p-6 bg-white shadow rounded-lg">
+      <div className="flex items-center gap-4">
+        {profile.avatar_url ? (
+          <Image
+            src={profile.avatar_url}
+            alt="Avatar"
+            className="w-16 h-16 rounded-full border"
+          />
+        ) : (
+          <div className="w-16 h-16 rounded-full bg-gray-300" />
+        )}
+        <div>
+          <h2 className="text-xl font-semibold">
+            {profile.display_name || "No display name"}
+          </h2>
+          <p className="text-gray-600">@{profile.username || "no-username"}</p>
+        </div>
+      </div>
+
+      <div className="mt-4">
+        <h3 className="font-medium">Bio</h3>
+        <p className="text-gray-700">
+          {profile.bio || "No bio added yet."}
+        </p>
+      </div>
+
+      <div className="mt-4 text-sm text-gray-500">
+        Joined on:{" "}
+        {profile.created_at
+          ? new Date(profile.created_at).toLocaleDateString()
+          : "Unknown"}
       </div>
     </div>
-  );
+  )
 }
