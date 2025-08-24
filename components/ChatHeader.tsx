@@ -55,7 +55,6 @@ type RoomWithMembershipCount = Room & {
   activeUsers?: number;
 };
 
-type SearchResult = UserProfile | RoomWithMembershipCount;
 
 export default function ChatHeader({ user }: { user: SupabaseUser | undefined }) {
   const router = useRouter();
@@ -930,58 +929,62 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     border-border
     !max-w-[95vw]
     !max-h-[99vh]
+    shadow-xl
   "
 >
-
   <div className="p-[.3vw]">
     <h3 className="font-semibold text-[1.1em] mb-2">Switch Room</h3>
 
     {availableRooms.length === 0 ? (
-      <p className="text-[1em] text-gray-400">No rooms available</p>
+      <p className="text-[1em] text-muted-foreground">No rooms available</p>
     ) : (
       <ul className="space-y-2 overflow-y-auto max-h-[calc(100vh-200px)] scrollbar-none lg:scrollbar-custom">
-  {availableRooms.map((room) => (
-    <li
-      key={room.id}
-      className="flex items-center justify-between p-2 rounded-lg 
-                 bg-gray-800/60 hover:bg-gray-700/60 transition-colors"
-    >
-      <div className="flex items-center gap-3">
-        {/* Room icon */}
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-500/10">
-          <span className="text-lg font-semibold text-indigo-400">
-            {room.name.charAt(0).toUpperCase()}
-          </span>
-        </div>
+        {availableRooms.map((room) => (
+          <li
+            key={room.id}
+            className="
+              flex items-center justify-between p-2 rounded-lg 
+              bg-card hover:bg-accent transition-colors
+            "
+          >
+            <div className="flex items-center gap-3">
+              {/* Room icon */}
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-500/10">
+                <span className="text-lg font-semibold text-indigo-500">
+                  {room.name.charAt(0).toUpperCase()}
+                </span>
+              </div>
 
-        {/* Room info */}
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-white">{room.name}</span>
-            {room.is_private && (
-              <LockIcon className="h-3.5 w-3.5 text-gray-400" />
-            )}
-          </div>
-          {/* ✅ Only keep active indicator */}
-          <p className="text-sm text-green-400">
-            {room.activeUsers ?? 0} active
-          </p>
-        </div>
-      </div>
+              {/* Room info */}
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold">{room.name}</span>
+                  {room.is_private && (
+                    <LockIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                  )}
+                </div>
+                <p className="text-sm text-green-500">
+                  {room.activeUsers ?? 0} active
+                </p>
+              </div>
+            </div>
 
-      {/* Toggle switch */}
-      <Switch
-        checked={selectedRoom?.id === room.id}
-        onCheckedChange={() => handleRoomSwitch(room)}
-        className="data-[state=checked]:bg-indigo-600 data-[state=unchecked]:bg-gray-600"
-      />
-    </li>
-  ))}
-</ul>
-
+            {/* Toggle switch */}
+            <Switch
+              checked={selectedRoom?.id === room.id}
+              onCheckedChange={() => handleRoomSwitch(room)}
+              className="
+                data-[state=checked]:bg-indigo-600 
+                data-[state=unchecked]:bg-muted
+              "
+            />
+          </li>
+        ))}
+      </ul>
     )}
   </div>
 </PopoverContent>
+
 
           </Popover>
         )}
@@ -1010,7 +1013,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
               <Search className="h-5 w-5" />
             </Button>
           </PopoverTrigger>
-         <PopoverContent
+        <PopoverContent
   side="bottom"
   align="center"
   sideOffset={0}
@@ -1026,153 +1029,165 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     rounded-xl
   "
 >
+  <div className="p-1">
+    <div className="flex justify-between items-center mb-[0.5em]">
+      <h3 className="font-bold text-[1.5em]">Search</h3>
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => {
+          setIsSearchPopoverOpen(false);
+          router.push("/profile");
+        }}
+        className="text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <Settings className="h-4 w-4" />
+      </Button>
+    </div>
 
+    <Input
+      type="text"
+      placeholder={
+        searchType === "users" ? "Search users..." : "Search rooms..."
+      }
+      value={searchQuery}
+      onChange={handleSearchInputChange}
+      className="
+        mb-1 bg-muted/50 border-border text-foreground 
+        placeholder-muted-foreground rounded-lg 
+        focus:ring-2 focus:ring-indigo-500 
+        focus:border-indigo-500 transition-all
+      "
+    />
 
-            <div className="p-1">
-              <div className="flex justify-between items-center mb-[0.5em]">
-                <h3 className="font-bold text-[1.5em] text-white">Search</h3>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => {
-                    setIsSearchPopoverOpen(false);
-                    router.push("/profile");
-                  }}
-                  className="text-gray-300 hover:text-white transition-colors"
-                >
-                  <Settings className="h-4 w-4" />
-                </Button>
-              </div>
-              <Input
-                type="text"
-                placeholder={
-                  searchType === "users" ? "Search users..." : "Search rooms..."
-                }
-                value={searchQuery}
-                onChange={handleSearchInputChange}
-                className="mb-1 bg-gray-700/50 border-gray-600/50 text-white placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
-              />
-              <div className="w-[100%] flex gap-1 mb-[1.2em]">
-                <Button
-                  variant={searchType === "rooms" ? "default" : "outline"}
-                  onClick={() => handleSearchByType("rooms")}
-                  className={`${
-                    searchType === "rooms"
-                      ? "bg-indigo-600 hover:bg-indigo-700"
-                      : "bg-transparent border-gray-600 hover:bg-gray-700"
-                  } text-white rounded-lg transition-colors w-full`}
-                >
-                  Rooms
-                </Button>
-                <Button
-                  variant={searchType === "users" ? "default" : "outline"}
-                  onClick={() => handleSearchByType("users")}
-                  className={`${
-                    searchType === "users"
-                      ? "bg-indigo-600 hover:bg-indigo-700"
-                      : "bg-transparent border-gray-600 hover:bg-gray-700"
-                  } text-white rounded-lg transition-colors w-full`}
-                >
-                  Users
-                </Button>
-              </div>
-              {searchType === "users" && userResults.length > 0 && (
-                <div className="mt-4">
-                  <h4 className="font-semibold text-[1em] text-gray-300 mb-3">
-                    User Profiles
-                  </h4>
-                  <ul className="space-y-3 overflow-y-auto max-h-[440px] scrollbar-none lg:scrollbar-custom">
-                    {userResults.map((result) => (
-                      <li
-                        key={result.id}
-                        className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-700/50 transition-colors"
-                      >
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-10 w-10">
-                            {result.avatar_url ? (
-                              <AvatarImage
-                                src={result.avatar_url}
-                                alt={result.username || "Avatar"}
-                                className="rounded-full"
-                              />
-                            ) : (
-                              <AvatarFallback className="bg-indigo-500 text-white rounded-full">
-                                {result.username?.charAt(0).toUpperCase() ||
-                                  result.display_name?.charAt(0).toUpperCase() ||
-                                  "?"}
-                              </AvatarFallback>
-                            )}
-                          </Avatar>
-                          <div>
-                            <div className="text-xs text-gray-400">
-                              {result.username}
-                            </div>
-                            <div className="text-[1em] font-medium text-white">
-                              {result.display_name}
-                            </div>
-                          </div>
-                        </div>
-                        <UserIcon className="h-4 w-4 text-gray-400" />
-                      </li>
-                    ))}
-                  </ul>
+    {/* Toggle buttons */}
+    <div className="w-[100%] flex gap-1 mb-[1.2em]">
+      <Button
+        variant={searchType === "rooms" ? "default" : "outline"}
+        onClick={() => handleSearchByType("rooms")}
+        className={`${
+          searchType === "rooms"
+            ? "bg-indigo-600 hover:bg-indigo-700"
+            : "bg-transparent border-border hover:bg-accent"
+        } text-foreground rounded-lg transition-colors w-full`}
+      >
+        Rooms
+      </Button>
+      <Button
+        variant={searchType === "users" ? "default" : "outline"}
+        onClick={() => handleSearchByType("users")}
+        className={`${
+          searchType === "users"
+            ? "bg-indigo-600 hover:bg-indigo-700"
+            : "bg-transparent border-border hover:bg-accent"
+        } text-foreground rounded-lg transition-colors w-full`}
+      >
+        Users
+      </Button>
+    </div>
+
+    {/* Results */}
+    {searchType === "users" && userResults.length > 0 && (
+      <div className="mt-4">
+        <h4 className="font-semibold text-[1em] text-muted-foreground mb-3">
+          User Profiles
+        </h4>
+        <ul className="space-y-3 overflow-y-auto max-h-[440px] scrollbar-none lg:scrollbar-custom">
+          {userResults.map((result) => (
+            <li
+              key={result.id}
+              className="flex items-center justify-between p-2 rounded-lg hover:bg-accent transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <Avatar className="h-10 w-10">
+                  {result.avatar_url ? (
+                    <AvatarImage
+                      src={result.avatar_url}
+                      alt={result.username || "Avatar"}
+                      className="rounded-full"
+                    />
+                  ) : (
+                    <AvatarFallback className="bg-indigo-500 text-white rounded-full">
+                      {result.username?.charAt(0).toUpperCase() ||
+                        result.display_name?.charAt(0).toUpperCase() ||
+                        "?"}
+                    </AvatarFallback>
+                  )}
+                </Avatar>
+                <div>
+                  <div className="text-xs text-muted-foreground">
+                    {result.username}
+                  </div>
+                  <div className="text-[1em] font-medium">{result.display_name}</div>
                 </div>
-              )}
-              {searchType === "rooms" && (
-                <div className="mt-4">
-                  <h4 className="font-semibold text-[1em] text-gray-300 mb-3">
-                    Rooms
-                  </h4>
-                  <ul className="space-y-[.1em] overflow-y-auto max-h-[440px] py-[.2em] rounded-lg scrollbar-none lg:scrollbar-custom">
-                    {isLoading ? (
-                      // Loading skeletons
-                      Array(3).fill(0).map((_, i) => (
-                        <li key={i} className="flex items-center justify-between p-2 rounded-lg bg-gray-800/50 animate-pulse">
-                          <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-lg bg-gray-700"></div>
-                            <div>
-                              <div className="h-4 w-32 bg-gray-700 rounded mb-2"></div>
-                              <div className="h-3 w-24 bg-gray-700 rounded"></div>
-                            </div>
-                          </div>
-                          <div className="h-8 w-16 bg-gray-700 rounded"></div>
-                        </li>
-                      ))
-                    ) : roomResults.length > 0 ? (
-                      roomResults.map((result) => renderRoomSearchResult(result))
-                    ) : (
-                      <li className="text-[1em] text-gray-400 p-2">No rooms found</li>
-                    )}
-                  </ul>
+              </div>
+              <UserIcon className="h-4 w-4 text-muted-foreground" />
+            </li>
+          ))}
+        </ul>
+      </div>
+    )}
+
+    {/* Rooms results */}
+    {searchType === "rooms" && (
+      <div className="mt-4">
+        <h4 className="font-semibold text-[1em] text-muted-foreground mb-3">
+          Rooms
+        </h4>
+        <ul className="space-y-[.1em] overflow-y-auto max-h-[440px] py-[.2em] rounded-lg scrollbar-none lg:scrollbar-custom">
+          {isLoading ? (
+            Array(3).fill(0).map((_, i) => (
+              <li key={i} className="flex items-center justify-between p-2 rounded-lg bg-muted animate-pulse">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-lg bg-accent"></div>
+                  <div>
+                    <div className="h-4 w-32 bg-accent rounded mb-2"></div>
+                    <div className="h-3 w-24 bg-accent rounded"></div>
+                  </div>
                 </div>
-              )}
-              {((searchType === "users" && userResults.length === 0) ||
-                (searchType === "rooms" && roomResults.length === 0)) &&
-                searchQuery.length > 0 && (
-                  <p className="text-[1em] text-gray-400 mt-3">
-                    No {searchType} found.
-                  </p>
-                )}
-             {searchQuery.length === 0 && searchType && (
-                <p
-                  className={`text-[1em] text-gray-400 mt-3 transition-opacity duration-500 ${
-                    isFaded ? 'opacity-0' : 'opacity-100'
-                  }`}
-                >
-                  Showing all {searchType}...
-                </p>
-              )}
-              {isLoading && (
-                <p
-                  className={`text-[1em] text-gray-400 mt-3 transition-opacity duration-500 ${
-                    isFaded ? 'opacity-0' : 'opacity-100'
-                  }`}
-                >
-                  Loading...
-                </p>
-              )}
-            </div>
-          </PopoverContent>
+                <div className="h-8 w-16 bg-accent rounded"></div>
+              </li>
+            ))
+          ) : roomResults.length > 0 ? (
+            roomResults.map((result) => renderRoomSearchResult(result))
+          ) : (
+            <li className="text-[1em] text-muted-foreground p-2">No rooms found</li>
+          )}
+        </ul>
+      </div>
+    )}
+
+    {/* Empty & Loading states */}
+    {((searchType === "users" && userResults.length === 0) ||
+      (searchType === "rooms" && roomResults.length === 0)) &&
+      searchQuery.length > 0 && (
+        <p className="text-[1em] text-muted-foreground mt-3">
+          No {searchType} found.
+        </p>
+      )}
+
+    {searchQuery.length === 0 && searchType && (
+      <p
+        className={`text-[1em] text-muted-foreground mt-3 transition-opacity duration-500 ${
+          isFaded ? "opacity-0" : "opacity-100"
+        }`}
+      >
+        Showing all {searchType}...
+      </p>
+    )}
+
+    {isLoading && (
+      <p
+        className={`text-[1em] text-muted-foreground mt-3 transition-opacity duration-500 ${
+          isFaded ? "opacity-0" : "opacity-100"
+        }`}
+      >
+        Loading...
+      </p>
+    )}
+  </div>
+</PopoverContent>
+
         </Popover>
       </div>
     </header>
