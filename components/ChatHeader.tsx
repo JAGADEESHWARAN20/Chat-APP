@@ -55,11 +55,6 @@ type RoomWithMembershipCount = Room & {
   activeUsers?: number;
 };
 
-interface PresenceState {
-  user_id: string;
-  online_at: string;
-}
-
 export default function ChatHeader({ user }: { user: SupabaseUser | undefined }) {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
@@ -227,17 +222,35 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
           console.error("Error fetching member counts:", membersError);
         }
 
-        // Aggregate counts client-side
+        // Aggregate counts client-side (FIX: do not shadow countsMap)
         membersData?.forEach((m: Pick<RoomMemberRow, "room_id">) => {
           countsMap.set(m.room_id, (countsMap.get(m.room_id) ?? 0) + 1);
         });
       }
 
-      // Attach memberCount, activeUsers: 0, isMember:true, participationStatus to each room
+      // For each room, get active users data
+      const presencePromises = roomIds.map(async (roomId) => {
+        const { count } = await supabase
+          .from("room_members")
+          .select("*", { count: "exact", head: true })
+          .eq("room_id", roomId)
+          .eq("status", "accepted")
+          .eq("active", true);
+
+        return {
+          roomId,
+          activeUsers: count ?? 0,
+        };
+      });
+
+      const presenceResults = await Promise.all(presencePromises);
+      const activeUsersMap = new Map(presenceResults.map((r) => [r.roomId, r.activeUsers]));
+
+      // Attach memberCount, activeUsers, and isMember:true, participationStatus to each room
       const joinedRooms: RoomWithMembershipCount[] = joinedRoomsRaw.map((room) => ({
         ...room,
         memberCount: countsMap.get(room.id) ?? 0,
-        activeUsers: 0,
+        activeUsers: activeUsersMap.get(room.id) ?? 0,
         isMember: true,
         participationStatus: "accepted",
       }));
@@ -252,46 +265,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       setIsLoading(false);
     }
   }, [user, supabase, setRooms]);
-
-  useEffect(() => {
-    if (!availableRooms.length || !user) return;
-
-    const channels = availableRooms.map((room) => {
-      const channelName = `room_${room.id}_presence`;
-      const channel = supabase.channel(channelName);
-
-      const handleSync = () => {
-        const presenceState = channel.presenceState<PresenceState>();
-        const userIds = new Set<string>();
-
-        Object.values(presenceState).forEach((stateList) => {
-          stateList.forEach((presence) => {
-            if (presence.user_id) {
-              userIds.add(presence.user_id);
-            }
-          });
-        });
-
-        setAvailableRooms((prev) =>
-          prev.map((r) =>
-            r.id === room.id ? { ...r, activeUsers: userIds.size } : r
-          )
-        );
-      };
-
-      channel
-        .on("presence", { event: "sync" }, handleSync)
-        .on("presence", { event: "join" }, handleSync)
-        .on("presence", { event: "leave" }, handleSync)
-        .subscribe();
-
-      return channel;
-    });
-
-    return () => {
-      channels.forEach((channel) => channel.unsubscribe());
-    };
-  }, [availableRooms, supabase, user]);
 
   useEffect(() => {
     if (!user) return;
@@ -309,17 +282,24 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 
           if (!room_id) return;
 
-          // Recalculate memberCount for only this room
+          // Recalculate memberCount and activeUsers for only this room
           const { count: totalCount } = await supabase
             .from("room_members")
             .select("*", { count: "exact", head: true })
             .eq("room_id", room_id)
             .eq("status", "accepted");
 
+          const { count: activeCount } = await supabase
+            .from("room_members")
+            .select("*", { count: "exact", head: true })
+            .eq("room_id", room_id)
+            .eq("status", "accepted")
+            .eq("active", true);
+
           // Update only that room in availableRooms
           setAvailableRooms((prev) =>
             prev.map((room) =>
-              room.id === room_id ? { ...room, memberCount: totalCount ?? 0 } : room
+              room.id === room_id ? { ...room, memberCount: totalCount ?? 0, activeUsers: activeCount ?? 0 } : room
             )
           );
         }
@@ -540,11 +520,26 @@ const handleRoomSwitch = useCallback(
             memberCounts.get(p.room_id)!.add(p.user_id);
           });
 
+          // Get active users for each room
+          const activePromises = roomIds.map(async (roomId: string) => {
+            const { count } = await supabase
+              .from("room_members")
+              .select("*", { count: "exact", head: true })
+              .eq("room_id", roomId)
+              .eq("status", "accepted")
+              .eq("active", true);
+            return { roomId, activeUsers: count ?? 0 };
+          });
+
+          const activeResults = await Promise.all(activePromises);
+          const activeUsersMap = new Map(activeResults.map((r) => [r.roomId, r.activeUsers]));
+
           const roomsWithDetailedStatus = await Promise.all(
             fetchedRooms.map(async (room: Room) => ({
               ...room,
               participationStatus: await checkRoomParticipation(room.id),
               memberCount: memberCounts.get(room.id)?.size ?? 0,
+              activeUsers: activeUsersMap.get(room.id) ?? 0,
               isMember: await checkRoomMembership(room.id),
             }))
           );
@@ -788,6 +783,7 @@ const handleRoomSwitch = useCallback(
           </div>
           <div className="text-sm text-gray-400">
             {result.memberCount} {result.memberCount === 1 ? "member" : "members"}
+            {(result.activeUsers ?? 0) > 0 && ` • ${result.activeUsers ?? 0} active`}
           </div>
         </div>
       </div>
