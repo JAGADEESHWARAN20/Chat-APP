@@ -228,31 +228,18 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         });
       }
 
-      // For each room, get presence data
+      // For each room, get active users data
       const presencePromises = roomIds.map(async (roomId) => {
-        const { data: roomMembers } = await supabase
+        const { count } = await supabase
           .from("room_members")
-          .select("user_id")
+          .select("*", { count: "exact", head: true })
           .eq("room_id", roomId)
-          .eq("status", "accepted");
-
-        const { data: presenceData } = await supabase
-          .from("typing_status")
-          .select("user_id")
-          .eq("room_id", roomId)
-          .in(
-            "user_id",
-            roomMembers?.map((member: Pick<RoomMemberRow, "user_id">) => member.user_id) || []
-          );
-
-        // Get unique active users (filter out duplicates)
-        const uniqueActiveUsers = new Set(
-          presenceData?.map((p: Pick<TypingStatusRow, "user_id">) => p.user_id)
-        );
+          .eq("status", "accepted")
+          .eq("active", true);
 
         return {
           roomId,
-          activeUsers: uniqueActiveUsers.size,
+          activeUsers: count ?? 0,
         };
       });
 
@@ -283,42 +270,36 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     if (!user) return;
 
     const channel = supabase
-      .channel("typing-status-listener")
+      .channel("room-members-listener")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "typing_status" },
-        async (payload: RealtimePostgresChangesPayload<TypingStatusRow>) => {
-          // SAFELY extract room_id from new/old rows (FIX: proper typing to avoid TS2339)
+        { event: "*", schema: "public", table: "room_members" },
+        async (payload: RealtimePostgresChangesPayload<RoomMemberRow>) => {
+          // SAFELY extract room_id from new/old rows
           const room_id =
-            (payload.new as TypingStatusRow | null)?.room_id ??
-            (payload.old as TypingStatusRow | null)?.room_id;
+            (payload.new as RoomMemberRow | null)?.room_id ??
+            (payload.old as RoomMemberRow | null)?.room_id;
 
           if (!room_id) return;
 
-          // Recalculate active users for only this room
-          const { data: roomMembers } = await supabase
+          // Recalculate memberCount and activeUsers for only this room
+          const { count: totalCount } = await supabase
             .from("room_members")
-            .select("user_id")
+            .select("*", { count: "exact", head: true })
             .eq("room_id", room_id)
             .eq("status", "accepted");
 
-          const { data: presenceData } = await supabase
-            .from("typing_status")
-            .select("user_id")
+          const { count: activeCount } = await supabase
+            .from("room_members")
+            .select("*", { count: "exact", head: true })
             .eq("room_id", room_id)
-            .in(
-              "user_id",
-              roomMembers?.map((m: Pick<RoomMemberRow, "user_id">) => m.user_id) || []
-            );
-
-          const uniqueActiveUsers = new Set(
-            presenceData?.map((p: Pick<TypingStatusRow, "user_id">) => p.user_id)
-          );
+            .eq("status", "accepted")
+            .eq("active", true);
 
           // Update only that room in availableRooms
           setAvailableRooms((prev) =>
             prev.map((room) =>
-              room.id === room_id ? { ...room, activeUsers: uniqueActiveUsers.size } : room
+              room.id === room_id ? { ...room, memberCount: totalCount ?? 0, activeUsers: activeCount ?? 0 } : room
             )
           );
         }
@@ -539,11 +520,26 @@ const handleRoomSwitch = useCallback(
             memberCounts.get(p.room_id)!.add(p.user_id);
           });
 
+          // Get active users for each room
+          const activePromises = roomIds.map(async (roomId) => {
+            const { count } = await supabase
+              .from("room_members")
+              .select("*", { count: "exact", head: true })
+              .eq("room_id", roomId)
+              .eq("status", "accepted")
+              .eq("active", true);
+            return { roomId, activeUsers: count ?? 0 };
+          });
+
+          const activeResults = await Promise.all(activePromises);
+          const activeUsersMap = new Map(activeResults.map((r) => [r.roomId, r.activeUsers]));
+
           const roomsWithDetailedStatus = await Promise.all(
             fetchedRooms.map(async (room: Room) => ({
               ...room,
               participationStatus: await checkRoomParticipation(room.id),
               memberCount: memberCounts.get(room.id)?.size ?? 0,
+              activeUsers: activeUsersMap.get(room.id) ?? 0,
               isMember: await checkRoomMembership(room.id),
             }))
           );
