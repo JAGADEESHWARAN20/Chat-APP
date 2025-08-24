@@ -521,7 +521,7 @@ const handleRoomSwitch = useCallback(
           });
 
           // Get active users for each room
-          const activePromises = roomIds.map(async (roomId) => {
+          const activePromises = roomIds.map(async (roomId: string) => {
             const { count } = await supabase
               .from("room_members")
               .select("*", { count: "exact", head: true })
