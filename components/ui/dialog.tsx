@@ -19,23 +19,20 @@ const DialogOverlay = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Overlay
-    ref={ref}
-    className={cn(
-  "fixed left-[50%] top-[50%] z-50 grid w-full max-w-[90vw] sm:max-w-md lg:max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border rounded-xl p-6 shadow-lg duration-200",
+  ref={ref}
+  className={cn(
+    "fixed inset-0 z-40", 
+    // blur + transparency
+    "backdrop-blur-sm bg-black/30", 
 
-  // light mode
-  "bg-white border-gray-200 text-gray-900",
+    // animations
+    "data-[state=open]:animate-in data-[state=closed]:animate-out",
+    "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+    className
+  )}
+  {...props}
+/>
 
-  // dark mode
-  "dark:bg-gradient-to-br dark:from-gray-800 dark:to-gray-900 dark:border-gray-700 dark:text-white",
-
-  // animations
-  "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]",
-  className
-)}
-
-    {...props}
-  />
 ))
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName
 
