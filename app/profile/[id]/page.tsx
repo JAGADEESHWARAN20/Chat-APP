@@ -14,7 +14,7 @@ export default function ProfilePage({ params }: { params: { id: string } }) {
   useEffect(() => {
     const fetchProfile = async () => {
       const { data } = await supabase
-        .from("users")
+        .from("profiles")
         .select("*")
         .eq("id", params.id)
         .single();
