@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Button } from "./ui/button";
 import { supabaseBrowser } from "@/lib/supabase/browser";
-import { User as SupabaseUser } from "@supabase/supabase-js";
+import { User as SupabaseUser, RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 import ChatPresence from "./ChatPresence";
 import {
@@ -16,7 +16,6 @@ import {
   PlusCircle,
   Bell,
   Settings,
-  ArrowRight,
   LogOut,
   UserIcon,
   ArrowRightLeft,
@@ -40,12 +39,13 @@ import { useRoomStore } from "@/lib/store/roomstore";
 import { useDebounce } from "use-debounce";
 import Notifications from "./Notifications";
 import { useNotification } from "@/lib/store/notifications";
-import { SearchTabs } from "./ui/search-tabs";
-import { useActiveUsers } from "@/hooks/useActiveUsers";
-
+// import { SearchTabs } from "./ui/search-tabs"; // (unused import removed)
+// import { useActiveUsers } from "@/hooks/useActiveUsers"; // (unused import removed)
 
 type UserProfile = Database["public"]["Tables"]["users"]["Row"];
 type Room = Database["public"]["Tables"]["rooms"]["Row"];
+type RoomMemberRow = Database["public"]["Tables"]["room_members"]["Row"];
+type TypingStatusRow = Database["public"]["Tables"]["typing_status"]["Row"];
 
 // Extended Room type including memberCount, isMember, participationStatus
 type RoomWithMembershipCount = Room & {
@@ -54,7 +54,6 @@ type RoomWithMembershipCount = Room & {
   memberCount: number;
   activeUsers?: number;
 };
-
 
 export default function ChatHeader({ user }: { user: SupabaseUser | undefined }) {
   const router = useRouter();
@@ -71,7 +70,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const [newRoomName, setNewRoomName] = useState("");
   const [isPrivate, setIsPrivate] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
-  const { selectedRoom, setSelectedRoom, setRooms, initializeDefaultRoom } = useRoomStore();
+  const { selectedRoom, setSelectedRoom, setRooms } = useRoomStore();
   const { notifications, fetchNotifications, subscribeToNotifications } = useNotification();
   const isMounted = useRef(true);
   const [isLoading, setIsLoading] = useState(false);
@@ -81,16 +80,13 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const [limit] = useState(100);
   const [offset] = useState(0);
   const [isFaded, setIsFaded] = useState(false);
-  // const activeUsersCount = useActiveUsers(selectedRoom?.id ?? null);
 
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsFaded(true);
-    }, 2); // 2-second delay
-
-    return () => clearTimeout(timer); // Cleanup timeout on unmount
+    }, 2);
+    return () => clearTimeout(timer);
   }, []);
-
 
   const [debouncedCallback] = useDebounce((value: string) => setSearchQuery(value), 300);
   const [debouncedSearchQuery] = useDebounce(searchQuery, 300);
@@ -226,39 +222,42 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
           console.error("Error fetching member counts:", membersError);
         }
 
-        // Aggregate counts client-side
-        const countsMap = new Map<string, number>();
-        membersData?.forEach((m) => {
+        // Aggregate counts client-side (FIX: do not shadow countsMap)
+        membersData?.forEach((m: Pick<RoomMemberRow, "room_id">) => {
           countsMap.set(m.room_id, (countsMap.get(m.room_id) ?? 0) + 1);
         });
-
       }
 
       // For each room, get presence data
       const presencePromises = roomIds.map(async (roomId) => {
         const { data: roomMembers } = await supabase
-          .from('room_members')
-          .select('user_id')
-          .eq('room_id', roomId)
-          .eq('status', 'accepted');
+          .from("room_members")
+          .select("user_id")
+          .eq("room_id", roomId)
+          .eq("status", "accepted");
 
         const { data: presenceData } = await supabase
-          .from('typing_status')
-          .select('user_id')
-          .eq('room_id', roomId)
-          .in('user_id', roomMembers?.map(member => member.user_id) || []);
+          .from("typing_status")
+          .select("user_id")
+          .eq("room_id", roomId)
+          .in(
+            "user_id",
+            roomMembers?.map((member: Pick<RoomMemberRow, "user_id">) => member.user_id) || []
+          );
 
         // Get unique active users (filter out duplicates)
-        const uniqueActiveUsers = new Set(presenceData?.map(p => p.user_id));
+        const uniqueActiveUsers = new Set(
+          presenceData?.map((p: Pick<TypingStatusRow, "user_id">) => p.user_id)
+        );
 
         return {
           roomId,
-          activeUsers: uniqueActiveUsers.size
+          activeUsers: uniqueActiveUsers.size,
         };
       });
 
       const presenceResults = await Promise.all(presencePromises);
-      const activeUsersMap = new Map(presenceResults.map(r => [r.roomId, r.activeUsers]));
+      const activeUsersMap = new Map(presenceResults.map((r) => [r.roomId, r.activeUsers]));
 
       // Attach memberCount, activeUsers, and isMember:true, participationStatus to each room
       const joinedRooms: RoomWithMembershipCount[] = joinedRoomsRaw.map((room) => ({
@@ -279,52 +278,57 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       setIsLoading(false);
     }
   }, [user, supabase, setRooms]);
+
   useEffect(() => {
-  if (!user) return;
+    if (!user) return;
 
-  const channel = supabase
-    .channel("typing-status-listener")
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "typing_status" },
-      async (payload) => {
-        const { room_id } = payload.new || payload.old;
-        if (!room_id) return;
+    const channel = supabase
+      .channel("typing-status-listener")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "typing_status" },
+        async (payload: RealtimePostgresChangesPayload<TypingStatusRow>) => {
+          // SAFELY extract room_id from new/old rows (FIX: proper typing to avoid TS2339)
+          const room_id =
+            (payload.new as TypingStatusRow | null)?.room_id ??
+            (payload.old as TypingStatusRow | null)?.room_id;
 
-        // Recalculate active users for only this room
-        const { data: roomMembers } = await supabase
-          .from("room_members")
-          .select("user_id")
-          .eq("room_id", room_id)
-          .eq("status", "accepted");
+          if (!room_id) return;
 
-        const { data: presenceData } = await supabase
-          .from("typing_status")
-          .select("user_id")
-          .eq("room_id", room_id)
-          .in("user_id", roomMembers?.map((m) => m.user_id) || []);
+          // Recalculate active users for only this room
+          const { data: roomMembers } = await supabase
+            .from("room_members")
+            .select("user_id")
+            .eq("room_id", room_id)
+            .eq("status", "accepted");
 
-        const uniqueActiveUsers = new Set(presenceData?.map((p) => p.user_id));
+          const { data: presenceData } = await supabase
+            .from("typing_status")
+            .select("user_id")
+            .eq("room_id", room_id)
+            .in(
+              "user_id",
+              roomMembers?.map((m: Pick<RoomMemberRow, "user_id">) => m.user_id) || []
+            );
 
-        // Update only that room in availableRooms
-        setAvailableRooms((prev) =>
-          prev.map((room) =>
-            room.id === room_id
-              ? { ...room, activeUsers: uniqueActiveUsers.size }
-              : room
-          )
-        );
-      }
-    )
-    .subscribe();
+          const uniqueActiveUsers = new Set(
+            presenceData?.map((p: Pick<TypingStatusRow, "user_id">) => p.user_id)
+          );
 
-  return () => {
-    channel.unsubscribe();
-  };
-}, [supabase, user]);
+          // Update only that room in availableRooms
+          setAvailableRooms((prev) =>
+            prev.map((room) =>
+              room.id === room_id ? { ...room, activeUsers: uniqueActiveUsers.size } : room
+            )
+          );
+        }
+      )
+      .subscribe();
 
-
-
+    return () => {
+      channel.unsubscribe();
+    };
+  }, [supabase, user]);
 
   // Handler functions: handleRoomSwitch, handleLeaveRoom, handleJoinRoom, handleCreateRoom remain largely unchanged but work with RoomWithMembershipCount type
 
@@ -353,9 +357,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
           } else if (result.code === "ROOM_NOT_FOUND") {
             toast.error("Room not found.");
           } else if (result.status === "pending") {
-            toast.info(
-              result.message || "Switch request sent to room owner for approval."
-            );
+            toast.info(result.message || "Switch request sent to room owner for approval.");
           } else {
             toast.error(result.message || "Failed to switch room.");
           }
@@ -425,9 +427,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 
         if (membersError || participantsError) {
           throw new Error(
-            membersError?.message ||
-              participantsError?.message ||
-              "Failed to leave room"
+            membersError?.message || participantsError?.message || "Failed to leave room"
           );
         }
 
@@ -454,9 +454,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
           setSelectedRoom(null);
           router.push("/");
         } else {
-          const defaultRoom = availableRooms.find(
-            (room) => room.name === "General Chat"
-          );
+          const defaultRoom = availableRooms.find((room) => room.name === "General Chat");
           if (defaultRoom) {
             setSelectedRoom(defaultRoom);
           } else {
@@ -515,7 +513,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         if (isMounted.current) {
           // Get member counts for all rooms from both tables
           const roomIds = fetchedRooms.map((room: Room) => room.id);
-          
+
           // Get accepted room members
           const { data: membersData } = await supabase
             .from("room_members")
@@ -532,21 +530,21 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 
           // Combine both sets of users and count unique users per room
           const memberCounts = new Map<string, Set<string>>();
-          
+
           // Add members
-          membersData?.forEach(m => {
+          membersData?.forEach((m: Pick<RoomMemberRow, "room_id" | "user_id">) => {
             if (!memberCounts.has(m.room_id)) {
               memberCounts.set(m.room_id, new Set());
             }
-            memberCounts.get(m.room_id)?.add(m.user_id);
+            memberCounts.get(m.room_id)!.add(m.user_id);
           });
-          
+
           // Add participants
-          participantsData?.forEach(p => {
+          participantsData?.forEach((p: { room_id: string; user_id: string }) => {
             if (!memberCounts.has(p.room_id)) {
               memberCounts.set(p.room_id, new Set());
             }
-            memberCounts.get(p.room_id)?.add(p.user_id);
+            memberCounts.get(p.room_id)!.add(p.user_id);
           });
 
           const roomsWithDetailedStatus = await Promise.all(
@@ -554,7 +552,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
               ...room,
               participationStatus: await checkRoomParticipation(room.id),
               memberCount: memberCounts.get(room.id)?.size ?? 0,
-              isMember: await checkRoomMembership(room.id)
+              isMember: await checkRoomMembership(room.id),
             }))
           );
           setRoomResults(roomsWithDetailedStatus);
@@ -779,10 +777,11 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   }, [selectedRoom, availableRooms]);
 
   // Render a room result with memberCount shown
-  const renderRoomSearchResult = (
-    result: RoomWithMembershipCount
-  ) => (
-    <li key={result.id} className="flex items-center justify-between pb-[1em] rounded-lg  transition-colors">
+  const renderRoomSearchResult = (result: RoomWithMembershipCount) => (
+    <li
+      key={result.id}
+      className="flex items-center justify-between pb-[1em] rounded-lg  transition-colors"
+    >
       <div className="flex items-center gap-3">
         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-500/30">
           <span className="text-lg font-semibold text-indigo-400">
@@ -792,12 +791,10 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         <div>
           <div className="flex items-center gap-2">
             <span className="font-semibold text-white">{result.name}</span>
-            {result.is_private && (
-              <LockIcon className="h-3.5 w-3.5 text-gray-400" />
-            )}
+            {result.is_private && <LockIcon className="h-3.5 w-3.5 text-gray-400" />}
           </div>
           <div className="text-sm text-gray-400">
-            {result.memberCount} {result.memberCount === 1 ? 'member' : 'members'} 
+            {result.memberCount} {result.memberCount === 1 ? "member" : "members"}
             {(result.activeUsers ?? 0) > 0 && ` • ${result.activeUsers ?? 0} active`}
           </div>
         </div>
@@ -853,185 +850,169 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
             </Button>
           </DialogTrigger>
           <DialogContent>
-  <DialogHeader>
-    <DialogTitle className="text-[2em] font-bold">
-      Create New Room
-    </DialogTitle>
-  </DialogHeader>
+            <DialogHeader>
+              <DialogTitle className="text-[2em] font-bold">Create New Room</DialogTitle>
+            </DialogHeader>
 
-  <div className="grid gap-[1.2em] py-[1em]">
-    <div className="space-y-[0.6em]">
-      <Label
-        htmlFor="roomName"
-        className="text-[1em] font-medium text-foreground"
-      >
-        Room Name
-      </Label>
-      <Input
-        id="roomName"
-        placeholder="Enter room name"
-        value={newRoomName}
-        onChange={(e) => setNewRoomName(e.target.value)}
-        disabled={isCreating}
-        className="
-          bg-background
-          border
-          border-border
-          text-foreground
-          placeholder:text-muted-foreground
-          rounded-lg
-          focus-visible:ring-1
-          focus-visible:ring-indigo-500
-          focus-visible:border-indigo-500
-          transition-all
-        "
-      />
-    </div>
+            <div className="grid gap-[1.2em] py-[1em]">
+              <div className="space-y-[0.6em]">
+                <Label htmlFor="roomName" className="text-[1em] font-medium text-foreground">
+                  Room Name
+                </Label>
+                <Input
+                  id="roomName"
+                  placeholder="Enter room name"
+                  value={newRoomName}
+                  onChange={(e) => setNewRoomName(e.target.value)}
+                  disabled={isCreating}
+                  className="
+                    bg-background
+                    border
+                    border-border
+                    text-foreground
+                    placeholder:text-muted-foreground
+                    rounded-lg
+                    focus-visible:ring-1
+                    focus-visible:ring-indigo-500
+                    focus-visible:border-indigo-500
+                    transition-all
+                  "
+                />
+              </div>
 
-    <div className="flex items-center space-x-[1em]">
-      <Switch
-        id="private"
-        checked={isPrivate}
-        onCheckedChange={setIsPrivate}
-        disabled={isCreating}
-        className="
-          data-[state=checked]:bg-indigo-600
-          data-[state=unchecked]:bg-muted
-        "
-      />
-      <Label
-        htmlFor="private"
-        className="text-[1em] font-medium text-foreground"
-      >
-        Private Room
-      </Label>
-    </div>
-  </div>
+              <div className="flex items-center space-x-[1em]">
+                <Switch
+                  id="private"
+                  checked={isPrivate}
+                  onCheckedChange={setIsPrivate}
+                  disabled={isCreating}
+                  className="
+                    data-[state=checked]:bg-indigo-600
+                    data-[state=unchecked]:bg-muted
+                  "
+                />
+                <Label htmlFor="private" className="text-[1em] font-medium text-foreground">
+                  Private Room
+                </Label>
+              </div>
+            </div>
 
-  <DialogFooter>
-    <Button
-      variant="outline"
-      onClick={() => setIsDialogOpen(false)}
-      disabled={isCreating}
-      className="
-        bg-transparent
-        border-border
-        text-foreground
-        hover:bg-muted
-        hover:text-foreground
-        rounded-lg
-        transition-colors
-      "
-    >
-      Cancel
-    </Button>
-    <Button
-      onClick={handleCreateRoom}
-      disabled={isCreating}
-      className="
-        bg-indigo-600
-        hover:bg-indigo-700
-        text-white
-        rounded-lg
-        transition-colors
-      "
-    >
-      {isCreating ? "Creating..." : "Create Room"}
-    </Button>
-  </DialogFooter>
-</DialogContent>
-
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setIsDialogOpen(false)}
+                disabled={isCreating}
+                className="
+                  bg-transparent
+                  border-border
+                  text-foreground
+                  hover:bg-muted
+                  hover:text-foreground
+                  rounded-lg
+                  transition-colors
+                "
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleCreateRoom}
+                disabled={isCreating}
+                className="
+                  bg-indigo-600
+                  hover:bg-indigo-700
+                  text-white
+                  rounded-lg
+                  transition-colors
+                "
+              >
+                {isCreating ? "Creating..." : "Create Room"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
         </Dialog>
 
         {selectedRoom && (
-          <Popover
-            open={isSwitchRoomPopoverOpen}
-            onOpenChange={setIsSwitchRoomPopoverOpen}
-          >
+          <Popover open={isSwitchRoomPopoverOpen} onOpenChange={setIsSwitchRoomPopoverOpen}>
             <PopoverTrigger asChild>
               <Button variant="ghost" size="icon">
                 <ArrowRightLeft className="h-5 w-5" />
               </Button>
             </PopoverTrigger>
-          <PopoverContent
-  side="bottom"
-  align="center"
-  sideOffset={0}
-  className="
-    !w-[min(32em,95vw)]
-    !h-[min(30em,85vh)]
-    md:!w-[32em]
-    md:!h-[32em]
-    mr-[2.3vw]
-    lg:mt-[1vw]
-    mt-[1em]
-    mb-[2vh]
-    bg-popover
-    text-popover-foreground
-    backdrop-blur-xl
-    rounded-2xl
-    p-[.7em]
-    border
-    border-border
-    !max-w-[95vw]
-    !max-h-[99vh]
-    shadow-xl
-  "
->
-  <div className="p-[.3vw]">
-    <h3 className="font-semibold text-[1.1em] mb-2">Switch Room</h3>
-
-    {availableRooms.length === 0 ? (
-      <p className="text-[1em] text-muted-foreground">No rooms available</p>
-    ) : (
-      <ul className="space-y-2 overflow-y-auto max-h-[calc(100vh-200px)] scrollbar-none lg:scrollbar-custom">
-        {availableRooms.map((room) => (
-          <li
-            key={room.id}
-            className="
-              flex items-center justify-between p-2 rounded-lg 
-              bg-card hover:bg-accent transition-colors
-            "
-          >
-            <div className="flex items-center gap-3">
-              {/* Room icon */}
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-500/10">
-                <span className="text-lg font-semibold text-indigo-500">
-                  {room.name.charAt(0).toUpperCase()}
-                </span>
-              </div>
-
-              {/* Room info */}
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold">{room.name}</span>
-                  {room.is_private && (
-                    <LockIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                  )}
-                </div>
-                <p className="text-sm text-green-500">
-                  {room.activeUsers ?? 0} active
-                </p>
-              </div>
-            </div>
-
-            {/* Toggle switch */}
-            <Switch
-              checked={selectedRoom?.id === room.id}
-              onCheckedChange={() => handleRoomSwitch(room)}
+            <PopoverContent
+              side="bottom"
+              align="center"
+              sideOffset={0}
               className="
-                data-[state=checked]:bg-indigo-600 
-                data-[state=unchecked]:bg-muted
+                !w-[min(32em,95vw)]
+                !h-[min(30em,85vh)]
+                md:!w-[32em]
+                md:!h-[32em]
+                mr-[2.3vw]
+                lg:mt-[1vw]
+                mt-[1em]
+                mb-[2vh]
+                bg-popover
+                text-popover-foreground
+                backdrop-blur-xl
+                rounded-2xl
+                p-[.7em]
+                border
+                border-border
+                !max-w-[95vw]
+                !max-h-[99vh]
+                shadow-xl
               "
-            />
-          </li>
-        ))}
-      </ul>
-    )}
-  </div>
-</PopoverContent>
+            >
+              <div className="p-[.3vw]">
+                <h3 className="font-semibold text-[1.1em] mb-2">Switch Room</h3>
 
+                {availableRooms.length === 0 ? (
+                  <p className="text-[1em] text-muted-foreground">No rooms available</p>
+                ) : (
+                  <ul className="space-y-2 overflow-y-auto max-h-[calc(100vh-200px)] scrollbar-none lg:scrollbar-custom">
+                    {availableRooms.map((room) => (
+                      <li
+                        key={room.id}
+                        className="
+                          flex items-center justify-between p-2 rounded-lg 
+                          bg-card hover:bg-accent transition-colors
+                        "
+                      >
+                        <div className="flex items-center gap-3">
+                          {/* Room icon */}
+                          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-500/10">
+                            <span className="text-lg font-semibold text-indigo-500">
+                              {room.name.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
 
+                          {/* Room info */}
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold">{room.name}</span>
+                              {room.is_private && (
+                                <LockIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                              )}
+                            </div>
+                            <p className="text-sm text-green-500">{room.activeUsers ?? 0} active</p>
+                          </div>
+                        </div>
+
+                        {/* Toggle switch */}
+                        <Switch
+                          checked={selectedRoom?.id === room.id}
+                          onCheckedChange={() => handleRoomSwitch(room)}
+                          className="
+                            data-[state=checked]:bg-indigo-600 
+                            data-[state=unchecked]:bg-muted
+                          "
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </PopoverContent>
           </Popover>
         )}
 
@@ -1059,183 +1040,183 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
               <Search className="h-5 w-5" />
             </Button>
           </PopoverTrigger>
-        <PopoverContent
-  side="bottom"
-  align="center"
-  sideOffset={0}
-  className="
-    w-[400px]
-    p-4
-    bg-popover
-    text-popover-foreground
-    backdrop-blur-lg
-    border
-    border-border
-    shadow-xl
-    rounded-xl
-  "
->
-  <div className="p-1">
-    <div className="flex justify-between items-center mb-[0.5em]">
-      <h3 className="font-bold text-[1.5em]">Search</h3>
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={() => {
-          setIsSearchPopoverOpen(false);
-          router.push("/profile");
-        }}
-        className="text-muted-foreground hover:text-foreground transition-colors"
-      >
-        <Settings className="h-4 w-4" />
-      </Button>
-    </div>
-
-    <Input
-      type="text"
-      placeholder={
-        searchType === "users" ? "Search users..." : "Search rooms..."
-      }
-      value={searchQuery}
-      onChange={handleSearchInputChange}
-      className="
-        mb-1 bg-muted/50 border-border text-foreground 
-        placeholder-muted-foreground rounded-lg 
-        focus:ring-2 focus:ring-indigo-500 
-        focus:border-indigo-500 transition-all
-      "
-    />
-
-    {/* Toggle buttons */}
-    <div className="w-[100%] flex gap-1 mb-[1.2em]">
-      <Button
-        variant={searchType === "rooms" ? "default" : "outline"}
-        onClick={() => handleSearchByType("rooms")}
-        className={`${
-          searchType === "rooms"
-            ? "bg-indigo-600 hover:bg-indigo-700"
-            : "bg-transparent border-border hover:bg-accent"
-        } text-foreground rounded-lg transition-colors w-full`}
-      >
-        Rooms
-      </Button>
-      <Button
-        variant={searchType === "users" ? "default" : "outline"}
-        onClick={() => handleSearchByType("users")}
-        className={`${
-          searchType === "users"
-            ? "bg-indigo-600 hover:bg-indigo-700"
-            : "bg-transparent border-border hover:bg-accent"
-        } text-foreground rounded-lg transition-colors w-full`}
-      >
-        Users
-      </Button>
-    </div>
-
-    {/* Results */}
-    {searchType === "users" && userResults.length > 0 && (
-      <div className="mt-4">
-        <h4 className="font-semibold text-[1em] text-muted-foreground mb-3">
-          User Profiles
-        </h4>
-        <ul className="space-y-3 overflow-y-auto max-h-[440px] scrollbar-none lg:scrollbar-custom">
-          {userResults.map((result) => (
-            <li
-              key={result.id}
-              className="flex items-center justify-between p-2 rounded-lg hover:bg-accent transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <Avatar className="h-10 w-10">
-                  {result.avatar_url ? (
-                    <AvatarImage
-                      src={result.avatar_url}
-                      alt={result.username || "Avatar"}
-                      className="rounded-full"
-                    />
-                  ) : (
-                    <AvatarFallback className="bg-indigo-500 text-white rounded-full">
-                      {result.username?.charAt(0).toUpperCase() ||
-                        result.display_name?.charAt(0).toUpperCase() ||
-                        "?"}
-                    </AvatarFallback>
-                  )}
-                </Avatar>
-                <div>
-                  <div className="text-xs text-muted-foreground">
-                    {result.username}
-                  </div>
-                  <div className="text-[1em] font-medium">{result.display_name}</div>
-                </div>
+          <PopoverContent
+            side="bottom"
+            align="center"
+            sideOffset={0}
+            className="
+              w-[400px]
+              p-4
+              bg-popover
+              text-popover-foreground
+              backdrop-blur-lg
+              border
+              border-border
+              shadow-xl
+              rounded-xl
+            "
+          >
+            <div className="p-1">
+              <div className="flex justify-between items-center mb-[0.5em]">
+                <h3 className="font-bold text-[1.5em]">Search</h3>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => {
+                    setIsSearchPopoverOpen(false);
+                    router.push("/profile");
+                  }}
+                  className="text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <Settings className="h-4 w-4" />
+                </Button>
               </div>
-              <UserIcon className="h-4 w-4 text-muted-foreground" />
-            </li>
-          ))}
-        </ul>
-      </div>
-    )}
 
-    {/* Rooms results */}
-    {searchType === "rooms" && (
-      <div className="mt-4">
-        <h4 className="font-semibold text-[1em] text-muted-foreground mb-3">
-          Rooms
-        </h4>
-        <ul className="space-y-[.1em] overflow-y-auto max-h-[440px] py-[.2em] rounded-lg scrollbar-none lg:scrollbar-custom">
-          {isLoading ? (
-            Array(3).fill(0).map((_, i) => (
-              <li key={i} className="flex items-center justify-between p-2 rounded-lg bg-muted animate-pulse">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-accent"></div>
-                  <div>
-                    <div className="h-4 w-32 bg-accent rounded mb-2"></div>
-                    <div className="h-3 w-24 bg-accent rounded"></div>
-                  </div>
+              <Input
+                type="text"
+                placeholder={searchType === "users" ? "Search users..." : "Search rooms..."}
+                value={searchQuery}
+                onChange={handleSearchInputChange}
+                className="
+                  mb-1 bg-muted/50 border-border text-foreground 
+                  placeholder-muted-foreground rounded-lg 
+                  focus:ring-2 focus:ring-indigo-500 
+                  focus:border-indigo-500 transition-all
+                "
+              />
+
+              {/* Toggle buttons */}
+              <div className="w-[100%] flex gap-1 mb-[1.2em]">
+                <Button
+                  variant={searchType === "rooms" ? "default" : "outline"}
+                  onClick={() => handleSearchByType("rooms")}
+                  className={`${
+                    searchType === "rooms"
+                      ? "bg-indigo-600 hover:bg-indigo-700"
+                      : "bg-transparent border-border hover:bg-accent"
+                  } text-foreground rounded-lg transition-colors w-full`}
+                >
+                  Rooms
+                </Button>
+                <Button
+                  variant={searchType === "users" ? "default" : "outline"}
+                  onClick={() => handleSearchByType("users")}
+                  className={`${
+                    searchType === "users"
+                      ? "bg-indigo-600 hover:bg-indigo-700"
+                      : "bg-transparent border-border hover:bg-accent"
+                  } text-foreground rounded-lg transition-colors w-full`}
+                >
+                  Users
+                </Button>
+              </div>
+
+              {/* Results */}
+              {searchType === "users" && userResults.length > 0 && (
+                <div className="mt-4">
+                  <h4 className="font-semibold text-[1em] text-muted-foreground mb-3">
+                    User Profiles
+                  </h4>
+                  <ul className="space-y-3 overflow-y-auto max-h-[440px] scrollbar-none lg:scrollbar-custom">
+                    {userResults.map((result) => (
+                      <li
+                        key={result.id}
+                        className="flex items-center justify-between p-2 rounded-lg hover:bg-accent transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-10 w-10">
+                            {result.avatar_url ? (
+                              <AvatarImage
+                                src={result.avatar_url}
+                                alt={result.username || "Avatar"}
+                                className="rounded-full"
+                              />
+                            ) : (
+                              <AvatarFallback className="bg-indigo-500 text-white rounded-full">
+                                {result.username?.charAt(0).toUpperCase() ||
+                                  result.display_name?.charAt(0).toUpperCase() ||
+                                  "?"}
+                              </AvatarFallback>
+                            )}
+                          </Avatar>
+                          <div>
+                            <div className="text-xs text-muted-foreground">{result.username}</div>
+                            <div className="text-[1em] font-medium">
+                              {result.display_name}
+                            </div>
+                          </div>
+                        </div>
+                        <UserIcon className="h-4 w-4 text-muted-foreground" />
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-                <div className="h-8 w-16 bg-accent rounded"></div>
-              </li>
-            ))
-          ) : roomResults.length > 0 ? (
-            roomResults.map((result) => renderRoomSearchResult(result))
-          ) : (
-            <li className="text-[1em] text-muted-foreground p-2">No rooms found</li>
-          )}
-        </ul>
-      </div>
-    )}
+              )}
 
-    {/* Empty & Loading states */}
-    {((searchType === "users" && userResults.length === 0) ||
-      (searchType === "rooms" && roomResults.length === 0)) &&
-      searchQuery.length > 0 && (
-        <p className="text-[1em] text-muted-foreground mt-3">
-          No {searchType} found.
-        </p>
-      )}
+              {/* Rooms results */}
+              {searchType === "rooms" && (
+                <div className="mt-4">
+                  <h4 className="font-semibold text-[1em] text-muted-foreground mb-3">Rooms</h4>
+                  <ul className="space-y-[.1em] overflow-y-auto max-h-[440px] py-[.2em] rounded-lg scrollbar-none lg:scrollbar-custom">
+                    {isLoading ? (
+                      Array(3)
+                        .fill(0)
+                        .map((_, i) => (
+                          <li
+                            key={i}
+                            className="flex items-center justify-between p-2 rounded-lg bg-muted animate-pulse"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="h-10 w-10 rounded-lg bg-accent"></div>
+                              <div>
+                                <div className="h-4 w-32 bg-accent rounded mb-2"></div>
+                                <div className="h-3 w-24 bg-accent rounded"></div>
+                              </div>
+                            </div>
+                            <div className="h-8 w-16 bg-accent rounded"></div>
+                          </li>
+                        ))
+                    ) : roomResults.length > 0 ? (
+                      roomResults.map((result) => renderRoomSearchResult(result))
+                    ) : (
+                      <li className="text-[1em] text-muted-foreground p-2">No rooms found</li>
+                    )}
+                  </ul>
+                </div>
+              )}
 
-    {searchQuery.length === 0 && searchType && (
-      <p
-        className={`text-[1em] text-muted-foreground mt-3 transition-opacity duration-500 ${
-          isFaded ? "opacity-0" : "opacity-100"
-        }`}
-      >
-        Showing all {searchType}...
-      </p>
-    )}
+              {/* Empty & Loading states */}
+              {((searchType === "users" && userResults.length === 0) ||
+                (searchType === "rooms" && roomResults.length === 0)) &&
+                searchQuery.length > 0 && (
+                  <p className="text-[1em] text-muted-foreground mt-3">
+                    No {searchType} found.
+                  </p>
+                )}
 
-    {isLoading && (
-      <p
-        className={`text-[1em] text-muted-foreground mt-3 transition-opacity duration-500 ${
-          isFaded ? "opacity-0" : "opacity-100"
-        }`}
-      >
-        Loading...
-      </p>
-    )}
-  </div>
-</PopoverContent>
+              {searchQuery.length === 0 && searchType && (
+                <p
+                  className={`text-[1em] text-muted-foreground mt-3 transition-opacity duration-500 ${
+                    isFaded ? "opacity-0" : "opacity-100"
+                  }`}
+                >
+                  Showing all {searchType}...
+                </p>
+              )}
 
+              {isLoading && (
+                <p
+                  className={`text-[1em] text-muted-foreground mt-3 transition-opacity duration-500 ${
+                    isFaded ? "opacity-0" : "opacity-100"
+                  }`}
+                >
+                  Loading...
+                </p>
+              )}
+            </div>
+          </PopoverContent>
         </Popover>
       </div>
     </header>
   );
-};
+}
