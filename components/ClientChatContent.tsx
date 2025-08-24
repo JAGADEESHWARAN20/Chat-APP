@@ -11,7 +11,7 @@ export default function ClientChatContent({ user }: { user: SupabaseUser | undef
     const selectedRoom = useRoomStore((state) => state.selectedRoom);
 
     return (
-        <div className="h-[87vh] w-[98vw] lg:w-[50vw] mx-[1em] flex flex-col">
+        <div className="h-[85vh] w-[98vw] lg:w-[50vw] mx-[1em] flex flex-col">
             {user ? (
                 selectedRoom ? (
                     <>
