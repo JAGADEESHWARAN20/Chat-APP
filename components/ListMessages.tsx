@@ -238,7 +238,7 @@ export default function ListMessages() {
           ))
         ) : (
           <>
-            <div className="space-y-[.5em]">
+            <div className="space-y-[.1em]">
               {filteredMessages.map((value) => (
                 <Message key={value.id} message={value} />
               ))}
