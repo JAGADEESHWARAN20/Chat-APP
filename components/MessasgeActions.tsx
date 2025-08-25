@@ -1,3 +1,4 @@
+// components/MessageActions.tsx
 "use client";
 import {
   AlertDialog,
@@ -57,7 +58,7 @@ export function DeleteAlert() {
     <AlertDialog open={actionType === 'delete'} onOpenChange={(isOpen) => {
       if (!isOpen) {
         resetActionMessage();
-        focusMessageContainer(); // Correctly focuses the message container
+        focusMessageContainer();
       }
     }}>
       <AlertDialogContent className="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
@@ -131,14 +132,14 @@ export function EditAlert() {
       setActionMessage(actionMessage, 'delete');
       return;
     }
-    focusMessageContainer(); // Correctly focuses the message container
+    // ✅ Removed focus call from here
   };
 
   return (
     <Dialog open={actionType === 'edit'} onOpenChange={(isOpen) => {
       if (!isOpen) {
         resetActionMessage();
-        focusMessageContainer(); // Correctly focuses the message container
+        focusMessageContainer(); // ✅ Moved focus call to the onOpenChange handler
       }
     }}>
       <DialogContent className="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 w-full">
