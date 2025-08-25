@@ -70,22 +70,25 @@ export default function ListMessages() {
         if (!res.ok) throw new Error(await res.text());
 
         const { messages } = await res.json();
-        if (messages) {
+        if (messages && Array.isArray(messages)) {
           const formattedMessages = messages.map((msg: any) => ({
             ...msg,
             profiles: msg.profiles
               ? {
-                  id: msg.profiles.id,
-                  avatar_url: msg.profiles.avatar_url || null,
-                  display_name: msg.profiles.display_name || null,
-                  username: msg.profiles.username || null,
-                  created_at: msg.profiles.created_at || null,
-                  bio: msg.profiles.bio || null,
-                  updated_at: msg.profiles.updated_at || null,
-                }
+                id: msg.profiles.id,
+                avatar_url: msg.profiles.avatar_url || null,
+                display_name: msg.profiles.display_name || null,
+                username: msg.profiles.username || null,
+                created_at: msg.profiles.created_at || null,
+                bio: msg.profiles.bio || null,
+                updated_at: msg.profiles.updated_at || null,
+              }
               : null,
           }));
           setMessages(formattedMessages);
+        } else {
+          console.warn("No messages or invalid messages format received");
+          setMessages([]);
         }
       } catch (error) {
         toast.error("Failed to load messages");
@@ -157,9 +160,9 @@ export default function ListMessages() {
                     if (
                       scrollRef.current &&
                       scrollRef.current.scrollTop <
-                        scrollRef.current.scrollHeight -
-                          scrollRef.current.clientHeight -
-                          10
+                      scrollRef.current.scrollHeight -
+                      scrollRef.current.clientHeight -
+                      10
                     ) {
                       setNotification((prev) => prev + 1);
                     }
@@ -202,8 +205,11 @@ export default function ListMessages() {
 
   // Memoized filtered messages
   const filteredMessages = useMemo(() => {
+    if (!messages || !Array.isArray(messages)) {
+      return [];
+    }
     return messages
-      .filter((msg) => msg.room_id === selectedRoom?.id)
+      .filter((msg) => msg && msg.room_id === selectedRoom?.id)
       .sort(
         (a, b) =>
           new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
@@ -239,9 +245,24 @@ export default function ListMessages() {
         ) : (
           <>
             <div className="space-y-[.1em]">
-              {filteredMessages.map((value) => (
-                <Message key={value.id} message={value} />
-              ))}
+              {filteredMessages && filteredMessages.length > 0 ? (
+                filteredMessages.map((value) => {
+                  try {
+                    return <Message key={value.id} message={value} />;
+                  } catch (error) {
+                    console.error("Error rendering message:", error);
+                    return (
+                      <div key={value.id} className="p-2 text-red-500">
+                        Error rendering message
+                      </div>
+                    );
+                  }
+                })
+              ) : (
+                <div className="flex items-center justify-center h-32 text-gray-500">
+                  <p>No messages yet. Start a conversation!</p>
+                </div>
+              )}
               {selectedRoom?.id && user?.id && (
                 <TypingIndicator
                   roomId={selectedRoom.id}

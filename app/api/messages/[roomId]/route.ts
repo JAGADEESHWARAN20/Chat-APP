@@ -50,7 +50,7 @@ export async function GET(
         direct_chat_id,
         dm_thread_id,
         status,
-        profiles:profiles!sender_id (
+        profiles:profiles!messages_sender_id_fkey (
           id,
           username,
           display_name,
@@ -70,11 +70,14 @@ export async function GET(
       return NextResponse.json({ error: "Failed to fetch messages" }, { status: 500 });
     }
 
-    return NextResponse.json({ messages });
+    // Ensure messages is always an array
+    const safeMessages = Array.isArray(messages) ? messages : [];
+    
+    return NextResponse.json({ messages: safeMessages });
   } catch (error) {
     console.error("Server error in message fetch route:", error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "Internal server error", messages: [] },
       { status: 500 }
     );
   }

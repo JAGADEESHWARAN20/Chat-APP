@@ -16,37 +16,57 @@ import { useUser } from "@/lib/store/user";
 export default function Message({ message }: { message: Imessage }) {
   const user = useUser((state) => state.user);
 
+  // Add safety check for message
+  if (!message) {
+    return <div className="p-2 text-gray-500">Message not available</div>;
+  }
+
   return (
     <div className="flex gap-2 p-[.3em]">
       <div className="flex-shrink-0">
-        <Image
-          src={message.profiles?.avatar_url!}
-          alt={message.profiles?.display_name!}
-          width={40}
-          height={40}
-          className="rounded-full ring-2 ring-indigo-500/50"
-          priority
-        />
+        {message.profiles?.avatar_url ? (
+          <Image
+            src={message.profiles.avatar_url}
+            alt={message.profiles.display_name || message.profiles.username || "User avatar"}
+            width={40}
+            height={40}
+            className="rounded-full ring-2 ring-indigo-500/50"
+            priority
+            onError={(e) => {
+              // Fallback to placeholder if image fails to load
+              const target = e.target as HTMLImageElement;
+              target.style.display = 'none';
+              target.nextElementSibling?.classList.remove('hidden');
+            }}
+          />
+        ) : null}
+        <div className={`w-10 h-10 rounded-full ring-2 ring-indigo-500/50 bg-gray-300 flex items-center justify-center ${message.profiles?.avatar_url ? 'hidden' : ''}`}>
+          <span className="text-gray-600 text-sm font-medium">
+            {message.profiles?.display_name?.charAt(0)?.toUpperCase() ||
+              message.profiles?.username?.charAt(0)?.toUpperCase() ||
+              "?"}
+          </span>
+        </div>
       </div>
       <div className="flex-1 flex-col">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-           <h1 className="font-semibold text-foreground text-sm sm:text-base">
-              {message.profiles?.display_name}
+            <h1 className="font-semibold text-foreground text-sm sm:text-base">
+              {message.profiles?.display_name || message.profiles?.username || "Unknown User"}
             </h1>
 
             <h1 className="text-xs text-muted-foreground truncate">
-              {new Date(message.created_at).toDateString()}
+              {message.created_at ? new Date(message.created_at).toDateString() : "Unknown date"}
             </h1>
 
 
           </div>
-          {message.profiles?.id === user?.id && (
+          {message.profiles?.id && user?.id && message.profiles.id === user.id && (
             <MessageMenu message={message} />
           )}
         </div>
         <p className="dark:text-gray-200 text-black   text-[1.22em]   break-words">
-          {message.text}
+          {message.text || "Message content not available"}
         </p>
       </div>
     </div>
@@ -56,12 +76,17 @@ export default function Message({ message }: { message: Imessage }) {
 const MessageMenu = ({ message }: { message: Imessage }) => {
   const setActionMessage = useMessage((state) => state.setActionMessage);
 
+  // Add safety check for message
+  if (!message) {
+    return null;
+  }
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger className="text-gray-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-full p-1 transition-colors">
         <MoreHorizontal className="h-5 w-5" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent 
+      <DropdownMenuContent
         align="end"
         sideOffset={8}
         className="bg-gray-800 border-gray-700/50 text-white rounded-lg shadow-lg"
@@ -71,7 +96,7 @@ const MessageMenu = ({ message }: { message: Imessage }) => {
         <DropdownMenuItem
           onClick={() => {
             document.getElementById("trigger-edit")?.click();
-            setActionMessage(message,"edit");
+            setActionMessage(message, "edit");
           }}
           className="text-gray-200 hover:bg-gray-700 hover:text-white focus:bg-gray-700 focus:text-white rounded-md transition-colors"
         >
@@ -80,7 +105,7 @@ const MessageMenu = ({ message }: { message: Imessage }) => {
         <DropdownMenuItem
           onClick={() => {
             document.getElementById("trigger-delete")?.click();
-            setActionMessage(message,"delete");
+            setActionMessage(message, "delete");
           }}
           className="text-gray-200 hover:bg-gray-700 hover:text-white focus:bg-gray-700 focus:text-white rounded-md transition-colors"
         >

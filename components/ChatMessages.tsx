@@ -28,7 +28,7 @@ export default function ChatMessages() {
         if (!response.ok) throw new Error("Failed to fetch messages");
         const { messages } = await response.json();
 
-        const formattedMessages: Imessage[] = messages.map((msg: any) => ({
+        const formattedMessages: Imessage[] = (messages && Array.isArray(messages) ? messages.map((msg: any) => ({
           id: msg.id,
           created_at: msg.created_at,
           is_edited: msg.is_edited,
@@ -39,7 +39,8 @@ export default function ChatMessages() {
           dm_thread_id: msg.dm_thread_id,
           status: msg.status,
           users: msg.users || null,
-        })) || [];
+          profiles: msg.profiles || null,
+        })) : []) || [];
 
         setMessages(formattedMessages.reverse());
         
@@ -50,7 +51,7 @@ export default function ChatMessages() {
         if (!response.ok) throw new Error("Failed to fetch direct messages");
         const { messages } = await response.json();
 
-        const formattedMessages: Imessage[] = messages.map((msg: any) => ({
+        const formattedMessages: Imessage[] = (messages && Array.isArray(messages) ? messages.map((msg: any) => ({
           id: msg.id,
           created_at: msg.created_at,
           is_edited: msg.is_edited,
@@ -61,7 +62,8 @@ export default function ChatMessages() {
           dm_thread_id: msg.dm_thread_id,
           status: msg.status,
           users: msg.users || null,
-        })) || [];
+          profiles: msg.profiles || null,
+        })) : []) || [];
 
         setMessages(formattedMessages.reverse());
       }
