@@ -1,24 +1,42 @@
 "use client";
 import { useUser } from "@/lib/store/user";
-import React from "react";
-import { useRoomStore } from "@/lib/store/roomstore";
-import { useRoomPresence } from "@/hooks/useRoomPresence"; // ✅ Import the new hook
+import { supabaseBrowser } from "@/lib/supabase/browser";
+import React, { useEffect } from "react";
+import { useRoomPresence } from "@/hooks/useRoomPresence";
 
-export default function ChatPresence() {
+interface ChatPresenceProps {
+  roomId?: string;
+}
+
+export default function ChatPresence({ roomId }: ChatPresenceProps) {
   const user = useUser((state) => state.user);
-  const selectedRoom = useRoomStore((state) => state.selectedRoom);
+  const supabase = supabaseBrowser();
+  const roomOnlineCounts = useRoomPresence(roomId ? [roomId] : []);
+  const onlineCount = roomId ? roomOnlineCounts.get(roomId) ?? 0 : 0;
 
-  // ✅ Use the new hook to get the real-time online count for the selected room.
-  // We pass the room ID in an array as required by the hook's signature.
-  const roomOnlineCounts = useRoomPresence(selectedRoom ? [selectedRoom.id] : []);
+  useEffect(() => {
+    if (!user?.id || !roomId) return;
 
-  // ✅ Get the specific online count for the current selected room.
-  const onlineCount = roomOnlineCounts.get(selectedRoom?.id ?? '') ?? 0;
+    const updateActiveStatus = async (active: boolean) => {
+      try {
+        await supabase
+          .from("room_members")
+          .update({ active })
+          .eq("room_id", roomId)
+          .eq("user_id", user.id);
+      } catch (error) {
+        console.error("Error updating active status:", error);
+      }
+    };
 
-  // No need for a separate useEffect or useState for `onlineUsers`.
-  // The hook handles the subscription and state updates internally.
+    updateActiveStatus(true);
 
-  if (!user || !selectedRoom) {
+    return () => {
+      updateActiveStatus(false);
+    };
+  }, [user?.id, supabase, roomId]);
+
+  if (!user || !roomId) {
     return <div className="h-3 w-1" />;
   }
 
@@ -26,7 +44,7 @@ export default function ChatPresence() {
     <div className="flex items-center gap-1 sm:text-[1vw] md:text-[3vw]">
       <div className="h-[1.6vw] w-[1.6vw] lg:h-[.6vw] lg:w-[.6vw] bg-green-500 rounded-full animate-pulse" />
       <h1 className="text-[2vw] lg:text-[.3em] dark:text-gray-400 text-black">
-        {onlineCount} {onlineCount === 1 ? 'online' : 'online'}
+        {onlineCount} {onlineCount === 1 ? "online" : "online"}
       </h1>
     </div>
   );
