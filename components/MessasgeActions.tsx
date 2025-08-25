@@ -19,12 +19,12 @@ import { toast } from "sonner";
 import { useEffect, useRef } from "react";
 
 // Helper function to focus the main message container
-const focusMessageContainer = () => {
-  const messageContainer = document.getElementById("message-container") as HTMLDivElement | null;
-  if (messageContainer) {
-    messageContainer.focus();
-  }
-};
+// const focusMessageContainer = () => {
+//   const messageContainer = document.getElementById("message-container") as HTMLDivElement | null;
+//   if (messageContainer) {
+//     messageContainer.focus();
+//   }
+// };
 
 export function DeleteAlert() {
   const { actionMessage, actionType, optimisticDeleteMessage, resetActionMessage } = useMessage((state) => ({
@@ -60,7 +60,7 @@ export function DeleteAlert() {
   onOpenChange={(isOpen) => {
     if (!isOpen) {
       resetActionMessage();
-      focusMessageContainer();
+     
     }
   }}
 >
@@ -150,7 +150,7 @@ export function EditAlert() {
       if (document.activeElement instanceof HTMLElement) {
         document.activeElement.blur();
       }
-      setTimeout(focusMessageContainer, 50);
+   
       resetActionMessage();
     }
   }}
