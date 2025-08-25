@@ -76,7 +76,7 @@ export default function CreateRoomDialog({ user }: { user: SupabaseUser | undefi
     <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
       <DialogTrigger asChild>
         <Button variant="ghost" size="icon">
-          <PlusCircle className="h-5 w-5 text-gray-300 hover:text-white transition-colors" />
+          <PlusCircle className="h-5 w-5 text-black dark:text-gray-300 hover:text-white transition-colors" />
         </Button>
       </DialogTrigger>
       <DialogContent>
