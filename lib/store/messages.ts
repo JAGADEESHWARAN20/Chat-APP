@@ -11,16 +11,20 @@ type MessageWithProfile = Database["public"]["Tables"]["messages"]["Row"] & {
 
 export type Imessage = MessageWithProfile;
 
+type ActionMessage = Imessage | null;
+type ActionType = "edit" | "delete" | null; // Define a new type for clarity
+
 interface MessageState {
   hasMore: boolean;
   page: number;
   messages: Imessage[];
-  actionMessage: Imessage | undefined;
+  actionMessage: ActionMessage;
+  actionType: ActionType; // ✅ Add actionType state
   optimisticIds: string[];
   currentSubscription: any | null;
   addMessage: (message: Imessage) => void;
-  setActionMessage: (message: Imessage | undefined) => void;
-  resetActionMessage: () => void; // New action
+  setActionMessage: (message: Imessage, type: ActionType) => void; // ✅ Modify setter
+  resetActionMessage: () => void; // ✅ Add reset function
   optimisticDeleteMessage: (messageId: string) => void;
   optimisticUpdateMessage: (messageId: string, updates: Partial<Imessage>) => void;
   addOptimisticId: (id: string) => void;
@@ -36,7 +40,8 @@ export const useMessage = create<MessageState>()((set, get) => ({
   page: 1,
   messages: [],
   optimisticIds: [],
-  actionMessage: undefined,
+  actionMessage: null,
+  actionType: null, // ✅ Initialize
   currentSubscription: null,
 
   setMessages: (newMessages) =>
@@ -64,15 +69,8 @@ export const useMessage = create<MessageState>()((set, get) => ({
       optimisticIds: [...state.optimisticIds, id],
     })),
 
-  setActionMessage: (message) =>
-    set(() => ({
-      actionMessage: message,
-    })),
-
-  resetActionMessage: () =>
-    set(() => ({
-      actionMessage: undefined,
-    })),
+  setActionMessage: (message, type) => set({ actionMessage: message, actionType: type }), // ✅ Update setter
+  resetActionMessage: () => set({ actionMessage: null, actionType: null }), // ✅ Add reset
 
   optimisticDeleteMessage: (messageId) =>
     set((state) => ({

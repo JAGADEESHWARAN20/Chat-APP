@@ -1,3 +1,4 @@
+// components/MessasgeActions.tsx
 "use client";
 import {
   AlertDialog,
@@ -15,61 +16,54 @@ import { Input } from "@/components/ui/input";
 import { Imessage, useMessage } from "@/lib/store/messages";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { toast } from "sonner";
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
+
+// Helper to focus the chat input
+const focusChatInput = () => {
+  const chatInput = document.querySelector("input[placeholder*='Message']") as HTMLInputElement | null;
+  chatInput?.focus();
+};
 
 export function DeleteAlert() {
-  const actionMessage = useMessage((state) => state.actionMessage);
-  const optimisticDeleteMessage = useMessage((state) => state.optimisticDeleteMessage);
-  const resetActionMessage = useMessage((state) => state.resetActionMessage);
-  const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    if (actionMessage && actionMessage.id) {
-      setOpen(true);
-    }
-  }, [actionMessage]);
+  const { actionMessage, actionType, optimisticDeleteMessage, resetActionMessage } = useMessage((state) => ({
+    actionMessage: state.actionMessage,
+    actionType: state.actionType,
+    optimisticDeleteMessage: state.optimisticDeleteMessage,
+    resetActionMessage: state.resetActionMessage,
+  }));
 
   const handleDeleteMessage = async () => {
     if (!actionMessage?.id) {
-      console.error("[DeleteAlert] No message selected for deletion");
       toast.error("No message selected for deletion");
-      setOpen(false);
-      resetActionMessage();
+      resetActionMessage(); // Reset state
+      focusChatInput(); // Restore focus
       return;
     }
 
-    console.log("[DeleteAlert] Deleting message:", actionMessage.id);
-    const supabase = supabaseBrowser();
+    // Optimistic UI update
     optimisticDeleteMessage(actionMessage.id);
+    resetActionMessage(); // Immediately close dialog and reset state
 
-    const { error } = await supabase
-      .from("messages")
-      .delete()
-      .eq("id", actionMessage.id);
+    // API call
+    const supabase = supabaseBrowser();
+    const { error } = await supabase.from("messages").delete().eq("id", actionMessage.id);
 
     if (error) {
-      console.error("[DeleteAlert] Supabase Delete Error:", error);
       toast.error(error.message);
+      // Optional: Handle re-adding the message on API failure
     } else {
-      console.log("[DeleteAlert] Message deleted successfully");
       toast.success("Successfully deleted a message");
     }
-
-    setOpen(false);
-    resetActionMessage();
-    // ✅ Type assertion here
-    const chatInput = document.querySelector("input[placeholder*='Message']") as HTMLInputElement | null;
-    chatInput?.focus();
+    focusChatInput(); // Restore focus after action
   };
 
   return (
-    <AlertDialog open={open} onOpenChange={(isOpen) => {
-      setOpen(isOpen);
-      if (!isOpen) {
-        resetActionMessage();
-        // ✅ Type assertion here
-        const chatInput = document.querySelector("input[placeholder*='Message']") as HTMLInputElement | null;
-        chatInput?.focus();
+    // ✅ Use actionType from store to control `open` prop
+    <AlertDialog open={actionType === 'delete'} onOpenChange={(isOpen) => {
+      // If dialog is closing and it was previously open due to a delete action
+      if (!isOpen && actionType === 'delete') {
+        resetActionMessage(); // Reset the action in the store
+        focusChatInput(); // Restore focus to chat input
       }
     }}>
       <AlertDialogContent className="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
@@ -82,13 +76,7 @@ export function DeleteAlert() {
         <AlertDialogFooter>
           <AlertDialogCancel
             className="dark:bg-gray-800 dark:text-gray-100"
-            onClick={() => {
-              setOpen(false);
-              resetActionMessage();
-              // ✅ Type assertion here
-              const chatInput = document.querySelector("input[placeholder*='Message']") as HTMLInputElement | null;
-              chatInput?.focus();
-            }}
+            // ✅ onClick for Cancel should just let onOpenChange handle reset and focus
           >
             Cancel
           </AlertDialogCancel>
@@ -105,38 +93,42 @@ export function DeleteAlert() {
 }
 
 export function EditAlert() {
-  const actionMessage = useMessage((state) => state.actionMessage);
-  const optimisticUpdateMessage = useMessage((state) => state.optimisticUpdateMessage);
-  const resetActionMessage = useMessage((state) => state.resetActionMessage);
-  const optimisticDeleteMessage = useMessage((state) => state.optimisticDeleteMessage);
-  const [open, setOpen] = useState(false);
+  const { actionMessage, actionType, optimisticUpdateMessage, resetActionMessage, optimisticDeleteMessage, setActionMessage } = useMessage((state) => ({
+    actionMessage: state.actionMessage,
+    actionType: state.actionType,
+    optimisticUpdateMessage: state.optimisticUpdateMessage,
+    resetActionMessage: state.resetActionMessage,
+    optimisticDeleteMessage: state.optimisticDeleteMessage,
+    setActionMessage: state.setActionMessage // Needed to trigger delete dialog
+  }));
+
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // ✅ Use an effect to focus the input only when this specific dialog is open
   useEffect(() => {
-    if (actionMessage && actionMessage.id) {
-      setOpen(true);
-      // When the dialog opens, focus the input field
-      // This needs a slight delay to ensure the dialog is fully rendered and the input is available
-      setTimeout(() => {
+    if (actionType === 'edit' && inputRef.current) {
+      setTimeout(() => { // Small delay to ensure dialog is rendered
         inputRef.current?.focus();
-      }, 100); 
+      }, 100);
     }
-  }, [actionMessage]); // Removed `open` from dependency array to avoid infinite loop
+  }, [actionType]); // Depend on actionType to trigger focus
 
   const handleEdit = async () => {
-    if (!actionMessage?.id) {
-      console.error("[EditAlert] No message selected for editing");
+    if (!actionMessage?.id || !inputRef.current) {
       toast.error("No message selected for editing");
-      setOpen(false);
-      resetActionMessage();
+      resetActionMessage(); // Reset state
+      focusChatInput(); // Restore focus
       return;
     }
 
-    const text = inputRef.current?.value.trim();
-    console.log("[EditAlert] Editing message:", actionMessage.id, { text });
+    const text = inputRef.current.value.trim();
 
     if (text) {
+      // Optimistic UI update
       optimisticUpdateMessage(actionMessage.id, { text, is_edited: true });
+      resetActionMessage(); // Immediately close dialog and reset state
+
+      // API call
       const supabase = supabaseBrowser();
       const { error } = await supabase
         .from("messages")
@@ -144,59 +136,29 @@ export function EditAlert() {
         .eq("id", actionMessage.id);
 
       if (error) {
-        console.error("[EditAlert] Supabase Update Error:", error);
         toast.error(error.message);
+        // Optional: Handle re-adding original message on API failure
       } else {
-        console.log("[EditAlert] Message updated successfully");
-        toast.success("Update Successfully");
+        toast.success("Update Successful");
       }
     } else {
-      console.log("[EditAlert] Empty message text, prompting for deletion");
-      // ✅ Replaced window.confirm with toast.confirm for better UX and consistency
-      toast.info("Message is empty. Do you want to delete it?", {
-        action: {
-          label: "Delete",
-          onClick: async () => {
-            optimisticDeleteMessage(actionMessage.id);
-            const supabase = supabaseBrowser();
-            const { error } = await supabase
-              .from("messages")
-              .delete()
-              .eq("id", actionMessage.id);
-
-            if (error) {
-              toast.error(error.message);
-            } else {
-              toast.success("Successfully deleted a message");
-            }
-          },
-        },
-        duration: 5000, // Give user time to decide
-        onDismiss: () => {
-          // If user dismisses without deleting, simply close dialog
-          setOpen(false);
-          resetActionMessage();
-          const chatInput = document.querySelector("input[placeholder*='Message']") as HTMLInputElement | null;
-          chatInput?.focus();
-        }
-      });
+      // If empty, close EditAlert and open DeleteAlert for confirmation
+      resetActionMessage(); // Close edit dialog first
+      // ✅ Now explicitly set the action to 'delete' for the same message
+      setActionMessage(actionMessage, 'delete');
+      // The DeleteAlert component will now open automatically.
+      return; // Exit here, as DeleteAlert will handle the rest
     }
-
-    setOpen(false);
-    resetActionMessage();
-    // ✅ Type assertion here
-    const chatInput = document.querySelector("input[placeholder*='Message']") as HTMLInputElement | null;
-    chatInput?.focus();
+    focusChatInput(); // Restore focus after action
   };
 
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => {
-      setOpen(isOpen);
-      if (!isOpen) {
-        resetActionMessage();
-        // ✅ Type assertion here
-        const chatInput = document.querySelector("input[placeholder*='Message']") as HTMLInputElement | null;
-        chatInput?.focus();
+    // ✅ Use actionType from store to control `open` prop
+    <Dialog open={actionType === 'edit'} onOpenChange={(isOpen) => {
+      // If dialog is closing and it was previously open due to an edit action
+      if (!isOpen && actionType === 'edit') {
+        resetActionMessage(); // Reset the action in the store
+        focusChatInput(); // Restore focus to chat input
       }
     }}>
       <DialogContent className="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 w-full">
@@ -211,13 +173,7 @@ export function EditAlert() {
         <DialogFooter>
           <Button
             variant="outline"
-            onClick={() => {
-              setOpen(false);
-              resetActionMessage();
-              // ✅ Type assertion here
-              const chatInput = document.querySelector("input[placeholder*='Message']") as HTMLInputElement | null;
-              chatInput?.focus();
-            }}
+            // ✅ onClick for Cancel should just let onOpenChange handle reset and focus
             className="dark:bg-gray-800 dark:text-gray-100"
           >
             Cancel
