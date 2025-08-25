@@ -7,8 +7,7 @@ import { toast } from "sonner";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { useUser } from "@/lib/store/user";
 import { useRoomStore } from "@/lib/store/roomstore";
-import { useRoomContext } from "../store/RoomContext"; // <-- NEW
-
+import { useRoomContext } from "@/lib/store/RoomContext"; // Assuming this is the correct path
 import { useFetchRooms } from "@/hooks/useFetchRooms";
 import { Database } from "@/lib/types/supabase";
 
@@ -22,8 +21,7 @@ export default function RoomInitializer() {
   const supabase = supabaseBrowser();
   const user = useUser((state) => state.user);
   const { setRooms, initializeDefaultRoom } = useRoomStore();
-  const { joinRoom: setCurrentRoom } = useRoomContext(); // <-- NEW
-
+  const { joinRoom: setCurrentRoom } = useRoomContext();
   const isMounted = useRef(true);
   const initializationInProgress = useRef(false);
 
@@ -42,7 +40,6 @@ export default function RoomInitializer() {
         console.error("Error checking room membership:", error);
         return false;
       }
-
       return data?.status === "accepted";
     },
     [user, supabase]
@@ -62,7 +59,6 @@ export default function RoomInitializer() {
         console.error("Error checking room participation:", error);
         return null;
       }
-
       return data?.status || null;
     },
     [user, supabase]
@@ -99,16 +95,20 @@ export default function RoomInitializer() {
       }
 
       if (!existingRoom) {
-        const { data: newRoom, error: createError } = await supabase.rpc("create_room_with_member", {
-          p_name: "General Chat",
-          p_is_private: false,
-          p_user_id: user.id,
-          p_timestamp: timestamp
-        });
+        const { data: newRoom, error: createError } = await supabase.rpc(
+          "create_room_with_member",
+          {
+            p_name: "General Chat",
+            p_is_private: false,
+            p_user_id: user.id,
+            p_timestamp: timestamp,
+          }
+        );
 
         if (createError) {
           if (createError.code === "23505") {
             await fetchAvailableRooms();
+            initializationInProgress.current = false;
             return;
           }
           throw createError;
@@ -127,7 +127,7 @@ export default function RoomInitializer() {
               user_id: user.id,
               status: "accepted",
               joined_at: timestamp,
-              active: true
+              active: true,
             });
 
           if (joinError && joinError.code !== "23505") {
@@ -136,11 +136,11 @@ export default function RoomInitializer() {
         }
       }
 
-      // ✅ Set current room into context and localStorage
+      // Set current room and persist to localStorage
       setCurrentRoom(roomId);
       localStorage.setItem("activeRoom", roomId);
 
-      // 🔁 Refresh rooms
+      // Fetch all rooms
       await fetchAvailableRooms();
 
       if (initializeDefaultRoom) initializeDefaultRoom();
@@ -151,18 +151,24 @@ export default function RoomInitializer() {
     } finally {
       initializationInProgress.current = false;
     }
-  }, [user, supabase, fetchAvailableRooms, setRooms, initializeDefaultRoom, checkRoomMembership, setCurrentRoom]);
+  }, [
+    user,
+    supabase,
+    fetchAvailableRooms,
+    setRooms,
+    initializeDefaultRoom,
+    checkRoomMembership,
+    setCurrentRoom,
+  ]);
 
   useEffect(() => {
-    let isActive = true;
-
     if (!user) {
       setRooms([]);
       return;
     }
 
     const debouncedInit = debounce(() => {
-      if (isActive && user) initializeRooms();
+      if (isMounted.current && user) initializeRooms();
     }, 300);
 
     debouncedInit();
@@ -175,11 +181,11 @@ export default function RoomInitializer() {
           event: "*",
           schema: "public",
           table: "room_members",
-          filter: `user_id=eq.${user.id}`
+          filter: `user_id=eq.${user.id}`,
         },
         (payload) => {
           console.log("Room membership change detected:", payload);
-          if (isActive) fetchAvailableRooms();
+          if (isMounted.current) fetchAvailableRooms();
         }
       )
       .subscribe((status) => {
@@ -187,9 +193,8 @@ export default function RoomInitializer() {
       });
 
     return () => {
-      isActive = false;
-      roomChannel.unsubscribe();
       isMounted.current = false;
+      roomChannel.unsubscribe();
       debouncedInit.cancel();
     };
   }, [user, setRooms, supabase, fetchAvailableRooms, initializeRooms]);

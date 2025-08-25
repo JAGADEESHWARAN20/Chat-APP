@@ -1,6 +1,5 @@
 import { useCallback } from "react";
 import { toast } from "sonner";
-
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { Database } from "@/lib/types/supabase";
 
@@ -31,13 +30,14 @@ export const useFetchRooms = (
     try {
       let rooms: Room[] = [];
 
+      // Fetch rooms where user is an accepted member
       const { data: memberships, error: memberError } = await supabase
         .from("room_members")
         .select("room_id")
         .eq("user_id", user.id)
         .eq("status", "accepted");
 
-      if (memberError && memberError.code !== "42P17") {
+      if (memberError && memberError.code !== "PGRST116") {
         toast.error("Failed to fetch room memberships");
         console.error("Room membership fetch error:", memberError);
         if (isMounted.current) {
@@ -68,7 +68,7 @@ export const useFetchRooms = (
         rooms = joinedRooms || [];
       }
 
-      // Fallback: ensure General Chat exists if no rooms were returned
+      // Fallback: Ensure General Chat exists if no rooms are found
       if (rooms.length === 0) {
         const { data: generalRoom, error: generalError } = await supabase
           .from("rooms")
@@ -79,7 +79,6 @@ export const useFetchRooms = (
 
         let roomToUse: Room | null = generalRoom ?? null;
 
-        // Create General Chat if it doesn't exist
         if (!roomToUse && generalError?.code === "PGRST116") {
           const { data: newRoom, error: createError } = await supabase
             .from("rooms")
@@ -88,7 +87,7 @@ export const useFetchRooms = (
                 name: "General Chat",
                 is_private: false,
                 created_by: user.id,
-                created_at: new Date().toISOString()
+                created_at: new Date().toISOString(),
               },
               { onConflict: "name,is_private" }
             )
@@ -109,7 +108,6 @@ export const useFetchRooms = (
         }
 
         if (roomToUse) {
-          // Join General Chat if not already a member
           const isMember = await checkRoomMembership(roomToUse.id);
           if (!isMember) {
             const { error: joinError } = await supabase
@@ -119,7 +117,7 @@ export const useFetchRooms = (
                 user_id: user.id,
                 status: "accepted",
                 joined_at: new Date().toISOString(),
-                active: true
+                active: true,
               });
 
             if (joinError && joinError.code !== "23505") {
@@ -137,12 +135,12 @@ export const useFetchRooms = (
         }
       }
 
-      // Enrich each room with membership/participation details
+      // Enrich rooms with membership and participation details
       const enrichedRooms: RoomWithMembership[] = await Promise.all(
         rooms.map(async (room) => ({
           ...room,
           isMember: await checkRoomMembership(room.id),
-          participationStatus: await checkRoomParticipation(room.id)
+          participationStatus: await checkRoomParticipation(room.id),
         }))
       );
 
@@ -167,7 +165,7 @@ export const useFetchRooms = (
     setAvailableRooms,
     setRooms,
     isMounted,
-    initializeDefaultRoom
+    initializeDefaultRoom,
   ]);
 
   return { fetchAvailableRooms };
