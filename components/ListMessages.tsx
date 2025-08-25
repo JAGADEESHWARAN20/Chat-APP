@@ -224,23 +224,24 @@ export default function ListMessages() {
         onScroll={handleOnScroll}
       >
         {isLoading ? (
-          Array.from({ length: 3 }).map((_, index) => (
+          Array.from({ length: 10 }).map((_, index) => (
             <SkeletonMessage key={index} />
           ))
         ) : (
           <>
             
 
-            {/* Typing Indicator */}
-            {selectedRoom?.id && user?.id && (
-              <TypingIndicator roomId={selectedRoom.id} currentUserId={user.id} />
-            )}
+            
 
             <div className="space-y-[.5em]">
               {filteredMessages.map((value) => (
                 <Message key={value.id} message={value} />
               ))}
             </div>
+          
+            {selectedRoom?.id && user?.id && (
+              <TypingIndicator roomId={selectedRoom.id} currentUserId={user.id} />
+            )}
           </>
         )}
 
