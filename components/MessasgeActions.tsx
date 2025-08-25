@@ -55,32 +55,40 @@ export function DeleteAlert() {
   };
 
   return (
-    <AlertDialog open={actionType === 'delete'} onOpenChange={(isOpen) => {
-      if (!isOpen) {
-        resetActionMessage();
-        focusMessageContainer();
-      }
-    }}>
-      <AlertDialogContent className="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-        <AlertDialogHeader>
-          <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-          <AlertDialogDescription>
-            This action cannot be undone. This will permanently delete the message from the chat.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel className="dark:bg-gray-800 dark:text-gray-100">
-            Cancel
-          </AlertDialogCancel>
-          <AlertDialogAction
-            className="bg-red-600 text-white hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800"
-            onClick={handleDeleteMessage}
-          >
-            Continue
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <AlertDialog
+  open={actionType === 'delete'}
+  onOpenChange={(isOpen) => {
+    if (!isOpen) {
+      resetActionMessage();
+      focusMessageContainer();
+    }
+  }}
+>
+  <AlertDialogContent
+    className="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+    onOpenAutoFocus={(e) => e.preventDefault()}
+    onCloseAutoFocus={(e) => e.preventDefault()}
+  >
+    <AlertDialogHeader>
+      <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+      <AlertDialogDescription>
+        This action cannot be undone. This will permanently delete the message from the chat.
+      </AlertDialogDescription>
+    </AlertDialogHeader>
+    <AlertDialogFooter>
+      <AlertDialogCancel className="dark:bg-gray-800 dark:text-gray-100">
+        Cancel
+      </AlertDialogCancel>
+      <AlertDialogAction
+        className="bg-red-600 text-white hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800"
+        onClick={handleDeleteMessage}
+      >
+        Continue
+      </AlertDialogAction>
+    </AlertDialogFooter>
+  </AlertDialogContent>
+</AlertDialog>
+
   );
 }
 
@@ -135,44 +143,49 @@ export function EditAlert() {
   };
 
   return (
-    <Dialog open={actionType === 'edit'} onOpenChange={(isOpen) => {
-      if (!isOpen) {
-        // ✅ The crucial change: Blur the active element first
-        // This breaks the focus trap left by the dialog
-        if (document.activeElement instanceof HTMLElement) {
-          document.activeElement.blur();
-        }
-        
-        // ✅ Then, set focus on the message container with a small delay
-        setTimeout(focusMessageContainer, 50); 
-        resetActionMessage();
+   <Dialog
+  open={actionType === 'edit'}
+  onOpenChange={(isOpen) => {
+    if (!isOpen) {
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
       }
-    }}>
-      <DialogContent className="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 w-full">
-        <DialogHeader>
-          <DialogTitle>Edit Message</DialogTitle>
-        </DialogHeader>
-        <Input
-          defaultValue={actionMessage?.text || ""}
-          ref={inputRef}
-          className="dark:bg-gray-800 dark:text-gray-100"
-        />
-        <DialogFooter>
-          <Button
-            variant="outline"
-            className="dark:bg-gray-800 dark:text-gray-100"
-          >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            onClick={handleEdit}
-            className="bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800"
-          >
-            Save changes
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      setTimeout(focusMessageContainer, 50);
+      resetActionMessage();
+    }
+  }}
+>
+  <DialogContent
+    className="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 w-full"
+    onOpenAutoFocus={(e) => e.preventDefault()}
+    onCloseAutoFocus={(e) => e.preventDefault()}
+  >
+    <DialogHeader>
+      <DialogTitle>Edit Message</DialogTitle>
+    </DialogHeader>
+    <Input
+      defaultValue={actionMessage?.text || ""}
+      ref={inputRef}
+      className="dark:bg-gray-800 dark:text-gray-100"
+    />
+    <DialogFooter>
+      <Button
+        variant="outline"
+        className="dark:bg-gray-800 dark:text-gray-100"
+        onClick={resetActionMessage} // ✅ make Cancel close properly
+      >
+        Cancel
+      </Button>
+      <Button
+        type="submit"
+        onClick={handleEdit}
+        className="bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800"
+      >
+        Save changes
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
+
   );
 }
