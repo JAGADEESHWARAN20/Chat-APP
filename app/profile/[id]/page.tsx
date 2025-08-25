@@ -7,6 +7,7 @@ import Image from "next/image"
 import { ChevronLeft } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
 
 // The Profile type from your Supabase database schema
 type Profile = Database["public"]["Tables"]["profiles"]["Row"]
@@ -49,8 +50,33 @@ export default function ProfilePage() {
   }, [supabase])
 
   if (!profile) return (
-    <div className="p-4 text-center text-gray-800 dark:text-gray-200">
-      Loading profile...
+     <div className="max-w-xl mx-auto mt-8 p-8 bg-card text-card-foreground shadow-xl rounded-2xl border border-border">
+      {/* Skeleton for the Back Button */}
+      <Skeleton className="h-6 w-24 mb-6" />
+      <hr className="mb-6 border-border" />
+
+      {/* Skeleton for the Profile Header */}
+      <div className="flex items-center gap-6 mb-8">
+        <Skeleton className="w-20 h-20 rounded-full" />
+        <div className="space-y-2">
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-4 w-32" />
+        </div>
+      </div>
+
+      {/* Skeleton for the Bio Section */}
+      <div className="space-y-4 mb-8">
+        <Skeleton className="h-6 w-20" />
+        <Skeleton className="h-16 w-full" />
+      </div>
+
+      {/* Skeleton for the Joined Date */}
+      <div className="mb-8">
+        <Skeleton className="h-4 w-40" />
+      </div>
+
+      {/* Skeleton for the Edit Profile Button */}
+      <Skeleton className="h-10 w-full" />
     </div>
   )
 
