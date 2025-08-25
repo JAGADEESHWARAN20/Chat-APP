@@ -137,9 +137,15 @@ export function EditAlert() {
   return (
     <Dialog open={actionType === 'edit'} onOpenChange={(isOpen) => {
       if (!isOpen) {
-        resetActionMessage();
-        // ✅ Add a slight delay to ensure the dialog unmounts before we focus
+        // ✅ The crucial change: Blur the active element first
+        // This breaks the focus trap left by the dialog
+        if (document.activeElement instanceof HTMLElement) {
+          document.activeElement.blur();
+        }
+        
+        // ✅ Then, set focus on the message container with a small delay
         setTimeout(focusMessageContainer, 50); 
+        resetActionMessage();
       }
     }}>
       <DialogContent className="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 w-full">
