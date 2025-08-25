@@ -400,6 +400,64 @@ export default function SearchComponent({ user }: { user: SupabaseUser | undefin
           </div>
         </div>
       </div>
+      <Button
+        size="icon"
+        variant="ghost"
+        onClick={async () => {
+          if (!user) {
+            toast.error("Please log in to leave a room");
+            return;
+          }
+          if (!result.id || !UUID_REGEX.test(result.id)) {
+            toast.error("Invalid room ID");
+            return;
+          }
+          try {
+            // Set loading state if you want to disable button during leave
+            // setIsLeaving(true);
+            const { error: membersError } = await supabase
+              .from("room_members")
+              .delete()
+              .eq("room_id", result.id)
+              .eq("user_id", user.id);
+
+            const { error: participantsError } = await supabase
+              .from("room_participants")
+              .delete()
+              .eq("room_id", result.id)
+              .eq("user_id", user.id);
+
+            if (membersError || participantsError) {
+              throw new Error(
+                membersError?.message || participantsError?.message || "Failed to leave room"
+              );
+            }
+
+            toast.success("Successfully left the room");
+            // Optionally update UI state
+            setRoomResults((prev) =>
+              prev.map((room) =>
+                room.id === result.id
+                  ? { ...room, isMember: false, participationStatus: null }
+                  : room
+              )
+            );
+            // If you want to update selectedRoom, you can do so here
+            if (selectedRoom?.id === result.id) {
+              setSelectedRoom(null);
+              router.push("/");
+            }
+          } catch (error) {
+            toast.error(error instanceof Error ? error.message : "Failed to leave room");
+          } finally {
+            // setIsLeaving(false);
+          }
+        }}
+        className="bg-red-500 hover:bg-red-600 rounded-md text-white"
+        title="Leave Room"
+      >
+        <LogOut className="h-4 w-4" />
+      </Button>
 
       <div className="flex items-center gap-2">
         {result.isMember ? (

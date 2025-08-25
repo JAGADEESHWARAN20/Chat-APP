@@ -13,8 +13,6 @@ import {
 } from "@/components/ui/popover";
 import {
   Search,
-  Settings,
-  LogOut,
   ArrowRightLeft,
   LockIcon,
 } from "lucide-react";
@@ -46,7 +44,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const isMounted = useRef(true);
   const [isLoading, setIsLoading] = useState(false);
   const [isMember, setIsMember] = useState(false);
-  const [isLeaving, setIsLeaving] = useState(false);
 
   const UUID_REGEX = useMemo(
     () => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
@@ -241,83 +238,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     [user, availableRooms, setSelectedRoom, setAvailableRooms, fetchAvailableRooms]
   );
 
-  // const handleLeaveRoom = useCallback(
-  //   async () => {
-  //     if (!user) {
-  //       toast.error("Please log in to leave a room");
-  //       return;
-  //     }
-
-  //     if (!selectedRoom) {
-  //       toast.error("No room selected");
-  //       return;
-  //     }
-
-  //     if (!selectedRoom.id || !UUID_REGEX.test(selectedRoom.id)) {
-  //       toast.error("Invalid room ID");
-  //       return;
-  //     }
-
-  //     try {
-  //       setIsLeaving(true);
-  //       const { error: membersError } = await supabase
-  //         .from("room_members")
-  //         .delete()
-  //         .eq("room_id", selectedRoom.id)
-  //         .eq("user_id", user.id);
-
-  //       const { error: participantsError } = await supabase
-  //         .from("room_participants")
-  //         .delete()
-  //         .eq("room_id", selectedRoom.id)
-  //         .eq("user_id", user.id);
-
-  //       if (membersError || participantsError) {
-  //         throw new Error(
-  //           membersError?.message || participantsError?.message || "Failed to leave room"
-  //         );
-  //       }
-
-  //       toast.success("Successfully left the room");
-  //       setIsMember(false);
-  //       await fetchAvailableRooms();
-
-  //       const { data: remainingRooms } = await supabase
-  //         .from("room_members")
-  //         .select("room_id")
-  //         .eq("user_id", user.id)
-  //         .eq("status", "accepted");
-
-  //       if (remainingRooms && remainingRooms.length === 0) {
-  //         setSelectedRoom(null);
-  //         router.push("/");
-  //       } else {
-  //         const defaultRoom = availableRooms.find((room) => room.name === "General Chat");
-  //         if (defaultRoom) {
-  //           setSelectedRoom(defaultRoom);
-  //         } else {
-  //           setSelectedRoom(null);
-  //           router.push("/");
-  //         }
-  //       }
-  //     } catch (error) {
-  //       toast.error(error instanceof Error ? error.message : "Failed to leave room");
-  //     } finally {
-  //       setIsLeaving(false);
-  //     }
-  //   },
-  //   [
-  //     user,
-  //     selectedRoom,
-  //     UUID_REGEX,
-  //     supabase,
-  //     fetchAvailableRooms,
-  //     setSelectedRoom,
-  //     router,
-  //     availableRooms,
-  //   ]
-  // );
-
   useEffect(() => {
     if (!user?.id) return;
     fetchAvailableRooms();
@@ -446,7 +366,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                                 <LockIcon className="h-3.5 w-3.5 text-muted-foreground" />
                               )}
                             </div>
-                            <p className="text-sm text-green-500">{onlineCounts.get(room.id) ?? 0} active</p>
+                            <p className="text-[1em] text-green-800 dark:text-white px-[.2em] py-[.1em] bg-green-500/20 dark:bg-green-500 rounded-full">{onlineCounts.get(room.id) ?? 0} active</p>
                           </div>
                         </div>
 
