@@ -219,6 +219,8 @@ export default function ListMessages() {
   return (
     <>
       <div
+        id="message-container"
+        tabIndex={-1}
         className="flex-1 flex flex-col p-1 h-auto overflow-y-auto"
         ref={scrollRef}
         onScroll={handleOnScroll}
