@@ -11,7 +11,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useMessage } from "@/lib/store/messages";
 import { supabaseBrowser } from "@/lib/supabase/browser";
@@ -156,11 +156,10 @@ export function EditAlert() {
   };
 
   return (
-    <Dialog
+     <Dialog
       open={actionType === "edit"}
       onOpenChange={(isOpen) => {
         if (!isOpen) {
-          // break any leftover focus from the portal
           if (document.activeElement instanceof HTMLElement) {
             document.activeElement.blur();
           }
@@ -169,40 +168,40 @@ export function EditAlert() {
         }
       }}
     >
-      <Dialog
-  open={actionType === 'edit'}
-  onOpenChange={(isOpen) => {
-    if (!isOpen) resetActionMessage();
-  }}
->
-  <DialogContent
-    className="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 w-full"
-    onOpenAutoFocus={(e) => e.preventDefault()}
-  >
-    <DialogHeader>
-      <DialogTitle>Edit Message</DialogTitle>
-    </DialogHeader>
-
-    <Input
-      defaultValue={actionMessage?.text || ""}
-      ref={inputRef}
-      className="dark:bg-gray-800 dark:text-gray-100"
-    />
-
-    <DialogFooter>
-      <Button asChild variant="outline" className="dark:bg-gray-800 dark:text-gray-100">
-        <DialogClose>Cancel</DialogClose>
-      </Button>
-      <Button
-        type="submit"
-        onClick={handleEdit}
-        className="bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800"
+      <DialogContent
+        className="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 w-full"
+        onOpenAutoFocus={(e: Event) => e.preventDefault()}
+        onCloseAutoFocus={() => {}}
       >
-        Save changes
-      </Button>
-    </DialogFooter>
-  </DialogContent>
-</Dialog>
-
+        <DialogHeader>
+          <DialogTitle>Edit Message</DialogTitle>
+        </DialogHeader>
+        <Input
+          defaultValue={actionMessage?.text || ""}
+          ref={inputRef}
+          className="dark:bg-gray-800 dark:text-gray-100"
+        />
+        <DialogFooter>
+          <Button
+            variant="outline"
+            className="dark:bg-gray-800 dark:text-gray-100"
+            onClick={() => {
+              resetActionMessage();
+              // ensure focus returns to the list
+              focusMessageContainerSafely();
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            onClick={handleEdit}
+            className="bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800"
+          >
+            Save changes
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
