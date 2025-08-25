@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { X } from "lucide-react";
 import { useMessage } from "@/lib/store/messages";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { toast } from "sonner";
@@ -117,7 +118,6 @@ export function EditAlert() {
 
   useEffect(() => {
     if (actionType === "edit" && inputRef.current) {
-
       const t = setTimeout(() => inputRef.current?.focus(), 80);
       return () => clearTimeout(t);
     }
@@ -160,51 +160,66 @@ export function EditAlert() {
     }
   };
 
-  return (
-    <Dialog
-      key={actionMessage?.id || 'edit-dialog'}
-      open={actionType === 'edit'}
-      onOpenChange={(isOpen) => {
-        if (!isOpen) {
-          // break any leftover focus
-          if (document.activeElement instanceof HTMLElement) {
-            document.activeElement.blur();
-          }
-          resetActionMessage();
-          focusMessageContainerSafely();
-        }
-      }}
-    >
+  const handleCancel = () => {
+    resetActionMessage();
+    focusMessageContainerSafely();
+  };
 
-      <DialogContent
-        className="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 w-full"
-        onOpenAutoFocus={(e) => e.preventDefault()}
-        onCloseAutoFocus={(e) => e.preventDefault()}
-      >
-        <DialogHeader>
-          <DialogTitle>Edit Message</DialogTitle>
-        </DialogHeader>
+  if (actionType !== 'edit') {
+    return null;
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 bg-black/50 backdrop-blur-sm"
+        onClick={handleCancel}
+      />
+
+      {/* Modal */}
+      <div className="relative bg-white dark:bg-gray-900 rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+            Edit Message
+          </h2>
+          <button
+            onClick={handleCancel}
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
 
         <Input
           defaultValue={actionMessage?.text || ""}
           ref={inputRef}
-          className="dark:bg-gray-800 dark:text-gray-100"
+          className="mb-4 dark:bg-gray-800 dark:text-gray-100"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              handleEdit();
+            } else if (e.key === 'Escape') {
+              handleCancel();
+            }
+          }}
         />
 
-        <DialogFooter>
-          <Button asChild variant="outline" className="dark:bg-gray-800 dark:text-gray-100">
-            <DialogClose>Cancel</DialogClose>
+        <div className="flex justify-end space-x-2">
+          <Button
+            variant="outline"
+            onClick={handleCancel}
+            className="dark:bg-gray-800 dark:text-gray-100"
+          >
+            Cancel
           </Button>
           <Button
-            type="submit"
             onClick={handleEdit}
             className="bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800"
           >
             Save changes
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-
+        </div>
+      </div>
+    </div>
   );
 }
