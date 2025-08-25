@@ -55,6 +55,8 @@ export default function ListMessages() {
       top: scrollRef.current.scrollHeight,
       behavior: "smooth",
     });
+    // focus after scroll so keyboard users keep context
+    scrollRef.current?.focus();
   }, []);
 
   // Load initial messages
@@ -72,18 +74,16 @@ export default function ListMessages() {
           const formattedMessages = messages.map((msg: any) => ({
             ...msg,
             profiles: msg.profiles
-                ? {
-                    id: msg.profiles.id,
-                    avatar_url: msg.profiles.avatar_url || null,
-                    display_name: msg.profiles.display_name || null,
-                    username: msg.profiles.username || null,
-                    created_at: msg.profiles.created_at || null,
-                    bio: msg.profiles.bio || null,
-                    updated_at: msg.profiles.updated_at || null,
-                  }
-                : null,
-
-
+              ? {
+                  id: msg.profiles.id,
+                  avatar_url: msg.profiles.avatar_url || null,
+                  display_name: msg.profiles.display_name || null,
+                  username: msg.profiles.username || null,
+                  created_at: msg.profiles.created_at || null,
+                  bio: msg.profiles.bio || null,
+                  updated_at: msg.profiles.updated_at || null,
+                }
+              : null,
           }));
           setMessages(formattedMessages);
         }
@@ -117,9 +117,12 @@ export default function ListMessages() {
             const messagePayload = payload.new as MessageRow;
             if (messagePayload.room_id !== selectedRoom.id) return;
 
-            if (payload.eventType === "INSERT" && !optimisticIds.includes(messagePayload.id)) {
+            if (
+              payload.eventType === "INSERT" &&
+              !optimisticIds.includes(messagePayload.id)
+            ) {
               supabase
-               .from("profiles")
+                .from("profiles")
                 .select("*")
                 .eq("id", messagePayload.sender_id)
                 .single<ProfileRow>()
@@ -140,16 +143,14 @@ export default function ListMessages() {
                       status: messagePayload.status,
                       text: messagePayload.text,
                       profiles: {
-                          id: user.id,
-                          avatar_url: user.avatar_url || null,
-                          display_name: user.display_name || null,
-                          username: user.username || null,
-                          created_at: user.created_at || null,
-                          bio: user.bio || null,
-                          updated_at: user.updated_at || null,
-                        },
-
-
+                        id: user.id,
+                        avatar_url: user.avatar_url || null,
+                        display_name: user.display_name || null,
+                        username: user.username || null,
+                        created_at: user.created_at || null,
+                        bio: user.bio || null,
+                        updated_at: user.updated_at || null,
+                      },
                     };
                     addMessage(newMessage);
 
@@ -203,7 +204,10 @@ export default function ListMessages() {
   const filteredMessages = useMemo(() => {
     return messages
       .filter((msg) => msg.room_id === selectedRoom?.id)
-      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      .sort(
+        (a, b) =>
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
   }, [messages, selectedRoom?.id]);
 
   const SkeletonMessage = () => (
@@ -220,8 +224,11 @@ export default function ListMessages() {
     <>
       <div
         id="message-container"
-        tabIndex={-1}
-        className="flex-1 flex flex-col p-1 h-auto overflow-y-auto"
+        // Make it programmatically focusable for focus restore
+        tabIndex={0}
+        role="region"
+        aria-label="Messages"
+        className="flex-1 flex flex-col p-1 h-auto overflow-y-auto outline-none"
         ref={scrollRef}
         onScroll={handleOnScroll}
       >
@@ -231,19 +238,21 @@ export default function ListMessages() {
           ))
         ) : (
           <>
-            
-            <div className="space-y-[.1em]">
+            <div className="space-y-[.5em]">
               {filteredMessages.map((value) => (
                 <Message key={value.id} message={value} />
               ))}
-            {selectedRoom?.id && user?.id && (
-              <TypingIndicator roomId={selectedRoom.id} currentUserId={user.id} />
-            )}
+              {selectedRoom?.id && user?.id && (
+                <TypingIndicator
+                  roomId={selectedRoom.id}
+                  currentUserId={user.id}
+                />
+              )}
             </div>
           </>
         )}
-          
 
+        {/* Portaled dialogs live here; controlled open avoids ghost focus */}
         <DeleteAlert />
         <EditAlert />
       </div>
