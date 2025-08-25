@@ -5,6 +5,9 @@ import InitUser from "@/lib/initialization/InitUser";
 import ClientChatContent from "@/components/ClientChatContent";
 import LoginLogoutButton from "@/components/LoginLogoutButton";
 import ThemeToggle from "@/components/ThemeToggle";
+import SearchComponent from "@/components/SearchComponent";
+import CreateRoomDialog from "@/components/CreateRoomDialog";
+import NotificationsWrapper from "@/components/NotificationsWrapper";
 
 export default async function Page() {
   const supabase = await supabaseServer();
@@ -21,6 +24,9 @@ export default async function Page() {
             </h1>
           </div>
           <div className="flex items-center gap-4">
+            <SearchComponent user={data.session?.user} />
+            <CreateRoomDialog user={data.session?.user} />
+            <NotificationsWrapper />
             <ThemeToggle />
             <LoginLogoutButton user={data.session?.user} />
           </div>
