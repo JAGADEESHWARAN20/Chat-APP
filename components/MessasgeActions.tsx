@@ -117,7 +117,7 @@ export function EditAlert() {
 
   useEffect(() => {
     if (actionType === "edit" && inputRef.current) {
-      // slight delay to ensure content is fully mounted
+     
       const t = setTimeout(() => inputRef.current?.focus(), 80);
       return () => clearTimeout(t);
     }
@@ -149,7 +149,7 @@ export function EditAlert() {
         toast.success("Update Successful");
       }
     } else {
-      // empty -> confirm delete
+     
       resetActionMessage();
       setActionMessage(actionMessage, "delete");
     }
