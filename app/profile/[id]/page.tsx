@@ -50,7 +50,7 @@ export default function ProfilePage() {
   if (!profile) return <div className="p-4">Loading profile...</div>
 
   return (
-    <div className="max-w-xl mx-auto mt-6 p-6 bg-white shadow rounded-lg">
+    <div className="max-w-xl mx-auto sm:mx-[.5em] mt-6 p-6 bg-white dark:bg-slate-800/10 shadow rounded-lg">
       {/* Back Button */}
       <button
         onClick={() => router.back()}
