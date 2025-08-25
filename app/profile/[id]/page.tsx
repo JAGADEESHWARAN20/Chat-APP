@@ -55,7 +55,7 @@ export default function ProfilePage() {
   )
 
   return (
-    <div className="max-w-xl mx-auto sm:mx-[.5em] mt-8 p-8 bg-card text-card-foreground shadow-xl rounded-2xl border border-border">
+    <div className="max-w-xl mx-auto sm:mx-[.5em] mt-[.2em] p-8 bg-card text-card-foreground shadow-xl rounded-2xl border border-border">
       {/* Back Button */}
       <button
         onClick={() => router.back()}
