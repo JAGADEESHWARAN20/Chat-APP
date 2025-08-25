@@ -132,14 +132,14 @@ export function EditAlert() {
       setActionMessage(actionMessage, 'delete');
       return;
     }
-    // ✅ Removed focus call from here
   };
 
   return (
     <Dialog open={actionType === 'edit'} onOpenChange={(isOpen) => {
       if (!isOpen) {
         resetActionMessage();
-        focusMessageContainer(); // ✅ Moved focus call to the onOpenChange handler
+        // ✅ Add a slight delay to ensure the dialog unmounts before we focus
+        setTimeout(focusMessageContainer, 50); 
       }
     }}>
       <DialogContent className="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 w-full">

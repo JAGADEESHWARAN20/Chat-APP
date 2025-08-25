@@ -232,20 +232,17 @@ export default function ListMessages() {
         ) : (
           <>
             
-
-            
-
             <div className="space-y-[.5em]">
               {filteredMessages.map((value) => (
                 <Message key={value.id} message={value} />
               ))}
             </div>
-          
-            {selectedRoom?.id && user?.id && (
-              <TypingIndicator roomId={selectedRoom.id} currentUserId={user.id} />
-            )}
           </>
         )}
+        {selectedRoom?.id && user?.id && (
+          <TypingIndicator roomId={selectedRoom.id} currentUserId={user.id} />
+        )}
+          
 
         <DeleteAlert />
         <EditAlert />
