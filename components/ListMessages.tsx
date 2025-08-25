@@ -236,11 +236,11 @@ export default function ListMessages() {
               {filteredMessages.map((value) => (
                 <Message key={value.id} message={value} />
               ))}
+            {selectedRoom?.id && user?.id && (
+              <TypingIndicator roomId={selectedRoom.id} currentUserId={user.id} />
+            )}
             </div>
           </>
-        )}
-        {selectedRoom?.id && user?.id && (
-          <TypingIndicator roomId={selectedRoom.id} currentUserId={user.id} />
         )}
           
 
