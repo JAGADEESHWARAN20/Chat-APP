@@ -110,13 +110,13 @@ export default function ChatInput() {
 
   return (
     <div className="p-1 flex flex-col">
-      {typingUsers.length > 0 && (
+      {/* {typingUsers.length > 0 && (
         <div className="text-sm text-gray-500 px-2">
           {typingUsers.length === 1
             ? "Someone is typing..."
             : `${typingUsers.length} people are typing...`}
         </div>
-      )}
+      )} */}
       <div className="flex items-center">
         <input
           type="text"
