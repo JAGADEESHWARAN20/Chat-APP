@@ -117,7 +117,7 @@ export function EditAlert() {
 
   useEffect(() => {
     if (actionType === "edit" && inputRef.current) {
-     
+
       const t = setTimeout(() => inputRef.current?.focus(), 80);
       return () => clearTimeout(t);
     }
@@ -149,48 +149,62 @@ export function EditAlert() {
         toast.success("Update Successful");
       }
     } else {
-     
+      // If text is empty, treat as delete
       resetActionMessage();
       setActionMessage(actionMessage, "delete");
+    }
+
+    // Ensure proper cleanup
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
     }
   };
 
   return (
-      <Dialog
-  open={actionType === 'edit'}
-  onOpenChange={(isOpen) => {
-    if (!isOpen) resetActionMessage();
-  }}
->
-    
-  <DialogContent
-    className="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 w-full"
-    onOpenAutoFocus={(e) => e.preventDefault()}
-  >
-    <DialogHeader>
-      <DialogTitle>Edit Message</DialogTitle>
-    </DialogHeader>
+    <Dialog
+      key={actionMessage?.id || 'edit-dialog'}
+      open={actionType === 'edit'}
+      onOpenChange={(isOpen) => {
+        if (!isOpen) {
+          // break any leftover focus
+          if (document.activeElement instanceof HTMLElement) {
+            document.activeElement.blur();
+          }
+          resetActionMessage();
+          focusMessageContainerSafely();
+        }
+      }}
+    >
 
-    <Input
-      defaultValue={actionMessage?.text || ""}
-      ref={inputRef}
-      className="dark:bg-gray-800 dark:text-gray-100"
-    />
-
-    <DialogFooter>
-      <Button asChild variant="outline" className="dark:bg-gray-800 dark:text-gray-100">
-        <DialogClose>Cancel</DialogClose>
-      </Button>
-      <Button
-        type="submit"
-        onClick={handleEdit}
-        className="bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800"
+      <DialogContent
+        className="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 w-full"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        onCloseAutoFocus={(e) => e.preventDefault()}
       >
-        Save changes
-      </Button>
-    </DialogFooter>
-  </DialogContent>
-</Dialog>
+        <DialogHeader>
+          <DialogTitle>Edit Message</DialogTitle>
+        </DialogHeader>
+
+        <Input
+          defaultValue={actionMessage?.text || ""}
+          ref={inputRef}
+          className="dark:bg-gray-800 dark:text-gray-100"
+        />
+
+        <DialogFooter>
+          <Button asChild variant="outline" className="dark:bg-gray-800 dark:text-gray-100">
+            <DialogClose>Cancel</DialogClose>
+          </Button>
+          <Button
+            type="submit"
+            onClick={handleEdit}
+            className="bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800"
+          >
+            Save changes
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
   );
 }
