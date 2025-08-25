@@ -22,7 +22,7 @@ import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { useRoomStore } from "@/lib/store/roomstore";
 import { useRoomPresence } from "@/hooks/useRoomPresence";
-
+import { useMessage, Imessage } from "@/lib/store/messages"; 
 type Room = Database["public"]["Tables"]["rooms"]["Row"];
 type RoomMemberRow = Database["public"]["Tables"]["room_members"]["Row"];
 
@@ -34,7 +34,10 @@ type RoomWithMembershipCount = Room & {
 };
 
 export default function ChatHeader({ user }: { user: SupabaseUser | undefined }) {
-  const router = useRouter();
+ 
+  const { searchMessages } = useMessage();
+  const [searchResults, setSearchResults] = useState<Imessage[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
   const [availableRooms, setAvailableRooms] = useState<RoomWithMembershipCount[]>([]);
   const supabase = supabaseBrowser();
   const [isSwitchRoomPopoverOpen, setIsSwitchRoomPopoverOpen] = useState(false);
@@ -45,10 +48,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const [isLoading, setIsLoading] = useState(false);
   const [isMember, setIsMember] = useState(false);
 
-  const UUID_REGEX = useMemo(
-    () => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
-    []
-  );
+ 
 
   // Compute all room IDs for presence tracking
   const allRoomIds = useMemo(() => {
@@ -59,7 +59,20 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   }, [availableRooms]);
 
   const onlineCounts = useRoomPresence(allRoomIds);
+  const handleSearch = async (query: string) => {
+    setMessageSearchQuery(query);
+    if (!selectedRoom?.id) return;
 
+    if (query.trim().length === 0) {
+      setSearchResults([]);
+      return;
+    }
+
+    setIsSearching(true);
+    const results = await searchMessages(selectedRoom.id, query);
+    setSearchResults(results);
+    setIsSearching(false);
+  };
   // Check if current user is a member of given room
   const checkRoomMembership = useCallback(
     async (roomId: string) => {
@@ -291,13 +304,38 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                 type="text"
                 placeholder="Search messages..."
                 value={messageSearchQuery}
-                onChange={(e) => setMessageSearchQuery(e.target.value)}
-                className="mb-1 bg-muted/50 border-border text-foreground placeholder-muted-foreground rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+                onChange={(e) => handleSearch(e.target.value)}
+                className="mb-2 bg-muted/50 border-border text-foreground placeholder-muted-foreground rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
               />
-              {/* Message search results would go here */}
-              <p className="text-sm text-muted-foreground mt-2">
-                Search functionality coming soon...
-              </p>
+
+              <div className="max-h-64 overflow-y-auto space-y-2">
+                {isSearching ? (
+                  <p className="text-sm text-muted-foreground">Searching...</p>
+                ) : searchResults.length > 0 ? (
+                  searchResults.map((msg) => (
+                    <div
+                      key={msg.id}
+                      className="p-2 rounded-md bg-accent hover:bg-accent/70 cursor-pointer"
+                      onClick={() => {
+                        // Optionally scroll to this message in ListMessages
+                        document.getElementById(`msg-${msg.id}`)?.scrollIntoView({
+                          behavior: "smooth",
+                          block: "center",
+                        });
+                        setIsMessageSearchOpen(false);
+                      }}
+                    >
+                      <p className="text-sm font-semibold">{msg.profiles?.display_name || msg.profiles?.username}</p>
+                      <p className="text-sm text-foreground">{msg.text}</p>
+                    </div>
+                  ))
+                ) : messageSearchQuery ? (
+                  <p className="text-sm text-muted-foreground">No results found</p>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Type to search messages...</p>
+                )}
+              </div>
+
             </div>
           </PopoverContent>
         </Popover>

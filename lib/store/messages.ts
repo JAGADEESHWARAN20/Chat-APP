@@ -33,6 +33,7 @@ interface MessageState {
   setOptimisticIds: (id: string) => void;
   subscribeToRoom: (roomId: string) => void;
   unsubscribeFromRoom: () => void;
+  searchMessages: (roomId: string, query: string) => Promise<Imessage[]>;
 }
 
 export const useMessage = create<MessageState>()((set, get) => ({
@@ -185,4 +186,34 @@ export const useMessage = create<MessageState>()((set, get) => ({
         currentSubscription: null,
       };
     }),
+    searchMessages: async (roomId, query) => {
+  if (!query.trim()) return [];
+
+  const { data, error } = await supabaseBrowser()
+    .from("messages")
+    .select(
+      `
+      *,
+      profiles:profiles!messages_sender_id_fkey (
+        id,
+        display_name,
+        avatar_url,
+        username
+      )
+    `
+    )
+    .eq("room_id", roomId)
+    .ilike("text", `%${query}%`)
+    .order("created_at", { ascending: false })
+    .limit(20);
+
+  if (error) {
+    toast.error("Failed to search messages");
+    console.error(error);
+    return [];
+  }
+
+  return data as Imessage[];
+},
+
 }));
