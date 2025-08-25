@@ -3,20 +3,14 @@
 import { useEffect, useCallback, useRef } from "react";
 import { debounce } from "lodash";
 import { toast } from "sonner";
-
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { useUser } from "@/lib/store/user";
 import { useRoomStore } from "@/lib/store/roomstore";
 import { useRoomContext } from "../store/RoomContext"; // <-- NEW
-
 import { useFetchRooms } from "@/hooks/useFetchRooms";
-import { Database } from "@/lib/types/supabase";
 
-type Room = Database["public"]["Tables"]["rooms"]["Row"];
-type RoomWithMembership = Room & {
-  isMember: boolean;
-  participationStatus: string | null;
-};
+
+
 
 export default function RoomInitializer() {
   const supabase = supabaseBrowser();

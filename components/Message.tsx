@@ -1,7 +1,7 @@
+"use client"
 import { Imessage, useMessage } from "@/lib/store/messages";
 import React from "react";
 import Image from "next/image";
-
 import {
   DropdownMenu,
   DropdownMenuContent,
