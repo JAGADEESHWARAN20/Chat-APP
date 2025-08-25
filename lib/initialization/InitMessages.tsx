@@ -2,7 +2,7 @@
 import { User } from "@supabase/supabase-js";
 import React, { useEffect, useRef } from "react";
 
-import { Imessage, useMessage } from "./messages";
+import { Imessage, useMessage } from "../store/messages";
 import { LIMIT_MESSAGE } from "../constant";
 
 export default function InitMessages({ messages }: { messages: Imessage[] }) {

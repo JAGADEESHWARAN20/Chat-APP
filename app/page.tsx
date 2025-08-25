@@ -1,7 +1,7 @@
 import React from "react";
 import ChatHeader from "@/components/ChatHeader";
 import { supabaseServer } from "@/lib/supabase/server";
-import InitUser from "@/lib/store/InitUser";
+import InitUser from "@/lib/initialization/InitUser";
 import ClientChatContent from "@/components/ClientChatContent";
 import LoginLogoutButton from "@/components/LoginLogoutButton";
 import ThemeToggle from "@/components/ThemeToggle";

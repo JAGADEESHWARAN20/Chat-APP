@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { useUser } from "@/lib/store/user";
 import { useRoomStore } from "@/lib/store/roomstore";
-import { useRoomContext } from "./RoomContext"; // <-- NEW
+import { useRoomContext } from "../store/RoomContext"; // <-- NEW
 
 import { useFetchRooms } from "@/hooks/useFetchRooms";
 import { Database } from "@/lib/types/supabase";

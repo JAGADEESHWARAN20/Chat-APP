@@ -7,7 +7,7 @@ import { DeleteAlert, EditAlert } from "./MessasgeActions";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { toast } from "sonner";
 import { ArrowDown } from "lucide-react";
-import LoadMoreMessages from "./LoadMoreMessages";
+
 import { Database } from "@/lib/types/supabase";
 import { useRoomStore } from "@/lib/store/roomstore";
 import TypingIndicator from "./TypingIndicator";
@@ -229,9 +229,7 @@ export default function ListMessages() {
           ))
         ) : (
           <>
-            <div className="flex-1 pb-5">
-              <LoadMoreMessages />
-            </div>
+            
 
             {/* Typing Indicator */}
             {selectedRoom?.id && user?.id && (

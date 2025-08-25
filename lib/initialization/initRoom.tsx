@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useEffect } from "react";
-import { useRoomStore } from "./roomstore";
+import { useRoomStore } from "../store/roomstore";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { useUser } from "@/lib/store/user";
 import { toast } from "sonner";

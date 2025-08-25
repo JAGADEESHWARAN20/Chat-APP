@@ -3,7 +3,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ResponsiveToaster } from "@/components/ResponsiveToaster";
 import { RoomProvider } from "@/lib/store/RoomContext";
-import RoomInitializer from "@/lib/store/RoomInitializer";
+import RoomInitializer from "@/lib/initialization/RoomInitializer";
 
 const space_Grotesk = Space_Grotesk({ subsets: ["latin"] });
 
