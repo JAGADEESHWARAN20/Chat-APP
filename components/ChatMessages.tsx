@@ -2,14 +2,15 @@
 
 import { Suspense, useEffect, useCallback } from "react";
 import ListMessages from "./ListMessages";
-import { useRoomStore } from "@/lib/store/roomstore";
+import { useRoomContext } from "@/lib/store/RoomContext";
 import { useDirectChatStore } from "@/lib/store/directChatStore";
 import { useMessage } from "@/lib/store/messages";
 import { toast } from "sonner";
 import { Imessage } from "@/lib/store/messages";
 
 export default function ChatMessages() {
-  const selectedRoom = useRoomStore((state) => state.selectedRoom);
+  const { state } = useRoomContext();
+  const { selectedRoom } = state;
   const selectedDirectChat = useDirectChatStore((state) => state.selectedChat);
   const { setMessages, clearMessages, subscribeToRoom, unsubscribeFromRoom } = useMessage((state) => ({
     setMessages: state.setMessages,

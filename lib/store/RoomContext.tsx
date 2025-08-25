@@ -266,7 +266,7 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
 
       // Auto-select the first available room if no room is currently selected
       if (joinedRooms.length > 0 && !state.selectedRoom) {
-        const defaultRoom = joinedRooms.find((room) => room.name === "Daily Chat") || joinedRooms[0];
+        const defaultRoom = joinedRooms.find((room) => room.name === "General Chat") || joinedRooms.find((room) => room.name === "Daily Chat") || joinedRooms[0];
         dispatch({ type: "SET_SELECTED_ROOM", payload: defaultRoom });
       }
     } catch (error) {
@@ -413,7 +413,8 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
       const switchedRoom = state.availableRooms.find((r) => r.id === newRoomId);
       if (switchedRoom) {
         dispatch({ type: "SET_SELECTED_ROOM", payload: switchedRoom });
-        toast.success(`Switched to ${switchedRoom.name}`);
+        const roomType = switchedRoom.is_private ? "private" : "public";
+        toast.success(`Switched to ${roomType} room: ${switchedRoom.name}`);
       }
     } catch (err) {
       console.error("Room switch failed:", err);

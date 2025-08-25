@@ -2,7 +2,7 @@
 import { useUser } from "@/lib/store/user";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import React, { useEffect, useState } from "react";
-import { useRoomStore } from "@/lib/store/roomstore";
+import { useRoomContext } from "@/lib/store/RoomContext";
 
 interface PresenceState {
     user_id: string;
@@ -11,7 +11,8 @@ interface PresenceState {
 
 export default function ChatPresence() {
     const user = useUser((state) => state.user);
-    const selectedRoom = useRoomStore((state) => state.selectedRoom);
+    const { state } = useRoomContext();
+    const { selectedRoom } = state;
     const supabase = supabaseBrowser();
     const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
 

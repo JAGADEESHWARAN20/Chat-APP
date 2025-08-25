@@ -2,17 +2,20 @@
 
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { Button } from "./ui/button";
-import { LogOut } from "lucide-react";
+import { LogOut, Menu, ChevronLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { User as SupabaseUser } from "@supabase/supabase-js";
 import { Database } from "@/database.types";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import Link from "next/link";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import ThemeToggle from "./ThemeToggle";
 
 interface LoginLogoutButtonProps {
   user: SupabaseUser | undefined | null;
@@ -30,20 +33,32 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
 
   if (user) {
     return (
-      <Popover>
-        <PopoverTrigger asChild>
-          <Avatar className="cursor-pointer">
-            <AvatarImage
-              src={user.user_metadata.avatar_url || ""}
-              alt={user.user_metadata.display_name || user.email}
-            />
-            <AvatarFallback>
-              {user.email?.[0].toUpperCase()}
-            </AvatarFallback>
-          </Avatar>
-        </PopoverTrigger>
-        <PopoverContent className="w-48">
-          <div className="flex flex-col gap-2">
+      <Sheet>
+        <SheetTrigger asChild>
+          <Button variant="ghost" size="icon">
+            <Menu className="h-5 w-5" />
+          </Button>
+        </SheetTrigger>
+        <SheetContent side="right" className="w-[300px]">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              <Avatar className="h-8 w-8">
+                <AvatarImage
+                  src={user.user_metadata.avatar_url || ""}
+                  alt={user.user_metadata.display_name || user.email}
+                />
+                <AvatarFallback>
+                  {user.email?.[0].toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <span>{user.user_metadata.display_name || user.email}</span>
+            </SheetTitle>
+          </SheetHeader>
+          <div className="flex flex-col gap-4 mt-6">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Theme</span>
+              <ThemeToggle />
+            </div>
             <Link href={`/profile/${user.id}`}>
               <Button variant="outline" size="sm" className="w-full">
                 View Profile
@@ -58,8 +73,8 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
               <LogOut className="h-4 w-4 mr-2" /> Logout
             </Button>
           </div>
-        </PopoverContent>
-      </Popover>
+        </SheetContent>
+      </Sheet>
     );
   }
 

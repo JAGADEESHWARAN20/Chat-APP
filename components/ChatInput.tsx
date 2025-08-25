@@ -3,7 +3,7 @@
 import React, { useCallback, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { useUser } from "@/lib/store/user";
-import { useRoomStore } from "@/lib/store/roomstore";
+import { useRoomContext } from "@/lib/store/RoomContext";
 import { useDirectChatStore } from "@/lib/store/directChatStore";
 import { Send } from "lucide-react";
 import { toast } from "sonner";
@@ -16,7 +16,8 @@ import { useTypingStatus } from "@/hooks/useTypingStatus";
 export default function ChatInput() {
   const supabase = supabaseBrowser();
   const user = useUser((state) => state.user);
-  const selectedRoom = useRoomStore((state) => state.selectedRoom);
+  const { state } = useRoomContext();
+  const { selectedRoom } = state;
   const selectedDirectChat = useDirectChatStore((state) => state.selectedChat);
 
   const addMessage = useMessage((state) => state.addMessage);
