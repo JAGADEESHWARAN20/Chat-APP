@@ -8,6 +8,7 @@ import { ChevronLeft } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 
+// The Profile type from your Supabase database schema
 type Profile = Database["public"]["Tables"]["profiles"]["Row"]
 
 export default function ProfilePage() {
@@ -47,53 +48,62 @@ export default function ProfilePage() {
     getProfile()
   }, [supabase])
 
-  if (!profile) return <div className="p-4">Loading profile...</div>
+  if (!profile) return (
+    <div className="p-4 text-center text-gray-800 dark:text-gray-200">
+      Loading profile...
+    </div>
+  )
 
   return (
-    <div className="max-w-xl mx-auto sm:mx-[.5em] mt-6 p-6 bg-white dark:bg-slate-800/10 shadow rounded-lg">
+    <div className="max-w-xl mx-auto sm:mx-[.5em] mt-8 p-8 bg-card text-card-foreground shadow-xl rounded-2xl border border-border">
       {/* Back Button */}
       <button
         onClick={() => router.back()}
-        className="flex items-center text-gray-600 hover:text-black mb-4"
+        className="flex items-center text-muted-foreground hover:text-foreground transition-colors mb-6"
       >
         <ChevronLeft className="w-5 h-5 mr-1" />
-        Back
+        <span className="text-base font-medium">Back</span>
       </button>
+      <hr className="mb-6 border-border"/>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-6">
         {profile.avatar_url ? (
           <Image
             src={profile.avatar_url}
             alt="Avatar"
-            className="w-16 h-16 rounded-full border"
-            width={64}
-            height={64}
+            className="w-20 h-20 rounded-full border-2 border-primary"
+            width={80}
+            height={80}
           />
         ) : (
-          <div className="w-16 h-16 rounded-full bg-gray-300" />
+          <div className="w-20 h-20 rounded-full bg-gray-200 dark:bg-gray-700" />
         )}
         <div>
-          <h2 className="text-xl font-semibold">
+          <h2 className="text-2xl font-bold">
             {profile.display_name || "No display name"}
           </h2>
-          <p className="text-gray-600">@{profile.username || "no-username"}</p>
+          <p className="text-muted-foreground">@{profile.username || "no-username"}</p>
         </div>
       </div>
 
-      <div className="mt-4">
-        <h3 className="font-medium">Bio</h3>
-        <p className="text-gray-700">{profile.bio || "No bio added yet."}</p>
-      </div>
+      <div className="mt-8 space-y-4">
+        <div>
+          <h3 className="text-lg font-semibold text-foreground">Bio</h3>
+          <p className="text-muted-foreground text-base mt-1">
+            {profile.bio || "No bio added yet."}
+          </p>
+        </div>
 
-      <div className="mt-4 text-sm text-gray-500">
-        Joined on:{" "}
-        {profile.created_at
-          ? new Date(profile.created_at).toLocaleDateString()
-          : "Unknown"}
+        <div className="text-sm text-muted-foreground">
+          <span className="font-semibold">Joined on:</span>{" "}
+          {profile.created_at
+            ? new Date(profile.created_at).toLocaleDateString()
+            : "Unknown"}
+        </div>
       </div>
 
       {/* ✅ Edit Profile Button */}
-      <div className="mt-6">
+      <div className="mt-8">
         <Button onClick={() => router.push("/edit-profile")} className="w-full">
           Edit Profile
         </Button>
