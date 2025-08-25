@@ -20,9 +20,9 @@ import { Input } from "@/components/ui/input";
 import { Database } from "@/lib/types/supabase";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
-import { useRoomStore } from "@/lib/store/roomstore";
+import { useRoomContext } from "@/lib/store/RoomContext";
 import { useRoomPresence } from "@/hooks/useRoomPresence";
-import { useMessage, Imessage } from "@/lib/store/messages"; 
+import { useMessage, Imessage } from "@/lib/store/messages";
 type Room = Database["public"]["Tables"]["rooms"]["Row"];
 type RoomMemberRow = Database["public"]["Tables"]["room_members"]["Row"];
 
@@ -34,21 +34,20 @@ type RoomWithMembershipCount = Room & {
 };
 
 export default function ChatHeader({ user }: { user: SupabaseUser | undefined }) {
- 
+
   const { searchMessages } = useMessage();
   const [searchResults, setSearchResults] = useState<Imessage[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [availableRooms, setAvailableRooms] = useState<RoomWithMembershipCount[]>([]);
   const supabase = supabaseBrowser();
   const [isSwitchRoomPopoverOpen, setIsSwitchRoomPopoverOpen] = useState(false);
   const [isMessageSearchOpen, setIsMessageSearchOpen] = useState(false);
   const [messageSearchQuery, setMessageSearchQuery] = useState("");
-  const { selectedRoom, setSelectedRoom, setRooms } = useRoomStore();
+  const { state, switchRoom } = useRoomContext();
+  const { selectedRoom, availableRooms, isLoading } = state;
   const isMounted = useRef(true);
-  const [isLoading, setIsLoading] = useState(false);
   const [isMember, setIsMember] = useState(false);
 
- 
+
 
   // Compute all room IDs for presence tracking
   const allRoomIds = useMemo(() => {
@@ -59,6 +58,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   }, [availableRooms]);
 
   const onlineCounts = useRoomPresence(allRoomIds);
+
   const handleSearch = async (query: string) => {
     setMessageSearchQuery(query);
     if (!selectedRoom?.id) return;
@@ -73,188 +73,14 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     setSearchResults(results);
     setIsSearching(false);
   };
-  // Check if current user is a member of given room
-  const checkRoomMembership = useCallback(
-    async (roomId: string) => {
-      if (!user) return false;
-      const { data, error } = await supabase
-        .from("room_members")
-        .select("status")
-        .eq("room_id", roomId)
-        .eq("user_id", user.id)
-        .eq("status", "accepted");
-      if (error) {
-        console.error("Error checking room membership:", error);
-        return false;
-      }
-      return data && data.length > 0 && data[0].status === "accepted";
-    },
-    [user, supabase]
-  );
-
-  // Fetch all available rooms where user is a member with memberCount included
-  const fetchAvailableRooms = useCallback(async () => {
-    if (!user) {
-      setIsLoading(false);
-      setAvailableRooms([]);
-      setRooms([]);
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      // Fetch accepted memberships for user + associated rooms
-      const { data: memberships, error } = await supabase
-        .from("room_members")
-        .select("room_id, rooms(id, name, is_private, created_by, created_at)")
-        .eq("user_id", user.id)
-        .eq("status", "accepted");
-
-      if (error) {
-        setAvailableRooms([]);
-        setRooms([]);
-        setIsLoading(false);
-        return;
-      }
-
-      const joinedRoomsRaw = (memberships || [])
-        .map((m) => m.rooms as Room)
-        .filter(Boolean);
-
-      // Collect room IDs for count query
-      const roomIds = joinedRoomsRaw.map((r) => r.id);
-      let countsMap = new Map<string, number>();
-
-      if (roomIds.length > 0) {
-        const { data: membersData, error: membersError } = await supabase
-          .from("room_members")
-          .select("room_id")
-          .in("room_id", roomIds)
-          .eq("status", "accepted");
-
-        if (membersError) {
-          console.error("Error fetching member counts:", membersError);
-        }
-
-        // Aggregate counts client-side
-        membersData?.forEach((m: Pick<RoomMemberRow, "room_id">) => {
-          countsMap.set(m.room_id, (countsMap.get(m.room_id) ?? 0) + 1);
-        });
-      }
-
-      // Attach memberCount, isMember:true, participationStatus to each room
-      const joinedRooms: RoomWithMembershipCount[] = joinedRoomsRaw.map((room) => ({
-        ...room,
-        memberCount: countsMap.get(room.id) ?? 0,
-        isMember: true,
-        participationStatus: "accepted",
-      }));
-
-      setAvailableRooms(joinedRooms);
-      setRooms(joinedRooms);
-    } catch (error) {
-      setAvailableRooms([]);
-      setRooms([]);
-      toast.error("An error occurred while fetching rooms");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [user, supabase, setRooms]);
-
-  useEffect(() => {
-    if (!user) return;
-
-    const channel = supabase
-      .channel("room-members-listener")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "room_members" },
-        async (payload: RealtimePostgresChangesPayload<RoomMemberRow>) => {
-          // SAFELY extract room_id from new/old rows
-          const room_id =
-            (payload.new as RoomMemberRow | null)?.room_id ??
-            (payload.old as RoomMemberRow | null)?.room_id;
-
-          if (!room_id) return;
-
-          // Recalculate memberCount for only this room
-          const { count: totalCount } = await supabase
-            .from("room_members")
-            .select("*", { count: "exact", head: true })
-            .eq("room_id", room_id)
-            .eq("status", "accepted");
-
-          // Update only that room in availableRooms
-          setAvailableRooms((prev) =>
-            prev.map((room) =>
-              room.id === room_id ? { ...room, memberCount: totalCount ?? 0 } : room
-            )
-          );
-        }
-      )
-      .subscribe();
-
-    return () => {
-      channel.unsubscribe();
-    };
-  }, [supabase, user]);
 
   const handleRoomSwitch = useCallback(
-    async (newRoomId: string, prevRoomId: string | null) => {
-      if (!user) {
-        toast.error("You must be logged in to switch rooms");
-        return;
-      }
-
-      try {
-        const response = await fetch(`/api/rooms/switch`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ roomId: newRoomId }),
-        });
-
-        const result = await response.json();
-        if (!response.ok) {
-          toast.error(result.message || "Failed to switch room");
-          return;
-        }
-
-        // Find the switched room from availableRooms
-        const switchedRoom = availableRooms.find((r) => r.id === newRoomId);
-
-        if (switchedRoom) {
-          // Update selected room immediately
-          setSelectedRoom({ ...switchedRoom, isMember: true });
-
-          // Locally patch availableRooms so popover shows updated status
-          setAvailableRooms((prev) =>
-            prev.map((room) =>
-              room.id === newRoomId
-                ? { ...room, isMember: true, participationStatus: "accepted" }
-                : room.id === prevRoomId
-                  ? { ...room, isMember: false }
-                  : room
-            )
-          );
-        }
-
-        setIsSwitchRoomPopoverOpen(false);
-        toast.success(`Switched to ${switchedRoom?.name || "room"}`);
-
-        // Refresh full list in background
-        await fetchAvailableRooms();
-      } catch (err) {
-        console.error("Room switch failed:", err);
-        toast.error("Failed to switch room");
-      }
+    async (newRoomId: string) => {
+      await switchRoom(newRoomId);
+      setIsSwitchRoomPopoverOpen(false);
     },
-    [user, availableRooms, setSelectedRoom, setAvailableRooms, fetchAvailableRooms]
+    [switchRoom]
   );
-
-  useEffect(() => {
-    if (!user?.id) return;
-    fetchAvailableRooms();
-  }, [user, fetchAvailableRooms]);
 
   useEffect(() => {
     return () => {
@@ -264,17 +90,11 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 
   useEffect(() => {
     if (selectedRoom && user) {
-      checkRoomMembership(selectedRoom.id).then(setIsMember);
+      setIsMember(selectedRoom.isMember);
     } else {
       setIsMember(false);
     }
-  }, [selectedRoom, user, checkRoomMembership]);
-
-  useEffect(() => {
-    if (!selectedRoom && availableRooms.length > 0) {
-      useRoomStore.getState().initializeDefaultRoom();
-    }
-  }, [selectedRoom, availableRooms]);
+  }, [selectedRoom, user]);
 
   return (
     <header className="h-[3.6em] lg:w-[50vw] w-[95vw] flex items-center justify-between px-[1.5vw] glass-gradient-header text-foreground bg-background z-10 dark:text-foreground dark:bg-background">
@@ -379,13 +199,13 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                 {availableRooms.length === 0 ? (
                   <p className="text-[1em] text-muted-foreground">No rooms available</p>
                 ) : (
-                  <ul className="space-y-2 overflow-y-auto max-h-[calc(100vh-200px)] scrollbar-none lg:scrollbar-custom">
+                  <ul className="space-y-0 overflow-y-auto max-h-[calc(100vh-200px)] scrollbar-none lg:scrollbar-custom">
                     {availableRooms.map((room) => (
                       <li
                         key={room.id}
                         className="
-                          flex items-center justify-between p-2 rounded-lg 
-                          bg-card hover:bg-accent transition-colors
+                          flex items-center border-b  justify-between p-2 rounded-lg 
+                          bg-transparent transition-colors
                         "
                       >
                         <div className="flex items-center gap-3">
@@ -404,14 +224,14 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                                 <LockIcon className="h-3.5 w-3.5 text-muted-foreground" />
                               )}
                             </div>
-                            <p className="text-[1em] px-[.02em] text-center py-[.01em] text-green-800 dark:text-white bg-green-500/20 dark:bg-green-500 rounded-full">{onlineCounts.get(room.id) ?? 0} active</p>
+                            <p className="text-[1em] px-[.02em] text-center py-[.01em] text-green-800 dark:text-white border border-green-500/20 dark:border-green-500 rounded-full">{onlineCounts.get(room.id) ?? 0} active</p>
                           </div>
                         </div>
 
                         {/* Toggle switch */}
                         <Switch
                           checked={selectedRoom?.id === room.id}
-                          onCheckedChange={() => handleRoomSwitch(room.id, selectedRoom?.id)}
+                          onCheckedChange={() => handleRoomSwitch(room.id)}
                           className="
                             data-[state=checked]:bg-indigo-600 
                             data-[state=unchecked]:bg-muted

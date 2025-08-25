@@ -21,7 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Database } from "@/lib/types/supabase";
 import { toast } from "sonner";
-import { useRoomStore } from "@/lib/store/roomstore";
+import { useRoomContext } from "@/lib/store/RoomContext";
 import { useDebounce } from "use-debounce";
 
 type UserProfile = Database["public"]["Tables"]["users"]["Row"];
@@ -43,7 +43,8 @@ export default function SearchComponent({ user }: { user: SupabaseUser | undefin
   const [userResults, setUserResults] = useState<UserProfile[]>([]);
   const supabase = supabaseBrowser();
   const [isSearchPopoverOpen, setIsSearchPopoverOpen] = useState(false);
-  const { selectedRoom, setSelectedRoom } = useRoomStore();
+  const { state, joinRoom, leaveRoom } = useRoomContext();
+  const { selectedRoom } = state;
   const isMounted = useRef(true);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -169,8 +170,8 @@ export default function SearchComponent({ user }: { user: SupabaseUser | undefin
       if (searchType === "rooms") {
         const apiQuery = debouncedSearchQuery.trim()
           ? `?q=${encodeURIComponent(
-              debouncedSearchQuery.trim()
-            )}&limit=${limit}&offset=${offset}`
+            debouncedSearchQuery.trim()
+          )}&limit=${limit}&offset=${offset}`
           : `?limit=${limit}&offset=${offset}`;
         const response = await fetch(`/api/rooms/all${apiQuery}`);
         if (!response.ok) {
@@ -280,72 +281,17 @@ export default function SearchComponent({ user }: { user: SupabaseUser | undefin
         toast.error("Invalid room ID format");
         return;
       }
-      try {
-        const response = await fetch(`/api/rooms/switch`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ roomId: currentRoomId }),
-        });
 
-        const result = await response.json();
-
-        if (!response.ok) {
-          if (result.code === "AUTH_REQUIRED") {
-            toast.error("Authentication required to join rooms.");
-          } else if (result.code === "ROOM_NOT_FOUND") {
-            toast.error("Room not found.");
-          } else if (result.status === "pending") {
-            toast.info(
-              result.message || "Join request sent to room owner for approval."
-            );
-          } else {
-            toast.error(result.message || "Failed to join room.");
-          }
-          return;
-        }
-
-        let newParticipationStatus: string | null = "accepted";
-        let newIsMember = true;
-
-        if (result.status === "pending") {
-          newParticipationStatus = "pending";
-          newIsMember = false;
-        }
-
-        const { data: room } = await supabase
-          .from("rooms")
-          .select("*")
-          .eq("id", currentRoomId)
-          .single();
-        if (!room) {
-          throw new Error("Failed to fetch room details after join.");
-        }
-
-        // Member count unknown at this point, you may fetch or set as 0 and refresh elsewhere
-        const roomWithMembership: RoomWithMembershipCount = {
-          ...room,
-          isMember: newIsMember,
-          participationStatus: newParticipationStatus,
-          memberCount: 0,
-        };
-
-        setSelectedRoom(roomWithMembership);
-        if (searchType) {
-          await fetchSearchResults();
-        }
-        toast.success(result.message || "Joined room successfully");
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Failed to join room");
+      await joinRoom(currentRoomId);
+      if (searchType) {
+        await fetchSearchResults();
       }
     },
     [
       user,
       selectedRoom,
       UUID_REGEX,
-      setSelectedRoom,
-      supabase,
+      joinRoom,
       searchType,
       fetchSearchResults,
     ]
@@ -458,7 +404,6 @@ export default function SearchComponent({ user }: { user: SupabaseUser | undefin
                   );
 
                   if (selectedRoom?.id === result.id) {
-                    setSelectedRoom(null);
                     router.push("/");
                   }
                 } catch (error) {
@@ -549,22 +494,20 @@ export default function SearchComponent({ user }: { user: SupabaseUser | undefin
             <Button
               variant={searchType === "rooms" ? "default" : "outline"}
               onClick={() => handleSearchByType("rooms")}
-              className={`${
-                searchType === "rooms"
-                  ? "bg-violet-900 text-white hover:bg-violet-800"
-                  : "bg-transparent border border-border hover:bg-accent text-black dark:text-white"
-              } rounded-lg transition-colors w-full`}
+              className={`${searchType === "rooms"
+                ? "bg-violet-900 text-white hover:bg-violet-800"
+                : "bg-transparent border border-border hover:bg-accent text-black dark:text-white"
+                } rounded-lg transition-colors w-full`}
             >
               Rooms
             </Button>
             <Button
               variant={searchType === "users" ? "default" : "outline"}
               onClick={() => handleSearchByType("users")}
-              className={`${
-                searchType === "users"
-                  ? "bg-violet-900 text-white hover:bg-violet-800"
-                  : "bg-transparent border border-border hover:bg-accent text-black dark:text-white"
-              } rounded-lg transition-colors w-full`}
+              className={`${searchType === "users"
+                ? "bg-violet-900 text-white hover:bg-violet-800"
+                : "bg-transparent border border-border hover:bg-accent text-black dark:text-white"
+                } rounded-lg transition-colors w-full`}
             >
               Users
             </Button>
@@ -655,9 +598,8 @@ export default function SearchComponent({ user }: { user: SupabaseUser | undefin
 
           {searchQuery.length === 0 && searchType && (
             <p
-              className={`text-[1em] text-muted-foreground mt-3 transition-opacity duration-500 ${
-                isFaded ? "opacity-0" : "opacity-100"
-              }`}
+              className={`text-[1em] text-muted-foreground mt-3 transition-opacity duration-500 ${isFaded ? "opacity-0" : "opacity-100"
+                }`}
             >
               Showing all {searchType}...
             </p>
@@ -665,9 +607,8 @@ export default function SearchComponent({ user }: { user: SupabaseUser | undefin
 
           {isLoading && (
             <p
-              className={`text-[1em] text-muted-foreground mt-3 transition-opacity duration-500 ${
-                isFaded ? "opacity-0" : "opacity-100"
-              }`}
+              className={`text-[1em] text-muted-foreground mt-3 transition-opacity duration-500 ${isFaded ? "opacity-0" : "opacity-100"
+                }`}
             >
               Loading...
             </p>

@@ -17,14 +17,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { useRoomStore } from "@/lib/store/roomstore";
+import { useRoomContext } from "@/lib/store/RoomContext";
 
 export default function CreateRoomDialog({ user }: { user: SupabaseUser | undefined }) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [newRoomName, setNewRoomName] = useState("");
   const [isPrivate, setIsPrivate] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
-  const { setSelectedRoom } = useRoomStore();
+  const { createRoom } = useRoomContext();
 
   const handleCreateRoom = async () => {
     if (!user) {
@@ -37,34 +37,10 @@ export default function CreateRoomDialog({ user }: { user: SupabaseUser | undefi
     }
     setIsCreating(true);
     try {
-      const response = await fetch("/api/rooms", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ name: newRoomName.trim(), isPrivate: isPrivate }),
-      });
-
-      const newRoomResponse = await response.json();
-
-      if (!response.ok) {
-        throw new Error(newRoomResponse.error || "Failed to create room");
-      }
-
-      const newRoom = newRoomResponse;
-
-      toast.success("Room created successfully!");
+      await createRoom(newRoomName.trim(), isPrivate);
       setNewRoomName("");
       setIsPrivate(false);
       setIsDialogOpen(false);
-
-      const roomWithMembership = {
-        ...newRoom,
-        isMember: true,
-        participationStatus: "accepted",
-        memberCount: 1, // Creator is the first member
-      };
-      setSelectedRoom(roomWithMembership);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to create room");
     } finally {
