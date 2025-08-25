@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { ArrowDown } from "lucide-react";
 
 import { Database } from "@/lib/types/supabase";
-import { useRoomStore } from "@/lib/store/roomstore";
+import { useRoomContext } from "@/lib/store/RoomContext";
 import TypingIndicator from "./TypingIndicator";
 import { useUser } from "@/lib/store/user";
 
@@ -21,7 +21,8 @@ export default function ListMessages() {
   const [userScrolled, setUserScrolled] = useState(false);
   const [notification, setNotification] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
-  const selectedRoom = useRoomStore((state) => state.selectedRoom);
+  const { state } = useRoomContext();
+  const { selectedRoom } = state;
   const user = useUser((state) => state.user);
 
   const {

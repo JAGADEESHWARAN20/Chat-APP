@@ -1,6 +1,7 @@
 import { Imessage, useMessage } from "@/lib/store/messages";
 import React from "react";
 import Image from "next/image";
+import { useSearchHighlight } from "@/lib/store/SearchHighlightContext";
 
 import {
   DropdownMenu,
@@ -15,14 +16,18 @@ import { useUser } from "@/lib/store/user";
 
 export default function Message({ message }: { message: Imessage }) {
   const user = useUser((state) => state.user);
+  const { highlightedMessageId, searchQuery } = useSearchHighlight();
 
   // Add safety check for message
   if (!message) {
     return <div className="p-2 text-gray-500">Message not available</div>;
   }
 
+  const isHighlighted = highlightedMessageId === message.id;
+  const highlightClass = isHighlighted ? "bg-yellow-200 dark:bg-yellow-800/30 border-l-4 border-yellow-500" : "";
+
   return (
-    <div className="flex gap-2 p-[.3em]">
+    <div id={`msg-${message.id}`} className={`flex gap-2 p-[.3em] ${highlightClass}`}>
       <div className="flex-shrink-0">
         {message.profiles?.avatar_url ? (
           <Image

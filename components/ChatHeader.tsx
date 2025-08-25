@@ -23,6 +23,7 @@ import { Switch } from "@/components/ui/switch";
 import { useRoomContext } from "@/lib/store/RoomContext";
 import { useRoomPresence } from "@/hooks/useRoomPresence";
 import { useMessage, Imessage } from "@/lib/store/messages";
+import { useSearchHighlight } from "@/lib/store/SearchHighlightContext";
 type Room = Database["public"]["Tables"]["rooms"]["Row"];
 type RoomMemberRow = Database["public"]["Tables"]["room_members"]["Row"];
 
@@ -46,6 +47,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const { selectedRoom, availableRooms, isLoading } = state;
   const isMounted = useRef(true);
   const [isMember, setIsMember] = useState(false);
+  const { setHighlightedMessageId, setSearchQuery } = useSearchHighlight();
 
 
 
@@ -61,10 +63,12 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 
   const handleSearch = async (query: string) => {
     setMessageSearchQuery(query);
+    setSearchQuery(query);
     if (!selectedRoom?.id) return;
 
     if (query.trim().length === 0) {
       setSearchResults([]);
+      setHighlightedMessageId(null);
       return;
     }
 
@@ -137,12 +141,18 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                       key={msg.id}
                       className="p-2 rounded-md bg-accent hover:bg-accent/70 cursor-pointer"
                       onClick={() => {
-                        // Optionally scroll to this message in ListMessages
+                        // Highlight and scroll to this message in ListMessages
+                        setHighlightedMessageId(msg.id);
                         document.getElementById(`msg-${msg.id}`)?.scrollIntoView({
                           behavior: "smooth",
                           block: "center",
                         });
                         setIsMessageSearchOpen(false);
+
+                        // Clear highlight after 3 seconds
+                        setTimeout(() => {
+                          setHighlightedMessageId(null);
+                        }, 3000);
                       }}
                     >
                       <p className="text-sm font-semibold">{msg.profiles?.display_name || msg.profiles?.username}</p>
@@ -203,8 +213,8 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                     <li
                       key={room.id}
                       className="
-                          flex items-center border-b  justify-between p-2 rounded-lg 
-                          bg-transparent transition-colors
+                          flex items-center justify-between p-3 rounded-lg 
+                          bg-transparent hover:bg-accent/50 transition-colors border-b border-border/50
                         "
                     >
                       <div className="flex items-center gap-3">
@@ -223,7 +233,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                               <LockIcon className="h-3.5 w-3.5 text-muted-foreground" />
                             )}
                           </div>
-                          <p className="text-[1em] px-[.02em] text-center py-[.01em] text-green-800 dark:text-white border border-green-500/20 dark:border-green-500 rounded-full">{onlineCounts.get(room.id) ?? 0} active</p>
+                          <p className="text-[0.8em] px-2 py-1 text-center text-green-800 dark:text-white bg-green-500/20 dark:bg-green-500/20 border border-green-500/30 dark:border-green-500/30 rounded-full">{onlineCounts.get(room.id) ?? 0} active</p>
                         </div>
                       </div>
 

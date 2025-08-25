@@ -44,7 +44,7 @@ export default function ChatMessages() {
         })) : []) || [];
 
         setMessages(formattedMessages.reverse());
-        
+
         // Subscribe to real-time updates for the room
         subscribeToRoom(selectedRoom.id);
       } else if (selectedDirectChat) {
@@ -72,7 +72,7 @@ export default function ChatMessages() {
       console.error("Error fetching messages:", error);
       toast.error("Failed to load messages");
     }
-  }, [selectedRoom, selectedDirectChat, setMessages, clearMessages, subscribeToRoom]);
+  }, [selectedRoom?.id, selectedDirectChat?.id, setMessages, clearMessages, subscribeToRoom]);
 
   useEffect(() => {
     fetchMessages();
@@ -81,7 +81,7 @@ export default function ChatMessages() {
     return () => {
       unsubscribeFromRoom();
     };
-  }, [fetchMessages, unsubscribeFromRoom]);
+  }, [selectedRoom?.id, selectedDirectChat?.id]);
 
   return (
     <Suspense fallback={<div>Loading messages...</div>}>

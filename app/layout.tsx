@@ -3,6 +3,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ResponsiveToaster } from "@/components/ResponsiveToaster";
 import { RoomProvider } from "@/lib/store/RoomContext";
+import { SearchHighlightProvider } from "@/lib/store/SearchHighlightContext";
 import RoomInitializer from "@/lib/initialization/RoomInitializer";
 import { supabaseServer } from "@/lib/supabase/server";
 
@@ -27,9 +28,11 @@ export default async function RootLayout({
           disableTransitionOnChange
         >
           <RoomProvider user={data.session?.user}>
-            <RoomInitializer />
-            {children}
-            <ResponsiveToaster />
+            <SearchHighlightProvider>
+              <RoomInitializer />
+              {children}
+              <ResponsiveToaster />
+            </SearchHighlightProvider>
           </RoomProvider>
         </ThemeProvider>
       </body>
