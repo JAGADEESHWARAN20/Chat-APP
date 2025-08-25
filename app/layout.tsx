@@ -4,14 +4,18 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { ResponsiveToaster } from "@/components/ResponsiveToaster";
 import { RoomProvider } from "@/lib/store/RoomContext";
 import RoomInitializer from "@/lib/initialization/RoomInitializer";
+import { supabaseServer } from "@/lib/supabase/server";
 
 const space_Grotesk = Space_Grotesk({ subsets: ["latin"] });
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const supabase = await supabaseServer();
+  const { data } = await supabase.auth.getSession();
+
   return (
     <html lang="en" suppressHydrationWarning>
       <head />
@@ -22,7 +26,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <RoomProvider>
+          <RoomProvider user={data.session?.user}>
             <RoomInitializer />
             {children}
             <ResponsiveToaster />
