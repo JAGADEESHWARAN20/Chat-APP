@@ -161,18 +161,17 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         </Popover>
 
         {/* Switch Room */}
-        {selectedRoom && (
-          <Popover open={isSwitchRoomPopoverOpen} onOpenChange={setIsSwitchRoomPopoverOpen}>
-            <PopoverTrigger asChild>
-              <Button variant="ghost" size="icon">
-                <ArrowRightLeft className="h-5 w-5" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent
-              side="bottom"
-              align="center"
-              sideOffset={0}
-              className="
+        <Popover open={isSwitchRoomPopoverOpen} onOpenChange={setIsSwitchRoomPopoverOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="ghost" size="icon">
+              <ArrowRightLeft className="h-5 w-5" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent
+            side="bottom"
+            align="center"
+            sideOffset={0}
+            className="
                 !w-[min(32em,95vw)]
                 !h-[min(30em,85vh)]
                 md:!w-[32em]
@@ -192,59 +191,58 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                 !max-h-[99vh]
                 shadow-xl
               "
-            >
-              <div className="p-[.3vw]">
-                <h3 className="font-semibold text-[1.1em] mb-2">Switch Room</h3>
+          >
+            <div className="p-[.3vw]">
+              <h3 className="font-semibold text-[1.1em] mb-2">Switch Room</h3>
 
-                {availableRooms.length === 0 ? (
-                  <p className="text-[1em] text-muted-foreground">No rooms available</p>
-                ) : (
-                  <ul className="space-y-0 overflow-y-auto max-h-[calc(100vh-200px)] scrollbar-none lg:scrollbar-custom">
-                    {availableRooms.map((room) => (
-                      <li
-                        key={room.id}
-                        className="
+              {availableRooms.length === 0 ? (
+                <p className="text-[1em] text-muted-foreground">No rooms available</p>
+              ) : (
+                <ul className="space-y-0 overflow-y-auto max-h-[calc(100vh-200px)] scrollbar-none lg:scrollbar-custom">
+                  {availableRooms.map((room) => (
+                    <li
+                      key={room.id}
+                      className="
                           flex items-center border-b  justify-between p-2 rounded-lg 
                           bg-transparent transition-colors
                         "
-                      >
-                        <div className="flex items-center gap-3">
-                          {/* Room icon */}
-                          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-500/10">
-                            <span className="text-lg font-semibold text-indigo-500">
-                              {room.name.charAt(0).toUpperCase()}
-                            </span>
-                          </div>
-
-                          {/* Room info */}
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold">{room.name}</span>
-                              {room.is_private && (
-                                <LockIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                              )}
-                            </div>
-                            <p className="text-[1em] px-[.02em] text-center py-[.01em] text-green-800 dark:text-white border border-green-500/20 dark:border-green-500 rounded-full">{onlineCounts.get(room.id) ?? 0} active</p>
-                          </div>
+                    >
+                      <div className="flex items-center gap-3">
+                        {/* Room icon */}
+                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-500/10">
+                          <span className="text-lg font-semibold text-indigo-500">
+                            {room.name.charAt(0).toUpperCase()}
+                          </span>
                         </div>
 
-                        {/* Toggle switch */}
-                        <Switch
-                          checked={selectedRoom?.id === room.id}
-                          onCheckedChange={() => handleRoomSwitch(room.id)}
-                          className="
+                        {/* Room info */}
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold">{room.name}</span>
+                            {room.is_private && (
+                              <LockIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                            )}
+                          </div>
+                          <p className="text-[1em] px-[.02em] text-center py-[.01em] text-green-800 dark:text-white border border-green-500/20 dark:border-green-500 rounded-full">{onlineCounts.get(room.id) ?? 0} active</p>
+                        </div>
+                      </div>
+
+                      {/* Toggle switch */}
+                      <Switch
+                        checked={selectedRoom?.id === room.id}
+                        onCheckedChange={() => handleRoomSwitch(room.id)}
+                        className="
                             data-[state=checked]:bg-indigo-600 
                             data-[state=unchecked]:bg-muted
                           "
-                        />
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </PopoverContent>
-          </Popover>
-        )}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </PopoverContent>
+        </Popover>
       </div>
     </header>
   );

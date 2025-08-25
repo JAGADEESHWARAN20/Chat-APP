@@ -51,19 +51,19 @@ function roomReducer(state: RoomState, action: RoomAction): RoomState {
   switch (action.type) {
     case "SET_AVAILABLE_ROOMS":
       return { ...state, availableRooms: action.payload };
-    
+
     case "SET_SELECTED_ROOM":
       return { ...state, selectedRoom: action.payload };
-    
+
     case "SET_LOADING":
       return { ...state, isLoading: action.payload };
-    
+
     case "SET_IS_MEMBER":
       return { ...state, isMember: action.payload };
-    
+
     case "SET_IS_LEAVING":
       return { ...state, isLeaving: action.payload };
-    
+
     case "UPDATE_ROOM_MEMBERSHIP":
       return {
         ...state,
@@ -76,7 +76,7 @@ function roomReducer(state: RoomState, action: RoomAction): RoomState {
           ? { ...state.selectedRoom, isMember: action.payload.isMember, participationStatus: action.payload.participationStatus }
           : state.selectedRoom
       };
-    
+
     case "UPDATE_ROOM_MEMBER_COUNT":
       return {
         ...state,
@@ -89,20 +89,20 @@ function roomReducer(state: RoomState, action: RoomAction): RoomState {
           ? { ...state.selectedRoom, memberCount: action.payload.memberCount }
           : state.selectedRoom
       };
-    
+
     case "REMOVE_ROOM":
       return {
         ...state,
         availableRooms: state.availableRooms.filter(room => room.id !== action.payload),
         selectedRoom: state.selectedRoom?.id === action.payload ? null : state.selectedRoom
       };
-    
+
     case "ADD_ROOM":
       return {
         ...state,
         availableRooms: [...state.availableRooms, action.payload]
       };
-    
+
     default:
       return state;
   }
@@ -263,6 +263,12 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
       }));
 
       dispatch({ type: "SET_AVAILABLE_ROOMS", payload: joinedRooms });
+
+      // Auto-select the first available room if no room is currently selected
+      if (joinedRooms.length > 0 && !state.selectedRoom) {
+        const defaultRoom = joinedRooms.find((room) => room.name === "Daily Chat") || joinedRooms[0];
+        dispatch({ type: "SET_SELECTED_ROOM", payload: defaultRoom });
+      }
     } catch (error) {
       dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
       toast.error("An error occurred while fetching rooms");
@@ -329,7 +335,7 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
 
       dispatch({ type: "SET_SELECTED_ROOM", payload: roomWithMembership });
       dispatch({ type: "ADD_ROOM", payload: roomWithMembership });
-      
+
       toast.success(result.message || "Joined room successfully");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to join room");
