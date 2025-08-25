@@ -71,7 +71,7 @@ const MessageMenu = ({ message }: { message: Imessage }) => {
         <DropdownMenuItem
           onClick={() => {
             document.getElementById("trigger-edit")?.click();
-            setActionMessage(message);
+            setActionMessage(message,"edit");
           }}
           className="text-gray-200 hover:bg-gray-700 hover:text-white focus:bg-gray-700 focus:text-white rounded-md transition-colors"
         >
@@ -80,7 +80,7 @@ const MessageMenu = ({ message }: { message: Imessage }) => {
         <DropdownMenuItem
           onClick={() => {
             document.getElementById("trigger-delete")?.click();
-            setActionMessage(message);
+            setActionMessage(message,"delete");
           }}
           className="text-gray-200 hover:bg-gray-700 hover:text-white focus:bg-gray-700 focus:text-white rounded-md transition-colors"
         >
