@@ -8,7 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import Image from "next/image";
-import { ChevronLeft } from "lucide-react"; // 👈 import chevron
+import { ChevronLeft } from "lucide-react";
+import { toast } from "sonner";
+import { Skeleton } from "@/components/ui/skeleton"; // ✅ Import Skeleton
 
 export default function EditProfilePage() {
   const supabase = createClientComponentClient<Database>();
@@ -87,18 +89,53 @@ export default function EditProfilePage() {
 
     if (error) {
       console.error("Failed to update profile:", error);
-      alert("Failed to update profile.");
+      toast.error("Failed to update profile.");
     } else {
-      alert("Profile updated!");
+      toast.success("Profile updated!");
       router.refresh();
     }
   };
 
-  if (loading) return <p className="p-4">Loading profile...</p>;
+  // ✅ Replaced "Loading..." text with a skeleton loader.
+  if (loading) {
+    return (
+      <div className="max-w-lg mx-auto p-6 space-y-4">
+        {/* Skeleton for the back button */}
+        <Skeleton className="h-6 w-24 mb-4" />
+        
+        {/* Skeleton for the heading */}
+        <Skeleton className="h-8 w-48 mb-4" />
 
+        {/* Skeleton for the form fields */}
+        <div className="space-y-4">
+          <div>
+            <Skeleton className="h-4 w-28 mb-1" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+          <div>
+            <Skeleton className="h-4 w-28 mb-1" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+          <div>
+            <Skeleton className="h-4 w-28 mb-1" />
+            <Skeleton className="h-20 w-full rounded-full" />
+            <Skeleton className="h-10 w-full mt-2" />
+          </div>
+          <div>
+            <Skeleton className="h-4 w-28 mb-1" />
+            <Skeleton className="h-24 w-full" />
+          </div>
+        </div>
+
+        {/* Skeleton for the Save button */}
+        <Skeleton className="h-10 w-full" />
+      </div>
+    );
+  }
+
+  // The rest of your component remains unchanged
   return (
     <div className="max-w-lg mx-auto p-6">
-      {/* 👇 Chevron left button */}
       <button
         onClick={() => router.back()}
         className="flex items-center text-gray-600 hover:text-black mb-4"
