@@ -389,86 +389,90 @@ export default function SearchComponent({ user }: { user: SupabaseUser | undefin
             <span className="font-semibold text-black dark:text-white">
               {result.name}
             </span>
-
             {result.is_private && (
               <LockIcon className="h-3.5 w-3.5 text-gray-400" />
             )}
           </div>
-
           <div className="text-sm text-gray-600 dark:text-gray-400">
             {result.memberCount} {result.memberCount === 1 ? "member" : "members"}
           </div>
         </div>
       </div>
-      <Button
-        size="icon"
-        variant="ghost"
-        onClick={async () => {
-          if (!user) {
-            toast.error("Please log in to leave a room");
-            return;
-          }
-          if (!result.id || !UUID_REGEX.test(result.id)) {
-            toast.error("Invalid room ID");
-            return;
-          }
-          try {
-            // Set loading state if you want to disable button during leave
-            // setIsLeaving(true);
-            const { error: membersError } = await supabase
-              .from("room_members")
-              .delete()
-              .eq("room_id", result.id)
-              .eq("user_id", user.id);
 
-            const { error: participantsError } = await supabase
-              .from("room_participants")
-              .delete()
-              .eq("room_id", result.id)
-              .eq("user_id", user.id);
-
-            if (membersError || participantsError) {
-              throw new Error(
-                membersError?.message || participantsError?.message || "Failed to leave room"
-              );
-            }
-
-            toast.success("Successfully left the room");
-            // Optionally update UI state
-            setRoomResults((prev) =>
-              prev.map((room) =>
-                room.id === result.id
-                  ? { ...room, isMember: false, participationStatus: null }
-                  : room
-              )
-            );
-            // If you want to update selectedRoom, you can do so here
-            if (selectedRoom?.id === result.id) {
-              setSelectedRoom(null);
-              router.push("/");
-            }
-          } catch (error) {
-            toast.error(error instanceof Error ? error.message : "Failed to leave room");
-          } finally {
-            // setIsLeaving(false);
-          }
-        }}
-        className="bg-red-500 hover:bg-red-600 rounded-md text-white"
-        title="Leave Room"
-      >
-        <LogOut className="h-4 w-4" />
-      </Button>
-
+      {/* Right-side actions */}
       <div className="flex items-center gap-2">
         {result.isMember ? (
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => router.push(`/rooms/${result.id}/settings`)}
-            className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300"
-          >
-            <Settings className="h-4 w-4" />
-          </Button>
+          <>
+            {/* Settings button */}
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => router.push(`/rooms/${result.id}/settings`)}
+              className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300"
+            >
+              <Settings className="h-4 w-4" />
+            </Button>
+
+            {/* Leave button (only if member) */}
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={async () => {
+                if (!user) {
+                  toast.error("Please log in to leave a room");
+                  return;
+                }
+                if (!result.id || !UUID_REGEX.test(result.id)) {
+                  toast.error("Invalid room ID");
+                  return;
+                }
+                try {
+                  const { error: membersError } = await supabase
+                    .from("room_members")
+                    .delete()
+                    .eq("room_id", result.id)
+                    .eq("user_id", user.id);
+
+                  const { error: participantsError } = await supabase
+                    .from("room_participants")
+                    .delete()
+                    .eq("room_id", result.id)
+                    .eq("user_id", user.id);
+
+                  if (membersError || participantsError) {
+                    throw new Error(
+                      membersError?.message ||
+                      participantsError?.message ||
+                      "Failed to leave room"
+                    );
+                  }
+
+                  toast.success("Successfully left the room");
+
+                  setRoomResults((prev) =>
+                    prev.map((room) =>
+                      room.id === result.id
+                        ? { ...room, isMember: false, participationStatus: null }
+                        : room
+                    )
+                  );
+
+                  if (selectedRoom?.id === result.id) {
+                    setSelectedRoom(null);
+                    router.push("/");
+                  }
+                } catch (error) {
+                  toast.error(
+                    error instanceof Error ? error.message : "Failed to leave room"
+                  );
+                }
+              }}
+              className="bg-red-500 hover:bg-red-600 rounded-md text-white"
+              title="Leave Room"
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
+          </>
         ) : result.participationStatus === "pending" ? (
           <span className="text-sm text-yellow-500 dark:text-yellow-400">
             Pending
@@ -486,6 +490,7 @@ export default function SearchComponent({ user }: { user: SupabaseUser | undefin
       </div>
     </li>
   );
+
 
   return (
     <Popover open={isSearchPopoverOpen} onOpenChange={setIsSearchPopoverOpen}>
