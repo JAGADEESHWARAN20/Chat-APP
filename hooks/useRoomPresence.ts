@@ -1,66 +1,76 @@
-"use client";
-
+// hooks/useRoomPresence.ts
 import { useState, useEffect } from "react";
 import { supabaseBrowser } from "@/lib/supabase/browser";
+import { useUser } from "@/lib/store/user";
 
-type TypingUser = {
-  user_id: string;
-};
+interface PresenceState {
+    user_id: string;
+    online_at: string;
+}
 
-export const useRoomPresence = (roomId: string | null) => {
-  const [activeUsers, setActiveUsers] = useState<number>(0);
-  const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
-  const supabase = supabaseBrowser();
+/**
+ * A hook to track online users for a list of rooms using Supabase Presence.
+ * @param roomIds An array of room IDs to track.
+ * @returns A map of online user counts for each room.
+ */
+export const useRoomPresence = (roomIds: string[]) => {
+    const user = useUser((state) => state.user);
+    const supabase = supabaseBrowser();
+    const [onlineCounts, setOnlineCounts] = useState<Map<string, number>>(new Map());
 
-  useEffect(() => {
-    if (!roomId) return;
+    useEffect(() => {
+        if (!user || roomIds.length === 0) {
+            setOnlineCounts(new Map());
+            return;
+        }
 
-    const fetchPresence = async () => {
-      // ✅ Fetch accepted room members
-      const { data: roomMembers } = await supabase
-        .from("room_members")
-        .select("user_id")
-        .eq("room_id", roomId)
-        .eq("status", "accepted");
+        const channels = roomIds.map(roomId => {
+            const channelName = `room_${roomId}_presence`;
+            return supabase.channel(channelName, {
+                config: { presence: { key: user.id } }
+            });
+        });
 
-      if (!roomMembers) return;
+        // Set up event listeners for all channels
+        channels.forEach(channel => {
+            const handlePresence = () => {
+                const presenceState = channel.presenceState<PresenceState>();
+                const userIds = new Set<string>();
+                Object.values(presenceState).forEach(stateList => {
+                    stateList.forEach(presence => {
+                        if (presence.user_id) {
+                            userIds.add(presence.user_id);
+                        }
+                    });
+                });
+                
+                // Update the count for this specific room
+                setOnlineCounts(prev => new Map(prev).set(channel.topic.split('_')[1], userIds.size));
+            };
 
-      const memberIds = roomMembers.map((m) => m.user_id);
-      setActiveUsers(memberIds.length);
+            channel
+                .on('presence', { event: 'sync' }, handlePresence)
+                .on('presence', { event: 'join' }, handlePresence)
+                .on('presence', { event: 'leave' }, handlePresence)
+                .subscribe(async (status) => {
+                    if (status === 'SUBSCRIBED') {
+                        await channel.track({
+                            user_id: user.id,
+                            online_at: new Date().toISOString(),
+                        });
+                    }
+                });
+        });
 
-      // ✅ Fetch typing users
-      const { data: presenceData } = await supabase
-        .from("typing_status")
-        .select("user_id, is_typing")
-        .eq("room_id", roomId)
-        .eq("is_typing", true)
-        .in("user_id", memberIds);
+        // Cleanup function to unsubscribe from all channels
+        return () => {
+            channels.forEach(channel => {
+                channel.untrack();
+                channel.unsubscribe();
+            });
+        };
 
-      if (presenceData) {
-        setTypingUsers(presenceData);
-      }
-    };
+    }, [user, supabase, roomIds]);
 
-    fetchPresence();
-
-    const channel = supabase
-      .channel(`room-presence-${roomId}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "typing_status", filter: `room_id=eq.${roomId}` },
-        fetchPresence
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "room_members", filter: `room_id=eq.${roomId}` },
-        fetchPresence
-      )
-      .subscribe();
-
-    return () => {
-      channel.unsubscribe();
-    };
-  }, [roomId, supabase]);
-
-  return { activeUsers, typingUsers };
+    return onlineCounts;
 };

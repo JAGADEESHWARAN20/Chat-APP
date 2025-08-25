@@ -39,6 +39,7 @@ import { useRoomStore } from "@/lib/store/roomstore";
 import { useDebounce } from "use-debounce";
 import Notifications from "./Notifications";
 import { useNotification } from "@/lib/store/notifications";
+import { useRoomPresence } from "@/hooks/useRoomPresence";
 // import { SearchTabs } from "./ui/search-tabs"; // (unused import removed)
 // import { useActiveUsers } from "@/hooks/useActiveUsers"; // (unused import removed)
 
@@ -52,7 +53,6 @@ type RoomWithMembershipCount = Room & {
   isMember: boolean;
   participationStatus: string | null;
   memberCount: number;
-  activeUsers?: number;
 };
 
 export default function ChatHeader({ user }: { user: SupabaseUser | undefined }) {
@@ -94,6 +94,17 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     () => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
     []
   );
+
+  // Compute all room IDs for presence tracking (availableRooms + roomResults)
+  const allRoomIds = useMemo(() => {
+    const ids = new Set([
+      ...availableRooms.map((r) => r.id),
+      ...roomResults.map((r) => r.id),
+    ]);
+    return Array.from(ids);
+  }, [availableRooms, roomResults]);
+
+  const onlineCounts = useRoomPresence(allRoomIds);
 
   // Check if current user is a member of given room
   const checkRoomMembership = useCallback(
@@ -228,29 +239,10 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         });
       }
 
-      // For each room, get active users data
-      const presencePromises = roomIds.map(async (roomId) => {
-        const { count } = await supabase
-          .from("room_members")
-          .select("*", { count: "exact", head: true })
-          .eq("room_id", roomId)
-          .eq("status", "accepted")
-          .eq("active", true);
-
-        return {
-          roomId,
-          activeUsers: count ?? 0,
-        };
-      });
-
-      const presenceResults = await Promise.all(presencePromises);
-      const activeUsersMap = new Map(presenceResults.map((r) => [r.roomId, r.activeUsers]));
-
-      // Attach memberCount, activeUsers, and isMember:true, participationStatus to each room
+      // Attach memberCount, isMember:true, participationStatus to each room
       const joinedRooms: RoomWithMembershipCount[] = joinedRoomsRaw.map((room) => ({
         ...room,
         memberCount: countsMap.get(room.id) ?? 0,
-        activeUsers: activeUsersMap.get(room.id) ?? 0,
         isMember: true,
         participationStatus: "accepted",
       }));
@@ -282,24 +274,17 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 
           if (!room_id) return;
 
-          // Recalculate memberCount and activeUsers for only this room
+          // Recalculate memberCount for only this room
           const { count: totalCount } = await supabase
             .from("room_members")
             .select("*", { count: "exact", head: true })
             .eq("room_id", room_id)
             .eq("status", "accepted");
 
-          const { count: activeCount } = await supabase
-            .from("room_members")
-            .select("*", { count: "exact", head: true })
-            .eq("room_id", room_id)
-            .eq("status", "accepted")
-            .eq("active", true);
-
           // Update only that room in availableRooms
           setAvailableRooms((prev) =>
             prev.map((room) =>
-              room.id === room_id ? { ...room, memberCount: totalCount ?? 0, activeUsers: activeCount ?? 0 } : room
+              room.id === room_id ? { ...room, memberCount: totalCount ?? 0 } : room
             )
           );
         }
@@ -313,59 +298,57 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 
   // Handler functions: handleRoomSwitch, handleLeaveRoom, handleJoinRoom, handleCreateRoom remain largely unchanged but work with RoomWithMembershipCount type
 
-const handleRoomSwitch = useCallback(
-  async (newRoomId: string, prevRoomId: string | null) => {
-    if (!user) {
-      toast.error("You must be logged in to switch rooms");
-      return;
-    }
-
-    try {
-      const response = await fetch(`/api/rooms/switch`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roomId: newRoomId }), // ✅ remove prevRoomId
-      });
-
-      const result = await response.json();
-      if (!response.ok) {
-        toast.error(result.message || "Failed to switch room");
+  const handleRoomSwitch = useCallback(
+    async (newRoomId: string, prevRoomId: string | null) => {
+      if (!user) {
+        toast.error("You must be logged in to switch rooms");
         return;
       }
 
-      // Find the switched room from availableRooms
-      const switchedRoom = availableRooms.find((r) => r.id === newRoomId);
+      try {
+        const response = await fetch(`/api/rooms/switch`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ roomId: newRoomId }), // ✅ remove prevRoomId
+        });
 
-      if (switchedRoom) {
-        // ✅ Update selected room immediately
-        setSelectedRoom({ ...switchedRoom, isMember: true });
+        const result = await response.json();
+        if (!response.ok) {
+          toast.error(result.message || "Failed to switch room");
+          return;
+        }
 
-        // ✅ Locally patch availableRooms so popover shows updated status
-        setAvailableRooms((prev) =>
-          prev.map((room) =>
-            room.id === newRoomId
-              ? { ...room, isMember: true, participationStatus: "accepted" }
-              : room.id === prevRoomId
-              ? { ...room, isMember: false } // mark old one as inactive
-              : room
-          )
-        );
+        // Find the switched room from availableRooms
+        const switchedRoom = availableRooms.find((r) => r.id === newRoomId);
+
+        if (switchedRoom) {
+          // ✅ Update selected room immediately
+          setSelectedRoom({ ...switchedRoom, isMember: true });
+
+          // ✅ Locally patch availableRooms so popover shows updated status
+          setAvailableRooms((prev) =>
+            prev.map((room) =>
+              room.id === newRoomId
+                ? { ...room, isMember: true, participationStatus: "accepted" }
+                : room.id === prevRoomId
+                ? { ...room, isMember: false } // mark old one as inactive
+                : room
+            )
+          );
+        }
+
+        setIsSwitchRoomPopoverOpen(false);
+        toast.success(`Switched to ${switchedRoom?.name || "room"}`);
+
+        // ✅ Refresh full list in background
+        await fetchAvailableRooms();
+      } catch (err) {
+        console.error("Room switch failed:", err);
+        toast.error("Failed to switch room");
       }
-
-      setIsSwitchRoomPopoverOpen(false);
-      toast.success(`Switched to ${switchedRoom?.name || "room"}`);
-
-      // ✅ Refresh full list in background
-      await fetchAvailableRooms();
-    } catch (err) {
-      console.error("Room switch failed:", err);
-      toast.error("Failed to switch room");
-    }
-  },
-  [user, availableRooms, setSelectedRoom, setAvailableRooms, fetchAvailableRooms]
-);
-
-
+    },
+    [user, availableRooms, setSelectedRoom, setAvailableRooms, fetchAvailableRooms]
+  );
 
   const handleLeaveRoom = useCallback(
     async () => {
@@ -520,26 +503,11 @@ const handleRoomSwitch = useCallback(
             memberCounts.get(p.room_id)!.add(p.user_id);
           });
 
-          // Get active users for each room
-          const activePromises = roomIds.map(async (roomId: string) => {
-            const { count } = await supabase
-              .from("room_members")
-              .select("*", { count: "exact", head: true })
-              .eq("room_id", roomId)
-              .eq("status", "accepted")
-              .eq("active", true);
-            return { roomId, activeUsers: count ?? 0 };
-          });
-
-          const activeResults = await Promise.all(activePromises);
-          const activeUsersMap = new Map(activeResults.map((r) => [r.roomId, r.activeUsers]));
-
           const roomsWithDetailedStatus = await Promise.all(
             fetchedRooms.map(async (room: Room) => ({
               ...room,
               participationStatus: await checkRoomParticipation(room.id),
               memberCount: memberCounts.get(room.id)?.size ?? 0,
-              activeUsers: activeUsersMap.get(room.id) ?? 0,
               isMember: await checkRoomMembership(room.id),
             }))
           );
@@ -764,77 +732,76 @@ const handleRoomSwitch = useCallback(
     }
   }, [selectedRoom, availableRooms]);
 
-const renderRoomSearchResult = (result: RoomWithMembershipCount) => (
-  <li
-    key={result.id}
-    className="flex items-center justify-between pb-[1em] rounded-lg transition-colors"
-  >
-    <div className="flex items-center gap-3">
-      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-500/30">
-        <span className="text-lg font-semibold text-indigo-400">
-          {result.name.charAt(0).toUpperCase()}
-        </span>
-      </div>
-      <div>
-        <div className="flex items-center gap-2">
-          {/* ✅ Room name: Black in light mode, White in dark mode */}
-          <span className="font-semibold text-black dark:text-white">
-            {result.name}
+  const renderRoomSearchResult = (result: RoomWithMembershipCount) => (
+    <li
+      key={result.id}
+      className="flex items-center justify-between pb-[1em] rounded-lg transition-colors"
+    >
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-500/30">
+          <span className="text-lg font-semibold text-indigo-400">
+            {result.name.charAt(0).toUpperCase()}
           </span>
-
-          {result.is_private && (
-            <LockIcon className="h-3.5 w-3.5 text-gray-400" />
-          )}
         </div>
+        <div>
+          <div className="flex items-center gap-2">
+            {/* ✅ Room name: Black in light mode, White in dark mode */}
+            <span className="font-semibold text-black dark:text-white">
+              {result.name}
+            </span>
 
-        {/* ✅ Adjust member text colors for both themes */}
-        <div className="text-sm text-gray-600 dark:text-gray-400">
-          {result.memberCount} {result.memberCount === 1 ? "member" : "members"}
-          {(result.activeUsers ?? 0) > 0 &&
-            ` • ${result.activeUsers ?? 0} active`}
+            {result.is_private && (
+              <LockIcon className="h-3.5 w-3.5 text-gray-400" />
+            )}
+          </div>
+
+          {/* ✅ Adjust member text colors for both themes */}
+          <div className="text-sm text-gray-600 dark:text-gray-400">
+            {result.memberCount} {result.memberCount === 1 ? "member" : "members"}
+            {(onlineCounts.get(result.id) ?? 0) > 0 &&
+              ` • ${onlineCounts.get(result.id) ?? 0} active`}
+          </div>
         </div>
       </div>
-    </div>
 
-    <div className="flex items-center gap-2">
-      {selectedRoom?.id === result.id && result.isMember && UUID_REGEX.test(result.id) ? (
-        <Button
-          size="sm"
-          variant="destructive"
-          onClick={handleLeaveRoom}
-          className="bg-red-600/10 text-red-500 hover:bg-red-600/20 hover:text-red-400"
-          disabled={isLeaving}
-        >
-          <LogOut className="h-4 w-4 mr-1" />
-          {isLeaving ? "Leaving..." : "Leave"}
-        </Button>
-      ) : result.isMember ? (
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() => router.push(`/rooms/${result.id}/settings`)}
-          className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300"
-        >
-          <Settings className="h-4 w-4" />
-        </Button>
-      ) : result.participationStatus === "pending" ? (
-        <span className="text-sm text-yellow-500 dark:text-yellow-400">
-          Pending
-        </span>
-      ) : (
-        <Button
-          size="sm"
-          onClick={() => handleJoinRoom(result.id)}
-          disabled={!user}
-          className="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20 hover:text-indigo-500 dark:hover:text-indigo-300"
-        >
-          Join
-        </Button>
-      )}
-    </div>
-  </li>
-);
-
+      <div className="flex items-center gap-2">
+        {selectedRoom?.id === result.id && result.isMember && UUID_REGEX.test(result.id) ? (
+          <Button
+            size="sm"
+            variant="destructive"
+            onClick={handleLeaveRoom}
+            className="bg-red-600/10 text-red-500 hover:bg-red-600/20 hover:text-red-400"
+            disabled={isLeaving}
+          >
+            <LogOut className="h-4 w-4 mr-1" />
+            {isLeaving ? "Leaving..." : "Leave"}
+          </Button>
+        ) : result.isMember ? (
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => router.push(`/rooms/${result.id}/settings`)}
+            className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300"
+          >
+            <Settings className="h-4 w-4" />
+          </Button>
+        ) : result.participationStatus === "pending" ? (
+          <span className="text-sm text-yellow-500 dark:text-yellow-400">
+            Pending
+          </span>
+        ) : (
+          <Button
+            size="sm"
+            onClick={() => handleJoinRoom(result.id)}
+            disabled={!user}
+            className="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20 hover:text-indigo-500 dark:hover:text-indigo-300"
+          >
+            Join
+          </Button>
+        )}
+      </div>
+    </li>
+  );
 
   return (
     <header className="h-[3.6em] lg:w-[50vw] w-[95vw] flex items-center justify-between px-[1.5vw] glass-gradient-header text-foreground bg-background z-10 dark:text-foreground dark:bg-background">
@@ -994,7 +961,7 @@ const renderRoomSearchResult = (result: RoomWithMembershipCount) => (
                                 <LockIcon className="h-3.5 w-3.5 text-muted-foreground" />
                               )}
                             </div>
-                            <p className="text-sm text-green-500">{room.activeUsers ?? 0} active</p>
+                            <p className="text-sm text-green-500">{onlineCounts.get(room.id) ?? 0} active</p>
                           </div>
                         </div>
 
@@ -1088,71 +1055,71 @@ const renderRoomSearchResult = (result: RoomWithMembershipCount) => (
               {/* Toggle buttons */}
               <div className="w-[100%] flex gap-1 mb-[1.2em]">
                 <Button
-    variant={searchType === "rooms" ? "default" : "outline"}
-    onClick={() => handleSearchByType("rooms")}
-    className={`${
-      searchType === "rooms"
-        ? "bg-violet-900 text-white hover:bg-violet-800"
-        : "bg-transparent border border-border hover:bg-accent text-black dark:text-white"
-    } rounded-lg transition-colors w-full`}
-  >
-    Rooms
-  </Button>
-  <Button
-    variant={searchType === "users" ? "default" : "outline"}
-    onClick={() => handleSearchByType("users")}
-    className={`${
-      searchType === "users"
-        ? "bg-violet-900 text-white hover:bg-violet-800"
-        : "bg-transparent border border-border hover:bg-accent text-black dark:text-white"
-    } rounded-lg transition-colors w-full`}
-  >
-    Users
-  </Button>
+                  variant={searchType === "rooms" ? "default" : "outline"}
+                  onClick={() => handleSearchByType("rooms")}
+                  className={`${
+                    searchType === "rooms"
+                      ? "bg-violet-900 text-white hover:bg-violet-800"
+                      : "bg-transparent border border-border hover:bg-accent text-black dark:text-white"
+                  } rounded-lg transition-colors w-full`}
+                >
+                  Rooms
+                </Button>
+                <Button
+                  variant={searchType === "users" ? "default" : "outline"}
+                  onClick={() => handleSearchByType("users")}
+                  className={`${
+                    searchType === "users"
+                      ? "bg-violet-900 text-white hover:bg-violet-800"
+                      : "bg-transparent border border-border hover:bg-accent text-black dark:text-white"
+                  } rounded-lg transition-colors w-full`}
+                >
+                  Users
+                </Button>
               </div>
 
               {/* Results */}
               {searchType === "users" && userResults.length > 0 && (
-                  <div className="mt-4">
-                    <h4 className="font-semibold text-[1em] text-muted-foreground mb-3">
-                      User Profiles
-                    </h4>
-                    <ul className="space-y-3 overflow-y-auto max-h-[440px] scrollbar-none lg:scrollbar-custom">
-                      {userResults.map((result) => (
-                        <li
-                          key={result.id}
-                          className="flex items-center justify-between p-2 rounded-lg hover:bg-accent transition-colors"
-                        >
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-10 w-10">
-                              {result.avatar_url ? (
-                                <AvatarImage
-                                  src={result.avatar_url}
-                                  alt={result.username || "Avatar"}
-                                  className="rounded-full"
-                                />
-                              ) : (
-                                <AvatarFallback className="bg-indigo-500 text-white rounded-full">
-                                  {result.username?.charAt(0).toUpperCase() ||
-                                    result.display_name?.charAt(0).toUpperCase() ||
-                                    "?"}
-                                </AvatarFallback>
-                              )}
-                            </Avatar>
-                            <div>
-                              <div className="text-xs text-muted-foreground">{result.username}</div>
-                              {/* ✅ Black in light, White in dark */}
-                              <div className="text-[1em] font-medium text-black dark:text-white">
-                                {result.display_name}
-                              </div>
+                <div className="mt-4">
+                  <h4 className="font-semibold text-[1em] text-muted-foreground mb-3">
+                    User Profiles
+                  </h4>
+                  <ul className="space-y-3 overflow-y-auto max-h-[440px] scrollbar-none lg:scrollbar-custom">
+                    {userResults.map((result) => (
+                      <li
+                        key={result.id}
+                        className="flex items-center justify-between p-2 rounded-lg hover:bg-accent transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-10 w-10">
+                            {result.avatar_url ? (
+                              <AvatarImage
+                                src={result.avatar_url}
+                                alt={result.username || "Avatar"}
+                                className="rounded-full"
+                              />
+                            ) : (
+                              <AvatarFallback className="bg-indigo-500 text-white rounded-full">
+                                {result.username?.charAt(0).toUpperCase() ||
+                                  result.display_name?.charAt(0).toUpperCase() ||
+                                  "?"}
+                              </AvatarFallback>
+                            )}
+                          </Avatar>
+                          <div>
+                            <div className="text-xs text-muted-foreground">{result.username}</div>
+                            {/* ✅ Black in light, White in dark */}
+                            <div className="text-[1em] font-medium text-black dark:text-white">
+                              {result.display_name}
                             </div>
                           </div>
-                          <UserIcon className="h-4 w-4 text-muted-foreground" />
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+                        </div>
+                        <UserIcon className="h-4 w-4 text-muted-foreground" />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
               {/* Rooms results */}
               {searchType === "rooms" && (
