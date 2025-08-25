@@ -44,8 +44,10 @@ export const useRoomPresence = (roomIds: string[]) => {
                     });
                 });
                 
-                // Update the count for this specific room
-                setOnlineCounts(prev => new Map(prev).set(channel.topic.split('_')[1], userIds.size));
+                // Update the count for this specific room, excluding the current user
+                const roomId = channel.topic.split('_')[1];
+                const otherUsersCount = Array.from(userIds).filter(userId => userId !== user.id).length;
+                setOnlineCounts(prev => new Map(prev).set(roomId, otherUsersCount));
             };
 
             channel
