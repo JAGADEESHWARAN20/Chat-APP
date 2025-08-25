@@ -156,10 +156,11 @@ export function EditAlert() {
   };
 
   return (
-     <Dialog
+    <Dialog
       open={actionType === "edit"}
       onOpenChange={(isOpen) => {
         if (!isOpen) {
+          // break any leftover focus from the portal
           if (document.activeElement instanceof HTMLElement) {
             document.activeElement.blur();
           }
@@ -171,7 +172,7 @@ export function EditAlert() {
       <DialogContent
         className="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 w-full"
         onOpenAutoFocus={(e: Event) => e.preventDefault()}
-        onCloseAutoFocus={() => {}}
+        onCloseAutoFocus={(e: Event) => e.preventDefault()}
       >
         <DialogHeader>
           <DialogTitle>Edit Message</DialogTitle>

@@ -18,23 +18,17 @@ export const RoomProvider = ({ children }: { children: React.ReactNode }) => {
   const joinRoom = (roomId: string) => {
     setPreviousRoom(currentRoom);
     setCurrentRoom(roomId);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("activeRoom", roomId);
-    }
+    localStorage.setItem("activeRoom", roomId);
   };
 
   const leaveRoom = () => {
     setCurrentRoom(null);
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("activeRoom");
-    }
+    localStorage.removeItem("activeRoom");
   };
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const cachedRoom = localStorage.getItem("activeRoom");
-      if (cachedRoom) setCurrentRoom(cachedRoom);
-    }
+    const cachedRoom = localStorage.getItem("activeRoom");
+    if (cachedRoom) setCurrentRoom(cachedRoom);
   }, []);
 
   return (
