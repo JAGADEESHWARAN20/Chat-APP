@@ -4,8 +4,15 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { ResponsiveToaster } from "@/components/ResponsiveToaster";
 import { RoomProvider } from "@/lib/store/RoomContext";
 import RoomInitializer from "@/lib/initialization/RoomInitializer";
+import type { Metadata } from "next";
 
-const space_Grotesk = Space_Grotesk({ subsets: ["latin"] });
+const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], variable: "--font-space" });
+
+export const metadata: Metadata = {
+  title: "FlychatApp",
+  description: "Secured chatting with Others",
+  icons: { icon: "/favicon.ico" },
+};
 
 export default function RootLayout({
   children,
@@ -14,8 +21,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head />
-      <body className={space_Grotesk.className}>
+      <body className={`${spaceGrotesk.variable} antialiased`}>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
@@ -23,6 +29,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <RoomProvider>
+            {/* client-only logic here */}
             <RoomInitializer />
             {children}
             <ResponsiveToaster />
