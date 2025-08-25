@@ -404,7 +404,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                                 <LockIcon className="h-3.5 w-3.5 text-muted-foreground" />
                               )}
                             </div>
-                            <p className="text-[.5em] px-[.02em] py-[.01em] text-green-800 dark:text-white bg-green-500/20 dark:bg-green-500 rounded-full">{onlineCounts.get(room.id) ?? 0} active</p>
+                            <p className="text-[.5em] px-[.02em] text-center py-[.01em] text-green-800 dark:text-white bg-green-500/20 dark:bg-green-500 rounded-full">{onlineCounts.get(room.id) ?? 0} active</p>
                           </div>
                         </div>
 
