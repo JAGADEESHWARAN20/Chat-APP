@@ -758,8 +758,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
           {/* ✅ Adjust member text colors for both themes */}
           <div className="text-sm text-gray-600 dark:text-gray-400">
             {result.memberCount} {result.memberCount === 1 ? "member" : "members"}
-            {(onlineCounts.get(result.id) ?? 0) > 0 &&
-              ` • ${onlineCounts.get(result.id) ?? 0} active`}
+            {(onlineCounts.get(result.id) ?? 0) > 0 }
           </div>
         </div>
       </div>
