@@ -240,12 +240,12 @@ export default function ListMessages() {
         onScroll={handleOnScroll}
       >
         {isLoading ? (
-          Array.from({ length: 10 }).map((_, index) => (
+          Array.from({ length: 18 }).map((_, index) => (
             <SkeletonMessage key={index} />
           ))
         ) : (
           <>
-            <div className="space-y-[.1em]">
+            <div className="space-y-[.5vw]">
               {filteredMessages && filteredMessages.length > 0 ? (
                 filteredMessages.map((value) => {
                   try {

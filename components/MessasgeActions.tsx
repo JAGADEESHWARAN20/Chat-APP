@@ -183,12 +183,12 @@ export function EditAlert() {
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
             Edit Message
           </h2>
-          <button
+          <Button
             onClick={handleCancel}
             className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
           >
             <X className="h-5 w-5" />
-          </button>
+          </Button>
         </div>
 
         <Input

@@ -24,10 +24,10 @@ export default function Message({ message }: { message: Imessage }) {
   }
 
   const isHighlighted = highlightedMessageId === message.id;
-  const highlightClass = isHighlighted ? "bg-yellow-200 dark:bg-yellow-800/30 border-l-4 border-yellow-500" : "";
+  const highlightClass = isHighlighted ? "bg-yellow-200 dark:bg-yellow-800/30 border-l-1 border-yellow-500 duration-100" : "duration-100";
 
   return (
-    <div id={`msg-${message.id}`} className={`flex gap-2 p-[.3em] ${highlightClass}`}>
+    <div id={`msg-${message.id}`} className={`flex gap-2 items-center p-[.3em] ${highlightClass}`}>
       <div className="flex-shrink-0">
         {message.profiles?.avatar_url ? (
           <Image
