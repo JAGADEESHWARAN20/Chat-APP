@@ -236,9 +236,9 @@
 
 
 .circle-mask {
-  position: fixed;
+  position: absolute;
   inset: 0;
-  z-index: 9999;
+  z-index: 0; /* stays behind Sheet content */
   pointer-events: none;
   background: var(--next-theme-bg);
   clip-path: circle(0 at var(--circle-x) var(--circle-y));

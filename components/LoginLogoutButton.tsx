@@ -40,6 +40,7 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
           </Button>
         </SheetTrigger>
         <SheetContent side="right" className="w-[300px]">
+          <div id="circle-mask" className="circle-mask"></div>
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               <Avatar className="h-8 w-8">
