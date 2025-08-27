@@ -17,7 +17,7 @@ import Link from "next/link";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import ThemeToggle from "./ThemeToggle";
 import { useTheme } from "next-themes";
-import { useState,useEffect } from "react";
+import { useState, useEffect } from "react";
 
 interface LoginLogoutButtonProps {
   user: SupabaseUser | undefined | null;
@@ -44,16 +44,13 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
     const btn = e.currentTarget;
     const rect = btn.getBoundingClientRect();
     const circle1 = document.createElement("div"); // Primary circle
-    const circle2 = document.createElement("div"); // Duplicate behind circle
 
     const x = rect.left + window.scrollX + rect.width / 2;
     const y = rect.top + window.scrollY + rect.height / 2;
 
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    const maxX = Math.max(x, vw - x);
-    const maxY = Math.max(y, vh - y);
-    const radius = Math.sqrt(maxX * maxX + maxY * maxY);
+    const maxRadius = Math.min(vw, vh) / 2; // Cap radius to half the smaller dimension
 
     circle1.className = "circle-effect-reveal";
     circle1.style.left = `${x}px`;
@@ -62,21 +59,15 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
     document.body.style.setProperty('--circle-x', `${x}px`);
     document.body.style.setProperty('--circle-y', `${y}px`);
 
-    circle2.className = "circle-effect-reveal duplicate";
-    circle2.style.left = `${x + 10}px`;
-    circle2.style.top = `${y + 10}px`;
-    circle2.style.width = circle2.style.height = "0px";
-
     const goingDark = !isDark;
 
-    // Append and animate circles first
-    document.body.appendChild(circle2);
+    // Append and animate circle
     document.body.appendChild(circle1);
 
     const animation1 = circle1.animate(
       [
         { width: "0px", height: "0px", transform: "translate(-50%, -50%) scale(0)" },
-        { width: `${radius * 2}px`, height: `${radius * 2}px`, transform: "translate(-50%, -50%) scale(1)" },
+        { width: `${maxRadius * 2}px`, height: `${maxRadius * 2}px`, transform: "translate(-50%, -50%) scale(1)" },
       ],
       {
         duration: 600,
@@ -85,8 +76,6 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
       }
     );
 
-   
-
     // Apply theme change after animation
     animation1.onfinish = () => {
       setTheme(goingDark ? "dark" : "light");
@@ -94,7 +83,6 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
       document.body.classList.toggle("light", !goingDark);
       setIsDark(goingDark);
       circle1.remove();
-      circle2.remove();
       document.body.style.removeProperty('--circle-x');
       document.body.style.removeProperty('--circle-y');
     };
