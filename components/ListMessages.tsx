@@ -7,7 +7,6 @@ import { DeleteAlert, EditAlert } from "./MessasgeActions";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { toast } from "sonner";
 import { ArrowDown } from "lucide-react";
-
 import { Database } from "@/lib/types/supabase";
 import { useRoomContext } from "@/lib/store/RoomContext";
 import TypingIndicator from "./TypingIndicator";
@@ -76,14 +75,14 @@ export default function ListMessages() {
             ...msg,
             profiles: msg.profiles
               ? {
-                id: msg.profiles.id,
-                avatar_url: msg.profiles.avatar_url || null,
-                display_name: msg.profiles.display_name || null,
-                username: msg.profiles.username || null,
-                created_at: msg.profiles.created_at || null,
-                bio: msg.profiles.bio || null,
-                updated_at: msg.profiles.updated_at || null,
-              }
+                  id: msg.profiles.id,
+                  avatar_url: msg.profiles.avatar_url || null,
+                  display_name: msg.profiles.display_name || null,
+                  username: msg.profiles.username || null,
+                  created_at: msg.profiles.created_at || null,
+                  bio: msg.profiles.bio || null,
+                  updated_at: msg.profiles.updated_at || null,
+                }
               : null,
           }));
           setMessages(formattedMessages);
@@ -161,9 +160,9 @@ export default function ListMessages() {
                     if (
                       scrollRef.current &&
                       scrollRef.current.scrollTop <
-                      scrollRef.current.scrollHeight -
-                      scrollRef.current.clientHeight -
-                      10
+                        scrollRef.current.scrollHeight -
+                          scrollRef.current.clientHeight -
+                          10
                     ) {
                       setNotification((prev) => prev + 1);
                     }
@@ -235,7 +234,7 @@ export default function ListMessages() {
         tabIndex={0}
         role="region"
         aria-label="Messages"
-        className="flex-1 flex flex-col p-1 h-auto overflow-y-auto outline-none"
+        className="flex-1 flex flex-col p-1 h-auto overflow-y-auto outline-none transparent-scrollbar-track"
         ref={scrollRef}
         onScroll={handleOnScroll}
       >
