@@ -1,3 +1,4 @@
+// LoginLogoutButton.tsx
 "use client";
 
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
@@ -31,7 +32,6 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
     router.push("/");
   };
 
-  
   if (user) {
     return (
       <Sheet>
@@ -40,7 +40,8 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
             <Menu className="h-5 w-5" />
           </Button>
         </SheetTrigger>
-        <SheetContent side="right" bg="glass" className="w-[300px]">
+        {/* The "bg" prop is not standard. Replaced with className to use Tailwind and custom glass styling. */}
+        <SheetContent side="right" className="w-[300px] glass-gradient-header">
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               <Avatar className="h-8 w-8">
@@ -76,7 +77,6 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
           </div>
         </SheetContent>
       </Sheet>
-   
     );
   }
 

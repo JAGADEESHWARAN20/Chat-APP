@@ -1,3 +1,4 @@
+// ThemeToggle.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -33,7 +34,6 @@ export default function ThemeToggle() {
     const circle = document.createElement("div");
 
     // Get the button's position relative to the entire viewport.
-    // This is crucial when the button is inside a container like a sheet.
     const x = rect.left + rect.width / 2;
     const y = rect.top + rect.height / 2;
 
@@ -51,16 +51,21 @@ export default function ThemeToggle() {
 
     const goingDark = !isDark;
     const root = document.documentElement;
+    // Get the background color of the next theme from the CSS variables
+    // and set the circle's background to match.
     const nextBg = getComputedStyle(root).getPropertyValue(
       goingDark ? "--background-dark" : "--background-light"
     );
     circle.style.background = `hsl(${nextBg.trim()})`;
 
     // Append the circle to the document's body.
-    // This places it outside the sheet's DOM context.
     document.body.appendChild(circle);
 
-    // Start the animation
+    // Immediately toggle the theme. This updates all CSS variables
+    // at the same time the animation starts.
+    setTheme(goingDark ? "dark" : "light");
+
+    // Start the animation.
     circle.animate(
       [
         { transform: "translate(-50%, -50%) scale(0)" },
@@ -73,10 +78,7 @@ export default function ThemeToggle() {
       }
     );
 
-    // Immediately toggle the theme.
-    setTheme(goingDark ? "dark" : "light");
-
-    // Clean up the circle element after the animation is complete
+    // Clean up the circle element after the animation is complete.
     setTimeout(() => {
       circle.remove();
     }, 650);
