@@ -24,7 +24,7 @@ export default function Message({ message }: { message: Imessage }) {
   }
 
   const isHighlighted = highlightedMessageId === message.id;
-  const highlightClass = isHighlighted ? "bg-yellow-200 dark:bg-yellow-800/30 border-l-1 border-yellow-500 duration-100" : "duration-100";
+  const highlightClass = isHighlighted ? "bg-slate-800 dark:bg-slate-300/40 border-l-[.5vw] border-slate-900 dark:border-white duration-100" : "duration-100";
 
   return (
     <div id={`msg-${message.id}`} className={`flex gap-2 items-center p-[.3em] ${highlightClass}`}>

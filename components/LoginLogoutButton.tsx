@@ -16,8 +16,9 @@ import {
 import Link from "next/link";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import ThemeToggle from "./ThemeToggle";
-import { useTheme } from "next-themes"; // Added missing imports
+import { useTheme } from "next-themes";
 import { useState,useEffect } from "react";
+
 interface LoginLogoutButtonProps {
   user: SupabaseUser | undefined | null;
 }
@@ -27,6 +28,7 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
   const supabase = createClientComponentClient<Database>();
   const { setTheme, resolvedTheme } = useTheme();
   const [isDark, setIsDark] = useState(false);
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
 
   useEffect(() => {
     setIsDark(resolvedTheme === "dark");
@@ -38,89 +40,85 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
     router.push("/");
   };
 
- const handleToggle = (e: React.MouseEvent<HTMLButtonElement>) => {
-  const btn = e.currentTarget;
-  const rect = btn.getBoundingClientRect();
-  const circle1 = document.createElement("div"); // Primary circle
-  const circle2 = document.createElement("div"); // Duplicate behind circle
+  const handleToggle = (e: React.MouseEvent<HTMLButtonElement>) => {
+    const btn = e.currentTarget;
+    const rect = btn.getBoundingClientRect();
+    const circle1 = document.createElement("div"); // Primary circle
+    const circle2 = document.createElement("div"); // Duplicate behind circle
 
-  // Get the button's position relative to the viewport, adjusted for sheet context
-  const x = rect.left + window.scrollX + rect.width / 2;
-  const y = rect.top + window.scrollY + rect.height / 2;
+    const x = rect.left + window.scrollX + rect.width / 2;
+    const y = rect.top + window.scrollY + rect.height / 2;
 
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
-  const maxX = Math.max(x, vw - x);
-  const maxY = Math.max(y, vh - y);
-  const radius = Math.sqrt(maxX * maxX + maxY * maxY);
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const maxX = Math.max(x, vw - x);
+    const maxY = Math.max(y, vh - y);
+    const radius = Math.sqrt(maxX * maxX + maxY * maxY);
 
-  // Set properties for primary circle
-  circle1.className = "circle-effect-reveal";
-  circle1.style.left = `${x}px`;
-  circle1.style.top = `${y}px`;
-  circle1.style.width = circle1.style.height = "0px";
-  document.body.style.setProperty('--circle-x', `${x}px`);
-  document.body.style.setProperty('--circle-y', `${y}px`);
+    circle1.className = "circle-effect-reveal";
+    circle1.style.left = `${x}px`;
+    circle1.style.top = `${y}px`;
+    circle1.style.width = circle1.style.height = "0px";
+    document.body.style.setProperty('--circle-x', `${x}px`);
+    document.body.style.setProperty('--circle-y', `${y}px`);
 
-  // Set properties for duplicate circle (behind, with slight offset and lower opacity)
-  circle2.className = "circle-effect-reveal duplicate";
-  circle2.style.left = `${x + 10}px`; // Slight offset for visual effect
-  circle2.style.top = `${y + 10}px`;
-  circle2.style.width = circle2.style.height = "0px";
+    circle2.className = "circle-effect-reveal duplicate";
+    circle2.style.left = `${x + 10}px`;
+    circle2.style.top = `${y + 10}px`;
+    circle2.style.width = circle2.style.height = "0px";
 
-  const goingDark = !isDark;
-  setTheme(goingDark ? "dark" : "light");
-  document.body.classList.toggle("dark", goingDark);
-  document.body.classList.toggle("light", !goingDark);
-  setIsDark(goingDark);
+    const goingDark = !isDark;
 
-  // Append both circles to trigger the reveal effect
-  document.body.appendChild(circle2); // Duplicate behind first
-  document.body.appendChild(circle1); // Primary on top
+    // Append and animate circles first
+    document.body.appendChild(circle2);
+    document.body.appendChild(circle1);
 
-  // Animate both circles to grow to the full radius
-  const animation1 = circle1.animate(
-    [
-      { width: "0px", height: "0px", transform: "translate(-50%, -50%) scale(0)" },
-      { width: `${radius * 2}px`, height: `${radius * 2}px`, transform: "translate(-50%, -50%) scale(1)" },
-    ],
-    {
-      duration: 600,
-      easing: "ease-in-out",
-      fill: "forwards",
-    }
-  );
+    const animation1 = circle1.animate(
+      [
+        { width: "0px", height: "0px", transform: "translate(-50%, -50%) scale(0)" },
+        { width: `${radius * 2}px`, height: `${radius * 2}px`, transform: "translate(-50%, -50%) scale(1)" },
+      ],
+      {
+        duration: 600,
+        easing: "ease-in-out",
+        fill: "forwards",
+      }
+    );
 
-  const animation2 = circle2.animate(
-    [
-      { width: "0px", height: "0px", transform: "translate(-50%, -50%) scale(0)" },
-      { width: `${radius * 2}px`, height: `${radius * 2}px`, transform: "translate(-50%, -50%) scale(1)" },
-    ],
-    {
-      duration: 600,
-      easing: "ease-in-out",
-      fill: "forwards",
-    }
-  );
+    const animation2 = circle2.animate(
+      [
+        { width: "0px", height: "0px", transform: "translate(-50%, -50%) scale(0)" },
+        { width: `${radius * 2}px`, height: `${radius * 2}px`, transform: "translate(-50%, -50%) scale(1)" },
+      ],
+      {
+        duration: 600,
+        easing: "ease-in-out",
+        fill: "forwards",
+      }
+    );
 
-  // Clean up both circles after animation
-  animation1.onfinish = () => {
-    circle1.remove();
-    circle2.remove();
-    document.body.style.removeProperty('--circle-x');
-    document.body.style.removeProperty('--circle-y');
+    // Apply theme change after animation
+    animation1.onfinish = () => {
+      setTheme(goingDark ? "dark" : "light");
+      document.body.classList.toggle("dark", goingDark);
+      document.body.classList.toggle("light", !goingDark);
+      setIsDark(goingDark);
+      circle1.remove();
+      circle2.remove();
+      document.body.style.removeProperty('--circle-x');
+      document.body.style.removeProperty('--circle-y');
+    };
   };
-};
 
   if (user) {
     return (
-      <Sheet>
+      <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
         <SheetTrigger asChild>
           <Button variant="ghost" size="icon">
             <Menu className="h-5 w-5" />
           </Button>
         </SheetTrigger>
-        <SheetContent side="right" className="w-[300px] z-[1001]">
+        <SheetContent side="right" className="w-[300px]">
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               <Avatar className="h-8 w-8">
