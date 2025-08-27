@@ -64,6 +64,7 @@
 @layer base {
   * {
     @apply border-border;
+    transition: background-color 0.6s ease-in-out, color 0.6s ease-in-out;
   }
   
   body {
@@ -82,6 +83,18 @@
   pointer-events: none;
   will-change: transform;
   transition: transform 600ms ease-in-out; /* Match JS animation duration */
+}
+
+/* Overlay for theme transition effect */
+.theme-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 999; /* Below circle, above content */
+  pointer-events: none;
+  transition: background-color 0.6s ease-in-out;
 }
 
 /* All other utility classes remain the same */

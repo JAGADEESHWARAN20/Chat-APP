@@ -31,6 +31,7 @@ export default function ThemeToggle() {
     const btn = e.currentTarget;
     const rect = btn.getBoundingClientRect();
     const circle = document.createElement("div");
+    const overlay = document.createElement("div");
 
     // Get the button's position relative to the viewport
     const x = rect.left + rect.width / 2;
@@ -42,32 +43,36 @@ export default function ThemeToggle() {
     const maxY = Math.max(y, vh - y);
     const radius = Math.sqrt(maxX * maxX + maxY * maxY);
 
-    // Set circle properties
+    // Circle setup
     circle.className = "circle-effect-reveal";
     circle.style.left = `${x}px`;
     circle.style.top = `${y}px`;
     circle.style.width = circle.style.height = `${radius * 2}px`;
 
+    // Overlay to handle the reveal effect
+    overlay.className = "theme-overlay";
+    document.body.appendChild(overlay);
+
     const goingDark = !isDark;
     const root = document.documentElement;
-    // Get the background color of the next theme
+    const currentBg = getComputedStyle(root).getPropertyValue("--background").trim();
     const nextBg = getComputedStyle(root).getPropertyValue(
       goingDark ? "--background-dark" : "--background-light"
-    );
-    circle.style.background = `hsl(${nextBg.trim()})`;
+    ).trim();
+    const currentFg = getComputedStyle(root).getPropertyValue("--foreground").trim();
+    const nextFg = getComputedStyle(root).getPropertyValue(
+      goingDark ? "--foreground-dark" : "--foreground-dark"
+    ).trim();
 
-    // Append the circle to the document's body
+    // Set initial overlay styles
+    overlay.style.background = `hsl(${currentBg})`;
+    document.body.style.transition = "none"; // Disable body transition temporarily
+
+    // Append circle after setting up overlay
     document.body.appendChild(circle);
 
-    // Add class to body to trigger full UI theme change
-    document.body.classList.toggle("dark", goingDark);
-    document.body.classList.toggle("light", !goingDark);
-
-    // Toggle theme via useTheme
-    setTheme(goingDark ? "dark" : "light");
-
-    // Start the animation
-    circle.animate(
+    // Animate circle and overlay together
+    const animation = circle.animate(
       [
         { transform: "translate(-50%, -50%) scale(0)" },
         { transform: "translate(-50%, -50%) scale(1)" },
@@ -79,7 +84,16 @@ export default function ThemeToggle() {
       }
     );
 
-    // Clean up the circle element after the animation
+    // Synchronize theme change with animation
+    animation.onfinish = () => {
+      setTheme(goingDark ? "dark" : "light");
+      document.body.classList.toggle("dark", goingDark);
+      document.body.classList.toggle("light", !goingDark);
+      overlay.remove();
+      document.body.style.transition = "background-color 0.6s ease-in-out, color 0.6s ease-in-out";
+    };
+
+    // Clean up circle
     setTimeout(() => {
       circle.remove();
     }, 650);
