@@ -38,58 +38,79 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
     router.push("/");
   };
 
-  const handleToggle = (e: React.MouseEvent<HTMLButtonElement>) => {
-    const btn = e.currentTarget;
-    const rect = btn.getBoundingClientRect();
-    const circle = document.createElement("div");
+ const handleToggle = (e: React.MouseEvent<HTMLButtonElement>) => {
+  const btn = e.currentTarget;
+  const rect = btn.getBoundingClientRect();
+  const circle1 = document.createElement("div"); // Primary circle
+  const circle2 = document.createElement("div"); // Duplicate behind circle
 
-    // Get the button's position relative to the viewport, adjusted for sheet context
-    const x = rect.left + window.scrollX + rect.width / 2; // Adjust for scroll and centering
-    const y = rect.top + window.scrollY + rect.height / 2; // Adjust for scroll and centering
+  // Get the button's position relative to the viewport, adjusted for sheet context
+  const x = rect.left + window.scrollX + rect.width / 2;
+  const y = rect.top + window.scrollY + rect.height / 2;
 
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const maxX = Math.max(x, vw - x);
-    const maxY = Math.max(y, vh - y);
-    const radius = Math.sqrt(maxX * maxX + maxY * maxY);
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const maxX = Math.max(x, vw - x);
+  const maxY = Math.max(y, vh - y);
+  const radius = Math.sqrt(maxX * maxX + maxY * maxY);
 
-    // Set circle properties
-    circle.className = "circle-effect-reveal";
-    circle.style.left = `${x}px`;
-    circle.style.top = `${y}px`;
-    circle.style.width = circle.style.height = "0px";
-    document.body.style.setProperty('--circle-x', `${x}px`);
-    document.body.style.setProperty('--circle-y', `${y}px`);
+  // Set properties for primary circle
+  circle1.className = "circle-effect-reveal";
+  circle1.style.left = `${x}px`;
+  circle1.style.top = `${y}px`;
+  circle1.style.width = circle1.style.height = "0px";
+  document.body.style.setProperty('--circle-x', `${x}px`);
+  document.body.style.setProperty('--circle-y', `${y}px`);
 
-    const goingDark = !isDark;
-    setTheme(goingDark ? "dark" : "light");
-    document.body.classList.toggle("dark", goingDark);
-    document.body.classList.toggle("light", !goingDark);
-    setIsDark(goingDark);
+  // Set properties for duplicate circle (behind, with slight offset and lower opacity)
+  circle2.className = "circle-effect-reveal duplicate";
+  circle2.style.left = `${x + 10}px`; // Slight offset for visual effect
+  circle2.style.top = `${y + 10}px`;
+  circle2.style.width = circle2.style.height = "0px";
 
-    // Append circle to trigger the reveal effect
-    document.body.appendChild(circle);
+  const goingDark = !isDark;
+  setTheme(goingDark ? "dark" : "light");
+  document.body.classList.toggle("dark", goingDark);
+  document.body.classList.toggle("light", !goingDark);
+  setIsDark(goingDark);
 
-    // Animate the circle to grow to the full radius
-    const animation = circle.animate(
-      [
-        { width: "0px", height: "0px", transform: "translate(-50%, -50%) scale(0)" },
-        { width: `${radius * 2}px`, height: `${radius * 2}px`, transform: "translate(-50%, -50%) scale(1)" },
-      ],
-      {
-        duration: 600,
-        easing: "ease-in-out",
-        fill: "forwards",
-      }
-    );
+  // Append both circles to trigger the reveal effect
+  document.body.appendChild(circle2); // Duplicate behind first
+  document.body.appendChild(circle1); // Primary on top
 
-    // Clean up circle after animation
-    animation.onfinish = () => {
-      circle.remove();
-      document.body.style.removeProperty('--circle-x');
-      document.body.style.removeProperty('--circle-y');
-    };
+  // Animate both circles to grow to the full radius
+  const animation1 = circle1.animate(
+    [
+      { width: "0px", height: "0px", transform: "translate(-50%, -50%) scale(0)" },
+      { width: `${radius * 2}px`, height: `${radius * 2}px`, transform: "translate(-50%, -50%) scale(1)" },
+    ],
+    {
+      duration: 600,
+      easing: "ease-in-out",
+      fill: "forwards",
+    }
+  );
+
+  const animation2 = circle2.animate(
+    [
+      { width: "0px", height: "0px", transform: "translate(-50%, -50%) scale(0)" },
+      { width: `${radius * 2}px`, height: `${radius * 2}px`, transform: "translate(-50%, -50%) scale(1)" },
+    ],
+    {
+      duration: 600,
+      easing: "ease-in-out",
+      fill: "forwards",
+    }
+  );
+
+  // Clean up both circles after animation
+  animation1.onfinish = () => {
+    circle1.remove();
+    circle2.remove();
+    document.body.style.removeProperty('--circle-x');
+    document.body.style.removeProperty('--circle-y');
   };
+};
 
   if (user) {
     return (
@@ -99,7 +120,7 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
             <Menu className="h-5 w-5" />
           </Button>
         </SheetTrigger>
-        <SheetContent side="right" className="w-[300px]">
+        <SheetContent side="right" className="w-[300px] z-[1001]">
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               <Avatar className="h-8 w-8">
