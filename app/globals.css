@@ -235,12 +235,12 @@
 }
 
 
-.circle-effect {
+.circle-mask {
   position: fixed;
-  border-radius: 50%;
-  transform: scale(0);
-  z-index: 9999; /* 🔥 stays above sheet and content */
+  inset: 0;
+  z-index: 9999;
   pointer-events: none;
-  will-change: transform;
+  background: var(--next-theme-bg);
+  clip-path: circle(0 at var(--circle-x) var(--circle-y));
+  transition: clip-path 0.7s ease-in-out;
 }
-
