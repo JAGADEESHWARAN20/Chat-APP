@@ -17,6 +17,7 @@ html.transitioning::before {
   pointer-events: none;
 }
 
+
 @layer base {
   :root {
   --background: 0 0% 100%;
@@ -249,22 +250,4 @@ html.transitioning::before {
     linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
-}
-
-.circle-effect {
-  position: fixed;
-  border-radius: 50%;
-  z-index: 9999; /* stays above sheet + everything */
-  pointer-events: none;
-  transform: translate(-50%, -50%) scale(0);
-  will-change: transform;
-}
-
-.theme-overlay {
-  position: fixed;
-  inset: 0;
-  background: transparent; /* 🔥 no solid background */
-  z-index: 9998;
-  opacity: 0;
-  pointer-events: none;
 }
