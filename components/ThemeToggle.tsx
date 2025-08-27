@@ -37,13 +37,17 @@ export default function ThemeToggle() {
     circle.style.width = circle.style.height = `${radius * 2}px`;
     circle.style.background = isDark ? "#fff" : "#000"; // contrast color
     circle.style.transform = "translate(-50%, -50%) scale(0)";
+    circle.style.position = "fixed";
+    circle.style.borderRadius = "50%";
+    circle.style.pointerEvents = "none";
+    circle.style.zIndex = "9999"; // ensure above all
     document.body.appendChild(circle);
 
     // Animate it
-    circle.animate(
+    const anim = circle.animate(
       [
-        { transform: "translate(-50%, -50%) scale(0)" },
-        { transform: "translate(-50%, -50%) scale(1)" },
+        { transform: "translate(-50%, -50%) scale(0)", opacity: 0.8 },
+        { transform: "translate(-50%, -50%) scale(1)", opacity: 1 },
       ],
       {
         duration: 600,
@@ -52,11 +56,15 @@ export default function ThemeToggle() {
       }
     );
 
-    // Switch theme only at the end
+    // Switch theme **during** animation, not after
     setTimeout(() => {
       setTheme(isDark ? "light" : "dark");
+    }, 200); // small delay so effect feels synced
+
+    // Cleanup after animation
+    anim.onfinish = () => {
       circle.remove();
-    }, 600);
+    };
   };
 
   return (
