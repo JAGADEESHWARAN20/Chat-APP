@@ -33,7 +33,7 @@ const PopoverContent = React.forwardRef<
           <div className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm" />
         )}
 
-        <PopoverPrimitive.Content
+          <PopoverPrimitive.Content
           ref={ref}
           align={align}
           sideOffset={sideOffset}
