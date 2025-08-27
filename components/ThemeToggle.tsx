@@ -6,7 +6,7 @@ import { Sun, Moon } from "lucide-react";
 import { Button } from "./ui/button";
 
 export default function ThemeToggle() {
-  const { theme, setTheme, resolvedTheme } = useTheme();
+  const { setTheme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => setMounted(true), []);
@@ -19,38 +19,52 @@ export default function ThemeToggle() {
     const rect = btn.getBoundingClientRect();
     const circle = document.createElement("div");
 
-    circle.classList.add("circle-effect");
-    circle.style.left = `${rect.left + rect.width / 2}px`;
-    circle.style.top = `${rect.top + rect.height / 2}px`;
-    circle.style.width = "200vmax";
-    circle.style.height = "200vmax";
-    circle.style.marginLeft = "-100vmax";
-    circle.style.marginTop = "-100vmax";
+    // Where the toggle button is
+    const x = rect.left + rect.width / 2;
+    const y = rect.top + rect.height / 2;
 
-    // Circle bg = next theme
+    // Expanding radius = distance to farthest corner
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const maxX = Math.max(x, vw - x);
+    const maxY = Math.max(y, vh - y);
+    const radius = Math.sqrt(maxX * maxX + maxY * maxY);
+
+    // Going dark or light
     const goingDark = !isDark;
-// NEW: use your CSS variables
-const root = document.documentElement;
-const nextBg = goingDark
-  ? getComputedStyle(root).getPropertyValue("--background-dark") || "hsl(224 71.4% 4.1%)"
-  : getComputedStyle(root).getPropertyValue("--background") || "hsl(0 0% 100%)";
+    const root = document.documentElement;
+    const nextBg = goingDark
+      ? getComputedStyle(root).getPropertyValue("--background-dark")
+      : getComputedStyle(root).getPropertyValue("--background-light");
+    const nextText = goingDark
+      ? getComputedStyle(root).getPropertyValue("--foreground-dark")
+      : getComputedStyle(root).getPropertyValue("--foreground-light");
 
-circle.style.background = `hsl(${nextBg.trim()})`;
+    // Style circle
+    circle.classList.add("circle-effect");
+    circle.style.left = `${x}px`;
+    circle.style.top = `${y}px`;
+    circle.style.width = circle.style.height = `${radius * 2}px`;
+    circle.style.background = `hsl(${nextBg.trim()})`;
+    circle.style.transform = "translate(-50%, -50%) scale(0)";
 
     document.body.appendChild(circle);
 
-    // Animate expansion
+    // Animate circle expansion
     circle.animate(
-      [{ transform: "scale(0)" }, { transform: "scale(1)" }],
-      { duration: 700, easing: "ease-in-out", fill: "forwards" }
+      [
+        { transform: "translate(-50%, -50%) scale(0)" },
+        { transform: "translate(-50%, -50%) scale(1)" },
+      ],
+      {
+        duration: 700,
+        easing: "ease-in-out",
+        fill: "forwards",
+      }
     );
 
-    // Immediately adjust text color during transition
-      document.documentElement.style.setProperty(
-      "--text-color",
-      goingDark ? "hsl(210 20% 98%)" : "hsl(224 71.4% 4.1%)"
-    );
-
+    // 🔥 Update text color immediately along the way
+    document.documentElement.style.setProperty("--text-color", `hsl(${nextText.trim()})`);
 
     setTimeout(() => {
       setTheme(goingDark ? "dark" : "light");

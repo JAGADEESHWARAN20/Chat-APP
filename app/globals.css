@@ -239,6 +239,8 @@
   position: fixed;
   border-radius: 50%;
   transform: scale(0);
-  z-index: 0; /* stays behind your chat content */
+  z-index: 9999; /* 🔥 stays above sheet and content */
   pointer-events: none;
+  will-change: transform;
 }
+
