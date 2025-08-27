@@ -17,14 +17,14 @@ export default function ThemeToggle() {
   const handleToggle = (e: React.MouseEvent<HTMLButtonElement>) => {
     const btn = e.currentTarget;
     const rect = btn.getBoundingClientRect();
+
+    // circle & overlay
     const circle = document.createElement("div");
     const overlay = document.createElement("div");
 
-    // Button center
     const x = rect.left + rect.width / 2;
     const y = rect.top + rect.height / 2;
 
-    // Circle radius
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const maxX = Math.max(x, vw - x);
@@ -33,6 +33,8 @@ export default function ThemeToggle() {
 
     const goingDark = !isDark;
     const root = document.documentElement;
+
+    // Grab the *next theme background*
     const nextBg = goingDark
       ? getComputedStyle(root).getPropertyValue("--background-dark")
       : getComputedStyle(root).getPropertyValue("--background-light");
@@ -47,42 +49,37 @@ export default function ThemeToggle() {
     // Overlay setup
     overlay.classList.add("theme-overlay");
 
-    // Append to body
     document.body.appendChild(overlay);
     document.body.appendChild(circle);
 
-    // Circle expand
+    // Animate circle expansion
     circle.animate(
       [
         { transform: "translate(-50%, -50%) scale(0)" },
         { transform: "translate(-50%, -50%) scale(1)" },
       ],
-      {
-        duration: 700,
-        easing: "ease-in-out",
-        fill: "forwards",
-      }
+      { duration: 700, easing: "ease-in-out", fill: "forwards" }
     );
 
-    // Overlay fade in
-    overlay.animate([{ opacity: 0 }, { opacity: 1 }], {
+    // Fade overlay in slightly (to soften transition)
+    overlay.animate([{ opacity: 0 }, { opacity: 0.4 }], {
       duration: 700,
       easing: "ease-in-out",
       fill: "forwards",
     });
 
-    // Switch theme mid-animation
+    // Switch theme after circle expansion
     setTimeout(() => {
       setTheme(goingDark ? "dark" : "light");
 
       // Fade overlay back out
-      overlay.animate([{ opacity: 1 }, { opacity: 0 }], {
+      overlay.animate([{ opacity: 0.4 }, { opacity: 0 }], {
         duration: 500,
         easing: "ease-in-out",
         fill: "forwards",
       });
 
-      // Cleanup after fade-out
+      // Cleanup
       setTimeout(() => {
         circle.remove();
         overlay.remove();

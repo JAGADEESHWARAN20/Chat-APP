@@ -234,21 +234,20 @@
   mask-composite: exclude;
 }
 
-
 .circle-effect {
   position: fixed;
   border-radius: 50%;
-  transform: scale(0);
-  z-index: 1;
+  z-index: 9999; /* stays above sheet + everything */
   pointer-events: none;
+  transform: translate(-50%, -50%) scale(0);
   will-change: transform;
 }
 
 .theme-overlay {
   position: fixed;
   inset: 0;
-  background: var(--background);
-  z-index: 1;
+  background: transparent; /* 🔥 no solid background */
+  z-index: 9998;
   opacity: 0;
   pointer-events: none;
 }
