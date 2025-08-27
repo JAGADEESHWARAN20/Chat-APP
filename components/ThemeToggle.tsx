@@ -46,7 +46,6 @@ export default function ThemeToggle() {
   circle.className = "circle-effect-reveal";
   circle.style.left = `${x}px`;
   circle.style.top = `${y}px`;
-  // Initial size is 0, will scale to cover the radius
   circle.style.width = circle.style.height = "0px";
   document.body.style.setProperty('--circle-x', `${x}px`);
   document.body.style.setProperty('--circle-y', `${y}px`);
@@ -62,14 +61,14 @@ export default function ThemeToggle() {
   // Append circle to trigger the reveal effect
   document.body.appendChild(circle);
 
-  // Animate the circle to grow to the full radius
+  // Animate the circle to grow with a slower transition
   const animation = circle.animate(
     [
       { width: "0px", height: "0px", transform: "translate(-50%, -50%) scale(0)" },
       { width: `${radius * 2}px`, height: `${radius * 2}px`, transform: "translate(-50%, -50%) scale(1)" },
     ],
     {
-      duration: 600,
+      duration: 1200, // Slowed down to 1200ms for a gradual effect
       easing: "ease-in-out",
       fill: "forwards",
     }
@@ -82,7 +81,6 @@ export default function ThemeToggle() {
     document.body.style.removeProperty('--circle-y');
   };
 };
-
   return (
     <Button
       variant="ghost"
