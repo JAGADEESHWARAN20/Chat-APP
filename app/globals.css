@@ -73,6 +73,7 @@
   z-index: -1; /* For the "reveal" method */
   pointer-events: none;
   will-change: transform;
+  transition: transform 600ms ease-in-out; /* Added transition for transform */
 }
 
 /* All other utility classes remain the same */
@@ -235,7 +236,7 @@
 /* Apply to any scrollable element */
 .transparent-scrollbar-track {
   scrollbar-width: thin; /* Firefox */
-  scrollbar-color: hsl(var(--foreground)) transparent; /* thumb color / track color */
+  scrollbar-color: hsl(var(--foreground)) transparent; /* Thumb uses foreground color */
 }
 
 .transparent-scrollbar-track::-webkit-scrollbar {
@@ -247,7 +248,11 @@
 }
 
 .transparent-scrollbar-track::-webkit-scrollbar-thumb {
-  background-color: hsl(var(--foreground)); /* Thumb color */
+  background-color: hsl(var(--foreground)); /* Thumb uses foreground color */
   border-radius: 9999px; /* Rounded thumb */
   border: 2px solid transparent; /* Optional: adds padding around thumb */
+}
+
+.transparent-scrollbar-track::-webkit-scrollbar-button {
+  background-color: hsl(var(--muted-foreground)); /* Arrows use muted-foreground color */
 }
