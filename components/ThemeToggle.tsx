@@ -32,6 +32,8 @@ export default function ThemeToggle() {
     const rect = btn.getBoundingClientRect();
     const circle = document.createElement("div");
 
+    // Get the button's position relative to the entire viewport.
+    // This is crucial when the button is inside a container like a sheet.
     const x = rect.left + rect.width / 2;
     const y = rect.top + rect.height / 2;
 
@@ -41,12 +43,12 @@ export default function ThemeToggle() {
     const maxY = Math.max(y, vh - y);
     const radius = Math.sqrt(maxX * maxX + maxY * maxY);
 
-    circle.className = "circle-effect-reveal"; // A new class for the reveal effect
+    // This class sets position: fixed, ensuring it's relative to the viewport.
+    circle.className = "circle-effect-reveal";
     circle.style.left = `${x}px`;
     circle.style.top = `${y}px`;
     circle.style.width = circle.style.height = `${radius * 2}px`;
-    
-    // Set the background color to the next theme
+
     const goingDark = !isDark;
     const root = document.documentElement;
     const nextBg = getComputedStyle(root).getPropertyValue(
@@ -54,7 +56,8 @@ export default function ThemeToggle() {
     );
     circle.style.background = `hsl(${nextBg.trim()})`;
 
-    // Append the circle to the body
+    // Append the circle to the document's body.
+    // This places it outside the sheet's DOM context.
     document.body.appendChild(circle);
 
     // Start the animation
@@ -70,7 +73,7 @@ export default function ThemeToggle() {
       }
     );
 
-    // Immediately toggle the theme. The CSS transition will handle the color change.
+    // Immediately toggle the theme.
     setTheme(goingDark ? "dark" : "light");
 
     // Clean up the circle element after the animation is complete
