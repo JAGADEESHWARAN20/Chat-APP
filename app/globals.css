@@ -246,5 +246,5 @@
   pointer-events: none;
   will-change: transform;
   background: var(--circle-bg);
-  opacity: 80%;
+  opacity: 20%;
 }
