@@ -233,3 +233,12 @@
   -webkit-mask-composite: xor;
   mask-composite: exclude;
 }
+
+
+.circle-effect {
+  position: fixed;
+  border-radius: 50%;
+  transform: scale(0);
+  z-index: 0; /* stays behind your chat content */
+  pointer-events: none;
+}
