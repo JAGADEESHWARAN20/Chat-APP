@@ -55,11 +55,12 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
     const x = rect.left - containerRect.left + rect.width / 2;
     const y = rect.top - containerRect.top + rect.height / 2;
 
+    // Use container dimensions for animation bounds
     const vw = containerRect.width;
     const vh = containerRect.height;
-    const maxX = Math.max(x, vw - x);
-    const maxY = Math.max(y, vh - y);
-    const radius = Math.sqrt(maxX * maxX + maxY * maxY);
+    const maxX = Math.min(x, vw - x); // Cap maxX to container width
+    const maxY = Math.min(y, vh - y); // Cap maxY to container height
+    const radius = Math.sqrt(maxX * maxX + maxY * maxY); // Adjusted radius
 
     circle1.className = "circle-effect-reveal";
     circle1.style.left = `${x}px`;
@@ -101,8 +102,8 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
       }
     );
 
-    // Apply theme change after animation
-    animation1.onfinish = () => {
+    // Apply theme change and cleanup after animation
+    animation1.onfinish = animation2.onfinish = () => {
       setTheme(goingDark ? "dark" : "light");
       document.body.classList.toggle("dark", goingDark);
       document.body.classList.toggle("light", !goingDark);
@@ -114,7 +115,7 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
 
   if (user) {
     return (
-      <div ref={animationContainerRef} style={{ position: "relative", overflow: "hidden", width: "100vw", height: "100vh" }}>
+      <div ref={animationContainerRef} style={{ position: "relative", overflow: "hidden", width: "100%", height: "100%" }}>
         <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
           <SheetTrigger asChild>
             <Button variant="ghost" size="icon">
