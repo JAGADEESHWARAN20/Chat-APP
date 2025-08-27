@@ -8,62 +8,85 @@ import { Button } from "./ui/button";
 export default function ThemeToggle() {
   const { setTheme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  const [clickCount, setClickCount] = useState(0); // 👈 track clicks
 
   useEffect(() => setMounted(true), []);
   if (!mounted) return null;
 
   const isDark = resolvedTheme === "dark";
 
- const handleToggle = (e: React.MouseEvent<HTMLButtonElement>) => {
-  const btn = e.currentTarget;
-  const rect = btn.getBoundingClientRect();
-  const circle = document.createElement("div");
+  const handleToggle = (e: React.MouseEvent<HTMLButtonElement>) => {
+    setClickCount((prev) => prev + 1); // 👈 increment clicks
 
-  const x = rect.left + rect.width / 2;
-  const y = rect.top + rect.height / 2;
+    const btn = e.currentTarget;
+    const rect = btn.getBoundingClientRect();
+    const circle = document.createElement("div");
 
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
-  const maxX = Math.max(x, vw - x);
-  const maxY = Math.max(y, vh - y);
-  const radius = Math.sqrt(maxX * maxX + maxY * maxY);
+    const x = rect.left + rect.width / 2;
+    const y = rect.top + rect.height / 2;
 
-  circle.className = "circle-effect";
-  circle.style.left = `${x}px`;
-  circle.style.top = `${y}px`;
-  circle.style.width = circle.style.height = `${radius * 2}px`;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const maxX = Math.max(x, vw - x);
+    const maxY = Math.max(y, vh - y);
+    const radius = Math.sqrt(maxX * maxX + maxY * maxY);
 
-  // ✅ Fix: use *next* theme background
-  const goingDark = !isDark;
-  const root = document.documentElement;
-  const nextBg = getComputedStyle(root).getPropertyValue(
-    goingDark ? "--background-dark" : "--background-light"
-  );
-  circle.style.background = `hsl(${nextBg.trim()})`;
+    circle.className = "circle-effect";
+    circle.style.left = `${x}px`;
+    circle.style.top = `${y}px`;
+    circle.style.width = circle.style.height = `${radius * 2}px`;
 
-  circle.style.position = "fixed";
-  circle.style.transform = "translate(-50%, -50%) scale(0)";
-  document.body.appendChild(circle);
-
-  circle.animate(
-    [
-      { transform: "translate(-50%, -50%) scale(0)" },
-      { transform: "translate(-50%, -50%) scale(1)" },
-    ],
-    {
-      duration: 600,
-      easing: "ease-in-out",
-      fill: "forwards",
+    // ✅ Switch case for blend mode based on clicks
+    let blendMode = "overlay";
+    switch (clickCount % 5) { // 👈 cycle through 5 modes
+      case 0:
+        blendMode = "screen";
+        break;
+      case 1:
+        blendMode = "overlay";
+        break;
+      case 2:
+        blendMode = "multiply";
+        break;
+      case 3:
+        blendMode = "difference";
+        break;
+      case 4:
+        blendMode = "lighten";
+        break;
     }
-  );
+    circle.style.mixBlendMode = blendMode;
 
-  setTimeout(() => {
-    setTheme(goingDark ? "dark" : "light");
-  }, 300);
+    // ✅ Background based on next theme
+    const goingDark = !isDark;
+    const root = document.documentElement;
+    const nextBg = getComputedStyle(root).getPropertyValue(
+      goingDark ? "--background-dark" : "--background-light"
+    );
+    circle.style.background = `hsl(${nextBg.trim()})`;
 
-  setTimeout(() => circle.remove(), 650);
-};
+    circle.style.position = "fixed";
+    circle.style.transform = "translate(-50%, -50%) scale(0)";
+    document.body.appendChild(circle);
 
+    circle.animate(
+      [
+        { transform: "translate(-50%, -50%) scale(0)" },
+        { transform: "translate(-50%, -50%) scale(1)" },
+      ],
+      {
+        duration: 600,
+        easing: "ease-in-out",
+        fill: "forwards",
+      }
+    );
+
+    setTimeout(() => {
+      setTheme(goingDark ? "dark" : "light");
+    }, 300);
+
+    setTimeout(() => circle.remove(), 650);
+  };
 
   return (
     <Button
