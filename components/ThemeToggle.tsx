@@ -37,24 +37,7 @@ export default function ThemeToggle() {
     circle.style.width = circle.style.height = `${radius * 2}px`;
 
     // ✅ Switch case for blend mode based on clicks
-    let blendMode = "overlay";
-    switch (clickCount % 5) { // 👈 cycle through 5 modes
-      case 0:
-        blendMode = "screen";
-        break;
-      case 1:
-        blendMode = "overlay";
-        break;
-      case 2:
-        blendMode = "multiply";
-        break;
-      case 3:
-        blendMode = "difference";
-        break;
-      case 4:
-        blendMode = "lighten";
-        break;
-    }
+    let blendMode = "screen";
     circle.style.mixBlendMode = blendMode;
 
     // ✅ Background based on next theme
