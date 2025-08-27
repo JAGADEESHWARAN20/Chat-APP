@@ -17,13 +17,14 @@ export default function ThemeToggle() {
   const handleToggle = (e: React.MouseEvent<HTMLButtonElement>) => {
     const btn = e.currentTarget;
     const rect = btn.getBoundingClientRect();
-    const mask = document.getElementById("circle-mask");
-    if (!mask) return;
+    const circle = document.createElement("div");
+    const overlay = document.createElement("div");
 
+    // Button center
     const x = rect.left + rect.width / 2;
     const y = rect.top + rect.height / 2;
 
-    // Compute max radius to cover sheet
+    // Circle radius
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const maxX = Math.max(x, vw - x);
@@ -32,33 +33,62 @@ export default function ThemeToggle() {
 
     const goingDark = !isDark;
     const root = document.documentElement;
-
     const nextBg = goingDark
       ? getComputedStyle(root).getPropertyValue("--background-dark")
       : getComputedStyle(root).getPropertyValue("--background-light");
 
-    const nextText = goingDark
-      ? getComputedStyle(root).getPropertyValue("--foreground-dark")
-      : getComputedStyle(root).getPropertyValue("--foreground-light");
+    // Circle setup
+    circle.classList.add("circle-effect");
+    circle.style.left = `${x}px`;
+    circle.style.top = `${y}px`;
+    circle.style.width = circle.style.height = `${radius * 2}px`;
+    circle.style.background = `hsl(${nextBg.trim()})`;
 
-    // apply target theme background to mask
-    mask.style.setProperty("--next-theme-bg", `hsl(${nextBg.trim()})`);
-    mask.style.setProperty("--circle-x", `${x}px`);
-    mask.style.setProperty("--circle-y", `${y}px`);
+    // Overlay setup
+    overlay.classList.add("theme-overlay");
 
-    // expand circle
-    mask.style.clipPath = `circle(${radius}px at ${x}px ${y}px)`;
+    // Append to body
+    document.body.appendChild(overlay);
+    document.body.appendChild(circle);
 
-    // update text color immediately
-    document.documentElement.style.setProperty("--text-color", `hsl(${nextText.trim()})`);
+    // Circle expand
+    circle.animate(
+      [
+        { transform: "translate(-50%, -50%) scale(0)" },
+        { transform: "translate(-50%, -50%) scale(1)" },
+      ],
+      {
+        duration: 700,
+        easing: "ease-in-out",
+        fill: "forwards",
+      }
+    );
 
+    // Overlay fade in
+    overlay.animate([{ opacity: 0 }, { opacity: 1 }], {
+      duration: 700,
+      easing: "ease-in-out",
+      fill: "forwards",
+    });
+
+    // Switch theme mid-animation
     setTimeout(() => {
       setTheme(goingDark ? "dark" : "light");
-      document.documentElement.style.removeProperty("--text-color");
-      mask.style.clipPath = "circle(0 at var(--circle-x) var(--circle-y))"; // reset
+
+      // Fade overlay back out
+      overlay.animate([{ opacity: 1 }, { opacity: 0 }], {
+        duration: 500,
+        easing: "ease-in-out",
+        fill: "forwards",
+      });
+
+      // Cleanup after fade-out
+      setTimeout(() => {
+        circle.remove();
+        overlay.remove();
+      }, 500);
     }, 700);
   };
-
 
   return (
     <Button
