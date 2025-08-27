@@ -234,20 +234,19 @@
 
 /* Add this to your main CSS file (e.g., global.css) */
 .transparent-scrollbar-track {
-  scrollbar-color: hsl(var(--foreground)) transparent; /* For Firefox */
+  scrollbar-color: transparent; /* For Firefox */
   scrollbar-width: thin;
 }
 
-/* For Webkit-based browsers (Chrome, Safari, Edge) */
 .transparent-scrollbar-track::-webkit-scrollbar {
-  width: 8px; /* Set the scrollbar width */
+  width: 8px; 
 }
 
 .transparent-scrollbar-track::-webkit-scrollbar-track {
-  background: transparent; /* Makes the track transparent */
+  background: transparent; 
 }
 
 .transparent-scrollbar-track::-webkit-scrollbar-thumb {
-  background-color: hsl(var(--foreground)); /* The color of the scrollbar thumb */
-  border-radius: 9999px; /* Rounds the thumb */
+  background-color: hsl(var(--foreground)); 
+  border-radius: 9999px;
 }
