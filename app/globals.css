@@ -4,8 +4,12 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 224 71.4% 4.1%;
+  --background: 0 0% 100%;
+  --foreground: 224 71.4% 4.1%;
+  --background-light: 0 0% 100%;
+  --foreground-light: 224 71.4% 4.1%;
+  --background-dark: 224 71.4% 4.1%;
+  --foreground-dark: 210 20% 98%;
     --card: 0 0% 100%;
     --card-foreground: 224 71.4% 4.1%;
     --popover: 0 0% 100%;
@@ -27,8 +31,8 @@
   }
 
   .dark {
-    --background: 224 71.4% 4.1%;
-    --foreground: 210 20% 98%;
+  --background: 224 71.4% 4.1%;
+  --foreground: 210 20% 98%;
     --card: 224 71.4% 4.1%;
     --card-foreground: 210 20% 98%;
     --popover: 224 71.4% 4.1%;
@@ -55,7 +59,9 @@
   }
   body {
     @apply bg-background text-foreground;
+    color: var(--text-color, hsl(var(--foreground)));
   }
+
 }
 
 @layer utilities {
