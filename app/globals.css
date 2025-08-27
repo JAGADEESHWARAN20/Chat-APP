@@ -232,21 +232,22 @@
   mask-composite: exclude;
 }
 
-/* Add this to your main CSS file (e.g., global.css) */
+/* Apply to any scrollable element */
 .transparent-scrollbar-track {
-  scrollbar-color: transparent; /* For Firefox */
-  scrollbar-width: thin;
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: hsl(var(--foreground)) transparent; /* thumb color / track color */
 }
 
 .transparent-scrollbar-track::-webkit-scrollbar {
-  width: 8px; 
+  width: 8px; /* WebKit */
 }
 
 .transparent-scrollbar-track::-webkit-scrollbar-track {
-  background: transparent; 
+  background: transparent; /* Remove track background */
 }
 
 .transparent-scrollbar-track::-webkit-scrollbar-thumb {
-  background-color: hsl(var(--foreground)); 
-  border-radius: 9999px;
+  background-color: hsl(var(--foreground)); /* Thumb color */
+  border-radius: 9999px; /* Rounded thumb */
+  border: 2px solid transparent; /* Optional: adds padding around thumb */
 }
