@@ -36,10 +36,6 @@ export default function ThemeToggle() {
     circle.style.top = `${y}px`;
     circle.style.width = circle.style.height = `${radius * 2}px`;
 
-    // ✅ Switch case for blend mode based on clicks
-    let blendMode = "screen";
-    circle.style.mixBlendMode = blendMode;
-
     // ✅ Background based on next theme
     const goingDark = !isDark;
     const root = document.documentElement;
