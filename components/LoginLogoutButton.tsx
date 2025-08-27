@@ -17,7 +17,7 @@ import Link from "next/link";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import ThemeToggle from "./ThemeToggle";
 import { useTheme } from "next-themes";
-import { useState,useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 interface LoginLogoutButtonProps {
   user: SupabaseUser | undefined | null;
@@ -29,6 +29,7 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
   const { setTheme, resolvedTheme } = useTheme();
   const [isDark, setIsDark] = useState(false);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const animationContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setIsDark(resolvedTheme === "dark");
@@ -43,14 +44,19 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
   const handleToggle = (e: React.MouseEvent<HTMLButtonElement>) => {
     const btn = e.currentTarget;
     const rect = btn.getBoundingClientRect();
+    const container = animationContainerRef.current;
+    if (!container) return;
+
     const circle1 = document.createElement("div"); // Primary circle
     const circle2 = document.createElement("div"); // Duplicate behind circle
 
-    const x = rect.left + window.scrollX + rect.width / 2;
-    const y = rect.top + window.scrollY + rect.height / 2;
+    // Get the button's position relative to the container
+    const containerRect = container.getBoundingClientRect();
+    const x = rect.left - containerRect.left + rect.width / 2;
+    const y = rect.top - containerRect.top + rect.height / 2;
 
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
+    const vw = containerRect.width;
+    const vh = containerRect.height;
     const maxX = Math.max(x, vw - x);
     const maxY = Math.max(y, vh - y);
     const radius = Math.sqrt(maxX * maxX + maxY * maxY);
@@ -59,8 +65,6 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
     circle1.style.left = `${x}px`;
     circle1.style.top = `${y}px`;
     circle1.style.width = circle1.style.height = "0px";
-    document.body.style.setProperty('--circle-x', `${x}px`);
-    document.body.style.setProperty('--circle-y', `${y}px`);
 
     circle2.className = "circle-effect-reveal duplicate";
     circle2.style.left = `${x + 10}px`;
@@ -69,9 +73,9 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
 
     const goingDark = !isDark;
 
-    // Append and animate circles first
-    document.body.appendChild(circle2);
-    document.body.appendChild(circle1);
+    // Append and animate circles within the container
+    container.appendChild(circle2);
+    container.appendChild(circle1);
 
     const animation1 = circle1.animate(
       [
@@ -105,55 +109,55 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
       setIsDark(goingDark);
       circle1.remove();
       circle2.remove();
-      document.body.style.removeProperty('--circle-x');
-      document.body.style.removeProperty('--circle-y');
     };
   };
 
   if (user) {
     return (
-      <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
-        <SheetTrigger asChild>
-          <Button variant="ghost" size="icon">
-            <Menu className="h-5 w-5" />
-          </Button>
-        </SheetTrigger>
-        <SheetContent side="right" className="w-[300px]">
-          <SheetHeader>
-            <SheetTitle className="flex items-center gap-2">
-              <Avatar className="h-8 w-8">
-                <AvatarImage
-                  src={user.user_metadata.avatar_url || ""}
-                  alt={user.user_metadata.display_name || user.email}
-                />
-                <AvatarFallback>
-                  {user.email?.[0].toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-              <span>{user.user_metadata.display_name || user.email}</span>
-            </SheetTitle>
-          </SheetHeader>
-          <div className="flex flex-col gap-4 mt-6">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Theme</span>
-              <ThemeToggle onToggle={handleToggle} isDark={isDark} />
-            </div>
-            <Link href={`/profile/${user.id}`}>
-              <Button variant="outline" size="sm" className="w-full">
-                View Profile
-              </Button>
-            </Link>
-            <Button
-              onClick={handleLogout}
-              variant="ghost"
-              size="sm"
-              className="text-red-500 hover:text-red-600 hover:bg-red-100/10"
-            >
-              <LogOut className="h-4 w-4 mr-2" /> Logout
+      <div ref={animationContainerRef} style={{ position: "relative", overflow: "hidden", width: "100vw", height: "100vh" }}>
+        <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
+          <SheetTrigger asChild>
+            <Button variant="ghost" size="icon">
+              <Menu className="h-5 w-5" />
             </Button>
-          </div>
-        </SheetContent>
-      </Sheet>
+          </SheetTrigger>
+          <SheetContent side="right" className="w-[300px]">
+            <SheetHeader>
+              <SheetTitle className="flex items-center gap-2">
+                <Avatar className="h-8 w-8">
+                  <AvatarImage
+                    src={user.user_metadata.avatar_url || ""}
+                    alt={user.user_metadata.display_name || user.email}
+                  />
+                  <AvatarFallback>
+                    {user.email?.[0].toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <span>{user.user_metadata.display_name || user.email}</span>
+              </SheetTitle>
+            </SheetHeader>
+            <div className="flex flex-col gap-4 mt-6">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Theme</span>
+                <ThemeToggle onToggle={handleToggle} isDark={isDark} />
+              </div>
+              <Link href={`/profile/${user.id}`}>
+                <Button variant="outline" size="sm" className="w-full">
+                  View Profile
+                </Button>
+              </Link>
+              <Button
+                onClick={handleLogout}
+                variant="ghost"
+                size="sm"
+                className="text-red-500 hover:text-red-600 hover:bg-red-100/10"
+              >
+                <LogOut className="h-4 w-4 mr-2" /> Logout
+              </Button>
+            </div>
+          </SheetContent>
+        </Sheet>
+      </div>
     );
   }
 
