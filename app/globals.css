@@ -80,13 +80,15 @@
   position: absolute;
   top: 0;
   left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: radial-gradient(circle at var(--circle-x) var(--circle-y), transparent 0%, hsl(var(--background)) 100%);
+  width: 0; /* Initial size, will be animated */
+  height: 0;
+  background: hsl(var(--background)); /* Solid background to cover old theme */
+  border-radius: 50%; /* Ensures a perfect circle */
+  transform-origin: center; /* Center the scaling */
   z-index: 1000;
   pointer-events: none;
-  will-change: transform, background;
-  transition: background 0.6s ease-in-out;
+  will-change: width, height, transform;
+  transition: width 0.6s ease-in-out, height 0.6s ease-in-out, transform 0.6s ease-in-out;
 }
 
 /* All other utility classes remain the same */

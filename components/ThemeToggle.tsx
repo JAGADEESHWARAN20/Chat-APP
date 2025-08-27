@@ -42,11 +42,12 @@ export default function ThemeToggle() {
   const maxY = Math.max(y, vh - y);
   const radius = Math.sqrt(maxX * maxX + maxY * maxY);
 
-  // Set circle properties and gradient center on body
+  // Set circle properties
   circle.className = "circle-effect-reveal";
   circle.style.left = `${x}px`;
   circle.style.top = `${y}px`;
-  circle.style.width = circle.style.height = `${radius * 2}px`;
+  // Initial size is 0, will scale to cover the radius
+  circle.style.width = circle.style.height = "0px";
   document.body.style.setProperty('--circle-x', `${x}px`);
   document.body.style.setProperty('--circle-y', `${y}px`);
 
@@ -61,11 +62,11 @@ export default function ThemeToggle() {
   // Append circle to trigger the reveal effect
   document.body.appendChild(circle);
 
-  // Animate the circle
+  // Animate the circle to grow to the full radius
   const animation = circle.animate(
     [
-      { transform: "translate(-50%, -50%) scale(0)" },
-      { transform: "translate(-50%, -50%) scale(1)" },
+      { width: "0px", height: "0px", transform: "translate(-50%, -50%) scale(0)" },
+      { width: `${radius * 2}px`, height: `${radius * 2}px`, transform: "translate(-50%, -50%) scale(1)" },
     ],
     {
       duration: 600,
