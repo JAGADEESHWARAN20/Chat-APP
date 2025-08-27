@@ -245,5 +245,6 @@
   z-index: 10000; /* always above everything */
   pointer-events: none;
   will-change: transform;
-  background: var(--circle-bg); /* dynamic background */
+  background: var(--circle-bg);
+  mix-blend-mode: overlay; /* dynamic background */
 }
