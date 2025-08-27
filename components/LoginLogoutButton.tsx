@@ -41,7 +41,7 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
           </Button>
         </SheetTrigger>
         {/* The "bg" prop is not standard. Replaced with className to use Tailwind and custom glass styling. */}
-        <SheetContent side="right" className="w-[300px] glass-gradient-header">
+        <SheetContent side="right" className="w-[300px] bg-white">
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               <Avatar className="h-8 w-8">
