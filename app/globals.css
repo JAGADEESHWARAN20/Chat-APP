@@ -51,6 +51,14 @@
     --input: 215 27.9% 16.9%;
     --ring: 263.4 70% 50.4%;
   }
+
+  body.light {
+    @apply bg-background text-foreground;
+  }
+
+  body.dark {
+    @apply bg-background text-foreground;
+  }
 }
 
 @layer base {
@@ -70,10 +78,10 @@
   border-radius: 50%;
   transform: scale(0) translate(-50%, -50%); /* Initial state, centered at its own origin */
   transform-origin: 0 0; /* Set transform origin for correct scaling */
-  z-index: -1; /* For the "reveal" method */
+  z-index: 1000; /* Ensure it overlays all content */
   pointer-events: none;
   will-change: transform;
-  transition: transform 600ms ease-in-out; /* Added transition for transform */
+  transition: transform 600ms ease-in-out; /* Match JS animation duration */
 }
 
 /* All other utility classes remain the same */

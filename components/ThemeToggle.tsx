@@ -1,4 +1,3 @@
-// ThemeToggle.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -33,7 +32,7 @@ export default function ThemeToggle() {
     const rect = btn.getBoundingClientRect();
     const circle = document.createElement("div");
 
-    // Get the button's position relative to the entire viewport.
+    // Get the button's position relative to the viewport
     const x = rect.left + rect.width / 2;
     const y = rect.top + rect.height / 2;
 
@@ -43,7 +42,7 @@ export default function ThemeToggle() {
     const maxY = Math.max(y, vh - y);
     const radius = Math.sqrt(maxX * maxX + maxY * maxY);
 
-    // This class sets position: fixed, ensuring it's relative to the viewport.
+    // Set circle properties
     circle.className = "circle-effect-reveal";
     circle.style.left = `${x}px`;
     circle.style.top = `${y}px`;
@@ -51,21 +50,23 @@ export default function ThemeToggle() {
 
     const goingDark = !isDark;
     const root = document.documentElement;
-    // Get the background color of the next theme from the CSS variables
-    // and set the circle's background to match.
+    // Get the background color of the next theme
     const nextBg = getComputedStyle(root).getPropertyValue(
       goingDark ? "--background-dark" : "--background-light"
     );
     circle.style.background = `hsl(${nextBg.trim()})`;
 
-    // Append the circle to the document's body.
+    // Append the circle to the document's body
     document.body.appendChild(circle);
 
-    // Immediately toggle the theme. This updates all CSS variables
-    // at the same time the animation starts.
+    // Add class to body to trigger full UI theme change
+    document.body.classList.toggle("dark", goingDark);
+    document.body.classList.toggle("light", !goingDark);
+
+    // Toggle theme via useTheme
     setTheme(goingDark ? "dark" : "light");
 
-    // Start the animation.
+    // Start the animation
     circle.animate(
       [
         { transform: "translate(-50%, -50%) scale(0)" },
@@ -78,7 +79,7 @@ export default function ThemeToggle() {
       }
     );
 
-    // Clean up the circle element after the animation is complete.
+    // Clean up the circle element after the animation
     setTimeout(() => {
       circle.remove();
     }, 650);
