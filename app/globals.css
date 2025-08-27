@@ -93,9 +93,10 @@
 
 /* Duplicate circle behind the primary */
 .circle-effect-reveal.duplicate {
-  z-index: 48; /* Behind the primary circle and SheetOverlay */
+  z-index: 1; /* Behind the primary circle and SheetOverlay */
   background: rgba(0, 0, 0, 0.3); /* Lighter, semi-transparent version */
   opacity: 0.7; /* Slightly faded for depth effect */
+  
 }
 
 /* All other utility classes remain the same */
