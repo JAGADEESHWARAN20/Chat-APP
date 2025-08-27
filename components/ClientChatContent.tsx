@@ -17,7 +17,7 @@ export default function ClientChatContent({ user }: { user: SupabaseUser | undef
                 selectedRoom ? (
                     <>
                         {/* Messages area - scrollable */}
-                        <div className="flex-1 overflow-y-auto">
+                        <div className="flex-1 overflow-y-auto transparent-scrollbar-track">
                             <ChatMessages />
                         </div>
                         {/* Input area - fixed at bottom */}
