@@ -64,12 +64,12 @@
   }
 }
 
-/* New class for the reveal effect */
+
 .circle-effect-reveal {
   position: fixed;
   border-radius: 50%;
   transform: scale(0);
-  z-index: -1; /* This is the key change! */
+  z-index: 0; /* For the "reveal" method */
   pointer-events: none;
   will-change: transform;
 }
