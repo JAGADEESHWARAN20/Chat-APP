@@ -30,39 +30,52 @@ export default function ThemeToggle() {
     const maxY = Math.max(y, vh - y);
     const radius = Math.sqrt(maxX * maxX + maxY * maxY);
 
+    // Grab next theme colors from CSS variables
+    const root = document.documentElement;
+    const nextBg = isDark
+      ? getComputedStyle(root).getPropertyValue("--background-light")
+      : getComputedStyle(root).getPropertyValue("--background-dark");
+    const nextFg = isDark
+      ? getComputedStyle(root).getPropertyValue("--foreground-light")
+      : getComputedStyle(root).getPropertyValue("--foreground-dark");
+
     // Style overlay circle
     circle.className = "circle-effect";
     circle.style.left = `${x}px`;
     circle.style.top = `${y}px`;
     circle.style.width = circle.style.height = `${radius * 2}px`;
-    circle.style.background = isDark ? "#fff" : "#000"; // contrast color
+    circle.style.background = `hsl(${nextBg.trim()})`;
     circle.style.transform = "translate(-50%, -50%) scale(0)";
     circle.style.position = "fixed";
     circle.style.borderRadius = "50%";
     circle.style.pointerEvents = "none";
-    circle.style.zIndex = "9999"; // ensure above all
+    circle.style.zIndex = "10000";
     document.body.appendChild(circle);
 
-    // Animate it
+    // Animate expansion
     const anim = circle.animate(
       [
-        { transform: "translate(-50%, -50%) scale(0)", opacity: 0.8 },
+        { transform: "translate(-50%, -50%) scale(0)", opacity: 0.9 },
         { transform: "translate(-50%, -50%) scale(1)", opacity: 1 },
       ],
       {
-        duration: 600,
+        duration: 700,
         easing: "ease-in-out",
         fill: "forwards",
       }
     );
 
-    // Switch theme **during** animation, not after
+    // Smoothly transition text color along the way
+    document.documentElement.style.setProperty("--text-color", `hsl(${nextFg.trim()})`);
+
+    // Switch theme during animation
     setTimeout(() => {
       setTheme(isDark ? "light" : "dark");
-    }, 200); // small delay so effect feels synced
+    }, 250);
 
-    // Cleanup after animation
+    // Cleanup
     anim.onfinish = () => {
+      document.documentElement.style.removeProperty("--text-color");
       circle.remove();
     };
   };
