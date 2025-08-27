@@ -72,7 +72,7 @@ export default function ChatMessages() {
       console.error("Error fetching messages:", error);
       toast.error("Failed to load messages");
     }
-  }, [selectedRoom?.id, selectedDirectChat?.id, setMessages, clearMessages, subscribeToRoom]);
+  }, [selectedRoom, selectedDirectChat, setMessages, clearMessages, subscribeToRoom]);
 
   useEffect(() => {
     fetchMessages();
@@ -81,7 +81,7 @@ export default function ChatMessages() {
     return () => {
       unsubscribeFromRoom();
     };
-  }, [selectedRoom?.id, selectedDirectChat?.id]);
+  }, [selectedRoom?.id, selectedDirectChat?.id, unsubscribeFromRoom,fetchMessages]);
 
   return (
     <Suspense fallback={<div>Loading messages...</div>}>
