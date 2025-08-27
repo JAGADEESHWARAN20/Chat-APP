@@ -231,3 +231,23 @@
   -webkit-mask-composite: xor;
   mask-composite: exclude;
 }
+
+
+ /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 12px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: var(--thumb-color);
+      border-radius: 8px;
+    }
+    ::-webkit-scrollbar-button {
+      display: none;
+    }
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: var(--thumb-color) transparent;
+    }
