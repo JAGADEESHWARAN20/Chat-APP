@@ -242,8 +242,8 @@
   position: fixed;
   border-radius: 50%;
   transform: scale(0);
-  z-index: 10000; /* above everything */
+  z-index: 10000; /* always above everything */
   pointer-events: none;
   will-change: transform;
-  mix-blend-mode: difference; /* smooth reveal */
+  background: var(--circle-bg); /* dynamic background */
 }
