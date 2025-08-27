@@ -1,4 +1,3 @@
-// LoginLogoutButton.tsx
 "use client";
 
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
@@ -40,8 +39,7 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
             <Menu className="h-5 w-5" />
           </Button>
         </SheetTrigger>
-        {/* The "bg" prop is not standard. Replaced with className to use Tailwind and custom glass styling. */}
-        <SheetContent side="right" className="w-[300px] bg-white">
+        <SheetContent side="right" className="w-[300px]">
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               <Avatar className="h-8 w-8">
