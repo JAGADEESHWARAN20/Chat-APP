@@ -64,12 +64,12 @@
 @layer base {
   * {
     @apply border-border;
-    transition: background-color 1.2s ease-in-out, color 1.2s ease-in-out; /* Slowed to 1200ms */
+    transition: background-color 0.6s ease-in-out, color 0.6s ease-in-out;
   }
   
   body {
     @apply bg-background text-foreground;
-    transition: background-color 1.2s ease-in-out, color 1.2s ease-in-out; /* Slowed to 1200ms */
+    transition: background-color 0.6s ease-in-out, color 0.6s ease-in-out;
     position: relative;
     overflow: hidden;
   }
@@ -82,14 +82,13 @@
   left: 0;
   width: 0; /* Initial size, will be animated */
   height: 0;
-  background: rgba(0, 0, 0, 0.5); /* Semi-transparent black for visibility */
+  background: hsl(var(--background)); /* Solid background to cover old theme */
   border-radius: 50%; /* Ensures a perfect circle */
-  transform-origin: center;
+  transform-origin: center; /* Center the scaling */
   z-index: 1000;
   pointer-events: none;
-  mix-blend-mode: difference; /* Blends with underlying content */
   will-change: width, height, transform;
-  transition: width 1.2s ease-in-out, height 1.2s ease-in-out, transform 1.2s ease-in-out; /* Slowed to 1200ms */
+  transition: width 0.6s ease-in-out, height 0.6s ease-in-out, transform 0.6s ease-in-out;
 }
 
 /* All other utility classes remain the same */
@@ -252,7 +251,7 @@
 /* Apply to any scrollable element */
 .transparent-scrollbar-track {
   scrollbar-width: thin; /* Firefox */
-  scrollbar-color: hsl(var(--foreground) / 0.5) transparent; /* Adjusted for visibility */
+  scrollbar-color: hsl(var(--foreground)) transparent; /* Thumb uses foreground color */
 }
 
 .transparent-scrollbar-track::-webkit-scrollbar {
@@ -264,11 +263,11 @@
 }
 
 .transparent-scrollbar-track::-webkit-scrollbar-thumb {
-  background-color: hsl(var(--foreground) / 0.5); /* Adjusted for visibility */
+  background-color: hsl(var(--foreground)); /* Thumb uses foreground color */
   border-radius: 9999px; /* Rounded thumb */
   border: 2px solid transparent; /* Optional: adds padding around thumb */
 }
 
 .transparent-scrollbar-track::-webkit-scrollbar-button {
-  background-color: hsl(var(--muted-foreground) / 0.5); /* Adjusted for visibility */
+  background-color: hsl(var(--muted-foreground)); /* Arrows use muted-foreground color */
 }

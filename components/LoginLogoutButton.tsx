@@ -2,7 +2,7 @@
 
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { Button } from "./ui/button";
-import { LogOut, Menu, ChevronLeft } from "lucide-react";
+import { LogOut, Menu } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { User as SupabaseUser } from "@supabase/supabase-js";
 import { Database } from "@/database.types";
@@ -16,7 +16,8 @@ import {
 import Link from "next/link";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import ThemeToggle from "./ThemeToggle";
-
+import { useTheme } from "next-themes"; // Added missing imports
+import { useState,useEffect } from "react";
 interface LoginLogoutButtonProps {
   user: SupabaseUser | undefined | null;
 }
@@ -24,11 +25,70 @@ interface LoginLogoutButtonProps {
 export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
   const router = useRouter();
   const supabase = createClientComponentClient<Database>();
+  const { setTheme, resolvedTheme } = useTheme();
+  const [isDark, setIsDark] = useState(false);
+
+  useEffect(() => {
+    setIsDark(resolvedTheme === "dark");
+  }, [resolvedTheme]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
     router.refresh();
     router.push("/");
+  };
+
+  const handleToggle = (e: React.MouseEvent<HTMLButtonElement>) => {
+    const btn = e.currentTarget;
+    const rect = btn.getBoundingClientRect();
+    const circle = document.createElement("div");
+
+    // Get the button's position relative to the viewport, adjusted for sheet context
+    const x = rect.left + window.scrollX + rect.width / 2; // Adjust for scroll and centering
+    const y = rect.top + window.scrollY + rect.height / 2; // Adjust for scroll and centering
+
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const maxX = Math.max(x, vw - x);
+    const maxY = Math.max(y, vh - y);
+    const radius = Math.sqrt(maxX * maxX + maxY * maxY);
+
+    // Set circle properties
+    circle.className = "circle-effect-reveal";
+    circle.style.left = `${x}px`;
+    circle.style.top = `${y}px`;
+    circle.style.width = circle.style.height = "0px";
+    document.body.style.setProperty('--circle-x', `${x}px`);
+    document.body.style.setProperty('--circle-y', `${y}px`);
+
+    const goingDark = !isDark;
+    setTheme(goingDark ? "dark" : "light");
+    document.body.classList.toggle("dark", goingDark);
+    document.body.classList.toggle("light", !goingDark);
+    setIsDark(goingDark);
+
+    // Append circle to trigger the reveal effect
+    document.body.appendChild(circle);
+
+    // Animate the circle to grow to the full radius
+    const animation = circle.animate(
+      [
+        { width: "0px", height: "0px", transform: "translate(-50%, -50%) scale(0)" },
+        { width: `${radius * 2}px`, height: `${radius * 2}px`, transform: "translate(-50%, -50%) scale(1)" },
+      ],
+      {
+        duration: 600,
+        easing: "ease-in-out",
+        fill: "forwards",
+      }
+    );
+
+    // Clean up circle after animation
+    animation.onfinish = () => {
+      circle.remove();
+      document.body.style.removeProperty('--circle-x');
+      document.body.style.removeProperty('--circle-y');
+    };
   };
 
   if (user) {
@@ -57,7 +117,7 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
           <div className="flex flex-col gap-4 mt-6">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">Theme</span>
-              <ThemeToggle />
+              <ThemeToggle onToggle={handleToggle} isDark={isDark} />
             </div>
             <Link href={`/profile/${user.id}`}>
               <Button variant="outline" size="sm" className="w-full">
