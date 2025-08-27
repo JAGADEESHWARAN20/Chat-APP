@@ -50,7 +50,14 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
 
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    const maxRadius = Math.min(vw, vh) / 2; // Cap radius to half the smaller dimension
+
+    // Calculate radius based on distance to nearest edge, capped at 50% of smaller dimension
+    const distToLeft = x;
+    const distToRight = vw - x;
+    const distToTop = y;
+    const distToBottom = vh - y;
+    const edgeDistance = Math.min(distToLeft, distToRight, distToTop, distToBottom);
+    const maxRadius = Math.min(edgeDistance, Math.min(vw, vh) * 0.5); // Cap at 50% of viewport
 
     circle1.className = "circle-effect-reveal";
     circle1.style.left = `${x}px`;
