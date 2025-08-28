@@ -78,6 +78,49 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
     };
   };
 
+  const handleLogout = async (e: React.MouseEvent<HTMLButtonElement>) => {
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    // Calculate center of the screen
+    const x = vw / 2; // Center horizontally
+    const y = vh / 2; // Center vertically
+
+    // Calculate radius to cover the entire viewport
+    const maxRadius = Math.sqrt(vw * vw + vh * vh); // Diagonal distance to cover screen
+
+    const circle = document.createElement("div"); // Primary circle
+    circle.className = "circle-effect-reveal";
+    circle.style.left = `${x}px`;
+    circle.style.top = `${y}px`;
+    circle.style.width = "0px";
+    circle.style.height = "0px";
+
+    // Append and animate circle
+    document.body.appendChild(circle);
+
+    const animation = circle.animate(
+      [
+        { width: "0px", height: "0px", transform: "translate(-50%, -50%) scale(0)" },
+        { width: `${maxRadius * 2}px`, height: `${maxRadius * 2}px`, transform: "translate(-50%, -50%) scale(1)" },
+      ],
+      {
+        duration: 600,
+        easing: "ease-in-out",
+        fill: "forwards",
+      }
+    );
+
+    // Perform logout after animation
+    animation.onfinish = async () => {
+      setIsSheetOpen(false); // Close the sheet
+      await supabase.auth.signOut();
+      router.refresh();
+      router.push("/");
+      circle.remove();
+    };
+  };
+
   if (user) {
     return (
       <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
