@@ -34,44 +34,28 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
     setIsDark(resolvedTheme === "dark");
   }, [resolvedTheme]);
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.refresh();
-    router.push("/");
-  };
-
   const handleToggle = (e: React.MouseEvent<HTMLButtonElement>) => {
-    const btn = e.currentTarget;
-    const rect = btn.getBoundingClientRect();
-    const circle1 = document.createElement("div"); // Primary circle
-
-    const x = rect.left + window.scrollX + rect.width / 2;
-    const y = rect.top + window.scrollY + rect.height / 2;
-
     const vw = window.innerWidth;
     const vh = window.innerHeight;
 
-    // Calculate radius based on distance to nearest edge, capped at 50% of smaller dimension
-    const distToLeft = x;
-    const distToRight = vw - x;
-    const distToTop = y;
-    const distToBottom = vh - y;
-    const edgeDistance = Math.min(distToLeft, distToRight, distToTop, distToBottom);
-    const maxRadius = Math.min(edgeDistance, Math.min(vw, vh) * 0.5); // Cap at 50% of viewport
+    // Calculate center of the screen
+    const x = vw / 2; // Center horizontally
+    const y = vh / 2; // Center vertically
 
-    circle1.className = "circle-effect-reveal";
-    circle1.style.left = `${x}px`;
-    circle1.style.top = `${y}px`;
-    circle1.style.width = circle1.style.height = "0px";
-    document.body.style.setProperty('--circle-x', `${x}px`);
-    document.body.style.setProperty('--circle-y', `${y}px`);
+    // Calculate radius to cover the entire viewport
+    const maxRadius = Math.sqrt(vw * vw + vh * vh); // Diagonal distance to cover screen
 
-    const goingDark = !isDark;
+    const circle = document.createElement("div"); // Primary circle
+    circle.className = "circle-effect-reveal";
+    circle.style.left = `${x}px`;
+    circle.style.top = `${y}px`;
+    circle.style.width = "0px";
+    circle.style.height = "0px";
 
     // Append and animate circle
-    document.body.appendChild(circle1);
+    document.body.appendChild(circle);
 
-    const animation1 = circle1.animate(
+    const animation = circle.animate(
       [
         { width: "0px", height: "0px", transform: "translate(-50%, -50%) scale(0)" },
         { width: `${maxRadius * 2}px`, height: `${maxRadius * 2}px`, transform: "translate(-50%, -50%) scale(1)" },
@@ -84,14 +68,13 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
     );
 
     // Apply theme change after animation
-    animation1.onfinish = () => {
+    const goingDark = !isDark;
+    animation.onfinish = () => {
       setTheme(goingDark ? "dark" : "light");
       document.body.classList.toggle("dark", goingDark);
       document.body.classList.toggle("light", !goingDark);
       setIsDark(goingDark);
-      circle1.remove();
-      document.body.style.removeProperty('--circle-x');
-      document.body.style.removeProperty('--circle-y');
+      circle.remove();
     };
   };
 
