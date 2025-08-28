@@ -77,13 +77,15 @@
 
 /* Circular effect for theme transition */
 .circle-effect-reveal {
-  position: absolute;
-  top: 0;
-  left: 0;
+  position: fixed; /* Use fixed to position relative to viewport */
+  top: 50vh; /* Center vertically */
+  left: 50vw; /* Center horizontally */
   width: 0; /* Initial size, will be animated */
   height: 0;
-  background: hsl(var(--background)); /* Solid background to cover old theme */
+  background: transparent; /* Transparent background */
+  border: 4px solid hsl(var(--primary)); /* Colored border using primary color */
   border-radius: 50%; /* Ensures a perfect circle */
+  transform: translate(-50%, -50%); /* Center the circle */
   transform-origin: center; /* Center the scaling */
   z-index: 49; /* Below SheetOverlay (z-index: 50) */
   pointer-events: none;
@@ -91,14 +93,7 @@
   transition: width 0.6s ease-in-out, height 0.6s ease-in-out, transform 0.6s ease-in-out;
 }
 
-/* Duplicate circle behind the primary */
-.circle-effect-reveal.duplicate {
-  z-index: 48; /* Further behind the primary circle */
-  background: rgba(0, 0, 0, 0.3); /* Lighter, semi-transparent version */
-  opacity: 0.7; /* Slightly faded for depth effect */
-}
 
-/* All other utility classes remain the same */
 @layer utilities {
   .scrollbar-none {
     -ms-overflow-style: none;
