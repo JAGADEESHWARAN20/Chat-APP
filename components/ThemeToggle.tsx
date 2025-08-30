@@ -48,7 +48,7 @@ export default function ThemeToggle() {
       {/* Toggle Button */}
       <Button
         onClick={handleClick}
-        className="relative flex items-center z-[999999] justify-center w-10 h-10 rounded-full   text-white bg-violet-700 focus:outline-none focus:ring-0"
+        className="relative flex items-center z-[999999] justify-center w-10 h-10 rounded-full   text-white bg-violet-700 "
       >
         <AnimatePresence mode="wait">
           <motion.div
@@ -58,7 +58,7 @@ export default function ThemeToggle() {
             exit={{ rotate: 90, opacity: 0, scale: 0 }}
             transition={{ duration: 0.4 }}
           >
-            {isDark ? <Moon className="text-black" size={20} /> : <Sun size={20}  />}
+            {isDark ? <Moon size={20} /> : <Sun size={20}  />}
           </motion.div>
         </AnimatePresence>
       </Button>
@@ -71,7 +71,7 @@ export default function ThemeToggle() {
             animate={{ clipPath: `circle(150% at ${circle.x}px ${circle.y}px)` }}
             transition={{ duration: 1.2, ease: "easeInOut" }}
             className={`fixed inset-0 z-[99998] pointer-events-none ${
-              circle.nextTheme === "dark" ? "bg-neutral-900/92 mix-blend-screen" : "bg-white/92  mix-blend-overlay"
+              circle.nextTheme === "dark" ? "bg-gray-900/97 mix-blend-screen" : "bg-white/92  mix-blend-overlay"
             }`}
           />
         )}
