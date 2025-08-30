@@ -40,59 +40,7 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
     router.push("/");
   };
 
-  const handleToggle = (e: React.MouseEvent<HTMLButtonElement>) => {
-    const btn = e.currentTarget;
-    const rect = btn.getBoundingClientRect();
-
-    const x = rect.left + rect.width / 2;
-    const y = rect.top + rect.height / 2;
-
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-
-    // radius = distance to farthest corner (so circle covers screen)
-    const maxRadius = Math.sqrt(
-      Math.max(x, vw - x) ** 2 + Math.max(y, vh - y) ** 2
-    );
-
-    const circle = document.createElement("div");
-    circle.className = "circle-effect-reveal";
-    circle.style.left = `${x}px`;
-    circle.style.top = `${y}px`;
-
-    document.body.appendChild(circle);
-
-    const goingDark = !isDark;
-
-    const animation = circle.animate(
-      [
-        {
-          width: "0px",
-          height: "0px",
-          transform: "translate(-50%, -50%) scale(0)",
-        },
-        {
-          width: `${maxRadius * 2}px`,
-          height: `${maxRadius * 2}px`,
-          transform: "translate(-50%, -50%) scale(1)",
-        },
-      ],
-      {
-        duration: 600,
-        easing: "ease-in-out",
-        fill: "forwards",
-      }
-    );
-
-    animation.onfinish = () => {
-      setTheme(goingDark ? "dark" : "light");
-      document.body.classList.toggle("dark", goingDark);
-      document.body.classList.toggle("light", !goingDark);
-      setIsDark(goingDark);
-      circle.remove();
-    };
-  };
-
+  
 
   if (user) {
     return (
@@ -120,7 +68,7 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
           <div className="flex flex-col gap-4 mt-6">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">Theme</span>
-              <ThemeToggle onToggle={handleToggle} isDark={isDark} />
+              <ThemeToggle/>
             </div>
             <Link href={`/profile/${user.id}`}>
               <Button variant="outline" size="sm" className="w-full">
