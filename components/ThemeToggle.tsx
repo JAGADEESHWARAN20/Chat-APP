@@ -16,22 +16,36 @@ export default function ThemeToggle() {
     y: number;
     active: boolean;
     oldTheme: string;
-  }>({ x: 0, y: 0, active: false, oldTheme: "light" });
+    newTheme: string;
+  }>({
+    x: 0,
+    y: 0,
+    active: false,
+    oldTheme: "light",
+    newTheme: "dark",
+  });
 
   const handleClick = (e: React.MouseEvent) => {
     const x = e.clientX;
     const y = e.clientY;
 
-    // store old theme color for circle
-    setCircle({ x, y, active: true, oldTheme: theme || "light" });
+    // toggle theme instantly
+    const nextTheme = isDark ? "light" : "dark";
+    setTheme(nextTheme);
 
-    // switch theme instantly
-    setTheme(isDark ? "light" : "dark");
+    // enable circle transition
+    setCircle({
+      x,
+      y,
+      active: true,
+      oldTheme: theme || "light",
+      newTheme: nextTheme,
+    });
 
-    // cleanup circle overlay after animation ends
+    // cleanup after animation
     setTimeout(() => {
       setCircle((prev) => ({ ...prev, active: false }));
-    }, 1500); // match transition duration
+    }, 1200);
   };
 
   return (
@@ -54,29 +68,18 @@ export default function ThemeToggle() {
         </AnimatePresence>
       </Button>
 
-      {/* Expanding Circle Overlay */}
+      {/* Clip-path Circle Reveal */}
       <AnimatePresence>
         {circle.active &&
           createPortal(
             <motion.div
-              initial={{ scale: 0, opacity: 1 }}
-              animate={{ scale: 120, opacity: 1 }}
+              initial={{ clipPath: `circle(0% at ${circle.x}px ${circle.y}px)` }}
+              animate={{ clipPath: `circle(150% at ${circle.x}px ${circle.y}px)` }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 1.5, ease: "easeInOut" }} // 👈 slow transition
-              style={{
-                position: "fixed",
-                top: circle.y,
-                left: circle.x,
-                width: "150vmax", // extra large to fully cover viewport
-                height: "150vmax",
-                borderRadius: "50%",
-                background:
-                  circle.oldTheme === "dark"
-                    ? "hsl(0, 0%, 10%)" // dark bg
-                    : "hsl(0, 0%, 98%)", // light bg
-                zIndex: 99998,
-                transform: "translate(-50%, -50%)",
-              }}
+              transition={{ duration: 1.2, ease: "easeInOut" }}
+              className={`fixed inset-0 z-[99998] ${
+                circle.newTheme === "dark" ? "bg-neutral-900" : "bg-neutral-50"
+              }`}
             />,
             document.body
           )}
