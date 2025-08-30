@@ -48,7 +48,7 @@ export default function ThemeToggle() {
       {/* Toggle Button */}
       <Button
         onClick={handleClick}
-        className="relative flex items-center z-[999999] justify-center w-10 h-10 rounded-full bg-gray-700 dark:bg-white text-white"
+        className="relative flex items-center z-[999999] justify-center w-10 h-10 rounded-full bg-gray-700 dark:bg-white  text-white"
       >
         <AnimatePresence mode="wait">
           <motion.div
@@ -58,7 +58,7 @@ export default function ThemeToggle() {
             exit={{ rotate: 90, opacity: 0, scale: 0 }}
             transition={{ duration: 0.4 }}
           >
-            {isDark ? <Moon size={20} /> : <Sun size={20} />}
+            {isDark ? <Moon className="text-black" size={20} /> : <Sun size={20}  />}
           </motion.div>
         </AnimatePresence>
       </Button>
