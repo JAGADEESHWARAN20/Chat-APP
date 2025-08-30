@@ -16,8 +16,7 @@ import {
 import Link from "next/link";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import ThemeToggle from "./ThemeToggle";
-import { useTheme } from "next-themes";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 
 interface LoginLogoutButtonProps {
   user: SupabaseUser | undefined | null;
@@ -26,21 +25,13 @@ interface LoginLogoutButtonProps {
 export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
   const router = useRouter();
   const supabase = createClientComponentClient<Database>();
-  const { setTheme, resolvedTheme } = useTheme();
-  const [isDark, setIsDark] = useState(false);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
-
-  useEffect(() => {
-    setIsDark(resolvedTheme === "dark");
-  }, [resolvedTheme]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
     router.refresh();
     router.push("/");
   };
-
-  
 
   if (user) {
     return (
@@ -68,7 +59,7 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
           <div className="flex flex-col gap-4 mt-6">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">Theme</span>
-              <ThemeToggle/>
+              <ThemeToggle />
             </div>
             <Link href={`/profile/${user.id}`}>
               <Button variant="outline" size="sm" className="w-full">
