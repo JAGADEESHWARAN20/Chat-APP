@@ -14,12 +14,12 @@ export default function ThemeToggle() {
     x: number;
     y: number;
     active: boolean;
-    newTheme: string;
+    nextTheme: string;
   }>({
     x: 0,
     y: 0,
     active: false,
-    newTheme: "light",
+    nextTheme: "light",
   });
 
   const handleClick = (e: React.MouseEvent) => {
@@ -27,19 +27,20 @@ export default function ThemeToggle() {
     const y = e.clientY;
 
     const nextTheme = isDark ? "light" : "dark";
-    setTheme(nextTheme);
 
+    // Start animation, but don’t change theme yet
     setCircle({
       x,
       y,
       active: true,
-      newTheme: nextTheme,
+      nextTheme,
     });
 
-    // cleanup
+    // After animation finishes, apply theme + cleanup
     setTimeout(() => {
+      setTheme(nextTheme);
       setCircle((prev) => ({ ...prev, active: false }));
-    }, 1200);
+    }, 1200); // same duration as animation
   };
 
   return (
@@ -62,7 +63,7 @@ export default function ThemeToggle() {
         </AnimatePresence>
       </Button>
 
-      {/* Clip-path Circle Reveal */}
+      {/* Circular clip-path animation */}
       <AnimatePresence>
         {circle.active && (
           <motion.div
@@ -71,7 +72,7 @@ export default function ThemeToggle() {
             exit={{ opacity: 0 }}
             transition={{ duration: 1.2, ease: "easeInOut" }}
             className={`fixed inset-0 z-[99998] pointer-events-none ${
-              circle.newTheme === "dark" ? "bg-neutral-900" : "bg-neutral-50"
+              circle.nextTheme === "dark" ? "bg-neutral-900/80" : "bg-neutral-50/80"
             }`}
           />
         )}
