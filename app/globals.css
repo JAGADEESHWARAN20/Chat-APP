@@ -74,7 +74,6 @@
   }
 }
 
-
 .circle-effect-reveal {
   position: fixed;
   top: 50%;
@@ -96,7 +95,9 @@
   background: hsl(var(--background)); /* new theme background */
   transform: scale(0);
   transform-origin: center;
-  transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  transition-property: transform, background-color;
+  transition-duration: 0.8s; /* duration of circle expansion */
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Active state (circle expands to cover screen) */
