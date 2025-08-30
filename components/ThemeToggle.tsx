@@ -4,17 +4,20 @@ import { useState } from "react";
 import { useTheme } from "next-themes";
 import { motion } from "framer-motion";
 import { Sun, Moon } from "lucide-react";
+import { Button } from "./ui/button";
+
+
 
 export default function ThemeToggle() {
   const { theme, setTheme } = useTheme();
   const isDark = theme === "dark";
 
-  const [circle, setCircle] = useState<{
+ const [circle, setCircle] = useState<{
     x: number;
     y: number;
     maxRadius: number;
     active: boolean;
-  }>({ x: 0, y: 0, maxRadius: 0, active: false });
+  }>({ x: 0, y: 0, maxRadius: 0, active: false });   
 
   const handleClick = (e: React.MouseEvent) => {
     const x = e.clientX;
@@ -33,7 +36,7 @@ export default function ThemeToggle() {
   return (
     <>
       {/* Button with Sun / Moon swap */}
-      <button
+      <Button
         onClick={handleClick}
         className="relative flex items-center justify-center w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-800"
       >
@@ -46,7 +49,7 @@ export default function ThemeToggle() {
         >
           {isDark ? <Moon size={20} /> : <Sun size={20} />}
         </motion.div>
-      </button>
+      </Button>
 
       {/* Circle Reveal Animation */}
       {circle.active && (
