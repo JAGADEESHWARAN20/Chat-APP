@@ -48,7 +48,7 @@ export default function ThemeToggle() {
       {/* Toggle Button */}
       <Button
         onClick={handleClick}
-        className="relative flex items-center z-[999999] justify-center w-10 h-10 rounded-full bg-gray-700 dark:bg-white  text-white"
+        className="relative flex items-center z-[999999] hover:bg-none  justify-center w-10 h-10 rounded-full bg-gray-900 dark:bg-white  text-violet-600 dark:text-violet-800"
       >
         <AnimatePresence mode="wait">
           <motion.div
