@@ -41,59 +41,58 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
   };
 
   const handleToggle = (e: React.MouseEvent<HTMLButtonElement>) => {
-    const btn = e.currentTarget;
-    const rect = btn.getBoundingClientRect();
-    const circle1 = document.createElement("div"); // Primary circle
+  const btn = e.currentTarget;
+  const rect = btn.getBoundingClientRect();
 
-    const x = rect.left + window.scrollX + rect.width / 2;
-    const y = rect.top + window.scrollY + rect.height / 2;
+  const x = rect.left + rect.width / 2;
+  const y = rect.top + rect.height / 2;
 
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
 
-    // Calculate radius based on distance to nearest edge, capped at 50% of smaller dimension
-    const distToLeft = x;
-    const distToRight = vw - x;
-    const distToTop = y;
-    const distToBottom = vh - y;
-    const edgeDistance = Math.min(distToLeft, distToRight, distToTop, distToBottom);
-    const maxRadius = Math.min(edgeDistance, Math.min(vw, vh) * 0.5); // Cap at 50% of viewport
+  // radius = distance to farthest corner (so circle covers screen)
+  const maxRadius = Math.sqrt(
+    Math.max(x, vw - x) ** 2 + Math.max(y, vh - y) ** 2
+  );
 
-    circle1.className = "circle-effect-reveal";
-    circle1.style.left = `${x}px`;
-    circle1.style.top = `${y}px`;
-    circle1.style.width = circle1.style.height = "0px";
-    document.body.style.setProperty('--circle-x', `${x}px`);
-    document.body.style.setProperty('--circle-y', `${y}px`);
+  const circle = document.createElement("div");
+  circle.className = "circle-effect-reveal";
+  circle.style.left = `${x}px`;
+  circle.style.top = `${y}px`;
 
-    const goingDark = !isDark;
+  document.body.appendChild(circle);
 
-    // Append and animate circle
-    document.body.appendChild(circle1);
+  const goingDark = !isDark;
 
-    const animation1 = circle1.animate(
-      [
-        { width: "0px", height: "0px", transform: "translate(-50%, -50%) scale(0)" },
-        { width: `${maxRadius * 2}px`, height: `${maxRadius * 2}px`, transform: "translate(-50%, -50%) scale(1)" },
-      ],
+  const animation = circle.animate(
+    [
       {
-        duration: 600,
-        easing: "ease-in-out",
-        fill: "forwards",
-      }
-    );
+        width: "0px",
+        height: "0px",
+        transform: "translate(-50%, -50%) scale(0)",
+      },
+      {
+        width: `${maxRadius * 2}px`,
+        height: `${maxRadius * 2}px`,
+        transform: "translate(-50%, -50%) scale(1)",
+      },
+    ],
+    {
+      duration: 600,
+      easing: "ease-in-out",
+      fill: "forwards",
+    }
+  );
 
-    // Apply theme change after animation
-    animation1.onfinish = () => {
-      setTheme(goingDark ? "dark" : "light");
-      document.body.classList.toggle("dark", goingDark);
-      document.body.classList.toggle("light", !goingDark);
-      setIsDark(goingDark);
-      circle1.remove();
-      document.body.style.removeProperty('--circle-x');
-      document.body.style.removeProperty('--circle-y');
-    };
+  animation.onfinish = () => {
+    setTheme(goingDark ? "dark" : "light");
+    document.body.classList.toggle("dark", goingDark);
+    document.body.classList.toggle("light", !goingDark);
+    setIsDark(goingDark);
+    circle.remove();
   };
+};
+
 
   if (user) {
     return (
