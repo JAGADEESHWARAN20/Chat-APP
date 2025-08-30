@@ -5,19 +5,18 @@ import { useTheme } from "next-themes";
 import { motion } from "framer-motion";
 import { Sun, Moon } from "lucide-react";
 import { Button } from "./ui/button";
-
-
+import { createPortal } from "react-dom";
 
 export default function ThemeToggle() {
   const { theme, setTheme } = useTheme();
   const isDark = theme === "dark";
 
- const [circle, setCircle] = useState<{
+  const [circle, setCircle] = useState<{
     x: number;
     y: number;
     maxRadius: number;
     active: boolean;
-  }>({ x: 0, y: 0, maxRadius: 0, active: false });   
+  }>({ x: 0, y: 0, maxRadius: 0, active: false });
 
   const handleClick = (e: React.MouseEvent) => {
     const x = e.clientX;
@@ -25,7 +24,6 @@ export default function ThemeToggle() {
     const vw = window.innerWidth;
     const vh = window.innerHeight;
 
-    // max distance to farthest corner
     const maxRadius = Math.sqrt(
       Math.pow(Math.max(x, vw - x), 2) + Math.pow(Math.max(y, vh - y), 2)
     );
@@ -35,7 +33,7 @@ export default function ThemeToggle() {
 
   return (
     <>
-      {/* Button with Sun / Moon swap */}
+      {/* Toggle Button */}
       <Button
         onClick={handleClick}
         className="relative flex items-center justify-center w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-800"
@@ -51,29 +49,31 @@ export default function ThemeToggle() {
         </motion.div>
       </Button>
 
-      {/* Circle Reveal Animation */}
-      {circle.active && (
-       <motion.div
-  key="circle"
-  className="circle-effect-reveal"
-  initial={{ width: 0, height: 0, opacity: 1 }}
-  animate={{
-    width: circle.maxRadius * 2,
-    height: circle.maxRadius * 2,
-    opacity: 1,
-  }}
-  exit={{ opacity: 0 }}
-  transition={{ duration: 0.6, ease: "easeInOut" }}
-  style={{
-    top: circle.y,
-    left: circle.x,
-  }}
-  onAnimationComplete={() => {
-    setTheme(isDark ? "light" : "dark");
-    setCircle((prev) => ({ ...prev, active: false }));
-  }}
-/>
-      )}
+      {/* Circle Reveal Animation (in portal above everything) */}
+      {circle.active &&
+        createPortal(
+          <motion.div
+            key="circle"
+            className="circle-effect-reveal"
+            initial={{ width: 0, height: 0, opacity: 1 }}
+            animate={{
+              width: circle.maxRadius * 2,
+              height: circle.maxRadius * 2,
+              opacity: 1,
+            }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.6, ease: "easeInOut" }}
+            style={{
+              top: circle.y,
+              left: circle.x,
+            }}
+            onAnimationComplete={() => {
+              setTheme(isDark ? "light" : "dark");
+              setCircle((prev) => ({ ...prev, active: false }));
+            }}
+          />,
+          document.body
+        )}
     </>
   );
 }
