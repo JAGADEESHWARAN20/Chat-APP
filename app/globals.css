@@ -82,34 +82,21 @@
   pointer-events: none;
   transform: translate(-50%, -50%);
   z-index: 99999;
- 
+  background-color: var(--background)/50;
+  transition: 1s linear;
 }
 
-.circle-effect-reveal::before {
-  content: "";
-  position: absolute;
-  inset: 0;
+.circle-effect-reveal.active {
+  position: fixed;
+  width: 100vw;
+  height: 100vh;
   border-radius: 50%;
-  transform: scale(0);
-  transform-origin: center;
-  will-change: transform, background-color;
-  transition: transform 1s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  z-index: 99999;
+  background-color: var(--background)/50; 
+  transition: 1s linear;
 }
-
-/* Expanding */
-.circle-effect-reveal.active::before {
-  transform: scale(220);
-}
-
-/* OLD THEME background applied here */
-.circle-effect-reveal.light::before {
-  background: hsl(var(--background)); /* light mode bg */
-}
-
-.circle-effect-reveal.dark::before {
-  background: hsl(var(--background)); /* dark mode bg */
-}
-
 
 
 @layer utilities {
