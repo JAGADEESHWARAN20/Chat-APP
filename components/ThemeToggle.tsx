@@ -16,33 +16,22 @@ export default function ThemeToggle() {
     y: number;
     active: boolean;
     oldTheme: string;
-    newTheme: string;
-  }>({ x: 0, y: 0, active: false, oldTheme: "light", newTheme: "dark" });
+  }>({ x: 0, y: 0, active: false, oldTheme: "light" });
 
   const handleClick = (e: React.MouseEvent) => {
     const x = e.clientX;
     const y = e.clientY;
 
-    const nextTheme = isDark ? "light" : "dark";
+    // store old theme color for circle
+    setCircle({ x, y, active: true, oldTheme: theme || "light" });
 
-    // start ripple with old theme color
-    setCircle({
-      x,
-      y,
-      active: true,
-      oldTheme: theme || "light",
-      newTheme: nextTheme,
-    });
+    // switch theme instantly
+    setTheme(isDark ? "light" : "dark");
 
-    // switch theme AFTER animation
-    setTimeout(() => {
-      setTheme(nextTheme);
-    }, 800); // match animation duration
-
-    // cleanup circle after fade
+    // cleanup circle overlay after animation ends
     setTimeout(() => {
       setCircle((prev) => ({ ...prev, active: false }));
-    }, 1200);
+    }, 1500); // match transition duration
   };
 
   return (
@@ -65,26 +54,26 @@ export default function ThemeToggle() {
         </AnimatePresence>
       </Button>
 
-      {/* Circle Reveal */}
+      {/* Expanding Circle Overlay */}
       <AnimatePresence>
         {circle.active &&
           createPortal(
             <motion.div
               initial={{ scale: 0, opacity: 1 }}
-              animate={{ scale: 100, opacity: 1 }}
+              animate={{ scale: 120, opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.8, ease: [0.4, 0, 0.2, 1] }}
+              transition={{ duration: 1.5, ease: "easeInOut" }} // 👈 slow transition
               style={{
                 position: "fixed",
                 top: circle.y,
                 left: circle.x,
-                width: "100vmax",
-                height: "100vmax",
+                width: "150vmax", // extra large to fully cover viewport
+                height: "150vmax",
                 borderRadius: "50%",
                 background:
                   circle.oldTheme === "dark"
-                    ? "hsl(0, 0%, 10%)"
-                    : "hsl(0, 0%, 98%)",
+                    ? "hsl(0, 0%, 10%)" // dark bg
+                    : "hsl(0, 0%, 98%)", // light bg
                 zIndex: 99998,
                 transform: "translate(-50%, -50%)",
               }}
