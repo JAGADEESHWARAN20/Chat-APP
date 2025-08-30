@@ -28,7 +28,7 @@ export default function ThemeToggle() {
 
     const nextTheme = isDark ? "light" : "dark";
 
-    // Start animation, but don’t change theme yet
+    // Trigger overlay animation first
     setCircle({
       x,
       y,
@@ -36,11 +36,11 @@ export default function ThemeToggle() {
       nextTheme,
     });
 
-    // After animation finishes, apply theme + cleanup
+    // Delay theme change until animation finishes
     setTimeout(() => {
       setTheme(nextTheme);
       setCircle((prev) => ({ ...prev, active: false }));
-    }, 1200); // same duration as animation
+    }, 1200); // matches transition duration
   };
 
   return (
@@ -48,7 +48,7 @@ export default function ThemeToggle() {
       {/* Toggle Button */}
       <Button
         onClick={handleClick}
-        className="relative flex items-center z-[999999] justify-center w-10 h-10 rounded-full bg-gray-700 dark:bg-white"
+        className="relative flex items-center z-[999999] justify-center w-10 h-10 rounded-full bg-gray-700 dark:bg-white dark:text-black"
       >
         <AnimatePresence mode="wait">
           <motion.div
@@ -63,16 +63,15 @@ export default function ThemeToggle() {
         </AnimatePresence>
       </Button>
 
-      {/* Circular clip-path animation */}
+      {/* Circular clip-path animation overlay */}
       <AnimatePresence>
         {circle.active && (
           <motion.div
             initial={{ clipPath: `circle(0% at ${circle.x}px ${circle.y}px)` }}
             animate={{ clipPath: `circle(150% at ${circle.x}px ${circle.y}px)` }}
-            exit={{ opacity: 0 }}
             transition={{ duration: 1.2, ease: "easeInOut" }}
             className={`fixed inset-0 z-[99998] pointer-events-none ${
-              circle.nextTheme === "dark" ? "bg-neutral-900/80" : "bg-neutral-50/80"
+              circle.nextTheme === "dark" ? "bg-neutral-900 opacity-10" : "bg-neutral-50 opacity-10"
             }`}
           />
         )}
