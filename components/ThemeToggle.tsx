@@ -71,7 +71,7 @@ export default function ThemeToggle() {
             animate={{ clipPath: `circle(150% at ${circle.x}px ${circle.y}px)` }}
             transition={{ duration: 1.2, ease: "easeInOut" }}
             className={`fixed inset-0 z-[99998] pointer-events-none ${
-              circle.nextTheme === "dark" ? "bg-neutral-900 mix-blend-screen" : "bg-white  mix-blend-overlay"
+              circle.nextTheme === "dark" ? "bg-neutral-900/92 mix-blend-screen" : "bg-white/92  mix-blend-overlay"
             }`}
           />
         )}
