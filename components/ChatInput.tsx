@@ -118,7 +118,7 @@ export default function ChatInput() {
             : `${typingUsers.length} people are typing...`}
         </div>
       )} */}
-      <div className="flex items-center">
+      <div className="flex items-center pb-[1.2em]">
         <input
           type="text"
           placeholder={
@@ -139,6 +139,7 @@ export default function ChatInput() {
             flex-grow rounded px-3 py-2
             bg-background
             text-foreground
+            duration-100
             placeholder:text-muted-foreground
             focus:outline-none focus:ring-2 focus:ring-ring
             transition-colors
