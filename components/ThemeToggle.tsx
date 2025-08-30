@@ -15,18 +15,21 @@ export default function ThemeToggle() {
     x: number;
     y: number;
     active: boolean;
-  }>({ x: 0, y: 0, active: false });
+    oldTheme: string;
+  }>({ x: 0, y: 0, active: false, oldTheme: "light" });
 
   const handleClick = (e: React.MouseEvent) => {
     const x = e.clientX;
     const y = e.clientY;
 
-    // set circle position + active
-    setCircle({ x, y, active: true });
+    // store old theme color for circle
+    setCircle({ x, y, active: true, oldTheme: theme || "light" });
 
-    // wait for CSS animation to finish (~1000ms)
+    // switch theme instantly (so new background is behind)
+    setTheme(isDark ? "light" : "dark");
+
+    // remove circle after animation ends
     setTimeout(() => {
-      setTheme(isDark ? "light" : "dark");
       setCircle((prev) => ({ ...prev, active: false }));
     }, 1000);
   };
@@ -51,11 +54,11 @@ export default function ThemeToggle() {
         </AnimatePresence>
       </Button>
 
-      {/* Circle Reveal (Portal so it stays above everything) */}
+      {/* Circle Reveal */}
       {circle.active &&
         createPortal(
           <div
-            className={`circle-effect-reveal ${circle.active ? "active" : ""}`}
+            className={`circle-effect-reveal active ${circle.oldTheme}`}
             style={{ top: circle.y, left: circle.x }}
           />,
           document.body
