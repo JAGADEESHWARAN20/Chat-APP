@@ -1,117 +1,76 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Sun, Moon } from "lucide-react";
-import { Button } from "./ui/button";
-import { motion, AnimatePresence } from "framer-motion";
+import { useState } from "react";
 import { useTheme } from "next-themes";
+import { motion } from "framer-motion";
+import { Sun, Moon } from "lucide-react";
 
 export default function ThemeToggle() {
   const { theme, setTheme } = useTheme();
   const isDark = theme === "dark";
-  const [mounted, setMounted] = useState(false);
+
   const [circle, setCircle] = useState<{
     x: number;
     y: number;
+    maxRadius: number;
     active: boolean;
-  }>({ x: 0, y: 0, active: false });
+  }>({ x: 0, y: 0, maxRadius: 0, active: false });
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const handleClick = (e: React.MouseEvent) => {
+    const x = e.clientX;
+    const y = e.clientY;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
 
-  if (!mounted) {
-    return (
-      <Button
-        variant="ghost"
-        size="icon"
-        aria-label="Toggle theme"
-        disabled
-        className="invisible h-5 w-5"
-      />
+    // max distance to farthest corner
+    const maxRadius = Math.sqrt(
+      Math.pow(Math.max(x, vw - x), 2) + Math.pow(Math.max(y, vh - y), 2)
     );
-  }
 
-  const handleToggle = (e: React.MouseEvent<HTMLButtonElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = rect.left + rect.width / 2;
-    const y = rect.top + rect.height / 2;
-
-    setCircle({ x, y, active: true });
-
-    // wait until circle animation is done before switching theme
-    setTimeout(() => {
-      setTheme(isDark ? "light" : "dark");
-      setCircle({ ...circle, active: false });
-    }, 600);
+    setCircle({ x, y, maxRadius, active: true });
   };
 
   return (
     <>
-      {/* Toggle Button */}
-      <Button
-        variant="ghost"
-        size="icon"
-        aria-label="Toggle theme"
-        onClick={handleToggle}
-        disabled={circle.active} // 🔥 prevents spam clicks
-        className="relative flex items-center justify-center overflow-hidden"
+      {/* Button with Sun / Moon swap */}
+      <button
+        onClick={handleClick}
+        className="relative flex items-center justify-center w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-800"
       >
+        <motion.div
+          key={isDark ? "moon" : "sun"}
+          initial={{ rotate: -90, opacity: 0, scale: 0 }}
+          animate={{ rotate: 0, opacity: 1, scale: 1 }}
+          exit={{ rotate: 90, opacity: 0, scale: 0 }}
+          transition={{ duration: 0.4 }}
+        >
+          {isDark ? <Moon size={20} /> : <Sun size={20} />}
+        </motion.div>
+      </button>
 
-        <AnimatePresence mode="wait" initial={false}>
-          {isDark ? (
-            <motion.div
-              key="sun"
-              initial={{ opacity: 0, rotate: -90, scale: 0.5 }}
-              animate={{ opacity: 1, rotate: 0, scale: 1 }}
-              exit={{ opacity: 0, rotate: 90, scale: 0.5 }}
-              transition={{ duration: 0.4, ease: "easeInOut" }}
-              className="absolute"
-            >
-              <Sun className="h-5 w-5 text-yellow-500" />
-            </motion.div>
-          ) : (
-            <motion.div
-              key="moon"
-              initial={{ opacity: 0, rotate: 90, scale: 0.5 }}
-              animate={{ opacity: 1, rotate: 0, scale: 1 }}
-              exit={{ opacity: 0, rotate: -90, scale: 0.5 }}
-              transition={{ duration: 0.4, ease: "easeInOut" }}
-              className="absolute"
-            >
-              <Moon className="h-5 w-5 text-blue-500" />
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </Button>
-
-      {/* Expanding Circle Overlay */}
-      <AnimatePresence>
-        {circle.active && (
-          <motion.div
-            key="circle"
-            initial={{ scale: 0, opacity: 1 }}
-            animate={{
-              scale: 50, // enough to cover whole screen
-              opacity: 1,
-            }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.6, ease: "easeInOut" }}
-            style={{
-              position: "fixed",
-              top: circle.y,
-              left: circle.x,
-              width: "20px",
-              height: "20px",
-              borderRadius: "50%",
-              backgroundColor: isDark ? "#ffffff" : "#0a0a0a",
-              transform: "translate(-50%, -50%)",
-              pointerEvents: "none",
-              zIndex: 9999, // sits above everything, but temporary
-            }}
-          />
-        )}
-      </AnimatePresence>
+      {/* Circle Reveal Animation */}
+      {circle.active && (
+       <motion.div
+  key="circle"
+  className="circle-effect-reveal"
+  initial={{ width: 0, height: 0, opacity: 1 }}
+  animate={{
+    width: circle.maxRadius * 2,
+    height: circle.maxRadius * 2,
+    opacity: 1,
+  }}
+  exit={{ opacity: 0 }}
+  transition={{ duration: 0.6, ease: "easeInOut" }}
+  style={{
+    top: circle.y,
+    left: circle.x,
+  }}
+  onAnimationComplete={() => {
+    setTheme(isDark ? "light" : "dark");
+    setCircle((prev) => ({ ...prev, active: false }));
+  }}
+/>
+      )}
     </>
   );
 }
