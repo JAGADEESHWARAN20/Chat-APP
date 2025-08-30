@@ -16,22 +16,33 @@ export default function ThemeToggle() {
     y: number;
     active: boolean;
     oldTheme: string;
-  }>({ x: 0, y: 0, active: false, oldTheme: "light" });
+    newTheme: string;
+  }>({ x: 0, y: 0, active: false, oldTheme: "light", newTheme: "dark" });
 
   const handleClick = (e: React.MouseEvent) => {
     const x = e.clientX;
     const y = e.clientY;
 
-    // store old theme color for circle
-    setCircle({ x, y, active: true, oldTheme: theme || "light" });
+    const nextTheme = isDark ? "light" : "dark";
 
-    // switch theme instantly so new bg is ready behind
-    setTheme(isDark ? "light" : "dark");
+    // start ripple with old theme color
+    setCircle({
+      x,
+      y,
+      active: true,
+      oldTheme: theme || "light",
+      newTheme: nextTheme,
+    });
 
-    // cleanup circle after animation
+    // switch theme AFTER animation
+    setTimeout(() => {
+      setTheme(nextTheme);
+    }, 800); // match animation duration
+
+    // cleanup circle after fade
     setTimeout(() => {
       setCircle((prev) => ({ ...prev, active: false }));
-    }, 1000);
+    }, 1200);
   };
 
   return (
@@ -62,18 +73,18 @@ export default function ThemeToggle() {
               initial={{ scale: 0, opacity: 1 }}
               animate={{ scale: 100, opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 1, ease: [0.4, 0, 0.2, 1] }}
+              transition={{ duration: 0.8, ease: [0.4, 0, 0.2, 1] }}
               style={{
                 position: "fixed",
                 top: circle.y,
                 left: circle.x,
-                width: "100vmax", // big enough to cover whole screen
+                width: "100vmax",
                 height: "100vmax",
                 borderRadius: "50%",
                 background:
                   circle.oldTheme === "dark"
-                    ? "hsl(0, 0%, 10%)" // dark bg
-                    : "hsl(0, 0%, 98%)", // light bg
+                    ? "hsl(0, 0%, 10%)"
+                    : "hsl(0, 0%, 98%)",
                 zIndex: 99998,
                 transform: "translate(-50%, -50%)",
               }}
