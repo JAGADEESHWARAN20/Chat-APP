@@ -25,10 +25,10 @@ export default function ThemeToggle() {
     // store old theme color for circle
     setCircle({ x, y, active: true, oldTheme: theme || "light" });
 
-    // switch theme instantly (so new background is behind)
+    // switch theme instantly so new bg is ready behind
     setTheme(isDark ? "light" : "dark");
 
-    // remove circle after animation ends
+    // cleanup circle after animation
     setTimeout(() => {
       setCircle((prev) => ({ ...prev, active: false }));
     }, 1000);
@@ -55,14 +55,32 @@ export default function ThemeToggle() {
       </Button>
 
       {/* Circle Reveal */}
-      {circle.active &&
-        createPortal(
-          <div
-            className={`circle-effect-reveal active ${circle.oldTheme}`}
-            style={{ top: circle.y, left: circle.x }}
-          />,
-          document.body
-        )}
+      <AnimatePresence>
+        {circle.active &&
+          createPortal(
+            <motion.div
+              initial={{ scale: 0, opacity: 1 }}
+              animate={{ scale: 100, opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 1, ease: [0.4, 0, 0.2, 1] }}
+              style={{
+                position: "fixed",
+                top: circle.y,
+                left: circle.x,
+                width: "100vmax", // big enough to cover whole screen
+                height: "100vmax",
+                borderRadius: "50%",
+                background:
+                  circle.oldTheme === "dark"
+                    ? "hsl(0, 0%, 10%)" // dark bg
+                    : "hsl(0, 0%, 98%)", // light bg
+                zIndex: 99998,
+                transform: "translate(-50%, -50%)",
+              }}
+            />,
+            document.body
+          )}
+      </AnimatePresence>
     </>
   );
 }
