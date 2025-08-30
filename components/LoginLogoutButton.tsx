@@ -41,57 +41,57 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
   };
 
   const handleToggle = (e: React.MouseEvent<HTMLButtonElement>) => {
-  const btn = e.currentTarget;
-  const rect = btn.getBoundingClientRect();
+    const btn = e.currentTarget;
+    const rect = btn.getBoundingClientRect();
 
-  const x = rect.left + rect.width / 2;
-  const y = rect.top + rect.height / 2;
+    const x = rect.left + rect.width / 2;
+    const y = rect.top + rect.height / 2;
 
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
 
-  // radius = distance to farthest corner (so circle covers screen)
-  const maxRadius = Math.sqrt(
-    Math.max(x, vw - x) ** 2 + Math.max(y, vh - y) ** 2
-  );
+    // radius = distance to farthest corner (so circle covers screen)
+    const maxRadius = Math.sqrt(
+      Math.max(x, vw - x) ** 2 + Math.max(y, vh - y) ** 2
+    );
 
-  const circle = document.createElement("div");
-  circle.className = "circle-effect-reveal";
-  circle.style.left = `${x}px`;
-  circle.style.top = `${y}px`;
+    const circle = document.createElement("div");
+    circle.className = "circle-effect-reveal";
+    circle.style.left = `${x}px`;
+    circle.style.top = `${y}px`;
 
-  document.body.appendChild(circle);
+    document.body.appendChild(circle);
 
-  const goingDark = !isDark;
+    const goingDark = !isDark;
 
-  const animation = circle.animate(
-    [
+    const animation = circle.animate(
+      [
+        {
+          width: "0px",
+          height: "0px",
+          transform: "translate(-50%, -50%) scale(0)",
+        },
+        {
+          width: `${maxRadius * 2}px`,
+          height: `${maxRadius * 2}px`,
+          transform: "translate(-50%, -50%) scale(1)",
+        },
+      ],
       {
-        width: "0px",
-        height: "0px",
-        transform: "translate(-50%, -50%) scale(0)",
-      },
-      {
-        width: `${maxRadius * 2}px`,
-        height: `${maxRadius * 2}px`,
-        transform: "translate(-50%, -50%) scale(1)",
-      },
-    ],
-    {
-      duration: 600,
-      easing: "ease-in-out",
-      fill: "forwards",
-    }
-  );
+        duration: 600,
+        easing: "ease-in-out",
+        fill: "forwards",
+      }
+    );
 
-  animation.onfinish = () => {
-    setTheme(goingDark ? "dark" : "light");
-    document.body.classList.toggle("dark", goingDark);
-    document.body.classList.toggle("light", !goingDark);
-    setIsDark(goingDark);
-    circle.remove();
+    animation.onfinish = () => {
+      setTheme(goingDark ? "dark" : "light");
+      document.body.classList.toggle("dark", goingDark);
+      document.body.classList.toggle("light", !goingDark);
+      setIsDark(goingDark);
+      circle.remove();
+    };
   };
-};
 
 
   if (user) {

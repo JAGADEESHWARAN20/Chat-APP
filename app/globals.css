@@ -75,7 +75,7 @@
   }
 }
 
-/* Circular effect for theme transition */
+
 .circle-effect-reveal {
   position: absolute;
   border-radius: 50%;
@@ -89,7 +89,6 @@
 }
 
 
-/* All other utility classes remain the same */
 @layer utilities {
   .scrollbar-none {
     -ms-overflow-style: none;
