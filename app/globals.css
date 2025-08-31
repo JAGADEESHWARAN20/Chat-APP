@@ -52,26 +52,42 @@
     --ring: 263.4 70% 50.4%;
   }
 
-  body.light {
-    @apply bg-background text-foreground;
-  }
+ body.light {
+   @apply bg-background text-foreground;
+ }
 
-  body.dark {
-    @apply bg-background text-foreground;
-  }
-}
+ body.dark {
+   @apply bg-background text-foreground;
+ }
 
-@layer base {
-  body {
-    @apply bg-background text-foreground;
-    transition: background-color 0.6s ease-in-out, color 0.6s ease-in-out;
-    position: relative;
-    overflow: hidden;
-  }
+ body {
+   @apply bg-background text-foreground;
+   transition: background-color 0.6s ease-in-out, color 0.6s ease-in-out;
+   position: relative;
+   overflow: hidden;
+ }
 
-  html {
-    transition: background-color 0.6s ease-in-out, color 0.6s ease-in-out;
-  }
+ html {
+   transition: background-color 0.6s ease-in-out, color 0.6s ease-in-out;
+ }
+
+ /* Add transitioning class to delay full opacity change */
+ body.transitioning {
+   transition: none;
+   /* Temporarily disable transition during animation */
+ }
+
+ body.transitioning.light {
+   --background: 0 0% 100%;
+   /* Force light theme colors */
+   --foreground: 224 71.4% 4.1%;
+ }
+
+ body.transitioning.dark {
+   --background: 224 71.4% 4.1%;
+   /* Force dark theme colors */
+   --foreground: 210 20% 98%;
+ }
 }
 
 

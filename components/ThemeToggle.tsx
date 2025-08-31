@@ -28,7 +28,7 @@ export default function ThemeToggle() {
 
     const nextTheme = isDark ? "light" : "dark";
 
-    // Trigger overlay animation first
+    // Trigger animation and add transitioning class to body
     setCircle({
       x,
       y,
@@ -36,11 +36,15 @@ export default function ThemeToggle() {
       nextTheme,
     });
 
-    // Delay theme change until animation finishes
+    // Delay theme change and class removal to match animation duration
     setTimeout(() => {
+      document.body.classList.add("transitioning");
       setTheme(nextTheme);
-      setCircle((prev) => ({ ...prev, active: false }));
-    }, 1200); // matches transition duration
+      setTimeout(() => {
+        document.body.classList.remove("transitioning");
+        setCircle((prev) => ({ ...prev, active: false }));
+      }, 600); // Matches body transition duration (0.6s)
+    }, 1200); // Matches animation duration (1.2s)
   };
 
   return (
@@ -48,7 +52,7 @@ export default function ThemeToggle() {
       {/* Toggle Button */}
       <Button
         onClick={handleClick}
-        className="relative flex items-center z-[999999] justify-center w-10 h-10 rounded-full   text-white bg-violet-700 "
+        className="relative flex items-center justify-center w-10 h-10 rounded-full text-white bg-violet-700 z-[999999]"
       >
         <AnimatePresence mode="wait">
           <motion.div
@@ -58,21 +62,23 @@ export default function ThemeToggle() {
             exit={{ rotate: 90, opacity: 0, scale: 0 }}
             transition={{ duration: 0.4 }}
           >
-            {isDark ? <Moon size={20} /> : <Sun size={20}  />}
+            {isDark ? <Moon size={20} /> : <Sun size={20} />}
           </motion.div>
         </AnimatePresence>
       </Button>
 
-      {/* Circular clip-path animation overlay */}
+      {/* Circular animation effect without blocking content */}
       <AnimatePresence>
         {circle.active && (
           <motion.div
             initial={{ clipPath: `circle(0% at ${circle.x}px ${circle.y}px)` }}
             animate={{ clipPath: `circle(150% at ${circle.x}px ${circle.y}px)` }}
             transition={{ duration: 1.2, ease: "easeInOut" }}
-            className={`fixed inset-0 z-[99998] pointer-events-none ${
-              circle.nextTheme === "dark" ? "bg-gray-900/90 mix-blend-screen" : "bg-white/90  mix-blend-overlay"
-            }`}
+            className="fixed inset-0 z-[99998] pointer-events-none"
+            style={{
+              background: `radial-gradient(circle at ${circle.x}px ${circle.y}px, ${circle.nextTheme === "dark" ? "rgba(0, 0, 0, 0.3)" : "rgba(255, 255, 255, 0.3)"
+                } 0%, transparent 70%)`,
+            }}
           />
         )}
       </AnimatePresence>
