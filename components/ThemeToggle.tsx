@@ -9,7 +9,7 @@ export default function ThemeToggleButton() {
 
   return (
     <div className="w-full justify-evenly flex items-center">
-    <Label>{ isDark?"Light":"Dark"}</Label>
+    <Label>{ isDark?"Dark":"Light"}</Label>
     <Button
       onClick={(e) => {
         const nextTheme = isDark ? "light" : "dark";
