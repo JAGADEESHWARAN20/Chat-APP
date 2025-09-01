@@ -15,10 +15,10 @@ export default function ChatLayout({
   onClose?: () => void; 
 }) {
   return (
-    <div className="flex-1 w-full flex transition-all duration-300">
+    <div className="flex-1 w-full flex transition-all duration-300 h-[100%]">
       <LeftSidebar user={user} isOpen={isOpen} onClose={onClose} /> {/* 🔹 pass it down */}
       <div
-        className={`flex-1 w-full lg:max-w-[75vw] mx-auto px-6 py-4 h-[90%] flex flex-col ${
+        className={`flex-1 w-full lg:max-w-[75vw]  mx-auto px-6 py-4 h-[90vh] flex flex-col ${
           isOpen ? "lg:ml-[25%]" : "lg:ml-0"
         }`}
       >
