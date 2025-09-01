@@ -31,7 +31,7 @@ export default function Page() {
           <div className="flex items-center justify-between max-w-[100vw] mx-auto w-full">
             
             {/* Left section (Sidebar toggle + Logo + Tabs) */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-[.1em]">
               {/* Sidebar toggle (mobile only) */}
               <button
                 onClick={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -50,8 +50,13 @@ export default function Page() {
                 FlyChat
               </h1>
 
+              
+            </div>
+
+            {/* Right section (Actions) */}
+            <div className="flex items-center gap-2">
               {/* Tabs */}
-              <div className="flex items-center gap-2 ml-2">
+              <div className="flex items-center gap-[.01em] ">
                 <button
                   onClick={() => setActiveTab("home")}
                   className={`glass-button flex items-center gap-2 ${
@@ -71,10 +76,6 @@ export default function Page() {
                   <span className="hidden sm:inline">Search</span>
                 </button>
               </div>
-            </div>
-
-            {/* Right section (Actions) */}
-            <div className="flex items-center gap-2">
               <CreateRoomDialog user={user} />
               <NotificationsWrapper />
               <LoginLogoutButton user={user} />
