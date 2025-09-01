@@ -76,7 +76,7 @@ export default function ThemeToggle() {
             transition={{ duration: 1.2, ease: "easeInOut" }}
             className="fixed inset-0 z-[99998] pointer-events-none"
             style={{
-              background: `radial-gradient(circle at ${circle.x}px ${circle.y}px, ${circle.nextTheme === "dark" ? "rgba(0, 0, 0, 0.6)" : "rgba(255, 255, 255, 0.6)"
+              background: `radial-gradient(circle at ${circle.x}px ${circle.y}px, ${circle.nextTheme === "dark" ? "rgba(255,233,0,.4)" : "rgba(255, 255, 255, 0.6)"
                 } 0%)`,
             }}
           />

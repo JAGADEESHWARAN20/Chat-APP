@@ -41,9 +41,9 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
             <Menu className="h-5 w-5" />
           </Button>
         </SheetTrigger>
-        <SheetContent side="right" className="w-[300px] z-[9999999]">
+        <SheetContent side="right" className="w-[300px] ">
           <SheetHeader>
-            <SheetTitle className="flex items-center gap-2">
+            <SheetTitle className="flex items-center gap-2 z-[999999]">
               <Avatar className="h-8 w-8">
                 <AvatarImage
                   src={user.user_metadata.avatar_url || ""}
@@ -57,12 +57,12 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
             </SheetTitle>
           </SheetHeader>
           <div className="flex flex-col gap-4 mt-6">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between z-[999999]">
               <span className="text-sm font-medium">Theme</span>
               <ThemeToggle />
             </div>
             <Link href={`/profile/${user.id}`}>
-              <Button variant="outline" size="sm" className="w-full">
+              <Button variant="outline" size="sm" className="w-full z-[999999]">
                 View Profile
               </Button>
             </Link>
@@ -70,7 +70,7 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
               onClick={handleLogout}
               variant="ghost"
               size="sm"
-              className="text-red-500 hover:text-red-600 hover:bg-red-100/10"
+              className="text-red-500 hover:text-red-600 hover:bg-red-100/10 z-[999999]"
             >
               <LogOut className="h-4 w-4 mr-2" /> Logout
             </Button>
