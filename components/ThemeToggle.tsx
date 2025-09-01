@@ -25,26 +25,16 @@ export default function ThemeToggle() {
   const handleClick = (e: React.MouseEvent) => {
     const x = e.clientX;
     const y = e.clientY;
-
     const nextTheme = isDark ? "light" : "dark";
 
-    // Trigger animation and add transitioning class to body
-    setCircle({
-      x,
-      y,
-      active: true,
-      nextTheme,
-    });
+    setCircle({ x, y, active: true, nextTheme });
 
-    // Delay theme change and class removal to match animation duration
     setTimeout(() => {
-      document.body.classList.add("transitioning");
       setTheme(nextTheme);
       setTimeout(() => {
-        document.body.classList.remove("transitioning");
         setCircle((prev) => ({ ...prev, active: false }));
-      }, 600); // Matches body transition duration (0.6s)
-    }, 1200); // Matches animation duration (1.2s)
+      }, 1200);
+    }, 10);
   };
 
   return (
@@ -67,22 +57,27 @@ export default function ThemeToggle() {
         </AnimatePresence>
       </Button>
 
-      {/* Circular animation effect without blocking content */}
+      {/* Masking Effect */}
       <AnimatePresence>
         {circle.active && (
           <motion.div
-  initial={{ clipPath: `circle(0% at ${circle.x}px ${circle.y}px)` }}
-  animate={{ clipPath: `circle(150% at ${circle.x}px ${circle.y}px)` }}
-  transition={{ duration: 1.2, ease: "easeInOut" }}
-  className="fixed inset-0 z-[99998] pointer-events-none"
-  style={{
-    background: `radial-gradient(
-      circle at ${circle.x}px ${circle.y}px,
-      hsl(${circle.nextTheme === "dark" ? "224 71.4% 4.1%" : "0 0% 100%"}) 0%,
-      transparent 80%
-    )`,
-  }}
-/>
+            initial={{ opacity: 1 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 1.2, ease: "easeInOut" }}
+            className={`fixed inset-0 z-[99998] pointer-events-none ${
+              circle.nextTheme === "dark" ? "bg-[#09090b]" : "bg-white"
+            }`}
+            style={{
+              WebkitMaskImage: `radial-gradient(circle at ${circle.x}px ${circle.y}px, black 0%, transparent 0%)`,
+              maskImage: `radial-gradient(circle at ${circle.x}px ${circle.y}px, black 0%, transparent 0%)`,
+              WebkitMaskRepeat: "no-repeat",
+              maskRepeat: "no-repeat",
+              WebkitMaskSize: "200% 200%",
+              maskSize: "200% 200%",
+              WebkitMaskPosition: "center",
+              maskPosition: "center",
+            }}
+          />
         )}
       </AnimatePresence>
     </>
