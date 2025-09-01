@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Button } from "./ui/button";
-import { supabaseBrowser } from "@/lib/supabase/browser";
+
 import { User as SupabaseUser, RealtimePostgresChangesPayload } from "@supabase/supabase-js";
-import { useRouter } from "next/navigation";
+
 import ChatPresence from "./ChatPresence";
 import {
   Popover,

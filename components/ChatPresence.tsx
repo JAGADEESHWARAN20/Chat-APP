@@ -1,90 +1,29 @@
 "use client";
-import { useUser } from "@/lib/store/user";
-import { supabaseBrowser } from "@/lib/supabase/browser";
-import React, { useEffect, useState } from "react";
-import { useRoomContext } from "@/lib/store/RoomContext";
 
-interface PresenceState {
-    user_id: string;
-    online_at: string;
-}
+import React from "react";
+import { useUser } from "@/lib/store/user";
+import { useRoomContext } from "@/lib/store/RoomContext";
+import { useRoomPresence } from "@/hooks/useRoomPresence";
 
 export default function ChatPresence() {
-    const user = useUser((state) => state.user);
-    const { state } = useRoomContext();
-    const { selectedRoom } = state;
-    const supabase = supabaseBrowser();
-    const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
+  const user = useUser((state) => state.user);
+  const { state } = useRoomContext();
+  const { selectedRoom } = state;
 
-    useEffect(() => {
-        if (!user || !selectedRoom) return;
+  // Use the hook for the selected room
+  const onlineCounts = useRoomPresence(selectedRoom ? [selectedRoom.id] : []);
+  const onlineCount = selectedRoom ? onlineCounts.get(selectedRoom.id) ?? 0 : 0;
 
-        const channelName = `room_${selectedRoom.id}_presence_main`;
-        const channel = supabase.channel(channelName, {
-            config: {
-                presence: {
-                    key: user.id,
-                },
-            },
-        });
+  if (!user || !selectedRoom) {
+    return <div className="h-3 w-1" />;
+  }
 
-        const handleSync = () => {
-            const presenceState = channel.presenceState<PresenceState>();
-            const userIds = new Set<string>();
-
-            Object.values(presenceState).forEach((stateList) => {
-                stateList.forEach((presence) => {
-                    if (presence.user_id) {
-                        userIds.add(presence.user_id);
-                    }
-                });
-            });
-
-            setOnlineUsers(userIds);
-        };
-
-        channel
-            .on('presence', { event: 'sync' }, handleSync)
-            .on('presence', { event: 'join' }, handleSync)
-            .on('presence', { event: 'leave' }, handleSync)
-            .subscribe(async (status) => {
-                if (status === 'SUBSCRIBED') {
-                    try {
-                        await channel.track({
-                            user_id: user.id,
-                            online_at: new Date().toISOString(),
-                            room_id: selectedRoom.id
-                        });
-
-                        // Ensure the user is marked active in the room
-                        await supabase
-                            .from("room_members")
-                            .update({ active: true })
-                            .eq("room_id", selectedRoom.id)
-                            .eq("user_id", user.id);
-                    } catch (error) {
-                        console.error('Error tracking presence or updating active status:', error);
-                    }
-                }
-            });
-
-
-        return () => {
-            channel.untrack();
-            channel.unsubscribe();
-        };
-    }, [user, supabase, selectedRoom]);
-
-    if (!user || !selectedRoom) {
-        return <div className="h-3 w-1" />;
-    }
-
-    return (
-        <div className="flex items-center gap-1 sm:text-[1vw] md:text-[3vw]">
-            <div className="h-[1.6vw] w-[1.6vw] lg:h-[.6vw] lg:w-[.6vw] bg-green-500 rounded-full animate-pulse" />
-            <h1 className="text-[2vw] lg:text-[.3em] text-gray-400">
-                {onlineUsers.size} {onlineUsers.size === 1 ? 'online' : 'online'}
-            </h1>
-        </div>
-    );
+  return (
+    <div className="flex items-center gap-1 sm:text-[1vw] md:text-[3vw]">
+      <div className="h-[1.6vw] w-[1.6vw] lg:h-[.6vw] lg:w-[.6vw] bg-green-500 rounded-full animate-pulse" />
+      <h1 className="text-[2vw] lg:text-[.3em] text-gray-400">
+        {onlineCount} {onlineCount === 1 ? "online" : "online"}
+      </h1>
+    </div>
+  );
 }
