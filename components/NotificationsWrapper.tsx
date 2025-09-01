@@ -10,14 +10,13 @@ export default function NotificationsWrapper() {
 
      return (
           <div className="relative">
-               <Button
-                    variant="ghost"
-                    size="icon"
+               <button
+                    title="notification"
                     onClick={() => setIsNotificationsOpen(true)}
                     className="relative"
                >
                     <Bell className="h-5 w-5" />
-               </Button>
+               </button>
                <Notifications
                     isOpen={isNotificationsOpen}
                     onClose={() => setIsNotificationsOpen(false)}
