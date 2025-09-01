@@ -1,82 +1,56 @@
 "use client";
 
-import { useState } from "react";
 import { useTheme } from "next-themes";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sun, Moon } from "lucide-react";
-import { Button } from "./ui/button";
+import { useState } from "react";
 
 export default function ThemeToggle() {
   const { theme, setTheme } = useTheme();
-  const isDark = theme === "dark";
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [clickPos, setClickPos] = useState({ x: 0, y: 0 });
 
-  const [circle, setCircle] = useState<{
-    x: number;
-    y: number;
-    active: boolean;
-    nextTheme: string;
-  }>({
-    x: 0,
-    y: 0,
-    active: false,
-    nextTheme: "light",
-  });
-
-  const handleClick = (e: React.MouseEvent) => {
-    const x = e.clientX;
-    const y = e.clientY;
-    const nextTheme = isDark ? "light" : "dark";
-
-    setCircle({ x, y, active: true, nextTheme });
-
-    setTimeout(() => {
-      setTheme(nextTheme);
-      setTimeout(() => {
-        setCircle((prev) => ({ ...prev, active: false }));
-      }, 1200);
-    }, 10);
+  const toggleTheme = (e: React.MouseEvent) => {
+    const rect = document.body.getBoundingClientRect();
+    setClickPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+    setIsAnimating(true);
+    setTheme(theme === "light" ? "dark" : "light");
+    setTimeout(() => setIsAnimating(false), 1200); // match animation duration
   };
 
   return (
     <>
-      {/* Toggle Button */}
-      <Button
-        onClick={handleClick}
-        className="relative flex items-center justify-center w-10 h-10 rounded-full text-white bg-violet-700 z-[999999]"
+      {/* Floating button */}
+      <button
+        onClick={toggleTheme}
+        className="fixed top-4 right-4 z-50 flex items-center justify-center w-12 h-12 rounded-full bg-gray-200 dark:bg-gray-800 shadow-lg transition-colors"
       >
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={isDark ? "moon" : "sun"}
-            initial={{ rotate: -90, opacity: 0, scale: 0 }}
-            animate={{ rotate: 0, opacity: 1, scale: 1 }}
-            exit={{ rotate: 90, opacity: 0, scale: 0 }}
-            transition={{ duration: 0.4 }}
-          >
-            {isDark ? <Moon size={20} /> : <Sun size={20} />}
-          </motion.div>
-        </AnimatePresence>
-      </Button>
+        {theme === "light" ? (
+          <Sun className="w-6 h-6 text-yellow-500" />
+        ) : (
+          <Moon className="w-6 h-6 text-blue-400" />
+        )}
+      </button>
 
-      {/* Masking Effect */}
+      {/* Circular expanding overlay */}
       <AnimatePresence>
-        {circle.active && (
+        {isAnimating && (
           <motion.div
-            initial={{ opacity: 1 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 1.2, ease: "easeInOut" }}
-            className={`fixed inset-0 z-[99998] pointer-events-none ${
-              circle.nextTheme === "dark" ? "bg-[#09090b]" : "bg-white"
-            }`}
-            style={{
-              WebkitMaskImage: `radial-gradient(circle at ${circle.x}px ${circle.y}px, black 0%, transparent 0%)`,
-              maskImage: `radial-gradient(circle at ${circle.x}px ${circle.y}px, black 0%, transparent 0%)`,
-              WebkitMaskRepeat: "no-repeat",
-              maskRepeat: "no-repeat",
-              WebkitMaskSize: "200% 200%",
-              maskSize: "200% 200%",
-              WebkitMaskPosition: "center",
-              maskPosition: "center",
+            key="circle-overlay"
+            initial={{
+              clipPath: `circle(0% at ${clickPos.x}px ${clickPos.y}px)`,
             }}
+            animate={{
+              clipPath: `circle(150% at ${clickPos.x}px ${clickPos.y}px)`,
+            }}
+            exit={{
+              opacity: 0,
+              transition: { duration: 0.3 },
+            }}
+            transition={{ duration: 1.2, ease: "easeInOut" }}
+            className={`fixed inset-0 z-40 ${
+              theme === "light" ? "bg-white" : "bg-neutral-900"
+            }`}
           />
         )}
       </AnimatePresence>
