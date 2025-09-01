@@ -31,9 +31,9 @@ export default function Page() {
         <header className="w-full px-6 py-3 border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 glass-gradient-header">
           <div className="flex items-center justify-between max-w-[100vw] mx-auto w-full">
             <div className="flex items-center gap-4">
-              <button
+              <Button
                 onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                className="lg:hidden p-2 rounded-md glass-button transition-transform duration-200 hover:scale-110"
+                className="lg:hidden rounded-md glass-button transition-transform duration-200 hover:scale-110"
                 aria-label={isSidebarOpen ? "Close sidebar" : "Open sidebar"}
               >
                 {isSidebarOpen ? (
@@ -41,17 +41,17 @@ export default function Page() {
                 ) : (
                   <ChevronRight className="w-6 h-6 text-foreground" />
                 )}
-              </button>
+              </Button>
               <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-500 to-green-500 bg-clip-text text-transparent">
                 FlyChat
               </h1>
             </div>
 
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-[.01em]">
               {/* Tab Triggers */}
               <Button
                 onClick={() => setActiveTab("home")}
-                className={`p-2 rounded-md glass-button transition-colors ${
+                className={` rounded-md glass-button transition-colors ${
                   activeTab === "home" ? "bg-primary/20" : "hover:bg-accent"
                 }`}
                 aria-label="Home Tab"
@@ -60,7 +60,7 @@ export default function Page() {
               </Button>
               <Button
                 onClick={() => setActiveTab("search")}
-                className={`p-2 rounded-md glass-button transition-colors ${
+                className={` rounded-md glass-button transition-colors ${
                   activeTab === "search" ? "bg-primary/20" : "hover:bg-accent"
                 }`}
                 aria-label="Search Tab"
