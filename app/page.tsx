@@ -10,7 +10,6 @@ import NotificationsWrapper from "@/components/NotificationsWrapper";
 import { RoomProvider } from "@/lib/store/RoomContext";
 import ChatLayout from "@/components/ChatLayout";
 import { ChevronLeft, ChevronRight, Home, Search } from "lucide-react";
-import { Button } from "@/components/ui/button";
 
 export default function Page() {
   const [user, setUser] = useState<any>(null);
@@ -27,48 +26,55 @@ export default function Page() {
   return (
     <RoomProvider user={user}>
       <div className="min-h-[90vh] flex flex-col overflow-hidden">
-        {/* Header section with full width */}
-        <header className="w-full px-6 py-3 border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 glass-gradient-header">
+        {/* Header */}
+        <header className="w-full px-4 py-3 border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 glass-gradient-header">
           <div className="flex items-center justify-between max-w-[100vw] mx-auto w-full">
-            <div className="flex items-center gap-4">
+            
+            {/* Left section (Sidebar toggle + Logo + Tabs) */}
+            <div className="flex items-center gap-3">
+              {/* Sidebar toggle (mobile only) */}
               <button
                 onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                className="lg:hidden rounded-md glass-button transition-transform duration-200 hover:scale-110"
+                className="lg:hidden glass-button"
                 aria-label={isSidebarOpen ? "Close sidebar" : "Open sidebar"}
               >
                 {isSidebarOpen ? (
-                  <ChevronLeft className="w-6 h-6 text-foreground" />
+                  <ChevronLeft className="w-5 h-5" />
                 ) : (
-                  <ChevronRight className="w-6 h-6 text-foreground" />
+                  <ChevronRight className="w-5 h-5" />
                 )}
               </button>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-500 to-green-500 bg-clip-text text-transparent">
+
+              {/* Logo */}
+              <h1 className="text-xl md:text-2xl font-bold bg-gradient-to-r from-blue-500 to-green-500 bg-clip-text text-transparent">
                 FlyChat
               </h1>
+
+              {/* Tabs */}
+              <div className="flex items-center gap-2 ml-2">
+                <button
+                  onClick={() => setActiveTab("home")}
+                  className={`glass-button flex items-center gap-2 ${
+                    activeTab === "home" ? "bg-primary/20" : ""
+                  }`}
+                >
+                  <Home className="w-4 h-4" />
+                  <span className="hidden sm:inline">Home</span>
+                </button>
+                <button
+                  onClick={() => setActiveTab("search")}
+                  className={`glass-button flex items-center gap-2 ${
+                    activeTab === "search" ? "bg-primary/20" : ""
+                  }`}
+                >
+                  <Search className="w-4 h-4" />
+                  <span className="hidden sm:inline">Search</span>
+                </button>
+              </div>
             </div>
 
-            <div className="flex items-center gap-[.01em]">
-              {/* Tab Triggers */}
-              <button
-                onClick={() => setActiveTab("home")}
-                className={` p-1 rounded-md glass-button transition-colors ${
-                  activeTab === "home" ? "bg-primary/20" : "hover:bg-accent"
-                }`}
-                aria-label="Home Tab"
-              >
-                <Home className="w-5 h-5" />
-              </button>
-              <button
-                onClick={() => setActiveTab("search")}
-                className={`p-1 rounded-md glass-button transition-colors ${
-                  activeTab === "search" ? "bg-primary/20" : "hover:bg-accent"
-                }`}
-                aria-label="Search Tab"
-              >
-                <Search className="w-5 h-5" />
-              </button>
-
-              {/* Other actions */}
+            {/* Right section (Actions) */}
+            <div className="flex items-center gap-2">
               <CreateRoomDialog user={user} />
               <NotificationsWrapper />
               <LoginLogoutButton user={user} />
@@ -76,15 +82,14 @@ export default function Page() {
           </div>
         </header>
 
-        {/* Main content area */}
+        {/* Main content */}
         <div className="flex flex-1 w-full overflow-hidden">
           {activeTab === "home" ? (
-              <ChatLayout 
-                user={user} 
-                isOpen={isSidebarOpen} 
-                onClose={() => setIsSidebarOpen(false)} 
-              />
-
+            <ChatLayout
+              user={user}
+              isOpen={isSidebarOpen}
+              onClose={() => setIsSidebarOpen(false)}
+            />
           ) : (
             <div className="flex-1 w-full px-6 py-4 overflow-y-auto">
               <SearchComponent user={user} />
