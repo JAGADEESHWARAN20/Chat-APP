@@ -47,8 +47,8 @@ export default function ThemeTransitionWrapper({
 
     // Wait until animation ends before switching theme
     setTimeout(() => {
-      setTheme(nextTheme);
       setCircle((prev) => ({ ...prev, active: false }));
+      setTheme(nextTheme);
     }, 600); // matches motion duration
   };
 
