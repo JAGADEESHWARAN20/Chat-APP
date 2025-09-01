@@ -7,7 +7,7 @@ import { Button } from "./ui/button";
 import { toast } from "sonner";
 import { useUser } from "@/lib/store/user";
 import { IRoom, IRoomParticipant } from "@/lib/types/rooms";
-import { ArrowRight, LogOut, Lock, Users } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { RoomCard } from "./ui/room-card";
 
