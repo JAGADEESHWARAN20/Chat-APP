@@ -8,7 +8,7 @@ export default function ThemeToggleButton() {
   const { triggerTransition, isDark } = useThemeTransition();
 
   return (
-    <div className="w-full justify-evenly flex items-center">
+    <div className="w-full justify-evenly z-[9999999] flex items-center">
     <Label>{ isDark?"Dark":"Light"}</Label>
     <Button
       onClick={(e) => {

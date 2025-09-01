@@ -58,7 +58,9 @@ export default function ThemeTransitionWrapper({
         circle.nextTheme === "dark"
           ? "hsl(224 71.4% 4.1%)"
           : "hsl(0 0% 100%)",
-      mixBlendMode: "difference", // <-- allows transparency blending with old theme
+      mixBlendMode: circle.nextTheme === "dark"
+          ? "difference"
+          : "lighten", // <-- allows transparency blending with old theme
     };
   };
 
