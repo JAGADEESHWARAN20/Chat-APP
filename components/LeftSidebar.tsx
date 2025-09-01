@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { RoomWithMembershipCount, useRoomContext } from "@/lib/store/RoomContext";
 import { Avatar, AvatarImage } from "@/components/ui/avatar";
-import { Loader2, Plus, ChevronLeft } from "lucide-react";
+import { Loader2, Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "./ui/button";
 
@@ -62,12 +62,10 @@ export default function LeftSidebar({
 
   return (
     <div
-      className={`fixed lg:static inset-y-0 left-0 w-3/4 lg:w-1/4 p-6 bg-card border-r border-border/40 h-screen flex flex-col transition-transform duration-300 transform ${
+      className={`fixed lg:static inset-y-0 left-0 w-3/4 lg:w-1/4 p-[.5em] bg-card border-r border-border/40 h-screen flex flex-col transition-transform duration-300 transform ${
         isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
       } z-50 lg:z-0`}
     >
-      
-
       <Tabs defaultValue="rooms" className="w-full mt-10 lg:mt-0 flex flex-col gap-[.1em]" onValueChange={setTabValue}>
         <div className="flex gap-[.2em] items-center">
           <TabsList className="grid w-full grid-cols-3 mb-1">
@@ -81,8 +79,8 @@ export default function LeftSidebar({
           onClick={onClose}
           className="p-2 rounded-full bg-background/80 hover:bg-muted transition-colors lg:hidden"
           aria-label="Close sidebar"
-        >
-          <ChevronLeft className="h-5 w-5 text-foreground" />
+            >
+              <ChevronRight className="h-5 w-5 text-foreground rotate-90 duration-200 transition-all" />
         </Button>
       )}
         </div>
