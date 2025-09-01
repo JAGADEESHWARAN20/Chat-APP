@@ -7,15 +7,21 @@ import { useState } from "react";
 
 export default function ThemeToggle() {
   const { theme, setTheme } = useTheme();
-  const [isAnimating, setIsAnimating] = useState(false);
+  const [animatingTheme, setAnimatingTheme] = useState<string | null>(null);
   const [clickPos, setClickPos] = useState({ x: 0, y: 0 });
 
   const toggleTheme = (e: React.MouseEvent) => {
+    const newTheme = theme === "light" ? "dark" : "light";
+    setAnimatingTheme(newTheme);
+
     const rect = document.body.getBoundingClientRect();
     setClickPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
-    setIsAnimating(true);
-    setTheme(theme === "light" ? "dark" : "light");
-    setTimeout(() => setIsAnimating(false), 1200); // match animation duration
+
+    // switch theme after short delay so Tailwind classes apply
+    setTimeout(() => setTheme(newTheme), 0);
+
+    // cleanup after animation
+    setTimeout(() => setAnimatingTheme(null), 1200);
   };
 
   return (
@@ -32,11 +38,11 @@ export default function ThemeToggle() {
         )}
       </button>
 
-      {/* Circular expanding overlay */}
+      {/* Circular theme reveal layer */}
       <AnimatePresence>
-        {isAnimating && (
+        {animatingTheme && (
           <motion.div
-            key="circle-overlay"
+            key="theme-reveal"
             initial={{
               clipPath: `circle(0% at ${clickPos.x}px ${clickPos.y}px)`,
             }}
@@ -48,10 +54,23 @@ export default function ThemeToggle() {
               transition: { duration: 0.3 },
             }}
             transition={{ duration: 1.2, ease: "easeInOut" }}
-            className={`fixed inset-0 z-40 ${
-              theme === "light" ? "bg-white" : "bg-neutral-900"
-            }`}
-          />
+            className="fixed inset-0 z-40 pointer-events-none"
+          >
+            {/* This child is a full-screen clone styled with the NEW theme */}
+            <div
+              className={
+                animatingTheme === "light"
+                  ? "bg-white text-black h-full w-full flex items-center justify-center"
+                  : "bg-neutral-900 text-white h-full w-full flex items-center justify-center"
+              }
+            >
+              <h1 className="text-3xl font-bold">
+                {animatingTheme === "light"
+                  ? "Light Mode Preview 🌞"
+                  : "Dark Mode Preview 🌙"}
+              </h1>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
     </>
