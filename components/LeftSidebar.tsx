@@ -62,7 +62,7 @@ export default function LeftSidebar({
 
   return (
     <div
-      className={`fixed lg:static inset-y-0 left-0 w-3/4 lg:w-1/4 p-[.5em] bg-card border-r border-border/40 h-screen flex flex-col transition-transform duration-300 transform ${
+      className={`fixed lg:static inset-y-0 left-0 w-full lg:w-1/4 p-[.5em] bg-card border-r border-border/40 h-screen flex flex-col transition-transform duration-300 transform ${
         isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
       } z-50 lg:z-0`}
     >
