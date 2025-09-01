@@ -1,158 +1,86 @@
 "use client";
 
-import React, { useCallback, useRef, useState } from "react";
-import { supabaseBrowser } from "@/lib/supabase/browser";
+import React, { useState } from "react";
+import { v4 as uuidv4 } from "uuid";
 import { useUser } from "@/lib/store/user";
 import { useRoomContext } from "@/lib/store/RoomContext";
-import { useDirectChatStore } from "@/lib/store/directChatStore";
-import { Send } from "lucide-react";
-import { toast } from "sonner";
-import { v4 as uuidv4 } from "uuid";
-import { Imessage, useMessage } from "@/lib/store/messages";
-import { useTypingStatus } from "@/hooks/useTypingStatus";
-
-
+import { supabaseBrowser } from "@/lib/supabase/browser";
+import type { Imessage } from "@/types/db"; // your type alias
 
 export default function ChatInput() {
-  const supabase = supabaseBrowser();
+  const [text, setText] = useState("");
+  const [loading, setLoading] = useState(false);
+
   const user = useUser((state) => state.user);
-  const { state } = useRoomContext();
-  const { selectedRoom } = state;
-  const selectedDirectChat = useDirectChatStore((state) => state.selectedChat);
+  const { state, addMessage } = useRoomContext();
+  const { selectedRoom, selectedDirectChat } = state;
 
-  const addMessage = useMessage((state) => state.addMessage);
-  const setOptimisticIds = useMessage((state) => state.setOptimisticIds);
+  const sendMessage = async () => {
+    if (!user || !text.trim()) return;
 
-  const [inputValue, setInputValue] = useState("");
-  const typingTimeoutRef = useRef<NodeJS.Timeout>();
+    setLoading(true);
 
-  const roomId = selectedRoom?.id || selectedDirectChat?.id || "";
-  const userId = user?.id || "";
-
-  // ✅ use startTyping instead of setIsTyping
-  const { typingUsers, startTyping } = useTypingStatus(roomId, userId);
-
-  const handleInputChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const value = e.target.value;
-      setInputValue(value);
-
-      // Mark user as typing
-      try {
-        startTyping();
-      } catch (error) {
-        console.error("Error setting typing status:", error);
-      }
-    },
-    [startTyping]
-  );
-
-  async function handleSendMessage(text: string) {
-    if (!text.trim() || !user) {
-      toast.error("Please log in and enter a message");
-      return;
-    }
-    if (!roomId) {
-      toast.error("Please select a room or user to chat with");
-      return;
-    }
-
-    setInputValue("");
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-    }
-
-    const id = uuidv4();
+    // ✅ Optimistic message (uses sender_id instead of user_id)
     const newMessage: Imessage = {
-      id,
-      text,
-      sender_id: user.id,
-      room_id: selectedRoom?.id || null,
-      direct_chat_id: selectedDirectChat?.id || null,
-      is_edited: false,
-      dm_thread_id: null,
+      id: uuidv4(),
+      sender_id: user.id, // matches your DB column
+      room_id: selectedRoom?.id ?? null,
+      direct_chat_id: selectedDirectChat?.id ?? null,
+      content: text,
       created_at: new Date().toISOString(),
-      status: "sent",
       profiles: {
         id: user.id,
-        avatar_url: user.user_metadata.avatar_url || "",
-        created_at: user.created_at || new Date().toISOString(),
-        display_name: user.user_metadata.display_name || "Anonymous",
-        username: user.user_metadata.username || "anonymous",
-        bio: null,
+        display_name: user.display_name ?? "",
+        avatar_url: user.avatar_url ?? "",
+        username: user.username ?? "",
+        bio: user.bio ?? "",
+        created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       },
     };
 
-    // Optimistic update
+    // Add message optimistically
     addMessage(newMessage);
-    setOptimisticIds(id);
 
-    try {
-      const { error } = await supabase.from("messages").insert({
-        id,
-        text,
-        room_id: selectedRoom?.id,
-        direct_chat_id: selectedDirectChat?.id,
-        sender_id: user.id,
-        status: "sent",
+    setText("");
+
+    // ✅ Persist in DB
+    const { error } = await supabaseBrowser
+      .from("messages")
+      .insert({
+        id: newMessage.id,
+        sender_id: newMessage.sender_id,
+        room_id: newMessage.room_id,
+        direct_chat_id: newMessage.direct_chat_id,
+        content: newMessage.content,
       });
 
-      if (error) throw error;
-    } catch (error) {
-      toast.error(
-        `Failed to send message: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`
-      );
-      useMessage.getState().optimisticDeleteMessage(id); // Rollback
+    if (error) {
+      console.error("Error sending message:", error);
     }
-  }
+
+    setLoading(false);
+  };
 
   return (
-    <div className="p-1 flex flex-col">
-      {/* {typingUsers.length > 0 && (
-        <div className="text-sm text-gray-500 px-2">
-          {typingUsers.length === 1
-            ? "Someone is typing..."
-            : `${typingUsers.length} people are typing...`}
-        </div>
-      )} */}
-      <div className="flex items-center ">
-        <input
-          type="text"
-          placeholder={
-            roomId
-              ? `Message ${selectedRoom ? "#" + selectedRoom.name : "..."}`
-              : "Select a chat to begin"
-          }
-          value={inputValue}
-          onChange={handleInputChange}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey && inputValue.trim()) {
-              e.preventDefault();
-              handleSendMessage(inputValue);
-            }
-          }}
-          disabled={!roomId}
-          className="
-            flex-grow rounded px-3 py-2
-            bg-background
-            text-foreground
-            duration-100
-            placeholder:text-muted-foreground
-            focus:outline-none focus:ring-2 focus:ring-ring
-            transition-colors
-          "
-        />
-        {inputValue.length > 0 && (
-          <Send
-            className="ml-2 cursor-pointer text-primary hover:text-primary/90 transition-colors"
-            size={24}
-            onClick={() => handleSendMessage(inputValue)}
-          />
-        )}
-      </div>
+    <div className="flex items-center gap-2 p-2 border-t">
+      <input
+        type="text"
+        className="flex-1 rounded-lg border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        placeholder="Type your message..."
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !loading) sendMessage();
+        }}
+      />
+      <button
+        className="rounded-lg bg-blue-500 px-4 py-2 text-white hover:bg-blue-600 disabled:opacity-50"
+        onClick={sendMessage}
+        disabled={loading || !text.trim()}
+      >
+        {loading ? "..." : "Send"}
+      </button>
     </div>
   );
 }
