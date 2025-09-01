@@ -45,46 +45,41 @@ export default function ThemeTransitionWrapper({
   const triggerTransition = (x: number, y: number, nextTheme: string) => {
     setCircle({ x, y, active: true, nextTheme });
 
+    // Wait until animation ends before switching theme
     setTimeout(() => {
-      setTimeout(() => {
-        setCircle((prev) => ({ ...prev, active: false }));
-        setTheme(nextTheme);
-      }, 500);
-    }, 0);
+      setTheme(nextTheme);
+      setCircle((prev) => ({ ...prev, active: false }));
+    }, 600); // matches motion duration
   };
 
-  
   const getCircleStyles = (): CSSProperties => {
-    if (circle.nextTheme === "dark") {
-      return {
-        background: "hsl(224 71.4% 4.1%)",
-        color: "hsl(210 40% 98%)",
-        boxShadow: "0 0 0 4px hsl(210 40% 98%)",
-        mixBlendMode: "darken",
-      };
-    } else {
-      return {
-        background: "hsl(0 0% 100%)",
-        color: "hsl(224 71.4% 4.1%)",
-        boxShadow: "0 0 0 4px hsl(224 71.4% 4.1%)",
-        mixBlendMode: "lighten",
-      };
-    }
+    return {
+      background:
+        circle.nextTheme === "dark"
+          ? "hsl(224 71.4% 4.1%)"
+          : "hsl(0 0% 100%)",
+      mixBlendMode: "difference", // <-- allows transparency blending with old theme
+    };
   };
 
   return (
     <ThemeTransitionContext.Provider value={{ triggerTransition, isDark }}>
-      {children}
+      {/* Current theme content */}
+      <div className={`transition-colors duration-300 ${theme}`}>
+        {children}
+      </div>
 
+      {/* Circle animation overlay */}
       <AnimatePresence>
         {circle.active && (
           <motion.div
             initial={{ clipPath: `circle(0% at ${circle.x}px ${circle.y}px)` }}
             animate={{
               clipPath: `circle(150% at ${circle.x}px ${circle.y}px)`,
+              opacity: 1,
             }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.5, ease: "linear" }}
+            transition={{ duration: 0.6, ease: "easeInOut" }}
             className="fixed inset-0 z-[99999] pointer-events-none"
             style={getCircleStyles()}
           />
