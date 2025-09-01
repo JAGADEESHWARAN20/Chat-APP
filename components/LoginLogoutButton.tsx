@@ -2,7 +2,7 @@
 
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { Button } from "./ui/button";
-import { LogOut, Menu } from "lucide-react";
+import { LogOut, Menu, ChevronsUpDown } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { User as SupabaseUser } from "@supabase/supabase-js";
 import { Database } from "@/database.types";
@@ -14,9 +14,14 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import Link from "next/link";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+
 import { useState } from "react";
 import ThemeToggleButton from "./ThemeToggle";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 interface LoginLogoutButtonProps {
   user: SupabaseUser | undefined | null;
@@ -44,25 +49,44 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
         <SheetContent side="right" className="w-[300px]">
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2 z-[99999]">
-              <Avatar className="h-8 w-8 z-[99999]">
-                <AvatarImage
-                  className=""
-                  src={user.user_metadata.avatar_url || ""}
-                  alt={user.user_metadata.display_name || user.email}
-                />
-              </Avatar>
-              
+              Menu
             </SheetTitle>
           </SheetHeader>
+
           <div className="flex flex-col gap-4 mt-6">
+            {/* Theme toggle */}
             <div className="flex items-center justify-center z-[999999]">
               <ThemeToggleButton />
             </div>
-            <Link href={`/profile/${user.id}`}>
-              <Button variant="outline" size="sm" className="w-full z-[999999]">
-                View Profile
-              </Button>
-            </Link>
+
+            {/* Username popover */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="w-full flex items-center justify-between z-[999999]"
+                >
+                  <span className="truncate">{user?.user_metadata?.username || user.email}</span>
+                  <ChevronsUpDown className="h-4 w-4 ml-2" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[200px] p-2">
+                <div className="flex flex-col gap-2">
+                  <Link href={`/profile/${user.id}`}>
+                    <Button variant="ghost" size="sm" className="w-full">
+                      View Profile
+                    </Button>
+                  </Link>
+                  <Link href={`/profile/${user.id}/edit`}>
+                    <Button variant="ghost" size="sm" className="w-full">
+                      Edit Profile
+                    </Button>
+                  </Link>
+                </div>
+              </PopoverContent>
+            </Popover>
+
+            {/* Logout */}
             <Button
               onClick={handleLogout}
               variant="ghost"
