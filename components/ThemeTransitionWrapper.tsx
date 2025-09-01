@@ -70,8 +70,13 @@ export default function ThemeTransitionWrapper({
               color:
                 circle.nextTheme === "dark"
                   ? "hsl(210 40% 98%)"
-                           : "hsl(224 71.4% 4.1%)",
-              mixBlendMode: circle.nextTheme === "dark" ? "lighten" : "darken",
+                  : "hsl(224 71.4% 4.1%)",
+              // Add border effect (like circular ring)
+              boxShadow:
+                circle.nextTheme === "dark"
+                  ? "0 0 0 4px hsl(210 40% 98%)"
+                  : "0 0 0 4px hsl(224 71.4% 4.1%)",
+              mixBlendMode: "difference", // keeps border visible against background
             }}
           />
         )}
