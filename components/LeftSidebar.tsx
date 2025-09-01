@@ -68,7 +68,7 @@ export default function LeftSidebar({
     >
       
 
-      <Tabs defaultValue="rooms" className="w-full mt-10 lg:mt-0" onValueChange={setTabValue}>
+      <Tabs defaultValue="rooms" className="w-full mt-10 lg:mt-0 flex gap-[.1em]" onValueChange={setTabValue}>
         <div className="flex gap-[.2em] items-center">
           <TabsList className="grid w-full grid-cols-3 mb-1">
           <TabsTrigger value="all">All</TabsTrigger>
@@ -79,7 +79,7 @@ export default function LeftSidebar({
       {onClose && (
         <Button
           onClick={onClose}
-          className="absolute top-4 right-4 p-2 rounded-full bg-background/80 hover:bg-muted transition-colors lg:hidden"
+          className="p-2 rounded-full bg-background/80 hover:bg-muted transition-colors lg:hidden"
           aria-label="Close sidebar"
         >
           <ChevronLeft className="h-5 w-5 text-foreground" />
@@ -132,15 +132,7 @@ export default function LeftSidebar({
         </TabsContent>
       </Tabs>
 
-      {/* Create new room/chat button */}
-      <Button
-        className="mt-auto bg-primary text-primary-foreground hover:bg-primary/90 rounded-full w-12 h-12 p-0 flex items-center justify-center"
-        onClick={() => {
-          /* Implement create new room/chat logic here */
-        }}
-      >
-        <Plus className="h-6 w-6" />
-      </Button>
+     
     </div>
   );
 }

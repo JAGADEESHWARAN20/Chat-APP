@@ -15,7 +15,7 @@ export default function ClientChatContent({ user }: { user: SupabaseUser | undef
   return (
     <div className="h-[90vh] w-full  items-center justify-start flex flex-col">
       <ChatHeader user={user} />
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex w-[100%] flex-col">
         {user && selectedRoom ? (
           <>
             <div className="flex-1 overflow-y-scroll h-[90%]  transparent-scrollbar-track">
