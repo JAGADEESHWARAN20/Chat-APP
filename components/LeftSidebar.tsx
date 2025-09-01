@@ -66,7 +66,16 @@ export default function LeftSidebar({
         isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
       } z-50 lg:z-0`}
     >
-      {/* 🔹 Close button (mobile only) */}
+      
+
+      <Tabs defaultValue="rooms" className="w-full mt-10 lg:mt-0" onValueChange={setTabValue}>
+        <div className="flex gap-[.2em] items-center">
+          <TabsList className="grid w-full grid-cols-3 mb-1">
+          <TabsTrigger value="all">All</TabsTrigger>
+          <TabsTrigger value="rooms">Rooms</TabsTrigger>
+          <TabsTrigger value="chats">Chats</TabsTrigger>
+        </TabsList>
+        {/* 🔹 Close button (mobile only) */}
       {onClose && (
         <Button
           onClick={onClose}
@@ -76,19 +85,13 @@ export default function LeftSidebar({
           <ChevronLeft className="h-5 w-5 text-foreground" />
         </Button>
       )}
-
-      <Tabs defaultValue="rooms" className="w-full mt-10 lg:mt-0" onValueChange={setTabValue}>
-        <TabsList className="grid w-full grid-cols-3 mb-4">
-          <TabsTrigger value="all">All</TabsTrigger>
-          <TabsTrigger value="rooms">Rooms</TabsTrigger>
-          <TabsTrigger value="chats">Chats</TabsTrigger>
-        </TabsList>
+        </div>
         <input
           type="text"
           placeholder="Search..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full p-3 mb-6 border border-input rounded-lg focus:ring-2 focus:ring-primary outline-none bg-background text-foreground placeholder-muted-foreground"
+          className="w-full p-3 mb-1 border border-input rounded-lg focus:ring-2 focus:ring-primary outline-none bg-background text-foreground placeholder-muted-foreground"
         />
         <TabsContent value="all">
           <div className="space-y-4 flex-1 overflow-y-auto scrollbar-thin">
