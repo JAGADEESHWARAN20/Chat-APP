@@ -6,6 +6,7 @@ import { RoomProvider } from "@/lib/store/RoomContext";
 import { SearchHighlightProvider } from "@/lib/store/SearchHighlightContext";
 import RoomInitializer from "@/lib/initialization/RoomInitializer";
 import { supabaseServer } from "@/lib/supabase/server";
+import ThemeTransitionWrapper from "@/components/ThemeTransitionwrapper";
 
 const space_Grotesk = Space_Grotesk({ subsets: ["latin"] });
 
@@ -22,19 +23,22 @@ export default async function RootLayout({
       <head />
       <body className={space_Grotesk.className}>
         <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <RoomProvider user={data.session?.user}>
-            <SearchHighlightProvider>
-              <RoomInitializer />
-              {children}
-              <ResponsiveToaster />
-            </SearchHighlightProvider>
-          </RoomProvider>
-        </ThemeProvider>
+            attribute="class"
+            defaultTheme="system"
+            enableSystem
+            disableTransitionOnChange
+          >
+            <ThemeTransitionWrapper>
+              <RoomProvider user={data.session?.user}>
+                <SearchHighlightProvider>
+                  <RoomInitializer />
+                  {children}
+                  <ResponsiveToaster />
+                </SearchHighlightProvider>
+              </RoomProvider>
+            </ThemeTransitionWrapper>
+          </ThemeProvider>
+
       </body>
     </html>
   );
