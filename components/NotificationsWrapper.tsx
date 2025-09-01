@@ -13,7 +13,7 @@ export default function NotificationsWrapper() {
                <button
                     title="notification"
                     onClick={() => setIsNotificationsOpen(true)}
-                    className="relative"
+                    className="w-[2em] h-[2em] flex items-center p-[.35em]"
                >
                     <Bell className="h-5 w-5" />
                </button>

@@ -42,7 +42,7 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
     return (
       <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
         <SheetTrigger asChild>
-          <button title="menu">
+          <button title="menu" className="w-[2em] h-[2em] flex items-center p-[.35em]">
             <Menu className="h-5 w-5" />
           </button>
         </SheetTrigger>
