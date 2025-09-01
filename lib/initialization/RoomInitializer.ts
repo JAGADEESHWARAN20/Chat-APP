@@ -9,13 +9,8 @@ import { useUser } from "@/lib/store/user";
 import { useRoomStore } from "@/lib/store/roomstore";
 import { useRoomContext } from "@/lib/store/RoomContext"; // Assuming this is the correct path
 import { useFetchRooms } from "@/hooks/useFetchRooms";
-import { Database } from "@/lib/types/supabase";
 
-type Room = Database["public"]["Tables"]["rooms"]["Row"];
-type RoomWithMembership = Room & {
-  isMember: boolean;
-  participationStatus: string | null;
-};
+
 
 export default function RoomInitializer() {
   const supabase = supabaseBrowser();

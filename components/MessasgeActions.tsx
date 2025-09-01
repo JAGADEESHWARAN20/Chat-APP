@@ -11,7 +11,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { X } from "lucide-react";
 import { useMessage } from "@/lib/store/messages";
@@ -19,10 +18,7 @@ import { supabaseBrowser } from "@/lib/supabase/browser";
 import { toast } from "sonner";
 import { useEffect, useRef } from "react";
 
-/**
- * Safely focus the main scroll container after a dialog closes.
- * Uses rAF to wait until Radix unmounts the portal & overlay.
- */
+
 function focusMessageContainerSafely() {
   const tryFocus = () => {
     const el = document.getElementById("message-container") as HTMLDivElement | null;

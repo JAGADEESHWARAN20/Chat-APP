@@ -15,8 +15,8 @@ import {
 } from "@/components/ui/sheet";
 import Link from "next/link";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import ThemeToggle from "./ThemeToggle";
 import { useState } from "react";
+import ThemeToggleButton from "./ThemeToggle";
 
 interface LoginLogoutButtonProps {
   user: SupabaseUser | undefined | null;
@@ -59,7 +59,7 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
           <div className="flex flex-col gap-4 mt-6">
             <div className="flex items-center justify-between z-[999999]">
               <span className="text-sm font-medium">Theme</span>
-              <ThemeToggle />
+              <ThemeToggleButton />
             </div>
             <Link href={`/profile/${user.id}`}>
               <Button variant="outline" size="sm" className="w-full z-[999999]">
