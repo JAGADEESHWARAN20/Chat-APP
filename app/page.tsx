@@ -9,7 +9,7 @@ import CreateRoomDialog from "@/components/CreateRoomDialog";
 import NotificationsWrapper from "@/components/NotificationsWrapper";
 import { RoomProvider } from "@/lib/store/RoomContext";
 import ChatLayout from "@/components/ChatLayout";
-import { ChevronLeft, ChevronRight, Home, Search } from "lucide-react";
+import {  ChevronRight, Home, Search } from "lucide-react";
 
 export default function Page() {
   const [user, setUser] = useState<any>(null);

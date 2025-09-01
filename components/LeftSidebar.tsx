@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { RoomWithMembershipCount, useRoomContext } from "@/lib/store/RoomContext";
 import { Avatar, AvatarImage } from "@/components/ui/avatar";
-import { Loader2, Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import { Loader2, ChevronRight } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "./ui/button";
 
