@@ -31,7 +31,7 @@ export default function Page() {
           <div className="flex items-center justify-between max-w-[100vw] mx-auto w-full">
             
             {/* Left section (Sidebar toggle + Logo + Tabs) */}
-            <div className="flex items-center gap-[.1em]">
+            <div className="flex items-center gap-[1em]">
               {/* Sidebar toggle (mobile only) */}
               <button
                 onClick={() => setIsSidebarOpen(!isSidebarOpen)}
