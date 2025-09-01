@@ -59,7 +59,7 @@ export default function Page() {
                   }`} />
                   <Search onClick={() => setActiveTab("search")}
                   className={`w-[2em] h-[2em] p-[.35em] text-white flex items-center ${
-                    activeTab === "search" ? "bg-gray-700 text-white dark:bg-primary/60" : "text-black dark:text-white"
+                    activeTab === "search" ? "bg-gray-700 text-white dark:bg-primary/60 dark:text-black" : "text-black dark:text-white"
                   }`} />
               <CreateRoomDialog user={user} />
               <NotificationsWrapper />
