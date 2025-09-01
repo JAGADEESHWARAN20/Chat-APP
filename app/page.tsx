@@ -9,11 +9,13 @@ import CreateRoomDialog from "@/components/CreateRoomDialog";
 import NotificationsWrapper from "@/components/NotificationsWrapper";
 import { RoomProvider } from "@/lib/store/RoomContext";
 import ChatLayout from "@/components/ChatLayout";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Home, Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export default function Page() {
   const [user, setUser] = useState<any>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<"home" | "search">("home");
 
   useEffect(() => {
     const supabase = supabaseBrowser();
@@ -44,8 +46,29 @@ export default function Page() {
                 FlyChat
               </h1>
             </div>
+
             <div className="flex items-center gap-4">
-              <SearchComponent user={user} />
+              {/* Tab Triggers */}
+              <Button
+                onClick={() => setActiveTab("home")}
+                className={`p-2 rounded-md glass-button transition-colors ${
+                  activeTab === "home" ? "bg-primary/20" : "hover:bg-accent"
+                }`}
+                aria-label="Home Tab"
+              >
+                <Home className="w-5 h-5" />
+              </Button>
+              <Button
+                onClick={() => setActiveTab("search")}
+                className={`p-2 rounded-md glass-button transition-colors ${
+                  activeTab === "search" ? "bg-primary/20" : "hover:bg-accent"
+                }`}
+                aria-label="Search Tab"
+              >
+                <Search className="w-5 h-5" />
+              </Button>
+
+              {/* Other actions */}
               <CreateRoomDialog user={user} />
               <NotificationsWrapper />
               <LoginLogoutButton user={user} />
@@ -55,7 +78,18 @@ export default function Page() {
 
         {/* Main content area */}
         <div className="flex flex-1 w-full overflow-hidden">
-          <ChatLayout user={user} isOpen={isSidebarOpen} />
+          {activeTab === "home" ? (
+              <ChatLayout 
+                user={user} 
+                isOpen={isSidebarOpen} 
+                onClose={() => setIsSidebarOpen(false)} 
+              />
+
+          ) : (
+            <div className="flex-1 w-full px-6 py-4 overflow-y-auto">
+              <SearchComponent user={user} />
+            </div>
+          )}
         </div>
 
         <InitUser user={user} />

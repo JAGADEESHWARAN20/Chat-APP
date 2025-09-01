@@ -3,21 +3,27 @@
 import React, { useState, useEffect } from "react";
 import { RoomWithMembershipCount, useRoomContext } from "@/lib/store/RoomContext";
 import { Avatar, AvatarImage } from "@/components/ui/avatar";
-import { Loader2, Plus } from "lucide-react";
+import { Loader2, Plus, ChevronLeft } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "./ui/button";
 
-export default function LeftSidebar({ user, isOpen }: { user: any; isOpen: boolean }) {
+export default function LeftSidebar({
+  user,
+  isOpen,
+  onClose, // 🔹 new prop for closing
+}: {
+  user: any;
+  isOpen: boolean;
+  onClose?: () => void;
+}) {
   const { state, fetchAvailableRooms, setSelectedRoom } = useRoomContext();
   const [searchTerm, setSearchTerm] = useState("");
   const [tabValue, setTabValue] = useState("rooms");
-  // Placeholder for direct chats; implement fetchDirectChats as needed
   const [directChats, setDirectChats] = useState<RoomWithMembershipCount[]>([]);
 
   useEffect(() => {
     if (user?.id) {
       fetchAvailableRooms();
-      // fetchDirectChats().then((chats) => setDirectChats(chats)); // Implement this function
     }
   }, [user, fetchAvailableRooms]);
 
@@ -60,7 +66,18 @@ export default function LeftSidebar({ user, isOpen }: { user: any; isOpen: boole
         isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
       } z-50 lg:z-0`}
     >
-      <Tabs defaultValue="rooms" className="w-full" onValueChange={setTabValue}>
+      {/* 🔹 Close button (mobile only) */}
+      {onClose && (
+        <Button
+          onClick={onClose}
+          className="absolute top-4 right-4 p-2 rounded-full bg-background/80 hover:bg-muted transition-colors lg:hidden"
+          aria-label="Close sidebar"
+        >
+          <ChevronLeft className="h-5 w-5 text-foreground" />
+        </Button>
+      )}
+
+      <Tabs defaultValue="rooms" className="w-full mt-10 lg:mt-0" onValueChange={setTabValue}>
         <TabsList className="grid w-full grid-cols-3 mb-4">
           <TabsTrigger value="all">All</TabsTrigger>
           <TabsTrigger value="rooms">Rooms</TabsTrigger>
@@ -75,7 +92,9 @@ export default function LeftSidebar({ user, isOpen }: { user: any; isOpen: boole
         />
         <TabsContent value="all">
           <div className="space-y-4 flex-1 overflow-y-auto scrollbar-thin">
-            {allItems.length > 0 ? allItems.map((item) => renderItem(item)) : (
+            {allItems.length > 0 ? (
+              allItems.map((item) => renderItem(item))
+            ) : (
               <div className="text-muted-foreground text-center mt-10">
                 No items found. Try creating one!
               </div>
@@ -99,7 +118,9 @@ export default function LeftSidebar({ user, isOpen }: { user: any; isOpen: boole
         </TabsContent>
         <TabsContent value="chats">
           <div className="space-y-4 flex-1 overflow-y-auto scrollbar-thin">
-            {filteredChats.length > 0 ? filteredChats.map((item) => renderItem(item)) : (
+            {filteredChats.length > 0 ? (
+              filteredChats.map((item) => renderItem(item))
+            ) : (
               <div className="text-muted-foreground text-center mt-10">
                 No chats found. Start a new chat!
               </div>
@@ -107,9 +128,13 @@ export default function LeftSidebar({ user, isOpen }: { user: any; isOpen: boole
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Create new room/chat button */}
       <Button
         className="mt-auto bg-primary text-primary-foreground hover:bg-primary/90 rounded-full w-12 h-12 p-0 flex items-center justify-center"
-        onClick={() => { /* Implement create new room/chat logic here */ }}
+        onClick={() => {
+          /* Implement create new room/chat logic here */
+        }}
       >
         <Plus className="h-6 w-6" />
       </Button>
