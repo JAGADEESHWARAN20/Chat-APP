@@ -51,7 +51,7 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
                   alt={user.user_metadata.display_name || user.email}
                 />
               </Avatar>
-              <span>{user.user_metadata.display_name || user.email}</span>
+              
             </SheetTitle>
           </SheetHeader>
           <div className="flex flex-col gap-4 mt-6">
