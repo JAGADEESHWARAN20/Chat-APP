@@ -70,7 +70,8 @@ export default function ThemeTransitionWrapper({
               color:
                 circle.nextTheme === "dark"
                   ? "hsl(210 40% 98%)"
-                  : "hsl(224 71.4% 4.1%)",
+                           : "hsl(224 71.4% 4.1%)",
+              mixBlendMode: circle.nextTheme === "dark" ? "lighten" : "darken",
             }}
           />
         )}
