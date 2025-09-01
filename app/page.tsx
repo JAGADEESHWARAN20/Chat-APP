@@ -35,7 +35,7 @@ export default function Page() {
               {/* Sidebar toggle (mobile only) */}
               <button
                 onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                className="lg:hidden glass-button"
+                className="lg:hidden w-4 h-4 p-[.35em]"
                 aria-label={isSidebarOpen ? "Close sidebar" : "Open sidebar"}
               >
                 {isSidebarOpen ? (
