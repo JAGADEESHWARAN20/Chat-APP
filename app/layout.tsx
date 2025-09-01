@@ -6,7 +6,7 @@ import { RoomProvider } from "@/lib/store/RoomContext";
 import { SearchHighlightProvider } from "@/lib/store/SearchHighlightContext";
 import RoomInitializer from "@/lib/initialization/RoomInitializer";
 import { supabaseServer } from "@/lib/supabase/server";
-import ThemeTransitionWrapper from "@/components/ThemeTransitionwrapper";
+import ThemeTransitionWrapper from "@/components/ThemeTransitionWrapper";
 
 const space_Grotesk = Space_Grotesk({ subsets: ["latin"] });
 
