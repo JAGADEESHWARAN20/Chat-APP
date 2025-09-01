@@ -118,7 +118,7 @@ export default function ChatInput() {
             : `${typingUsers.length} people are typing...`}
         </div>
       )} */}
-      <div className="flex items-center pb-[1.2em]">
+      <div className="flex items-center ">
         <input
           type="text"
           placeholder={
