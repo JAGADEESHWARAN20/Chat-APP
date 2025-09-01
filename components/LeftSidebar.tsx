@@ -62,11 +62,11 @@ export default function LeftSidebar({
 
   return (
     <div
-      className={`fixed lg:static inset-y-0 left-0 w-full lg:w-1/4 p-[.5em] bg-card border-r border-border/40 h-screen flex flex-col transition-transform duration-300 transform ${
+      className={`fixed lg:static inset-y-0 left-0 w-full lg:w-1/4 px-4 py-3 bg-card border-r border-border/40 h-screen flex flex-col transition-transform duration-300 transform ${
         isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
       } z-50 lg:z-0`}
     >
-      <Tabs defaultValue="rooms" className="w-full mt-10 lg:mt-0 flex flex-col gap-[.1em]" onValueChange={setTabValue}>
+      <Tabs defaultValue="rooms" className="w-full mt-0 lg:mt-0 flex flex-col gap-[.1em]" onValueChange={setTabValue}>
         <div className="flex gap-[.2em] items-center">
           <TabsList className="grid w-full grid-cols-3 mb-1">
           <TabsTrigger value="all">All</TabsTrigger>
@@ -80,7 +80,7 @@ export default function LeftSidebar({
           className="p-2 rounded-full bg-background/80 hover:bg-muted transition-colors lg:hidden"
           aria-label="Close sidebar"
             >
-              <ChevronRight className="h-5 w-5 text-foreground rotate-90 duration-200 transition-all" />
+              <ChevronRight className="h-5 w-5 text-foreground rotate-180 duration-200 transition-all" />
         </Button>
       )}
         </div>

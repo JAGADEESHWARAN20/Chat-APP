@@ -38,9 +38,9 @@ export default function Page() {
                 className="lg:hidden w-[2em] h-[2em] p-[.35em] flex items-center"
                 aria-label={isSidebarOpen ? "Close sidebar" : "Open sidebar"}
               >
-                {isSidebarOpen && (
+                
                   <ChevronRight className="w-5 h-5 rotate-0 duration-200 transition-all" />
-                )}
+                
               </button>
 
               {/* Logo */}
