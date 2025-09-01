@@ -3,19 +3,33 @@
 import React, { useState, useEffect } from "react";
 import { RoomWithMembershipCount, useRoomContext } from "@/lib/store/RoomContext";
 import { Avatar, AvatarImage } from "@/components/ui/avatar";
-import { Loader2 } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "./ui/button";
 
 export default function LeftSidebar({ user, isOpen }: { user: any; isOpen: boolean }) {
   const { state, fetchAvailableRooms, setSelectedRoom } = useRoomContext();
   const [searchTerm, setSearchTerm] = useState("");
+  const [tabValue, setTabValue] = useState("rooms");
+  // Placeholder for direct chats; implement fetchDirectChats as needed
+  const [directChats, setDirectChats] = useState<RoomWithMembershipCount[]>([]);
 
   useEffect(() => {
-    if (user?.id) fetchAvailableRooms();
+    if (user?.id) {
+      fetchAvailableRooms();
+      // fetchDirectChats().then((chats) => setDirectChats(chats)); // Implement this function
+    }
   }, [user, fetchAvailableRooms]);
 
   const filteredRooms = state.availableRooms.filter((item) =>
     item.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const filteredChats = directChats.filter((item) =>
+    item.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const allItems = [...filteredRooms, ...filteredChats];
 
   const renderItem = (item: RoomWithMembershipCount) => (
     <div
@@ -46,29 +60,59 @@ export default function LeftSidebar({ user, isOpen }: { user: any; isOpen: boole
         isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
       } z-50 lg:z-0`}
     >
-      {/* Search Bar */}
-      <input
-        type="text"
-        placeholder="Search rooms..."
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-        className="w-full p-3 mb-6 border border-input rounded-lg focus:ring-2 focus:ring-primary outline-none bg-background text-foreground placeholder-muted-foreground"
-      />
-
-      {/* Rooms List */}
-      <div className="space-y-4 flex-1 overflow-y-auto scrollbar-thin">
-        {state.isLoading ? (
-          <div className="flex justify-center items-center h-full">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <Tabs defaultValue="rooms" className="w-full" onValueChange={setTabValue}>
+        <TabsList className="grid w-full grid-cols-3 mb-4">
+          <TabsTrigger value="all">All</TabsTrigger>
+          <TabsTrigger value="rooms">Rooms</TabsTrigger>
+          <TabsTrigger value="chats">Chats</TabsTrigger>
+        </TabsList>
+        <input
+          type="text"
+          placeholder="Search..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full p-3 mb-6 border border-input rounded-lg focus:ring-2 focus:ring-primary outline-none bg-background text-foreground placeholder-muted-foreground"
+        />
+        <TabsContent value="all">
+          <div className="space-y-4 flex-1 overflow-y-auto scrollbar-thin">
+            {allItems.length > 0 ? allItems.map((item) => renderItem(item)) : (
+              <div className="text-muted-foreground text-center mt-10">
+                No items found. Try creating one!
+              </div>
+            )}
           </div>
-        ) : filteredRooms.length === 0 ? (
-          <div className="text-muted-foreground text-center mt-10">
-            No rooms found. Try creating one!
+        </TabsContent>
+        <TabsContent value="rooms">
+          <div className="space-y-4 flex-1 overflow-y-auto scrollbar-thin">
+            {state.isLoading ? (
+              <div className="flex justify-center items-center h-full">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            ) : filteredRooms.length === 0 ? (
+              <div className="text-muted-foreground text-center mt-10">
+                No rooms found. Try creating one!
+              </div>
+            ) : (
+              filteredRooms.map((item) => renderItem(item))
+            )}
           </div>
-        ) : (
-          filteredRooms.map((item) => renderItem(item))
-        )}
-      </div>
+        </TabsContent>
+        <TabsContent value="chats">
+          <div className="space-y-4 flex-1 overflow-y-auto scrollbar-thin">
+            {filteredChats.length > 0 ? filteredChats.map((item) => renderItem(item)) : (
+              <div className="text-muted-foreground text-center mt-10">
+                No chats found. Start a new chat!
+              </div>
+            )}
+          </div>
+        </TabsContent>
+      </Tabs>
+      <Button
+        className="mt-auto bg-primary text-primary-foreground hover:bg-primary/90 rounded-full w-12 h-12 p-0 flex items-center justify-center"
+        onClick={() => { /* Implement create new room/chat logic here */ }}
+      >
+        <Plus className="h-6 w-6" />
+      </Button>
     </div>
   );
 }

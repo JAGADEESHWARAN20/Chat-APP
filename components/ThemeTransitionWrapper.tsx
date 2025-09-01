@@ -2,7 +2,7 @@
 
 import { useTheme } from "next-themes";
 import { motion, AnimatePresence } from "framer-motion";
-import { useState, createContext, useContext } from "react";
+import { useState, createContext, useContext, CSSProperties } from "react";
 
 interface ThemeTransitionContextValue {
   triggerTransition: (x: number, y: number, nextTheme: string) => void;
@@ -15,7 +15,10 @@ const ThemeTransitionContext = createContext<ThemeTransitionContextValue | null>
 
 export function useThemeTransition() {
   const ctx = useContext(ThemeTransitionContext);
-  if (!ctx) throw new Error("useThemeTransition must be used inside ThemeTransitionWrapper");
+  if (!ctx)
+    throw new Error(
+      "useThemeTransition must be used inside ThemeTransitionWrapper"
+    );
   return ctx;
 }
 
@@ -50,6 +53,25 @@ export default function ThemeTransitionWrapper({
     }, 0);
   };
 
+  
+  const getCircleStyles = (): CSSProperties => {
+    if (circle.nextTheme === "dark") {
+      return {
+        background: "hsl(224 71.4% 4.1%)",
+        color: "hsl(210 40% 98%)",
+        boxShadow: "0 0 0 4px hsl(210 40% 98%)",
+        mixBlendMode: "darken",
+      };
+    } else {
+      return {
+        background: "hsl(0 0% 100%)",
+        color: "hsl(224 71.4% 4.1%)",
+        boxShadow: "0 0 0 4px hsl(224 71.4% 4.1%)",
+        mixBlendMode: "lighten",
+      };
+    }
+  };
+
   return (
     <ThemeTransitionContext.Provider value={{ triggerTransition, isDark }}>
       {children}
@@ -58,28 +80,13 @@ export default function ThemeTransitionWrapper({
         {circle.active && (
           <motion.div
             initial={{ clipPath: `circle(0% at ${circle.x}px ${circle.y}px)` }}
-            animate={{ clipPath: `circle(150% at ${circle.x}px ${circle.y}px)` }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: .5, ease: "linear" }}
-            className="fixed inset-0 z-[99999] pointer-events-none"
-            style={{
-              background:
-                circle.nextTheme === "dark"
-                  ? "hsl(224 71.4% 4.1%)"
-                  : "hsl(0 0% 100%)",
-              color:
-                circle.nextTheme === "dark"
-                  ? "hsl(210 40% 98%)"
-                  : "hsl(224 71.4% 4.1%)",
-              // Add border effect (like circular ring)
-              boxShadow:
-                circle.nextTheme === "dark"
-                  ? "0 0 0 4px hsl(210 40% 98%)"
-                  : "0 0 0 4px hsl(224 71.4% 4.1%)",
-              mixBlendMode: circle.nextTheme === "dark"
-                  ? "lighten"
-                  : "difference", 
+            animate={{
+              clipPath: `circle(150% at ${circle.x}px ${circle.y}px)`,
             }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.5, ease: "linear" }}
+            className="fixed inset-0 z-[99999] pointer-events-none"
+            style={getCircleStyles()}
           />
         )}
       </AnimatePresence>
