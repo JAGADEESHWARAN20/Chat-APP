@@ -8,6 +8,7 @@ import SearchComponent from "@/components/SearchComponent";
 import CreateRoomDialog from "@/components/CreateRoomDialog";
 import NotificationsWrapper from "@/components/NotificationsWrapper";
 import { RoomProvider } from "@/lib/store/RoomContext";
+import LeftSidebar from "@/components/LeftSidebar";
 
 export default async function Page() {
   const supabase = await supabaseServer();
@@ -34,12 +35,12 @@ export default async function Page() {
         </header>
 
         {/* Main content area that takes remaining height */}
-        <div className=" flex flex-col w-[100vw] overflow-hidden">
-          <div className="lg:max-w-[100vw]  w-[95vw] mx-auto px-4 flex flex-col flex-1">
+        <div className="flex flex-col w-[100vw] overflow-hidden">
+          <div className="lg:max-w-[100vw] w-[95vw] mx-auto px-4 flex flex-col flex-1">
             <div className="relative flex flex-col items-center flex-1">
               <ChatHeader user={data.session?.user} />
-              <div className="flex-1 flex-row flex w-[100vw] lg:justify-evenly lg:gap-[5em] gradient-border overflow-hidden"> {/* Changed this line */}
-                <div className="hidden lg:block">hi</div>
+              <div className="flex-1 flex-row flex w-[100vw] lg:justify-evenly lg:gap-[5em] gradient-border overflow-hidden">
+                <LeftSidebar user={data.session?.user} />
                 <ClientChatContent user={data.session?.user} />
                 <div className="hidden lg:block">hi</div>
               </div>
