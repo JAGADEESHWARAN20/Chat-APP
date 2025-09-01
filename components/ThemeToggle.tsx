@@ -71,15 +71,18 @@ export default function ThemeToggle() {
       <AnimatePresence>
         {circle.active && (
           <motion.div
-            initial={{ clipPath: `circle(0% at ${circle.x}px ${circle.y}px)` }}
-            animate={{ clipPath: `circle(150% at ${circle.x}px ${circle.y}px)` }}
-            transition={{ duration: 1.2, ease: "easeInOut" }}
-            className="fixed inset-0 z-[99998] pointer-events-none"
-            style={{
-              background: `radial-gradient(circle at ${circle.x}px ${circle.y}px, ${circle.nextTheme === "dark" ? "rgba(255,233,0,.4)" : "rgba(255, 255, 255, 0.6)"
-                } 0%)`,
-            }}
-          />
+  initial={{ clipPath: `circle(0% at ${circle.x}px ${circle.y}px)` }}
+  animate={{ clipPath: `circle(150% at ${circle.x}px ${circle.y}px)` }}
+  transition={{ duration: 1.2, ease: "easeInOut" }}
+  className="fixed inset-0 z-[99998] pointer-events-none"
+  style={{
+    background: `radial-gradient(
+      circle at ${circle.x}px ${circle.y}px,
+      hsl(${circle.nextTheme === "dark" ? "224 71.4% 4.1%" : "0 0% 100%"}) 0%,
+      transparent 80%
+    )`,
+  }}
+/>
         )}
       </AnimatePresence>
     </>
