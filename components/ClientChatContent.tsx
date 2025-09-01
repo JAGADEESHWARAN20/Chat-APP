@@ -13,7 +13,7 @@ export default function ClientChatContent({ user }: { user: SupabaseUser | undef
   const { selectedRoom } = state;
 
   return (
-    <div className="h-[90vh] w-full flex flex-col">
+    <div className="h-[90vh] w-full mx-auto flex flex-col">
       <ChatHeader user={user} />
       <div className="flex-1 flex flex-col">
         {user && selectedRoom ? (
