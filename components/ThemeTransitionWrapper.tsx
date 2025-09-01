@@ -43,11 +43,11 @@ export default function ThemeTransitionWrapper({
     setCircle({ x, y, active: true, nextTheme });
 
     setTimeout(() => {
-      setTheme(nextTheme);
       setTimeout(() => {
         setCircle((prev) => ({ ...prev, active: false }));
-      }, 800);
-    }, 900);
+        setTheme(nextTheme);
+      }, 1000);
+    }, 1100);
   };
 
   return (
@@ -60,7 +60,7 @@ export default function ThemeTransitionWrapper({
             initial={{ clipPath: `circle(0% at ${circle.x}px ${circle.y}px)` }}
             animate={{ clipPath: `circle(150% at ${circle.x}px ${circle.y}px)` }}
             exit={{ opacity: 0 }}
-            transition={{ duration: .5, ease: "easeInOut" }}
+            transition={{ duration: 1.1, ease: "linear" }}
             className="fixed inset-0 z-[99999] pointer-events-none"
             style={{
               background:
@@ -78,7 +78,7 @@ export default function ThemeTransitionWrapper({
                   : "0 0 0 4px hsl(224 71.4% 4.1%)",
               mixBlendMode: circle.nextTheme === "dark"
                   ? "screen"
-                  : "multiply", 
+                  : "normal", 
             }}
           />
         )}
