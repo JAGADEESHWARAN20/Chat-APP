@@ -41,7 +41,7 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
             <Menu className="h-5 w-5" />
           </Button>
         </SheetTrigger>
-        <SheetContent side="right" className="w-[300px] ">
+        <SheetContent side="right" className="w-[300px]">
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2 z-[999999]">
               <Avatar className="h-8 w-8 z-[99999999]">
