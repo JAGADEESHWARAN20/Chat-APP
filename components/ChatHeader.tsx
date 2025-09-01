@@ -17,7 +17,7 @@ import {
   LockIcon,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Database } from "@/lib/types/supabase";
+
 import { Switch } from "@/components/ui/switch";
 import { useRoomContext } from "@/lib/store/RoomContext";
 import { useRoomPresence } from "@/hooks/useRoomPresence";
@@ -30,7 +30,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const { searchMessages } = useMessage();
   const [searchResults, setSearchResults] = useState<Imessage[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  const supabase = supabaseBrowser();
   const [isSwitchRoomPopoverOpen, setIsSwitchRoomPopoverOpen] = useState(false);
   const [isMessageSearchOpen, setIsMessageSearchOpen] = useState(false);
   const [messageSearchQuery, setMessageSearchQuery] = useState("");
@@ -92,7 +91,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   }, [selectedRoom, user]);
 
   return (
-    <header className="h-[3.6em] lg:w-[50vw] w-[100vw] flex items-center justify-between px-[1vw] glass-gradient-header text-foreground bg-background z-10 dark:text-foreground dark:bg-background">
+    <header className="h-[3.6em] lg:w-[50vw] w-[95vw] flex items-center justify-between px-[1vw] glass-gradient-header text-foreground bg-background z-10 dark:text-foreground dark:bg-background">
       <h1 className="text-[2.5vw] lg:text-[1em] flex flex-col font-semibold py-[0.8em] lg:py-[2em] items-start">
         {selectedRoom ? `#${selectedRoom.name}` : "General Chat"}
         <ChatPresence />
