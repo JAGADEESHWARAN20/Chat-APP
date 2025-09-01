@@ -68,7 +68,7 @@ export default function LeftSidebar({
     >
       
 
-      <Tabs defaultValue="rooms" className="w-full mt-10 lg:mt-0 flex gap-[.1em]" onValueChange={setTabValue}>
+      <Tabs defaultValue="rooms" className="w-full mt-10 lg:mt-0 flex flex-col gap-[.1em]" onValueChange={setTabValue}>
         <div className="flex gap-[.2em] items-center">
           <TabsList className="grid w-full grid-cols-3 mb-1">
           <TabsTrigger value="all">All</TabsTrigger>
