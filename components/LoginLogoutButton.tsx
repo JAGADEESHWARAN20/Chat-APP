@@ -46,12 +46,10 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
             <SheetTitle className="flex items-center gap-2 z-[999999]">
               <Avatar className="h-8 w-8">
                 <AvatarImage
+                  className="z-[99999999]"
                   src={user.user_metadata.avatar_url || ""}
                   alt={user.user_metadata.display_name || user.email}
                 />
-                <AvatarFallback>
-                  {user.email?.[0].toUpperCase()}
-                </AvatarFallback>
               </Avatar>
               <span>{user.user_metadata.display_name || user.email}</span>
             </SheetTitle>
