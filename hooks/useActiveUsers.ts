@@ -11,12 +11,13 @@ export function useActiveUsers(roomId: string | null) {
     if (!roomId) return;
 
     const fetchActiveUsers = async () => {
-      const { count } = await supabase
+      const { count, error } = await supabase
         .from("room_members")
         .select("*", { count: "exact", head: true })
         .eq("room_id", roomId)
         .eq("status", "accepted")
-        .eq("active", true); // only active ones
+        .eq("active", true); // ✅ only count active
+      if (error) console.error("Error fetching active users:", error);
       setActiveUsers(count || 0);
     };
 
@@ -32,7 +33,7 @@ export function useActiveUsers(roomId: string | null) {
       .subscribe();
 
     return () => {
-      channel.unsubscribe();
+      supabase.removeChannel(channel);
     };
   }, [roomId, supabase]);
 

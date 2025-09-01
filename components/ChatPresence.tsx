@@ -1,19 +1,15 @@
 "use client";
 
-import React from "react";
-import { useUser } from "@/lib/store/user";
 import { useRoomContext } from "@/lib/store/RoomContext";
 import { useActiveUsers } from "@/hooks/useActiveUsers";
 
 export default function ChatPresence() {
-  const user = useUser((state) => state.user);
   const { state } = useRoomContext();
   const { selectedRoom } = state;
 
-  // Get active users from DB for this room
   const activeUsers = useActiveUsers(selectedRoom?.id ?? null);
 
-  if (!user || !selectedRoom) {
+  if (!selectedRoom) {
     return <div className="h-3 w-1" />;
   }
 
