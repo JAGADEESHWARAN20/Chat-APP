@@ -43,10 +43,10 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
         </SheetTrigger>
         <SheetContent side="right" className="w-[300px]">
           <SheetHeader>
-            <SheetTitle className="flex items-center gap-2 z-[999999]">
-              <Avatar className="h-8 w-8 z-[99999999]">
+            <SheetTitle className="flex items-center gap-2 z-[99999]">
+              <Avatar className="h-8 w-8 z-[99999]">
                 <AvatarImage
-                  className="z-[99999999]"
+                  className=""
                   src={user.user_metadata.avatar_url || ""}
                   alt={user.user_metadata.display_name || user.email}
                 />
@@ -55,8 +55,7 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
             </SheetTitle>
           </SheetHeader>
           <div className="flex flex-col gap-4 mt-6">
-            <div className="flex items-center justify-between z-[999999]">
-              <span className="text-sm font-medium">Theme</span>
+            <div className="flex items-center justify-center z-[999999]">
               <ThemeToggleButton />
             </div>
             <Link href={`/profile/${user.id}`}>

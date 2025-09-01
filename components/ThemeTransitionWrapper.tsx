@@ -61,7 +61,7 @@ export default function ThemeTransitionWrapper({
             animate={{ clipPath: `circle(150% at ${circle.x}px ${circle.y}px)` }}
             exit={{ opacity: 0 }}
             transition={{ duration: .5, ease: "linear" }}
-            className="fixed inset-0 mixble z-[99999] pointer-events-none"
+            className="fixed inset-0 z-[99999] pointer-events-none"
             style={{
               background:
                 circle.nextTheme === "dark"
@@ -77,7 +77,7 @@ export default function ThemeTransitionWrapper({
                   ? "0 0 0 4px hsl(210 40% 98%)"
                   : "0 0 0 4px hsl(224 71.4% 4.1%)",
               mixBlendMode: circle.nextTheme === "dark"
-                  ? "darken"
+                  ? "exclusion"
                   : "difference", 
             }}
           />
