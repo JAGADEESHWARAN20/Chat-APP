@@ -84,7 +84,7 @@ export default function Page() {
         </header>
 
         {/* Main content */}
-        <div className="flex flex-1 w-full overflow-hidden">
+        <div className="flex flex-1 w-full overflow-hidden overflow-y-scroll">
           {activeTab === "home" ? (
             <ChatLayout
               user={user}
