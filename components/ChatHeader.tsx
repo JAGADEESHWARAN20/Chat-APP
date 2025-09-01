@@ -18,21 +18,12 @@ import {
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Database } from "@/lib/types/supabase";
-import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { useRoomContext } from "@/lib/store/RoomContext";
 import { useRoomPresence } from "@/hooks/useRoomPresence";
 import { useMessage, Imessage } from "@/lib/store/messages";
 import { useSearchHighlight } from "@/lib/store/SearchHighlightContext";
-type Room = Database["public"]["Tables"]["rooms"]["Row"];
-type RoomMemberRow = Database["public"]["Tables"]["room_members"]["Row"];
 
-// Extended Room type including memberCount, isMember, participationStatus
-type RoomWithMembershipCount = Room & {
-  isMember: boolean;
-  participationStatus: string | null;
-  memberCount: number;
-};
 
 export default function ChatHeader({ user }: { user: SupabaseUser | undefined }) {
 
@@ -101,7 +92,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   }, [selectedRoom, user]);
 
   return (
-    <header className="h-[3.6em] lg:w-[50vw] w-[95vw] flex items-center justify-between px-[1.5vw] glass-gradient-header text-foreground bg-background z-10 dark:text-foreground dark:bg-background">
+    <header className="h-[3.6em] lg:w-[50vw] w-[100vw] flex items-center justify-between px-[1vw] glass-gradient-header text-foreground bg-background z-10 dark:text-foreground dark:bg-background">
       <h1 className="text-[2.5vw] lg:text-[1em] flex flex-col font-semibold py-[0.8em] lg:py-[2em] items-start">
         {selectedRoom ? `#${selectedRoom.name}` : "General Chat"}
         <ChatPresence />
