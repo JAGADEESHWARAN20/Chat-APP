@@ -47,7 +47,7 @@ export default function ThemeTransitionWrapper({
         setCircle((prev) => ({ ...prev, active: false }));
         setTheme(nextTheme);
       }, 1000);
-    }, 1100);
+    }, 900);
   };
 
   return (
@@ -78,7 +78,7 @@ export default function ThemeTransitionWrapper({
                   : "0 0 0 4px hsl(224 71.4% 4.1%)",
               mixBlendMode: circle.nextTheme === "dark"
                   ? "screen"
-                  : "normal", 
+                  : "multiply", 
             }}
           />
         )}
