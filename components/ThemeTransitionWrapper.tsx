@@ -46,8 +46,8 @@ export default function ThemeTransitionWrapper({
       setTheme(nextTheme);
       setTimeout(() => {
         setCircle((prev) => ({ ...prev, active: false }));
-      }, 600);
-    }, 1200);
+      }, 800);
+    }, 200);
   };
 
   return (
