@@ -54,28 +54,15 @@ export default function Page() {
             </div>
 
             {/* Right section (Actions) */}
-            <div className="flex items-center gap-2">
-              {/* Tabs */}
-              <div className="flex items-center gap-[.01em] ">
-                <button
-                  onClick={() => setActiveTab("home")}
-                  className={`glass-button flex items-center gap-2 ${
+            <div className="flex items-center gap-2">               
+                  <Home onClick={() => setActiveTab("home")}
+                  className={`w-4 h-4 flex items-center gap-2 ${
                     activeTab === "home" ? "bg-primary/20" : ""
-                  }`}
-                >
-                  <Home className="w-4 h-4" />
-                  <span className="hidden sm:inline">Home</span>
-                </button>
-                <button
-                  onClick={() => setActiveTab("search")}
-                  className={`glass-button flex items-center gap-2 ${
+                  }`} />
+                  <Search onClick={() => setActiveTab("search")}
+                  className={`w-4 h-4 flex items-center gap-2 ${
                     activeTab === "search" ? "bg-primary/20" : ""
-                  }`}
-                >
-                  <Search className="w-4 h-4" />
-                  <span className="hidden sm:inline">Search</span>
-                </button>
-              </div>
+                  }`} />
               <CreateRoomDialog user={user} />
               <NotificationsWrapper />
               <LoginLogoutButton user={user} />
