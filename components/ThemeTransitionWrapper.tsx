@@ -49,7 +49,7 @@ export default function ThemeTransitionWrapper({
     setTimeout(() => {
       setCircle((prev) => ({ ...prev, active: false }));
       setTheme(nextTheme);
-    }, 400); // matches motion duration
+    }, 300); // matches motion duration
   };
 
   const getCircleStyles = (): CSSProperties => {
