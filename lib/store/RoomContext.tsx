@@ -295,7 +295,9 @@ const acceptJoinNotification = useCallback(
 }, [user, supabase]);
 
 
-  const joinRoom = useCallback(async (roomId: string) => {
+  // RoomProvider.tsx
+const joinRoom = useCallback(
+  async (roomId: string) => {
     if (!user) {
       toast.error("You must be logged in to join a room");
       return;
@@ -304,10 +306,9 @@ const acceptJoinNotification = useCallback(
       const response = await fetch(`/api/rooms/${roomId}/join`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roomId }),
       });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.message || "Failed to join room");
+      if (!response.ok) throw new Error(result.error || "Failed to join room");
 
       let newParticipationStatus: string | null = "accepted";
       let newIsMember = true;
@@ -332,7 +333,9 @@ const acceptJoinNotification = useCallback(
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to join room");
     }
-  }, [user, supabase]);
+  },
+  [user, supabase]
+);
 
   const leaveRoom = useCallback(async (roomId: string) => {
     if (!user) {

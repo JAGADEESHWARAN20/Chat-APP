@@ -1,89 +1,97 @@
+// ChatInput.tsx
 "use client";
 
-import React, { useState } from "react";
-import { v4 as uuidv4 } from "uuid";
-import { useUser } from "@/lib/store/user";
+import { useState } from "react";
+import { useMessage } from "@/lib/store/messages";
 import { useRoomContext } from "@/lib/store/RoomContext";
-import { supabaseBrowser } from "@/lib/supabase/browser";
-import type { Imessage } from "@/lib/store/messages";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import { v4 as uuidv4 } from "uuid";
+import { User as SupabaseUser } from "@supabase/supabase-js";
+import { Imessage } from "@/lib/store/messages";
+import {Send} from "lucide-react"
 
-export default function ChatInput() {
+export default function ChatInput({ user }: { user: SupabaseUser }) {
   const [text, setText] = useState("");
-  const [loading, setLoading] = useState(false);
-  const supabase = supabaseBrowser();
-
-  const user = useUser((state) => state.user);
-  const { state, addMessage } = useRoomContext();
+  const { addMessage, addOptimisticId } = useMessage();
+  const { state } = useRoomContext();
   const { selectedRoom, selectedDirectChat } = state;
 
-  const sendMessage = async () => {
-    if (!user || !text.trim()) return;
+  const handleSend = async () => {
+    if (!user) {
+      toast.error("You must be logged in to send messages");
+      return;
+    }
+    if (!text.trim()) {
+      toast.error("Message cannot be empty");
+      return;
+    }
+    if (!selectedRoom && !selectedDirectChat) {
+      toast.error("No room or direct chat selected");
+      return;
+    }
 
-    setLoading(true);
-
-    const newMessage: Imessage = {
-      id: uuidv4(),
+    const optimisticId = uuidv4();
+    const optimisticMessage: Imessage = {
+      id: optimisticId,
+      text: text.trim(),
       sender_id: user.id,
-      room_id: selectedRoom?.id ?? null,
-      direct_chat_id: selectedDirectChat?.id ?? null,
-      dm_thread_id: null, // ✅ required by type
-      text,
+      room_id: selectedRoom?.id || null,
+      direct_chat_id: selectedDirectChat?.id || null,
+      dm_thread_id: null,
       created_at: new Date().toISOString(),
-      is_edited: false, // ✅ required by type
-      status: "sent", // ✅ required by type
+      is_edited: false,
+      status: "sent",
       profiles: {
         id: user.id,
-        display_name: user.display_name ?? "",
-        avatar_url: user.avatar_url ?? "",
-        username: user.username ?? "",
-        bio: user.bio ?? "",
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+        display_name: user.user_metadata.display_name || user.email || "",
+        avatar_url: user.user_metadata.avatar_url || "",
+        username: user.user_metadata.username || "",
+        created_at: user.created_at,
+        updated_at: null,
+        bio: null,
       },
     };
 
-    // Optimistic update
-    addMessage(newMessage);
-    setText("");
+    addOptimisticId(optimisticId);
+    addMessage(optimisticMessage);
 
-    // Persist to DB
-    const { error } = await supabase.from("messages").insert({
-      id: newMessage.id,
-      sender_id: newMessage.sender_id,
-      room_id: newMessage.room_id,
-      direct_chat_id: newMessage.direct_chat_id,
-      dm_thread_id: newMessage.dm_thread_id,
-      text: newMessage.text,
-      is_edited: newMessage.is_edited,
-      status: newMessage.status,
-    });
+    try {
+      const response = await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roomId: selectedRoom?.id,
+          directChatId: selectedDirectChat?.id,
+          dmThreadId: null,
+          content: text.trim(),
+        }),
+      });
 
-    if (error) {
-      console.error("Error sending message:", error);
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to send message");
+      }
+
+      setText("");
+      toast.success("Message sent");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to send message");
+      // Optionally remove optimistic message on failure
+      // useMessage.getState().optimisticDeleteMessage(optimisticId);
     }
-
-    setLoading(false);
   };
 
   return (
-    <div className="flex items-center gap-2 p-2 border-t">
-      <input
-        type="text"
-        className="flex-1 rounded-lg border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        placeholder="Type your message..."
+    <div className="flex gap-2">
+      <Input
         value={text}
         onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && !loading) sendMessage();
-        }}
+        placeholder="Type a message..."
+        onKeyDown={(e) => e.key === "Enter" && handleSend()}
       />
-      <button
-        className="rounded-lg bg-blue-500 px-4 py-2 text-white hover:bg-blue-600 disabled:opacity-50"
-        onClick={sendMessage}
-        disabled={loading || !text.trim()}
-      >
-        {loading ? "..." : "Send"}
-      </button>
+      <Button onClick={handleSend}><Send className="w-[2em] h-[2em]"/></Button>
     </div>
   );
 }

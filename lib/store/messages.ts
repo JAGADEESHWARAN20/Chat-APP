@@ -97,85 +97,94 @@ export const useMessage = create<MessageState>()((set, get) => ({
       hasMore: true,
     })),
 
-  subscribeToRoom: (roomId) =>
-    set((state) => {
-      if (state.currentSubscription) {
-        state.currentSubscription.unsubscribe();
-      }
+ // useMessage.tsx
+subscribeToRoom: (roomId?: string, directChatId?: string, dmThreadId?: string) =>
+  set((state) => {
+    if (state.currentSubscription) {
+      state.currentSubscription.unsubscribe();
+    }
 
-      const subscription = supabaseBrowser()
-        .channel(`room:${roomId}`)
-        .on(
-          "postgres_changes",
-          {
-            event: "INSERT",
-            schema: "public",
-            table: "messages",
-            filter: `room_id=eq.${roomId}`,
-          },
-          async (payload: { new: Database["public"]["Tables"]["messages"]["Row"] }) => {
-            const { new: newMessage } = payload;
-            const { data: messageWithUser, error } = await supabaseBrowser()
-              .from("messages")
-              .select(
-                `
-                *,
-                profiles:profiles!messages_sender_id_fkey (
-                  id,
-                  display_name,
-                  avatar_url,
-                  username,
-                  bio,
-                  created_at,
-                  updated_at
-                )
-              `
+    if (!roomId && !directChatId && !dmThreadId) {
+      return { currentSubscription: null };
+    }
+
+    const filter = roomId
+      ? `room_id=eq.${roomId}`
+      : directChatId
+      ? `direct_chat_id=eq.${directChatId}`
+      : `dm_thread_id=eq.${dmThreadId}`;
+
+    const channelName = roomId
+      ? `room:${roomId}`
+      : directChatId
+      ? `direct_chat:${directChatId}`
+      : `dm_thread:${dmThreadId}`;
+
+    const subscription = supabaseBrowser()
+      .channel(channelName)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+          filter,
+        },
+        async (payload: { new: Database["public"]["Tables"]["messages"]["Row"] }) => {
+          const { new: newMessage } = payload;
+          const { data: messageWithUser, error } = await supabaseBrowser()
+            .from("messages")
+            .select(`
+              *,
+              profiles:profiles!messages_sender_id_fkey (
+                id, display_name, avatar_url, username, bio, created_at, updated_at
               )
-              .eq("id", newMessage.id)
-              .single<MessageWithProfile>();
+            `)
+            .eq("id", newMessage.id)
+            .single<MessageWithProfile>();
 
-            if (error) {
-              toast.error("Error fetching message details");
-              return;
-            }
+          if (error) {
+            toast.error("Error fetching message details");
+            return;
+          }
 
-            if (messageWithUser && !state.optimisticIds.includes(messageWithUser.id)) {
-              get().addMessage(messageWithUser as unknown as Imessage);
-            }
+          if (messageWithUser && !state.optimisticIds.includes(messageWithUser.id)) {
+            get().addMessage(messageWithUser as Imessage);
           }
-        )
-        .on(
-          "postgres_changes",
-          {
-            event: "UPDATE",
-            schema: "public",
-            table: "messages",
-            filter: `room_id=eq.${roomId}`,
-          },
-          (payload: { new: Database["public"]["Tables"]["messages"]["Row"] }) => {
-            const { new: updatedMessage } = payload;
-            get().optimisticUpdateMessage(updatedMessage.id, updatedMessage);
-          }
-        )
-        .on(
-          "postgres_changes",
-          {
-            event: "DELETE",
-            schema: "public",
-            table: "messages",
-            filter: `room_id=eq.${roomId}`,
-          },
-          (payload) => {
-            const { old: deletedMessage } = payload;
-            get().optimisticDeleteMessage(deletedMessage.id);
-          }
-        )
-        .subscribe();
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "messages",
+          filter,
+        },
+        (payload) => {
+          const { new: updatedMessage } = payload;
+          get().optimisticUpdateMessage(updatedMessage.id, updatedMessage);
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "messages",
+          filter,
+        },
+        (payload) => {
+          const { old: deletedMessage } = payload;
+          get().optimisticDeleteMessage(deletedMessage.id);
+        }
+      )
+      .subscribe();
 
-      return {
-        currentSubscription: subscription,
-      };
-    }),
+    return {
+      currentSubscription: subscription,
+    };
+  }),
 
   unsubscribeFromRoom: () =>
     set((state) => {
