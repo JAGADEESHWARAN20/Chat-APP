@@ -59,8 +59,8 @@ export default function ThemeTransitionWrapper({
           ? "hsl(224 71.4% 4.1%)"
           : "hsl(0 0% 100%)",
       mixBlendMode: circle.nextTheme === "dark"
-          ? "overlay"
-          : "difference", 
+          ? "screen"
+          : "multiply", 
     };
   };
 

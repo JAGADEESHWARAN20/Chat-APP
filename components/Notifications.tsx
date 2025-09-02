@@ -105,6 +105,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
       if (!res.ok) throw new Error("Failed to accept notification");
 
       await markAsRead(id);
+      await removeNotification(id); // ✅ keep UI in sync
 
       if (["room_invite", "join_request"].includes(type)) {
         const { data: room, error } = await supabase
@@ -142,6 +143,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
 
       if (!res.ok) throw new Error("Reject failed");
       await markAsRead(id);
+      await removeNotification(id); // ✅ hides from UI
       toast.success("Request rejected.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Reject error.");

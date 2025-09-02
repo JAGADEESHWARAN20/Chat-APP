@@ -3,7 +3,8 @@ import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { Database } from "@/lib/types/supabase";
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function POST(
   req: NextRequest,
@@ -12,25 +13,37 @@ export async function POST(
   const supabase = createRouteHandlerClient<Database>({ cookies });
   const roomId = params.roomId;
 
-  // 1. Session check
-  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+  // 1️⃣ Verify session
+  const {
+    data: { session },
+    error: sessionError,
+  } = await supabase.auth.getSession();
+
   if (sessionError || !session?.user) {
     return NextResponse.json(
-      { success: false, error: "Authentication required", code: "AUTH_REQUIRED" },
+      {
+        success: false,
+        error: "Authentication required",
+        code: "AUTH_REQUIRED",
+      },
       { status: 401 }
     );
   }
   const userId = session.user.id;
 
-  // 2. Room ID validation
+  // 2️⃣ Validate room ID
   if (!roomId || !UUID_REGEX.test(roomId)) {
     return NextResponse.json(
-      { success: false, error: "Invalid room ID", code: "INVALID_ROOM_ID" },
+      {
+        success: false,
+        error: "Invalid room ID",
+        code: "INVALID_ROOM_ID",
+      },
       { status: 400 }
     );
   }
 
-  // 3. Fetch room info
+  // 3️⃣ Fetch room details
   const { data: room, error: roomError } = await supabase
     .from("rooms")
     .select("id, name, created_by, is_private")
@@ -39,12 +52,16 @@ export async function POST(
 
   if (roomError || !room) {
     return NextResponse.json(
-      { success: false, error: "Room not found", code: "ROOM_NOT_FOUND" },
+      {
+        success: false,
+        error: "Room not found",
+        code: "ROOM_NOT_FOUND",
+      },
       { status: 404 }
     );
   }
 
-  // 4. Check if already a member or participant
+  // 4️⃣ Check membership/participation
   const { data: existingMember } = await supabase
     .from("room_members")
     .select("status")
@@ -59,7 +76,10 @@ export async function POST(
     .eq("user_id", userId)
     .maybeSingle();
 
-  if (existingMember?.status === "accepted" || existingParticipant?.status === "accepted") {
+  if (
+    existingMember?.status === "accepted" ||
+    existingParticipant?.status === "accepted"
+  ) {
     return NextResponse.json({
       success: true,
       status: "accepted",
@@ -68,7 +88,10 @@ export async function POST(
     });
   }
 
-  if (existingParticipant?.status === "pending" || existingMember?.status === "pending") {
+  if (
+    existingMember?.status === "pending" ||
+    existingParticipant?.status === "pending"
+  ) {
     return NextResponse.json({
       success: true,
       status: "pending",
@@ -76,61 +99,94 @@ export async function POST(
     });
   }
 
-  // 5. Insert/Update participant/member, notify owner if private
+  // 5️⃣ Private vs Public
   const isPrivate = room.is_private;
 
   if (isPrivate) {
-    // Safety: owner must exist for private room
+    // ----- Private room → request approval -----
     if (!room.created_by) {
-      return NextResponse.json({
-        success: false,
-        error: "Room owner information is missing.",
-        code: "ROOM_OWNER_MISSING"
-      }, { status: 500 });
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Room owner information is missing.",
+          code: "ROOM_OWNER_MISSING",
+        },
+        { status: 500 }
+      );
     }
 
-    // Insert participant as pending
-    const { error: pErr } = await supabase
-      .from("room_participants")
-      .upsert([{ room_id: roomId, user_id: userId, status: "pending" }], { onConflict: "room_id,user_id" });
+    const { error: pErr } = await supabase.from("room_participants").upsert(
+      [{ room_id: roomId, user_id: userId, status: "pending" }],
+      { onConflict: "room_id,user_id" }
+    );
+
     if (pErr) {
-      return NextResponse.json({ success: false, error: "Could not request join", details: pErr.message }, { status: 500 });
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Could not request join",
+          details: pErr.message,
+        },
+        { status: 500 }
+      );
     }
 
-    // Create join_request notification for owner
-    const notifInsert = {
-      user_id: room.created_by,      // definitely a string here
+    // 🔔 Notify owner
+    const notifPayload = {
+      user_id: room.created_by,
       sender_id: userId,
       room_id: roomId,
       type: "join_request",
       message: `${session.user.email} requested to join "${room.name}"`,
       status: "unread",
     };
-    const { error: notifError } = await supabase.from("notifications").insert(notifInsert);
+
+    const { error: notifError } = await supabase
+      .from("notifications")
+      .insert(notifPayload);
+
     if (notifError) {
-      // Non-blocking
-      console.warn("Notification error:", notifError.message);
+      console.warn("[join] Notification insert error:", notifError.message);
     }
+
     return NextResponse.json({
       success: true,
       status: "pending",
       message: "Join request sent to room owner",
     });
   } else {
-    // Public room: upsert accepted to both tables
+    // ----- Public room → auto-accept -----
     const now = new Date().toISOString();
-    const { error: partErr } = await supabase
-      .from("room_participants")
-      .upsert([{ room_id: roomId, user_id: userId, status: "accepted", joined_at: now }], { onConflict: "room_id,user_id" });
-    const { error: memberErr } = await supabase
-      .from("room_members")
-      .upsert([{ room_id: roomId, user_id: userId, status: "accepted", joined_at: now, active: true }], { onConflict: "room_id,user_id" });
 
-    if (memberErr || partErr) {
+    const { error: partErr } = await supabase.from("room_participants").upsert(
+      [{ room_id: roomId, user_id: userId, status: "accepted", joined_at: now }],
+      { onConflict: "room_id,user_id" }
+    );
+
+    const { error: memberErr } = await supabase.from("room_members").upsert(
+      [
+        {
+          room_id: roomId,
+          user_id: userId,
+          status: "accepted",
+          joined_at: now,
+          active: true,
+        },
+      ],
+      { onConflict: "room_id,user_id" }
+    );
+
+    if (partErr || memberErr) {
       return NextResponse.json(
-        { success: false, error: "Join failed", details: memberErr?.message || partErr?.message }, { status: 500 }
+        {
+          success: false,
+          error: "Join failed",
+          details: memberErr?.message || partErr?.message,
+        },
+        { status: 500 }
       );
     }
+
     return NextResponse.json({
       success: true,
       status: "accepted",

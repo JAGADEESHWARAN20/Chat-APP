@@ -83,6 +83,32 @@ export const useNotification = create<NotificationState>((set, get) => {
         set({ notifications: [notification, ...notifications] });
       }
     },
+acceptNotification: async (
+  notificationId: string,
+  onRoomAccepted?: (roomId: string) => void
+) => {
+  try {
+    const res = await fetch(`/api/notifications/${notificationId}/accept`, {
+      method: "POST",
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error || "Failed to accept notification");
+
+    // Remove from local state
+    set((state) => ({
+      notifications: state.notifications.filter((n) => n.id !== notificationId),
+    }));
+
+    toast.success("Join request accepted!");
+
+    if (result?.roomId && onRoomAccepted) {
+      onRoomAccepted(result.roomId);
+    }
+  } catch (err) {
+    console.error("[Notifications Store] acceptNotification error:", err);
+    toast.error(err instanceof Error ? err.message : "Failed to accept notification");
+  }
+},
 
     markAsRead: async (notificationId) => {
       try {

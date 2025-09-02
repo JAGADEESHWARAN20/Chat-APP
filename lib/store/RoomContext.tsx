@@ -148,6 +148,9 @@ interface RoomContextType {
   checkRoomMembership: (roomId: string) => Promise<boolean>;
   checkRoomParticipation: (roomId: string) => Promise<string | null>;
   addMessage: (message: Imessage) => void;   // ✅ add this
+  // Inside RoomContextType
+acceptJoinNotification: (roomId: string) => Promise<void>;
+
 }
 
 const RoomContext = createContext<RoomContextType | undefined>(undefined);
@@ -162,6 +165,35 @@ export function RoomProvider({
 }) {
   const [state, dispatch] = useReducer(roomReducer, initialState);
   const supabase = supabaseBrowser();
+const acceptJoinNotification = useCallback(
+  async (roomId: string) => {
+    try {
+      const { data: room } = await supabase
+        .from("rooms")
+        .select("*")
+        .eq("id", roomId)
+        .single();
+
+      if (!room) throw new Error("Room not found after acceptance");
+
+      const roomWithMembership: RoomWithMembershipCount = {
+        ...room,
+        isMember: true,
+        participationStatus: "accepted",
+        memberCount: 0, // will be updated by realtime
+      };
+
+      dispatch({ type: "ADD_ROOM", payload: roomWithMembership });
+      dispatch({ type: "SET_SELECTED_ROOM", payload: roomWithMembership });
+
+      toast.success(`Accepted join request for room: ${room.name}`);
+    } catch (err) {
+      console.error("Error in acceptJoinNotification:", err);
+      toast.error("Failed to update room after acceptance");
+    }
+  },
+  [supabase]
+);
 
   const checkRoomMembership = useCallback(
     async (roomId: string) => {
@@ -441,6 +473,7 @@ const addMessage = useCallback((message: Imessage) => {
   checkRoomMembership,
   checkRoomParticipation,
   addMessage, // ✅ expose
+  acceptJoinNotification, // ✅ expose
 };
 
 
