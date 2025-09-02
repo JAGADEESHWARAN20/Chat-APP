@@ -148,6 +148,21 @@ export async function POST(
     if (notifError) {
       console.warn("[join] Notification insert error:", notifError.message);
     }
+    if (room.created_by) {
+    const { error: notifError } = await supabase.from("notifications").insert({
+      user_id: room.created_by,
+      sender_id: userId,
+      room_id: roomId,
+      type: "join_request",
+      message: `${session.user.email} requested to join "${room.name}"`,
+      status: "unread",
+    });
+
+    if (notifError) {
+      console.warn("[join] Notification insert error:", notifError.message);
+    }
+  }
+
 
     return NextResponse.json({
       success: true,
@@ -186,6 +201,20 @@ export async function POST(
         { status: 500 }
       );
     }
+    if (room.created_by) {
+    const { error: notifError } = await supabase.from("notifications").insert({
+      user_id: room.created_by,
+      sender_id: userId,
+      room_id: roomId,
+      type: "user_joined",
+      message: `${session.user.email} joined "${room.name}"`,
+      status: "unread",
+    });
+
+    if (notifError) {
+      console.warn("[join] Notification insert error:", notifError.message);
+    }
+  }
 
     return NextResponse.json({
       success: true,

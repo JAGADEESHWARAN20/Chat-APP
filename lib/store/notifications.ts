@@ -19,7 +19,9 @@ type RoomType = {
   is_private: boolean;
 };
 
-type NotificationWithRelations = Database["public"]["Tables"]["notifications"]["Row"] & {
+type NotificationRow = Database["public"]["Tables"]["notifications"]["Row"];
+
+type NotificationWithRelations = NotificationRow & {
   sender: UserType | null;
   recipient: UserType | null;
   room: RoomType | null;
@@ -36,9 +38,9 @@ export interface Inotification {
   room_id: string | null;
   join_status: string | null;
   direct_chat_id: string | null;
-  users: UserType | null; // This maps to 'sender'
+  users: UserType | null;    // sender
   recipient: UserType | null;
-  rooms: RoomType | null; // This maps to 'room'
+  rooms: RoomType | null;    // room
 }
 
 interface NotificationState {
@@ -46,9 +48,13 @@ interface NotificationState {
   setNotifications: (notifications: Inotification[]) => void;
   addNotification: (notification: Inotification) => void;
   markAsRead: (notificationId: string) => Promise<void>;
-  // Add removeNotification to the interface
   removeNotification: (notificationId: string) => void;
-  fetchNotifications: (userId: string, page?: number, limit?: number, retries?: number) => Promise<void>;
+  fetchNotifications: (
+    userId: string,
+    page?: number,
+    limit?: number,
+    retries?: number
+  ) => Promise<void>;
   subscribeToNotifications: (userId: string) => void;
   unsubscribeFromNotifications: () => void;
 }
@@ -68,159 +74,101 @@ export const useNotification = create<NotificationState>((set, get) => {
     room_id: n.room_id,
     join_status: n.join_status,
     direct_chat_id: n.direct_chat_id,
-    users: n.sender, // Correct mapping from 'sender' alias to 'users' in Inotification
+    users: n.sender,
     recipient: n.recipient,
-    rooms: n.room // Correct mapping from 'room' alias to 'rooms' in Inotification
+    rooms: n.room,
   });
 
   return {
     notifications: [],
+
     setNotifications: (notifications) => set({ notifications }),
+
     addNotification: (notification) => {
-      const notifications = get().notifications;
-      const exists = notifications.some(n => n.id === notification.id);
-      if (!exists) {
-        set({ notifications: [notification, ...notifications] });
-      }
-    },
-acceptNotification: async (
-  notificationId: string,
-  onRoomAccepted?: (roomId: string) => void
-) => {
-  try {
-    const res = await fetch(`/api/notifications/${notificationId}/accept`, {
-      method: "POST",
-    });
-    const result = await res.json();
-    if (!res.ok) throw new Error(result.error || "Failed to accept notification");
-
-    // Remove from local state
-    set((state) => ({
-      notifications: state.notifications.filter((n) => n.id !== notificationId),
-    }));
-
-    toast.success("Join request accepted!");
-
-    if (result?.roomId && onRoomAccepted) {
-      onRoomAccepted(result.roomId);
-    }
-  } catch (err) {
-    console.error("[Notifications Store] acceptNotification error:", err);
-    toast.error(err instanceof Error ? err.message : "Failed to accept notification");
-  }
-},
-
-    markAsRead: async (notificationId) => {
-      try {
-        console.log("[Notifications Store] Marking notification as read:", notificationId);
-        const { error } = await supabase
-          .from("notifications")
-          .update({ status: "read" })
-          .eq("id", notificationId);
-
-        if (error) throw error;
-
-        // Update the status in the local state
-        const notifications = get().notifications.map(n =>
-          n.id === notificationId ? { ...n, status: "read" } : n
-        );
-        set({ notifications });
-
-        console.log("[Notifications Store] Successfully marked as read");
-      } catch (error) {
-        console.error("[Notifications Store] Error marking as read:", error);
-        toast.error("Failed to update notification");
+      const current = get().notifications;
+      if (!current.some((n) => n.id === notification.id)) {
+        set({ notifications: [notification, ...current] });
       }
     },
 
-    // Implementation for removeNotification
-    removeNotification: (notificationId) => {
-      console.log("[Notifications Store] Removing notification from state:", notificationId);
-      set((state) => ({
-        notifications: state.notifications.filter(n => n.id !== notificationId)
-      }));
-      console.log("[Notifications Store] Notification removed from state");
+    removeNotification: (id) => {
+      set({
+        notifications: get().notifications.filter((n) => n.id !== id),
+      });
     },
 
-    fetchNotifications: async (userId: string, page = 1, limit = 50, retries = 3) => {
-      try {
-        console.log("[Notifications Store] Fetching notifications for user:", userId);
+    markAsRead: async (notificationId: string) => {
+      const { error } = await supabase
+        .from("notifications")
+        .update({ status: "read" })
+        .eq("id", notificationId);
+      if (error) toast.error("Failed to mark notification as read");
+      else {
+        set({
+          notifications: get().notifications.map((n) =>
+            n.id === notificationId ? { ...n, status: "read" } : n
+          ),
+        });
+      }
+    },
 
+    fetchNotifications: async (userId, page = 1, limit = 20, retries = 3) => {
+      try {
         const { data, error } = await supabase
           .from("notifications")
-          .select(`
+          .select(
+            `
             *,
-            sender:users!notifications_sender_id_fkey(
-              id, username, display_name, avatar_url, created_at
-            ),
-            recipient:users!notifications_user_id_fkey(
-              id, username, display_name, avatar_url, created_at
-            ),
-            room:rooms(
-              id, name, created_at, created_by, is_private
-            )
-          `)
+            sender:users!notifications_sender_id_fkey(*),
+            recipient:users!notifications_user_id_fkey(*),
+            room:rooms(*)
+          `
+          )
           .eq("user_id", userId)
           .order("created_at", { ascending: false })
           .range((page - 1) * limit, page * limit - 1);
 
         if (error) throw error;
 
-        if (data) {
-          console.log("[Notifications Store] Successfully fetched notifications:", data.length);
-          const transformedNotifications = data.map(transformNotification);
-          set({ notifications: transformedNotifications });
-          console.log("[Notifications Store] Notifications transformed and set in state");
-        }
-      } catch (error) {
-        console.error("[Notifications Store] Error fetching notifications:", error);
+        set({
+          notifications: (data as NotificationWithRelations[]).map(transformNotification),
+        });
+      } catch (err) {
+        console.error("Error fetching notifications:", err);
         if (retries > 0) {
-          console.log("[Notifications Store] Retrying fetch... Attempts remaining:", retries - 1);
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          return get().fetchNotifications(userId, page, limit, retries - 1);
+          setTimeout(
+            () => get().fetchNotifications(userId, page, limit, retries - 1),
+            1000
+          );
         }
-        toast.error("Failed to fetch notifications");
       }
     },
 
-    subscribeToNotifications: (userId) => {
-      try {
-        console.log("[Notifications Store] Setting up notification subscription for user:", userId);
-
-        if (notificationChannel) {
-          console.log("[Notifications Store] Cleaning up existing subscription");
-          notificationChannel.unsubscribe();
-        }
-
-        notificationChannel = supabase.channel(`notifications:${userId}`)
-          .on(
-            'postgres_changes',
-            {
-              event: '*', // Listen for all events (INSERT, UPDATE, DELETE)
-              schema: 'public',
-              table: 'notifications',
-              filter: `user_id=eq.${userId}`
-            },
-            async (payload) => {
-              console.log("[Notifications Store] Received notification change:", payload);
-              // Instead of refetching all, you can optimize based on payload.eventType
-              // For simplicity and to ensure data consistency, we'll refetch for now.
-              await get().fetchNotifications(userId);
-            }
-          )
-          .subscribe((status) => {
-            console.log("[Notifications Store] Subscription status:", status);
-          });
-      } catch (error) {
-        console.error("[Notifications Store] Error setting up subscription:", error);
-        toast.error("Failed to subscribe to notifications");
-      }
+    subscribeToNotifications: (userId: string) => {
+      notificationChannel = supabase
+        .channel(`notifications-${userId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "notifications",
+            filter: `user_id=eq.${userId}`,
+          },
+          (payload) => {
+            const newNotif = payload.new as NotificationWithRelations;
+            set((state) => ({
+              notifications: [transformNotification(newNotif), ...state.notifications],
+            }));
+            toast("🔔 New notification received");
+          }
+        )
+        .subscribe();
     },
 
     unsubscribeFromNotifications: () => {
       if (notificationChannel) {
-        console.log("[Notifications Store] Unsubscribing from notifications");
-        notificationChannel.unsubscribe();
+        supabase.removeChannel(notificationChannel);
         notificationChannel = null;
       }
     },
