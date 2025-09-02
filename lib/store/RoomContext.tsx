@@ -1,13 +1,25 @@
 "use client";
 
-import React, { createContext, useContext, useReducer, useEffect, useCallback } from "react";
+import React, {
+  createContext,
+  useContext,
+  useReducer,
+  useEffect,
+  useCallback,
+} from "react";
 import { supabaseBrowser } from "@/lib/supabase/browser";
-import { User as SupabaseUser, RealtimePostgresChangesPayload } from "@supabase/supabase-js";
+import {
+  User as SupabaseUser,
+  RealtimePostgresChangesPayload,
+} from "@supabase/supabase-js";
 import { toast } from "sonner";
 import { Database } from "@/lib/types/supabase";
+import { Imessage } from "./messages";
 
+// ---- Types ----
 type Room = Database["public"]["Tables"]["rooms"]["Row"];
 type RoomMemberRow = Database["public"]["Tables"]["room_members"]["Row"];
+type DirectChat = Database["public"]["Tables"]["direct_chats"]["Row"];
 
 export type RoomWithMembershipCount = Room & {
   isMember: boolean;
@@ -15,9 +27,11 @@ export type RoomWithMembershipCount = Room & {
   memberCount: number;
 };
 
+// ---- State ----
 interface RoomState {
   availableRooms: RoomWithMembershipCount[];
   selectedRoom: RoomWithMembershipCount | null;
+  selectedDirectChat: DirectChat | null; // ✅ add direct chat
   isLoading: boolean;
   isMember: boolean;
   isLeaving: boolean;
@@ -26,17 +40,29 @@ interface RoomState {
 type RoomAction =
   | { type: "SET_AVAILABLE_ROOMS"; payload: RoomWithMembershipCount[] }
   | { type: "SET_SELECTED_ROOM"; payload: RoomWithMembershipCount | null }
+  | { type: "SET_SELECTED_DIRECT_CHAT"; payload: DirectChat | null } // ✅ handle direct chat
   | { type: "SET_LOADING"; payload: boolean }
   | { type: "SET_IS_MEMBER"; payload: boolean }
   | { type: "SET_IS_LEAVING"; payload: boolean }
-  | { type: "UPDATE_ROOM_MEMBERSHIP"; payload: { roomId: string; isMember: boolean; participationStatus: string | null } }
-  | { type: "UPDATE_ROOM_MEMBER_COUNT"; payload: { roomId: string; memberCount: number } }
+  | {
+      type: "UPDATE_ROOM_MEMBERSHIP";
+      payload: {
+        roomId: string;
+        isMember: boolean;
+        participationStatus: string | null;
+      };
+    }
+  | {
+      type: "UPDATE_ROOM_MEMBER_COUNT";
+      payload: { roomId: string; memberCount: number };
+    }
   | { type: "REMOVE_ROOM"; payload: string }
   | { type: "ADD_ROOM"; payload: RoomWithMembershipCount };
 
 const initialState: RoomState = {
   availableRooms: [],
   selectedRoom: null,
+  selectedDirectChat: null, // ✅ initialize
   isLoading: false,
   isMember: false,
   isLeaving: false,
@@ -47,7 +73,9 @@ function roomReducer(state: RoomState, action: RoomAction): RoomState {
     case "SET_AVAILABLE_ROOMS":
       return { ...state, availableRooms: action.payload };
     case "SET_SELECTED_ROOM":
-      return { ...state, selectedRoom: action.payload };
+      return { ...state, selectedRoom: action.payload, selectedDirectChat: null };
+    case "SET_SELECTED_DIRECT_CHAT":
+      return { ...state, selectedDirectChat: action.payload, selectedRoom: null };
     case "SET_LOADING":
       return { ...state, isLoading: action.payload };
     case "SET_IS_MEMBER":
@@ -59,12 +87,21 @@ function roomReducer(state: RoomState, action: RoomAction): RoomState {
         ...state,
         availableRooms: state.availableRooms.map((room) =>
           room.id === action.payload.roomId
-            ? { ...room, isMember: action.payload.isMember, participationStatus: action.payload.participationStatus }
+            ? {
+                ...room,
+                isMember: action.payload.isMember,
+                participationStatus: action.payload.participationStatus,
+              }
             : room
         ),
-        selectedRoom: state.selectedRoom?.id === action.payload.roomId
-          ? { ...state.selectedRoom, isMember: action.payload.isMember, participationStatus: action.payload.participationStatus }
-          : state.selectedRoom,
+        selectedRoom:
+          state.selectedRoom?.id === action.payload.roomId
+            ? {
+                ...state.selectedRoom,
+                isMember: action.payload.isMember,
+                participationStatus: action.payload.participationStatus,
+              }
+            : state.selectedRoom,
       };
     case "UPDATE_ROOM_MEMBER_COUNT":
       return {
@@ -74,15 +111,19 @@ function roomReducer(state: RoomState, action: RoomAction): RoomState {
             ? { ...room, memberCount: action.payload.memberCount }
             : room
         ),
-        selectedRoom: state.selectedRoom?.id === action.payload.roomId
-          ? { ...state.selectedRoom, memberCount: action.payload.memberCount }
-          : state.selectedRoom,
+        selectedRoom:
+          state.selectedRoom?.id === action.payload.roomId
+            ? { ...state.selectedRoom, memberCount: action.payload.memberCount }
+            : state.selectedRoom,
       };
     case "REMOVE_ROOM":
       return {
         ...state,
-        availableRooms: state.availableRooms.filter((room) => room.id !== action.payload),
-        selectedRoom: state.selectedRoom?.id === action.payload ? null : state.selectedRoom,
+        availableRooms: state.availableRooms.filter(
+          (room) => room.id !== action.payload
+        ),
+        selectedRoom:
+          state.selectedRoom?.id === action.payload ? null : state.selectedRoom,
       };
     case "ADD_ROOM":
       return {
@@ -94,21 +135,31 @@ function roomReducer(state: RoomState, action: RoomAction): RoomState {
   }
 }
 
+// ---- Context ----
 interface RoomContextType {
   state: RoomState;
   fetchAvailableRooms: () => Promise<void>;
   setSelectedRoom: (room: RoomWithMembershipCount | null) => void;
+  setSelectedDirectChat: (chat: DirectChat | null) => void;
   joinRoom: (roomId: string) => Promise<void>;
   leaveRoom: (roomId: string) => Promise<void>;
   switchRoom: (newRoomId: string) => Promise<void>;
   createRoom: (name: string, isPrivate: boolean) => Promise<void>;
   checkRoomMembership: (roomId: string) => Promise<boolean>;
   checkRoomParticipation: (roomId: string) => Promise<string | null>;
+  addMessage: (message: Imessage) => void;   // ✅ add this
 }
 
 const RoomContext = createContext<RoomContextType | undefined>(undefined);
 
-export function RoomProvider({ children, user }: { children: React.ReactNode; user: SupabaseUser | undefined }) {
+// ---- Provider ----
+export function RoomProvider({
+  children,
+  user,
+}: {
+  children: React.ReactNode;
+  user: SupabaseUser | undefined;
+}) {
   const [state, dispatch] = useReducer(roomReducer, initialState);
   const supabase = supabaseBrowser();
 
@@ -301,7 +352,6 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
       if (switchedRoom) {
         dispatch({ type: "SET_SELECTED_ROOM", payload: switchedRoom });
         toast.success(`
-
 Switched to ${switchedRoom.is_private ? "private" : "public"} room: ${switchedRoom.name}`);
       }
     } catch (err) {
@@ -340,6 +390,16 @@ Switched to ${switchedRoom.is_private ? "private" : "public"} room: ${switchedRo
   const setSelectedRoom = useCallback((room: RoomWithMembershipCount | null) => {
     dispatch({ type: "SET_SELECTED_ROOM", payload: room });
   }, []);
+  // Add this above const value
+const setSelectedDirectChat = useCallback((chat: DirectChat | null) => {
+  dispatch({ type: "SET_SELECTED_DIRECT_CHAT", payload: chat });
+}, []);
+
+const addMessage = useCallback((message: Imessage) => {
+  console.log("Message added (RoomContext):", message);
+  // later you can sync with Zustand if needed
+}, []);
+
 
   useEffect(() => {
     if (!user) return;
@@ -370,16 +430,19 @@ Switched to ${switchedRoom.is_private ? "private" : "public"} room: ${switchedRo
   }, [user, fetchAvailableRooms]);
 
   const value: RoomContextType = {
-    state,
-    fetchAvailableRooms,
-    setSelectedRoom,
-    joinRoom,
-    leaveRoom,
-    switchRoom,
-    createRoom,
-    checkRoomMembership,
-    checkRoomParticipation,
-  };
+  state,
+  fetchAvailableRooms,
+  setSelectedRoom,
+  setSelectedDirectChat,
+  joinRoom,
+  leaveRoom,
+  switchRoom,
+  createRoom,
+  checkRoomMembership,
+  checkRoomParticipation,
+  addMessage, // ✅ expose
+};
+
 
   return <RoomContext.Provider value={value}>{children}</RoomContext.Provider>;
 }

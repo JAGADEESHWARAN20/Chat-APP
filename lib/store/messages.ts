@@ -5,7 +5,7 @@ import { Database } from "@/lib/types/supabase";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { toast } from "sonner";
 
-type MessageWithProfile = Database["public"]["Tables"]["messages"]["Row"] & {
+export type MessageWithProfile = Database["public"]["Tables"]["messages"]["Row"] & {
   profiles: Database["public"]["Tables"]["profiles"]["Row"];
 };
 

@@ -5,11 +5,12 @@ import { v4 as uuidv4 } from "uuid";
 import { useUser } from "@/lib/store/user";
 import { useRoomContext } from "@/lib/store/RoomContext";
 import { supabaseBrowser } from "@/lib/supabase/browser";
-import type { Imessage } from "@/types/db"; // your type alias
+import type { Imessage } from "@/lib/store/messages";
 
 export default function ChatInput() {
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
+  const supabase = supabaseBrowser();
 
   const user = useUser((state) => state.user);
   const { state, addMessage } = useRoomContext();
@@ -20,14 +21,16 @@ export default function ChatInput() {
 
     setLoading(true);
 
-    // ✅ Optimistic message (uses sender_id instead of user_id)
     const newMessage: Imessage = {
       id: uuidv4(),
-      sender_id: user.id, // matches your DB column
+      sender_id: user.id,
       room_id: selectedRoom?.id ?? null,
       direct_chat_id: selectedDirectChat?.id ?? null,
-      content: text,
+      dm_thread_id: null, // ✅ required by type
+      text,
       created_at: new Date().toISOString(),
+      is_edited: false, // ✅ required by type
+      status: "sent", // ✅ required by type
       profiles: {
         id: user.id,
         display_name: user.display_name ?? "",
@@ -39,21 +42,21 @@ export default function ChatInput() {
       },
     };
 
-    // Add message optimistically
+    // Optimistic update
     addMessage(newMessage);
-
     setText("");
 
-    // ✅ Persist in DB
-    const { error } = await supabaseBrowser
-      .from("messages")
-      .insert({
-        id: newMessage.id,
-        sender_id: newMessage.sender_id,
-        room_id: newMessage.room_id,
-        direct_chat_id: newMessage.direct_chat_id,
-        content: newMessage.content,
-      });
+    // Persist to DB
+    const { error } = await supabase.from("messages").insert({
+      id: newMessage.id,
+      sender_id: newMessage.sender_id,
+      room_id: newMessage.room_id,
+      direct_chat_id: newMessage.direct_chat_id,
+      dm_thread_id: newMessage.dm_thread_id,
+      text: newMessage.text,
+      is_edited: newMessage.is_edited,
+      status: newMessage.status,
+    });
 
     if (error) {
       console.error("Error sending message:", error);
