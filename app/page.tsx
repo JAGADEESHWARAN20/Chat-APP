@@ -55,11 +55,11 @@ export default function Page() {
             <div className="flex items-center gap-[.25em]">               
                   <Home onClick={() => setActiveTab("home")}
                   className={`w-[2em] h-[2em] p-[.35em] border-b border-transparent duration-100  flex items-center  ${
-                    activeTab === "home" ? "fill-gray-700  dark:fill-primary/60  border-gray-700" : "text-black dark:text-white"
+                    activeTab === "home" ? "fill-gray-700  dark:fill-primary/60 text-white border-gray-700" : "text-black dark:text-white"
                   }`} />
                   <Search onClick={() => setActiveTab("search")}
                   className={`w-[2em] h-[2em] p-[.35em] border-b border-transparent  duration-100 flex items-center ${
-                    activeTab === "search" ? "fill-gray-700  dark:fill-primary/60  border-gray-700" : "text-black dark:text-white"
+                    activeTab === "search" ? "fill-gray-700  dark:fill-primary/60 text-white border-gray-700" : "text-black dark:text-white"
                   }`} />
               <CreateRoomDialog user={user} />
               <NotificationsWrapper />
