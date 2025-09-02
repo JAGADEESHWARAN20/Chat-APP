@@ -301,7 +301,7 @@ const acceptJoinNotification = useCallback(
       return;
     }
     try {
-      const response = await fetch(`/api/rooms/switch`, {
+      const response = await fetch(`/api/rooms/${roomId}/join`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ roomId }),
