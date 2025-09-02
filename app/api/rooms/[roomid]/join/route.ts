@@ -39,7 +39,7 @@ export async function POST(
       .single();
     if (roomError || !room) {
       return NextResponse.json(
-        { success: false, error: "Room not found", code: "ROOM_NOT_FOUND" },
+        { success: false, error: "Room not found", code: "ROOM_NOT_FOUND", details: roomError?.message },
         { status: 404 }
       );
     }
@@ -75,11 +75,19 @@ export async function POST(
       });
     }
 
+    // 5. Fetch sender profile once
+    const { data: senderProfile } = await supabase
+      .from("profiles")
+      .select("display_name, username")
+      .eq("id", userId)
+      .single();
+    const senderName = senderProfile?.display_name || senderProfile?.username || session.user.email || "A user";
+
     const isPrivate = room.is_private;
     const now = new Date().toISOString();
 
     if (isPrivate) {
-      // 5. Private room: request approval
+      // 6. Private room: request approval
       if (!room.created_by) {
         return NextResponse.json(
           { success: false, error: "Room owner information is missing", code: "ROOM_OWNER_MISSING" },
@@ -104,21 +112,18 @@ export async function POST(
       if (participantError) {
         console.error("[join] Participant insert error:", participantError);
         return NextResponse.json(
-          { success: false, error: "Could not request join", code: "PARTICIPANT_INSERT_FAILED", details: participantError.message },
+          {
+            success: false,
+            error: "Could not request join",
+            code: "PARTICIPANT_INSERT_FAILED",
+            details: participantError.message,
+          },
           { status: 500 }
         );
       }
 
-      // 6. Notify room owner
-      const { data: senderProfile } = await supabase
-        .from("profiles")
-        .select("display_name, username")
-        .eq("id", userId)
-        .single();
-
-      const senderName = senderProfile?.display_name || senderProfile?.username || session.user.email || "A user";
-
-      const { error: notifError } = await supabase.from("notifications").insert({
+      // 7. Notify room owner
+      const { error: ownerNotifError } = await supabase.from("notifications").insert({
         user_id: room.created_by,
         sender_id: userId,
         room_id: roomId,
@@ -128,8 +133,23 @@ export async function POST(
         created_at: now,
       });
 
-      if (notifError) {
-        console.warn("[join] Notification insert error:", notifError.message);
+      if (ownerNotifError) {
+        console.warn("[join] Owner notification insert error:", ownerNotifError.message);
+      }
+
+      // 8. Notify user of their join request
+      const { error: userNotifError } = await supabase.from("notifications").insert({
+        user_id: userId,
+        sender_id: userId,
+        room_id: roomId,
+        type: "join_request_sent",
+        message: `You requested to join "${room.name}"`,
+        status: "unread",
+        created_at: now,
+      });
+
+      if (userNotifError) {
+        console.warn("[join] User notification insert error:", userNotifError.message);
       }
 
       return NextResponse.json({
@@ -138,7 +158,7 @@ export async function POST(
         message: "Join request sent to room owner",
       });
     } else {
-      // 7. Public room: auto-accept
+      // 9. Public room: auto-accept
       const { error: participantError } = await supabase
         .from("room_participants")
         .upsert(
@@ -170,22 +190,19 @@ export async function POST(
       if (participantError || memberError) {
         console.error("[join] Insert error:", participantError || memberError);
         return NextResponse.json(
-          { success: false, error: "Join failed", code: "JOIN_FAILED", details: (participantError || memberError)?.message },
+          {
+            success: false,
+            error: "Join failed",
+            code: "JOIN_FAILED",
+            details: (participantError || memberError)?.message,
+          },
           { status: 500 }
         );
       }
 
-      // 8. Notify room owner
+      // 10. Notify room owner
       if (room.created_by) {
-        const { data: senderProfile } = await supabase
-          .from("profiles")
-          .select("display_name, username")
-          .eq("id", userId)
-          .single();
-
-        const senderName = senderProfile?.display_name || senderProfile?.username || session.user.email || "A user";
-
-        const { error: notifError } = await supabase.from("notifications").insert({
+        const { error: ownerNotifError } = await supabase.from("notifications").insert({
           user_id: room.created_by,
           sender_id: userId,
           room_id: roomId,
@@ -195,9 +212,24 @@ export async function POST(
           created_at: now,
         });
 
-        if (notifError) {
-          console.warn("[join] Notification insert error:", notifError.message);
+        if (ownerNotifError) {
+          console.warn("[join] Owner notification insert error:", ownerNotifError.message);
         }
+      }
+
+      // 11. Notify user of successful join
+      const { error: userNotifError } = await supabase.from("notifications").insert({
+        user_id: userId,
+        sender_id: userId,
+        room_id: roomId,
+        type: "room_joined",
+        message: `You joined "${room.name}"`,
+        status: "unread",
+        created_at: now,
+      });
+
+      if (userNotifError) {
+        console.warn("[join] User notification insert error:", userNotifError.message);
       }
 
       return NextResponse.json({
@@ -210,7 +242,12 @@ export async function POST(
   } catch (err: any) {
     console.error("[join] Server error:", err);
     return NextResponse.json(
-      { success: false, error: err.message || "Internal server error", code: "INTERNAL_ERROR" },
+      {
+        success: false,
+        error: err.message || "Internal server error",
+        code: "INTERNAL_ERROR",
+        details: err.message,
+      },
       { status: 500 }
     );
   }
