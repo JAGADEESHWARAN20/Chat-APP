@@ -49,7 +49,7 @@ export default function ThemeTransitionWrapper({
     setTimeout(() => {
       setCircle((prev) => ({ ...prev, active: false }));
       setTheme(nextTheme);
-    }, 600); // matches motion duration
+    }, 400); // matches motion duration
   };
 
   const getCircleStyles = (): CSSProperties => {
@@ -81,7 +81,7 @@ export default function ThemeTransitionWrapper({
               opacity: 1,
             }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.6, ease: "easeInOut" }}
+            transition={{ duration: 0.4, ease: "linear" }}
             className="fixed inset-0 z-[99999] pointer-events-none"
             style={getCircleStyles()}
           />
