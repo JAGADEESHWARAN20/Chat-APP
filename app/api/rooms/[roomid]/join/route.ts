@@ -1,3 +1,4 @@
+// /api/rooms/[roomId]/join/route.ts
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
@@ -75,9 +76,9 @@ export async function POST(
       });
     }
 
-    // 5. Fetch sender profile once
+    // 5. Fetch sender profile
     const { data: senderProfile } = await supabase
-      .from("profiles")
+      .from("users") // Changed to "users" to match schema
       .select("display_name, username")
       .eq("id", userId)
       .single();
@@ -134,10 +135,19 @@ export async function POST(
       });
 
       if (ownerNotifError) {
-        console.warn("[join] Owner notification insert error:", ownerNotifError.message);
+        console.error("[join] Owner notification insert error:", ownerNotifError);
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Failed to send notification to room owner",
+            code: "NOTIFICATION_FAILED",
+            details: ownerNotifError.message,
+          },
+          { status: 500 }
+        );
       }
 
-      // 8. Notify user of their join request
+      // 8. Notify user
       const { error: userNotifError } = await supabase.from("notifications").insert({
         user_id: userId,
         sender_id: userId,
@@ -149,7 +159,7 @@ export async function POST(
       });
 
       if (userNotifError) {
-        console.warn("[join] User notification insert error:", userNotifError.message);
+        console.error("[join] User notification insert error:", userNotifError);
       }
 
       return NextResponse.json({
@@ -213,11 +223,11 @@ export async function POST(
         });
 
         if (ownerNotifError) {
-          console.warn("[join] Owner notification insert error:", ownerNotifError.message);
+          console.error("[join] Owner notification insert error:", ownerNotifError);
         }
       }
 
-      // 11. Notify user of successful join
+      // 11. Notify user
       const { error: userNotifError } = await supabase.from("notifications").insert({
         user_id: userId,
         sender_id: userId,
@@ -229,7 +239,7 @@ export async function POST(
       });
 
       if (userNotifError) {
-        console.warn("[join] User notification insert error:", userNotifError.message);
+        console.error("[join] User notification insert error:", userNotifError);
       }
 
       return NextResponse.json({

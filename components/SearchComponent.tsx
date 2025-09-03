@@ -251,36 +251,35 @@ export default function SearchComponent({ user }: { user: SupabaseUser | undefin
     searchType,
   ]);
 
-  const handleJoinRoom = useCallback(
-    async (roomId?: string) => {
-      if (!user) {
-        toast.error("You must be logged in to join a room");
-        return;
-      }
-      const currentRoomId = roomId || selectedRoom?.id;
-      if (!currentRoomId) {
-        toast.error("No room selected");
-        return;
-      }
-      if (!UUID_REGEX.test(currentRoomId)) {
-        toast.error("Invalid room ID format");
-        return;
-      }
+  // SearchComponent.tsx
+const handleJoinRoom = useCallback(
+  async (roomId?: string) => {
+    if (!user) {
+      toast.error("You must be logged in to join a room");
+      return;
+    }
+    const currentRoomId = roomId || selectedRoom?.id;
+    if (!currentRoomId) {
+      toast.error("No room selected");
+      return;
+    }
+    if (!UUID_REGEX.test(currentRoomId)) {
+      toast.error("Invalid room ID format");
+      return;
+    }
 
-      await joinRoom(currentRoomId);
-      if (searchType) {
-        await fetchSearchResults();
-      }
-    },
-    [
-      user,
-      selectedRoom,
-      UUID_REGEX,
-      joinRoom,
-      searchType,
-      fetchSearchResults,
-    ]
-  );
+    await joinRoom(currentRoomId);
+    await fetchSearchResults();
+    setRoomResults((prev) =>
+      prev.map((room) =>
+        room.id === currentRoomId
+          ? { ...room, isMember: !room.is_private, participationStatus: room.is_private ? "pending" : "accepted" }
+          : room
+      )
+    );
+  },
+  [user, selectedRoom, UUID_REGEX, joinRoom, fetchSearchResults]
+);
 
   const handleSearchByType = (type: "rooms" | "users") => {
     setSearchType(type);

@@ -239,7 +239,8 @@ const acceptJoinNotification = useCallback(
     [user, supabase]
   );
 
-  const fetchAvailableRooms = useCallback(async () => {
+// RoomContext.tsx (in fetchAvailableRooms)
+const fetchAvailableRooms = useCallback(async () => {
   if (!user) {
     dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
     dispatch({ type: "SET_LOADING", payload: false });
@@ -248,19 +249,32 @@ const acceptJoinNotification = useCallback(
 
   dispatch({ type: "SET_LOADING", payload: true });
   try {
-    const { data: memberships, error } = await supabase
+    const { data: memberships, error: membersError } = await supabase
       .from("room_members")
-      .select("room_id, rooms(id, name, is_private, created_by, created_at)")
+      .select("room_id, rooms(id, name, is_private, created_by, created_at), status")
       .eq("user_id", user.id)
       .eq("status", "accepted");
 
-    if (error) {
+    const { data: participants, error: participantsError } = await supabase
+      .from("room_participants")
+      .select("room_id, rooms(id, name, is_private, created_by, created_at), status")
+      .eq("user_id", user.id)
+      .eq("status", "accepted");
+
+    if (membersError || participantsError) {
+      console.error("Error fetching rooms:", membersError || participantsError);
       dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
       dispatch({ type: "SET_LOADING", payload: false });
       return;
     }
 
-    const joinedRoomsRaw = (memberships || []).map((m) => m.rooms as Room).filter(Boolean);
+    const joinedRoomsRaw = [
+      ...(memberships || []).map((m) => ({ ...m.rooms, status: m.status! })),
+      ...(participants || []).map((p) => ({ ...p.rooms, status: p.status! })),
+    ].reduce((acc, room) => {
+      if (!acc.find((r) => r.id === room.id)) acc.push(room);
+      return acc;
+    }, [] as (Room & { status: string })[]);
 
     const roomIds = joinedRoomsRaw.map((r) => r.id);
     let countsMap = new Map<string, number>();
@@ -268,25 +282,42 @@ const acceptJoinNotification = useCallback(
     if (roomIds.length > 0) {
       const { data: membersData, error: membersError } = await supabase
         .from("room_members")
-        .select("room_id")
+        .select("room_id, user_id")
         .in("room_id", roomIds)
         .eq("status", "accepted");
-      if (membersError) console.error("Error fetching member counts:", membersError);
+      const { data: participantsData, error: participantsError } = await supabase
+        .from("room_participants")
+        .select("room_id, user_id")
+        .in("room_id", roomIds)
+        .eq("status", "accepted");
 
-      membersData?.forEach((m: Pick<RoomMemberRow, "room_id">) => {
-        countsMap.set(m.room_id, (countsMap.get(m.room_id) ?? 0) + 1);
+      if (membersError || participantsError) {
+        console.error("Error fetching member counts:", membersError || participantsError);
+      }
+
+      const uniqueUsers = new Map<string, Set<string>>();
+      membersData?.forEach((m: { room_id: string; user_id: string }) => {
+        if (!uniqueUsers.has(m.room_id)) uniqueUsers.set(m.room_id, new Set());
+        uniqueUsers.get(m.room_id)!.add(m.user_id);
       });
+      participantsData?.forEach((p: { room_id: string; user_id: string }) => {
+        if (!uniqueUsers.has(p.room_id)) uniqueUsers.set(p.room_id, new Set());
+        uniqueUsers.get(p.room_id)!.add(p.user_id);
+      });
+
+      countsMap = new Map([...uniqueUsers].map(([roomId, users]) => [roomId, users.size]));
     }
 
     const joinedRooms: RoomWithMembershipCount[] = joinedRoomsRaw.map((room) => ({
       ...room,
       memberCount: countsMap.get(room.id) ?? 0,
-      isMember: true,
-      participationStatus: "accepted",
+      isMember: room.status === "accepted",
+      participationStatus: room.status,
     }));
 
     dispatch({ type: "SET_AVAILABLE_ROOMS", payload: joinedRooms });
   } catch (error) {
+    console.error("Error fetching rooms:", error);
     dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
     toast.error("An error occurred while fetching rooms");
   } finally {
