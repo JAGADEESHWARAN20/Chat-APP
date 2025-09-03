@@ -234,7 +234,7 @@ export default function ListMessages() {
         tabIndex={0}
         role="region"
         aria-label="Messages"
-        className="flex-1 flex flex-col p-1 h-[80vh]  outline-none "
+        className="flex-1 flex overflow-y-scroll flex-col p-1 h-[80vh]  outline-none "
         ref={scrollRef}
         onScroll={handleOnScroll}
       >
