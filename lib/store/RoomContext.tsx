@@ -195,6 +195,7 @@ const acceptJoinNotification = useCallback(
   [supabase]
 );
 
+
   const checkRoomMembership = useCallback(
     async (roomId: string) => {
       if (!user) return false;
@@ -267,6 +268,9 @@ const fetchAvailableRooms = useCallback(async () => {
       dispatch({ type: "SET_LOADING", payload: false });
       return;
     }
+
+    console.log("Fetched memberships:", memberships); // Debug log
+    console.log("Fetched participants:", participants); // Debug log
 
     const joinedRoomsRaw = [
       ...(memberships || []).map((m) => ({ ...m.rooms, status: m.status! })),

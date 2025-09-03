@@ -149,107 +149,113 @@ export default function SearchComponent({ user }: { user: SupabaseUser | undefin
   );
 
   const fetchSearchResults = useCallback(async () => {
-    if (!user || !searchType) {
-      setIsLoading(false);
+  if (!user || !searchType) {
+    setIsLoading(false);
+    setRoomResults([]);
+    setUserResults([]);
+    return;
+  }
+
+  setIsLoading(true);
+  try {
+    if (searchType === "rooms") {
+      const apiQuery = debouncedSearchQuery.trim()
+        ? `?q=${encodeURIComponent(debouncedSearchQuery.trim())}&limit=${limit}&offset=${offset}`
+        : `?limit=${limit}&offset=${offset}`;
+      const response = await fetch(`/api/rooms/all${apiQuery}`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const { rooms: fetchedRooms } = await response.json();
+      console.log("fetchSearchResults - Fetched rooms:", fetchedRooms); // Debug log
+
+      // Validate room IDs
+      const invalidRooms = fetchedRooms.filter((room: Room) => !UUID_REGEX.test(room.id));
+      if (invalidRooms.length > 0) {
+        console.error("Invalid room IDs found:", invalidRooms);
+      }
+
+      if (isMounted.current) {
+        const roomIds = fetchedRooms.map((room: Room) => room.id);
+
+        const { data: membersData } = await supabase
+          .from("room_members")
+          .select("room_id, user_id")
+          .in("room_id", roomIds)
+          .eq("status", "accepted");
+
+        const { data: participantsData } = await supabase
+          .from("room_participants")
+          .select("room_id, user_id")
+          .in("room_id", roomIds)
+          .eq("status", "accepted");
+
+        const memberCounts = new Map<string, Set<string>>();
+
+        membersData?.forEach((m: Pick<RoomMemberRow, "room_id" | "user_id">) => {
+          if (!memberCounts.has(m.room_id)) {
+            memberCounts.set(m.room_id, new Set());
+          }
+          memberCounts.get(m.room_id)!.add(m.user_id);
+        });
+
+        participantsData?.forEach((p: { room_id: string; user_id: string }) => {
+          if (!memberCounts.has(p.room_id)) {
+            memberCounts.set(p.room_id, new Set());
+          }
+          memberCounts.get(p.room_id)!.add(p.user_id);
+        });
+
+        const roomsWithDetailedStatus = await Promise.all(
+          fetchedRooms.map(async (room: Room) => ({
+            ...room,
+            participationStatus: await checkRoomParticipation(room.id),
+            memberCount: memberCounts.get(room.id)?.size ?? 0,
+            isMember: await checkRoomMembership(room.id),
+          }))
+        );
+        setRoomResults(roomsWithDetailedStatus);
+      }
+    } else if (searchType === "users") {
+      const { data, error } = await supabase
+        .from("users")
+        .select("id, username, display_name, avatar_url, created_at")
+        .ilike("display_name", `%${debouncedSearchQuery.trim()}%`)
+        .limit(10);
+
+      if (error) {
+        console.error(`Search error for ${searchType}:`, error);
+        toast.error(error.message || `Failed to search ${searchType}`);
+        setUserResults([]);
+      } else if (data && isMounted.current) {
+        setUserResults(data);
+      }
+    }
+  } catch (error) {
+    console.error("Search error:", error);
+    if (isMounted.current) {
+      toast.error(
+        error instanceof Error ? error.message : "An error occurred while searching"
+      );
       setRoomResults([]);
       setUserResults([]);
-      return;
     }
-
-    setIsLoading(true);
-    try {
-      if (searchType === "rooms") {
-        const apiQuery = debouncedSearchQuery.trim()
-          ? `?q=${encodeURIComponent(
-              debouncedSearchQuery.trim()
-            )}&limit=${limit}&offset=${offset}`
-          : `?limit=${limit}&offset=${offset}`;
-        const response = await fetch(`/api/rooms/all${apiQuery}`);
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const { rooms: fetchedRooms } = await response.json();
-
-        if (isMounted.current) {
-          const roomIds = fetchedRooms.map((room: Room) => room.id);
-
-          const { data: membersData } = await supabase
-            .from("room_members")
-            .select("room_id, user_id")
-            .in("room_id", roomIds)
-            .eq("status", "accepted");
-
-          const { data: participantsData } = await supabase
-            .from("room_participants")
-            .select("room_id, user_id")
-            .in("room_id", roomIds)
-            .eq("status", "accepted");
-
-          const memberCounts = new Map<string, Set<string>>();
-
-          membersData?.forEach((m: Pick<RoomMemberRow, "room_id" | "user_id">) => {
-            if (!memberCounts.has(m.room_id)) {
-              memberCounts.set(m.room_id, new Set());
-            }
-            memberCounts.get(m.room_id)!.add(m.user_id);
-          });
-
-          participantsData?.forEach((p: { room_id: string; user_id: string }) => {
-            if (!memberCounts.has(p.room_id)) {
-              memberCounts.set(p.room_id, new Set());
-            }
-            memberCounts.get(p.room_id)!.add(p.user_id);
-          });
-
-          const roomsWithDetailedStatus = await Promise.all(
-            fetchedRooms.map(async (room: Room) => ({
-              ...room,
-              participationStatus: await checkRoomParticipation(room.id),
-              memberCount: memberCounts.get(room.id)?.size ?? 0,
-              isMember: await checkRoomMembership(room.id),
-            }))
-          );
-          setRoomResults(roomsWithDetailedStatus);
-        }
-      } else if (searchType === "users") {
-        const { data, error } = await supabase
-          .from("users")
-          .select("id, username, display_name, avatar_url, created_at")
-          .ilike("display_name", `%${debouncedSearchQuery.trim()}%`)
-          .limit(10);
-
-        if (error) {
-          console.error(`Search error for ${searchType}:`, error);
-          toast.error(error.message || `Failed to search ${searchType}`);
-          setUserResults([]);
-        } else if (data && isMounted.current) {
-          setUserResults(data);
-        }
-      }
-    } catch (error) {
-      console.error("Search error:", error);
-      if (isMounted.current) {
-        toast.error(
-          error instanceof Error ? error.message : "An error occurred while searching"
-        );
-        setRoomResults([]);
-        setUserResults([]);
-      }
-    } finally {
-      if (isMounted.current) {
-        setIsLoading(false);
-      }
+  } finally {
+    if (isMounted.current) {
+      setIsLoading(false);
     }
-  }, [
-    supabase,
-    user,
-    debouncedSearchQuery,
-    checkRoomParticipation,
-    checkRoomMembership,
-    limit,
-    offset,
-    searchType,
-  ]);
+  }
+}, [
+  supabase,
+  user,
+  debouncedSearchQuery,
+  checkRoomParticipation,
+  checkRoomMembership,
+  limit,
+  offset,
+  searchType,
+  UUID_REGEX, 
+]);
 
   // SearchComponent.tsx
 const handleJoinRoom = useCallback(
@@ -259,11 +265,13 @@ const handleJoinRoom = useCallback(
       return;
     }
     const currentRoomId = roomId || selectedRoom?.id;
+    console.log("handleJoinRoom - Input roomId:", roomId, "selectedRoom.id:", selectedRoom?.id, "currentRoomId:", currentRoomId); // Debug log
     if (!currentRoomId) {
       toast.error("No room selected");
       return;
     }
     if (!UUID_REGEX.test(currentRoomId)) {
+      console.error("Invalid room ID format in handleJoinRoom:", currentRoomId); // Debug log
       toast.error("Invalid room ID format");
       return;
     }

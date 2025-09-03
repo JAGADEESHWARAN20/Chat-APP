@@ -13,6 +13,7 @@ export async function POST(
   try {
     const supabase = createRouteHandlerClient<Database>({ cookies });
     const roomId = params.roomId;
+    console.log("Received roomId:", roomId); // Debug log
 
     // 1. Verify session
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
@@ -26,6 +27,7 @@ export async function POST(
 
     // 2. Validate room ID
     if (!roomId || !UUID_REGEX.test(roomId)) {
+      console.error("Invalid room ID:", roomId); // Debug log
       return NextResponse.json(
         { success: false, error: "Invalid room ID", code: "INVALID_ROOM_ID" },
         { status: 400 }
@@ -39,6 +41,7 @@ export async function POST(
       .eq("id", roomId)
       .single();
     if (roomError || !room) {
+      console.error("Room fetch error:", roomError?.message); // Debug log
       return NextResponse.json(
         { success: false, error: "Room not found", code: "ROOM_NOT_FOUND", details: roomError?.message },
         { status: 404 }
@@ -78,7 +81,7 @@ export async function POST(
 
     // 5. Fetch sender profile
     const { data: senderProfile } = await supabase
-      .from("users") // Changed to "users" to match schema
+      .from("users") // Using "users" to match schema
       .select("display_name, username")
       .eq("id", userId)
       .single();
@@ -90,6 +93,7 @@ export async function POST(
     if (isPrivate) {
       // 6. Private room: request approval
       if (!room.created_by) {
+        console.error("Room has no valid owner:", roomId); // Debug log
         return NextResponse.json(
           { success: false, error: "Room owner information is missing", code: "ROOM_OWNER_MISSING" },
           { status: 500 }
@@ -111,7 +115,7 @@ export async function POST(
         );
 
       if (participantError) {
-        console.error("[join] Participant insert error:", participantError);
+        console.error("[join] Participant insert error:", participantError); // Debug log
         return NextResponse.json(
           {
             success: false,
@@ -135,7 +139,7 @@ export async function POST(
       });
 
       if (ownerNotifError) {
-        console.error("[join] Owner notification insert error:", ownerNotifError);
+        console.error("[join] Owner notification insert error:", ownerNotifError); // Debug log
         return NextResponse.json(
           {
             success: false,
@@ -159,7 +163,7 @@ export async function POST(
       });
 
       if (userNotifError) {
-        console.error("[join] User notification insert error:", userNotifError);
+        console.error("[join] User notification insert error:", userNotifError); // Debug log
       }
 
       return NextResponse.json({
@@ -198,7 +202,7 @@ export async function POST(
         );
 
       if (participantError || memberError) {
-        console.error("[join] Insert error:", participantError || memberError);
+        console.error("[join] Insert error:", participantError || memberError); // Debug log
         return NextResponse.json(
           {
             success: false,
@@ -223,7 +227,7 @@ export async function POST(
         });
 
         if (ownerNotifError) {
-          console.error("[join] Owner notification insert error:", ownerNotifError);
+          console.error("[join] Owner notification insert error:", ownerNotifError); // Debug log
         }
       }
 
@@ -239,7 +243,7 @@ export async function POST(
       });
 
       if (userNotifError) {
-        console.error("[join] User notification insert error:", userNotifError);
+        console.error("[join] User notification insert error:", userNotifError); // Debug log
       }
 
       return NextResponse.json({
@@ -250,7 +254,7 @@ export async function POST(
       });
     }
   } catch (err: any) {
-    console.error("[join] Server error:", err);
+    console.error("[join] Server error:", err); // Debug log
     return NextResponse.json(
       {
         success: false,
