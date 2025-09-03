@@ -8,9 +8,9 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 export async function POST(req: NextRequest) {
   try {
     const supabase = createRouteHandlerClient<Database>({ cookies });
-    const { roomId, directChatId, dmThreadId, content } = await req.json();
+    const { roomId, directChatId, dmThreadId, text } = await req.json();
 
-    // 1. Verify session
+    // Verify session
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     if (sessionError || !session?.user) {
       return NextResponse.json(
@@ -20,10 +20,10 @@ export async function POST(req: NextRequest) {
     }
     const userId = session.user.id;
 
-    // 2. Validate input
-    if (!content || content.trim().length === 0) {
+    // Validate input
+    if (!text || text.trim().length === 0) {
       return NextResponse.json(
-        { success: false, error: "Message content is required", code: "INVALID_CONTENT" },
+        { success: false, error: "Message text is required", code: "INVALID_TEXT" },
         { status: 400 }
       );
     }
@@ -33,9 +33,9 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    if (content.length > 2000) { // Example limit
+    if (text.length > 2000) {
       return NextResponse.json(
-        { success: false, error: "Message content too long", code: "CONTENT_TOO_LONG" },
+        { success: false, error: "Message text too long", code: "TEXT_TOO_LONG" },
         { status: 400 }
       );
     }
@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3. Verify membership/participation
+    // Verify membership/participation
     if (roomId) {
       const { data: member } = await supabase
         .from("room_members")
@@ -99,11 +99,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 4. Insert message
+    // Insert message
     const { data: message, error } = await supabase
       .from("messages")
       .insert({
-        text: content.trim(),
+        text: text.trim(),
         room_id: roomId || null,
         direct_chat_id: directChatId || null,
         dm_thread_id: dmThreadId || null,

@@ -18,70 +18,72 @@ export default function ChatInput({ user }: { user: SupabaseUser }) {
   const { state } = useRoomContext();
   const { selectedRoom, selectedDirectChat } = state;
 
-  const handleSend = async () => {
-    if (!user) {
-      toast.error("You must be logged in to send messages");
-      return;
-    }
-    if (!text.trim()) {
-      toast.error("Message cannot be empty");
-      return;
-    }
-    if (!selectedRoom && !selectedDirectChat) {
-      toast.error("No room or direct chat selected");
-      return;
-    }
+  // ChatInput.tsx
+// ChatInput.tsx (inside handleSend)
+const handleSend = async () => {
+  if (!user) {
+    toast.error("You must be logged in to send messages");
+    return;
+  }
+  if (!text.trim()) {
+    toast.error("Message cannot be empty");
+    return;
+  }
+  if (!selectedRoom && !selectedDirectChat) {
+    toast.error("No room or direct chat selected");
+    return;
+  }
 
-    const optimisticId = uuidv4();
-    const optimisticMessage: Imessage = {
-      id: optimisticId,
-      text: text.trim(),
-      sender_id: user.id,
-      room_id: selectedRoom?.id || null,
-      direct_chat_id: selectedDirectChat?.id || null,
-      dm_thread_id: null,
-      created_at: new Date().toISOString(),
-      is_edited: false,
-      status: "sent",
-      profiles: {
-        id: user.id,
-        display_name: user.user_metadata.display_name || user.email || "",
-        avatar_url: user.user_metadata.avatar_url || "",
-        username: user.user_metadata.username || "",
-        created_at: user.created_at,
-        updated_at: null,
-        bio: null,
-      },
-    };
-
-    addOptimisticId(optimisticId);
-    addMessage(optimisticMessage);
-
-    try {
-      const response = await fetch("/api/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          roomId: selectedRoom?.id,
-          directChatId: selectedDirectChat?.id,
-          dmThreadId: null,
-          content: text.trim(),
-        }),
-      });
-
-      const result = await response.json();
-      if (!response.ok) {
-        throw new Error(result.error || "Failed to send message");
-      }
-
-      setText("");
-      toast.success("Message sent");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to send message");
-      // Optionally remove optimistic message on failure
-      // useMessage.getState().optimisticDeleteMessage(optimisticId);
-    }
+  const optimisticId = uuidv4();
+  const optimisticMessage: Imessage = {
+    id: optimisticId,
+    text: text.trim(),
+    sender_id: user.id,
+    room_id: selectedRoom?.id || null,
+    direct_chat_id: selectedDirectChat?.id || null,
+    dm_thread_id: null,
+    created_at: new Date().toISOString(),
+    is_edited: false,
+    status: "sent",
+    profiles: {
+      id: user.id,
+      display_name: user.user_metadata.display_name || user.email || "",
+      avatar_url: user.user_metadata.avatar_url || "",
+      username: user.user_metadata.username || "",
+      created_at: user.created_at,
+      updated_at: null,
+      bio: null,
+    },
   };
+
+  addOptimisticId(optimisticId);
+  addMessage(optimisticMessage);
+
+  try {
+    const response = await fetch("/api/messages/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        roomId: selectedRoom?.id,
+        directChatId: selectedDirectChat?.id,
+        dmThreadId: null,
+        text: text.trim(), // Use text, not content
+      }),
+    });
+
+    const result = await response.json();
+    if (!response.ok) {
+      throw new Error(result.error || "Failed to send message");
+    }
+
+    setText("");
+    toast.success("Message sent");
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : "Failed to send message");
+    // Optionally remove optimistic message on failure
+    // useMessage.getState().optimisticDeleteMessage(optimisticId);
+  }
+};
 
   return (
     <div className="flex gap-2">
