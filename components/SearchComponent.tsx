@@ -57,7 +57,7 @@ export default function SearchComponent({ user }: { user: SupabaseUser | undefin
     []
   );
 
-  const { state, joinRoom, leaveRoom } = useRoomContext();
+ const { state, joinRoom, leaveRoom } = useRoomContext();
   const { selectedRoom } = state;
 
   const checkRoomMembership = useCallback(
@@ -258,35 +258,26 @@ export default function SearchComponent({ user }: { user: SupabaseUser | undefin
 ]);
 
   // SearchComponent.tsx
+// SearchComponent.tsx
 const handleJoinRoom = useCallback(
-  async (roomId?: string) => {
+  async (roomId: string) => {
     if (!user) {
       toast.error("You must be logged in to join a room");
       return;
     }
-    const currentRoomId = roomId || selectedRoom?.id;
-    console.log("handleJoinRoom - Input roomId:", roomId, "selectedRoom.id:", selectedRoom?.id, "currentRoomId:", currentRoomId); // Debug log
-    if (!currentRoomId) {
-      toast.error("No room selected");
+    // No need to use selectedRoom, roomId is directly from the button click
+    if (!roomId) {
+      toast.error("No room ID provided.");
       return;
     }
-    if (!UUID_REGEX.test(currentRoomId)) {
-      console.error("Invalid room ID format in handleJoinRoom:", currentRoomId); // Debug log
+    if (!UUID_REGEX.test(roomId)) {
+      console.error("Invalid room ID format in handleJoinRoom:", roomId);
       toast.error("Invalid room ID format");
       return;
     }
-
-    await joinRoom(currentRoomId);
-    await fetchSearchResults();
-    setRoomResults((prev) =>
-      prev.map((room) =>
-        room.id === currentRoomId
-          ? { ...room, isMember: !room.is_private, participationStatus: room.is_private ? "pending" : "accepted" }
-          : room
-      )
-    );
+    await joinRoom(roomId);
   },
-  [user, selectedRoom, UUID_REGEX, joinRoom, fetchSearchResults]
+  [user, UUID_REGEX, joinRoom]
 );
 
   const handleSearchByType = (type: "rooms" | "users") => {
@@ -296,20 +287,16 @@ const handleJoinRoom = useCallback(
     setUserResults([]);
   };
 
-  useEffect(() => {
-    if (searchType) {
-      fetchSearchResults();
-    } else {
-      setRoomResults([]);
-      setUserResults([]);
-    }
-  }, [debouncedSearchQuery, searchType, fetchSearchResults]);
 
-  useEffect(() => {
-    return () => {
-      isMounted.current = false;
-    };
-  }, []);
+    useEffect(() => {
+      if (searchType) {
+        fetchSearchResults();
+      }
+    }, [debouncedSearchQuery, searchType, fetchSearchResults]);
+
+    useEffect(() => {
+      setSearchType("rooms");
+    }, []); 
 
   const renderRoomSearchResult = (result: RoomWithMembershipCount) => (
     <li
@@ -349,63 +336,15 @@ const handleJoinRoom = useCallback(
               <Settings className="h-4 w-4" />
             </Button>
 
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={async () => {
-                if (!user) {
-                  toast.error("Please log in to leave a room");
-                  return;
-                }
-                if (!result.id || !UUID_REGEX.test(result.id)) {
-                  toast.error("Invalid room ID");
-                  return;
-                }
-                try {
-                  const { error: membersError } = await supabase
-                    .from("room_members")
-                    .delete()
-                    .eq("room_id", result.id)
-                    .eq("user_id", user.id);
-
-                  const { error: participantsError } = await supabase
-                    .from("room_participants")
-                    .delete()
-                    .eq("room_id", result.id)
-                    .eq("user_id", user.id);
-
-                  if (membersError || participantsError) {
-                    throw new Error(
-                      membersError?.message ||
-                      participantsError?.message ||
-                      "Failed to leave room"
-                    );
-                  }
-
-                  toast.success("Successfully left the room");
-
-                  setRoomResults((prev) =>
-                    prev.map((room) =>
-                      room.id === result.id
-                        ? { ...room, isMember: false, participationStatus: null }
-                        : room
-                    )
-                  );
-
-                  if (selectedRoom?.id === result.id) {
-                    router.push("/");
-                  }
-                } catch (error) {
-                  toast.error(
-                    error instanceof Error ? error.message : "Failed to leave room"
-                  );
-                }
-              }}
-              className="bg-red-500 hover:bg-red-600 rounded-md text-white"
-              title="Leave Room"
-            >
-              <LogOut className="h-4 w-4" />
-            </Button>
+<Button
+  size="icon"
+  variant="ghost"
+  onClick={() => leaveRoom(result.id)}
+  className="bg-red-500 hover:bg-red-600 rounded-md text-white"
+  title="Leave Room"
+>
+  <LogOut className="h-4 w-4" />
+</Button>
           </>
         ) : result.participationStatus === "pending" ? (
           <span className="text-sm text-yellow-500 dark:text-yellow-400">

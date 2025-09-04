@@ -343,33 +343,46 @@ const joinRoom = useCallback(
         headers: { "Content-Type": "application/json" },
       });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error || "Failed to join room");
 
-      let newParticipationStatus: string | null = "accepted";
-      let newIsMember = true;
-      if (result.status === "pending") {
-        newParticipationStatus = "pending";
-        newIsMember = false;
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to join room");
       }
 
-      const { data: room } = await supabase.from("rooms").select("*").eq("id", roomId).single();
-      if (!room) throw new Error("Failed to fetch room details after join");
+      // Check the status returned by the server
+      if (result.status === "pending") {
+        toast.success(result.message || "Join request sent.");
+        // We do not add the room to availableRooms since the user is not a member yet.
+        // The user will see this in the search results with a 'Pending' status.
+      } else { // status === "accepted"
+        const roomJoined = result.roomJoined; // Get the room data from the back-end response
+        if (!roomJoined) throw new Error("Missing room data from API response.");
 
-      const roomWithMembership: RoomWithMembershipCount = {
-        ...room,
-        isMember: newIsMember,
-        participationStatus: newParticipationStatus,
-        memberCount: 0,
-      };
-
-      dispatch({ type: "SET_SELECTED_ROOM", payload: roomWithMembership });
-      dispatch({ type: "ADD_ROOM", payload: roomWithMembership });
-      toast.success(result.message || "Joined room successfully");
+        // Dispatch the actions to update state with the new room
+        dispatch({
+          type: "SET_SELECTED_ROOM",
+          payload: {
+            ...roomJoined,
+            isMember: true,
+            participationStatus: "accepted",
+            memberCount: 0, // A separate fetch or a better API response could provide this
+          },
+        });
+        dispatch({
+          type: "ADD_ROOM",
+          payload: {
+            ...roomJoined,
+            isMember: true,
+            participationStatus: "accepted",
+            memberCount: 0,
+          },
+        });
+        toast.success(result.message || "Joined room successfully!");
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to join room");
     }
   },
-  [user, supabase]
+  [user]
 );
 
   const leaveRoom = useCallback(async (roomId: string) => {
