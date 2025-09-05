@@ -214,8 +214,10 @@ export default function SearchComponent({
     searchType,
   ]);
 
-  const handleJoinRoom = useCallback(
+ const handleJoinRoom = useCallback(
   async (roomId: string) => {
+    console.log("handleJoinRoom called with roomId:", roomId);
+    
     if (!user) {
       toast.error("You must be logged in to join a room");
       return;
