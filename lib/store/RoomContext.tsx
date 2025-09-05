@@ -192,7 +192,7 @@ const acceptJoinNotification = useCallback(
       toast.error("Failed to update room after acceptance");
     }
   },
-  [supabase]
+  [supabase] // supabase is stable, no dependencies needed
 );
 
 
@@ -330,59 +330,40 @@ const fetchAvailableRooms = useCallback(async () => {
 }, [user, supabase]);
 
 
-  // RoomProvider.tsx
+
 const joinRoom = useCallback(
   async (roomId: string) => {
-    if (!user) {
-      toast.error("You must be logged in to join a room");
-      return;
-    }
     try {
       const response = await fetch(`/api/rooms/${roomId}/join`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
-      const result = await response.json();
-
+      const data = await response.json();
+      console.log("[joinRoom] Response:", data); // Debug log
       if (!response.ok) {
-        throw new Error(result.error || "Failed to join room");
+        throw new Error(data.error || data.details || "Failed to join room");
       }
-
-      // Check the status returned by the server
-      if (result.status === "pending") {
-        toast.success(result.message || "Join request sent.");
-        // We do not add the room to availableRooms since the user is not a member yet.
-        // The user will see this in the search results with a 'Pending' status.
-      } else { // status === "accepted"
-        const roomJoined = result.roomJoined; // Get the room data from the back-end response
-        if (!roomJoined) throw new Error("Missing room data from API response.");
-
-        // Dispatch the actions to update state with the new room
+      if (data.status === "accepted") {
         dispatch({
-          type: "SET_SELECTED_ROOM",
-          payload: {
-            ...roomJoined,
-            isMember: true,
-            participationStatus: "accepted",
-            memberCount: 0, // A separate fetch or a better API response could provide this
-          },
+          type: "UPDATE_ROOM_MEMBERSHIP",
+          payload: { roomId, isMember: true, participationStatus: "accepted" },
         });
+        toast.success(data.message || "Joined room successfully");
+      } else if (data.status === "pending") {
         dispatch({
-          type: "ADD_ROOM",
-          payload: {
-            ...roomJoined,
-            isMember: true,
-            participationStatus: "accepted",
-            memberCount: 0,
-          },
+          type: "UPDATE_ROOM_MEMBERSHIP",
+          payload: { roomId, isMember: false, participationStatus: "pending" },
         });
-        toast.success(result.message || "Joined room successfully!");
+        toast.info(data.message || "Join request sent");
       }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to join room");
+      return data;
+    } catch (error: any) {
+      console.error("[joinRoom] Error:", error.message, error);
+      toast.error(error.message || "Failed to join room");
+      throw error;
     }
   },
-  [user]
+  [] // Remove setAvailableRooms, setSelectedRoom, and toast
 );
 
   const leaveRoom = useCallback(async (roomId: string) => {
