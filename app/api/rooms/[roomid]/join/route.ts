@@ -10,20 +10,19 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { roomId?: string } }
+  context: { params: { roomId: string } }
 ) {
   try {
     const supabase = createRouteHandlerClient<Database>({ cookies });
-    const roomId = params.roomId;
+    const roomId = context.params.roomId;
+  console.log("[join] Room ID received:", roomId);
 
-    // 1. Validate room ID
-    if (!roomId || !UUID_REGEX.test(roomId)) {
-      console.error("[join] Invalid room ID:", roomId);
-      return NextResponse.json(
-        { success: false, error: "Invalid room ID", code: "INVALID_ROOM_ID" },
-        { status: 400 }
-      );
-    }
+  if (!roomId || !UUID_REGEX.test(roomId)) {
+    return NextResponse.json(
+      { success: false, error: "Invalid room ID", code: "INVALID_ROOM_ID" },
+      { status: 400 }
+    );
+  }
 
     // 2. Verify session
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
