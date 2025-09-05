@@ -1,4 +1,3 @@
-// /app/api/rooms/[roomId]/join/route.ts
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
@@ -10,13 +9,14 @@ export const dynamic = "force-dynamic";
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { roomId: string } } // FIXED: Proper destructuring
+  { params }: { params: { roomid: string } } // FIXED: Use lowercase 'roomid'
 ) {
   try {
     const supabase = createRouteHandlerClient<Database>({ cookies });
-    const { roomId } = params; // FIXED: Extract from params object
+    const { roomid: roomId } = params; // FIXED: Extract as roomid and alias to roomId
 
     console.log("[join] Params received:", params);
+    console.log("[join] Room ID extracted:", roomId); // Add this for debugging
 
     // 1. Validate room ID
     if (!roomId || !UUID_REGEX.test(roomId)) {
