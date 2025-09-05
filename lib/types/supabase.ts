@@ -434,14 +434,7 @@ export type Database = {
     }
     Functions: {
       accept_notification: {
-        Args:
-          | {
-              p_notification_id: string
-              p_room_id: string
-              p_target_user_id: string
-              p_timestamp: string
-            }
-          | { p_notification_id: string; p_target_user_id: string }
+        Args: { p_notification_id: string; p_target_user_id: string }
         Returns: undefined
       }
       clear_stale_typing_status: {

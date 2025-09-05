@@ -134,6 +134,7 @@ export async function POST(
         roomJoined: room,
       });
     }
+    
   } catch (err: any) {
     console.error("[join] Server error:", err.message, err.stack);
     return NextResponse.json(
