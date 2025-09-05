@@ -338,8 +338,12 @@ const joinRoom = useCallback(
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
+      
+      console.log("Join API response status:", response.status);
+      
       const data = await response.json();
-      console.log("[joinRoom] Response:", data); // Debug log
+      console.log("[joinRoom] Response:", data);
+      
       if (!response.ok) {
         throw new Error(data.error || data.details || "Failed to join room");
       }

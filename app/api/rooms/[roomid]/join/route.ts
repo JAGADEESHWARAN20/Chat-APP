@@ -10,13 +10,13 @@ export const dynamic = "force-dynamic";
 
 export async function POST(
   req: NextRequest,
-  context: { params: { roomId: string } }
+  { params }: { params: { roomId: string } } // FIXED: Proper destructuring
 ) {
   try {
     const supabase = createRouteHandlerClient<Database>({ cookies });
-    const { roomId } = context.params;
+    const { roomId } = params; // FIXED: Extract from params object
 
-    console.log("[join] Params received:", context.params);
+    console.log("[join] Params received:", params);
 
     // 1. Validate room ID
     if (!roomId || !UUID_REGEX.test(roomId)) {

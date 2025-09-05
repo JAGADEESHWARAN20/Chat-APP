@@ -215,24 +215,26 @@ export default function SearchComponent({
   ]);
 
   const handleJoinRoom = useCallback(
-    async (roomId: string) => {
-      if (!user) {
-        toast.error("You must be logged in to join a room");
-        return;
-      }
+  async (roomId: string) => {
+    if (!user) {
+      toast.error("You must be logged in to join a room");
+      return;
+    }
 
-      if (!UUID_REGEX.test(roomId)) {
-        console.error("Invalid room ID format:", roomId);
-        toast.error("Invalid room ID format");
-        return;
-      }
+    console.log("Room ID to join:", roomId);
+    console.log("Is valid UUID:", UUID_REGEX.test(roomId));
 
-      console.log("Attempting to join room:", roomId);
-      await joinRoom(roomId);
-    },
-    [user, UUID_REGEX, joinRoom]
-  );
+    if (!UUID_REGEX.test(roomId)) {
+      console.error("Invalid room ID format:", roomId);
+      toast.error("Invalid room ID format");
+      return;
+    }
 
+    console.log("Attempting to join room:", roomId);
+    await joinRoom(roomId);
+  },
+  [user, UUID_REGEX, joinRoom]
+);
   useEffect(() => {
     if (searchType) fetchSearchResults();
   }, [debouncedSearchQuery, searchType, fetchSearchResults]);
