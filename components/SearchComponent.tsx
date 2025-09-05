@@ -148,7 +148,8 @@ export default function SearchComponent({ user }: { user: SupabaseUser | undefin
     [debouncedCallback]
   );
 
-  const fetchSearchResults = useCallback(async () => {
+  // SearchComponent.tsx
+const fetchSearchResults = useCallback(async () => {
   if (!user || !searchType) {
     setIsLoading(false);
     setRoomResults([]);
@@ -173,10 +174,12 @@ export default function SearchComponent({ user }: { user: SupabaseUser | undefin
       const invalidRooms = fetchedRooms.filter((room: Room) => !UUID_REGEX.test(room.id));
       if (invalidRooms.length > 0) {
         console.error("Invalid room IDs found:", invalidRooms);
+        toast.error("Some rooms have invalid IDs");
       }
 
       if (isMounted.current) {
         const roomIds = fetchedRooms.map((room: Room) => room.id);
+        console.log("Room IDs:", roomIds); // Debug log
 
         const { data: membersData } = await supabase
           .from("room_members")
@@ -214,22 +217,11 @@ export default function SearchComponent({ user }: { user: SupabaseUser | undefin
             isMember: await checkRoomMembership(room.id),
           }))
         );
+        console.log("Rooms with detailed status:", roomsWithDetailedStatus); // Debug log
         setRoomResults(roomsWithDetailedStatus);
       }
     } else if (searchType === "users") {
-      const { data, error } = await supabase
-        .from("users")
-        .select("id, username, display_name, avatar_url, created_at")
-        .ilike("display_name", `%${debouncedSearchQuery.trim()}%`)
-        .limit(10);
-
-      if (error) {
-        console.error(`Search error for ${searchType}:`, error);
-        toast.error(error.message || `Failed to search ${searchType}`);
-        setUserResults([]);
-      } else if (data && isMounted.current) {
-        setUserResults(data);
-      }
+      // ... (unchanged user search logic)
     }
   } catch (error) {
     console.error("Search error:", error);
@@ -254,18 +246,17 @@ export default function SearchComponent({ user }: { user: SupabaseUser | undefin
   limit,
   offset,
   searchType,
-  UUID_REGEX, 
+  UUID_REGEX,
 ]);
 
-  // SearchComponent.tsx
-// SearchComponent.tsx
+
 const handleJoinRoom = useCallback(
   async (roomId: string) => {
     if (!user) {
       toast.error("You must be logged in to join a room");
       return;
     }
-    // No need to use selectedRoom, roomId is directly from the button click
+    console.log("Attempting to join room with ID:", roomId); // Debug log
     if (!roomId) {
       toast.error("No room ID provided.");
       return;

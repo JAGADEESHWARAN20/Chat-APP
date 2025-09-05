@@ -6,7 +6,6 @@ import { Database } from "@/lib/types/supabase";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// Force dynamic rendering to ensure up-to-date data
 export const dynamic = 'force-dynamic';
 
 export async function POST(
@@ -20,6 +19,7 @@ export async function POST(
     // 1. Verify session
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     if (sessionError || !session?.user) {
+      console.error("[join] Authentication error:", sessionError);
       return NextResponse.json(
         { success: false, error: "Authentication required", code: "AUTH_REQUIRED" },
         { status: 401 }
@@ -29,6 +29,7 @@ export async function POST(
 
     // 2. Validate room ID
     if (!roomId || !UUID_REGEX.test(roomId)) {
+      console.error("[join] Invalid room ID:", roomId);
       return NextResponse.json(
         { success: false, error: "Invalid room ID", code: "INVALID_ROOM_ID" },
         { status: 400 }
@@ -43,6 +44,7 @@ export async function POST(
       .single();
 
     if (roomError || !room) {
+      console.error("[join] Room not found, error:", roomError);
       return NextResponse.json(
         { success: false, error: "Room not found", code: "ROOM_NOT_FOUND" },
         { status: 404 }
@@ -57,7 +59,15 @@ export async function POST(
       .eq("user_id", userId)
       .maybeSingle();
 
-    if (existingStatus?.status === "accepted") {
+    const { data: existingParticipantStatus } = await supabase
+      .from("room_participants")
+      .select("status")
+      .eq("room_id", roomId)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (existingStatus?.status === "accepted" || existingParticipantStatus?.status === "accepted") {
+      console.log("[join] User is already a member of room:", roomId);
       return NextResponse.json({
         success: true,
         status: "accepted",
@@ -66,7 +76,8 @@ export async function POST(
       });
     }
 
-    if (existingStatus?.status === "pending") {
+    if (existingStatus?.status === "pending" || existingParticipantStatus?.status === "pending") {
+      console.log("[join] Join request already pending for room:", roomId);
       return NextResponse.json({
         success: true,
         status: "pending",
@@ -84,30 +95,33 @@ export async function POST(
     const now = new Date().toISOString();
 
     const isPrivate = room.is_private;
+    const table = isPrivate ? "room_participants" : "room_members";
     const finalStatus = isPrivate ? "pending" : "accepted";
 
-    // 6. Use a transaction to ensure atomicity
-    const { error: transactionError } = await supabase.from("room_members").upsert(
-      {
-        room_id: roomId,
-        user_id: userId,
-        status: finalStatus,
-        joined_at: now,
-        active: true,
-        updated_at: now,
-      },
-      { onConflict: "room_members_room_id_user_id_unique" }
-    );
+    // 6. Insert into appropriate table
+    const { error: insertError } = await supabase
+      .from(table)
+      .upsert(
+        {
+          room_id: roomId,
+          user_id: userId,
+          status: finalStatus,
+          joined_at: now,
+          active: true,
+          updated_at: now,
+        },
+        { onConflict: isPrivate ? "room_participants_room_id_user_id_key" : "room_members_room_id_user_id_unique" }
+      );
 
-    if (transactionError) {
-      console.error("[join] Membership/Participant insert error:", transactionError);
+    if (insertError) {
+      console.error(`[join] ${table} insert error:`, insertError);
       return NextResponse.json(
-        { success: false, error: "Failed to join room", code: "JOIN_FAILED", details: transactionError.message },
+        { success: false, error: "Failed to join room", code: "JOIN_FAILED", details: insertError.message },
         { status: 500 }
       );
     }
 
-    // 7. Handle notifications based on room type
+    // 7. Handle notifications
     if (isPrivate) {
       // Notify room owner of pending request
       if (room.created_by) {
@@ -140,8 +154,7 @@ export async function POST(
         status: "pending",
         message: "Join request sent to room owner",
       });
-
-    } else { // Public room: auto-accept
+    } else {
       // Notify room owner that a user joined
       if (room.created_by) {
         const { error: ownerNotifError } = await supabase.from("notifications").insert({
