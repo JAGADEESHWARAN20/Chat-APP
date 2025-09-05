@@ -4,8 +4,7 @@ import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { Database } from "@/lib/types/supabase";
 
-const UUID_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const dynamic = "force-dynamic";
 
@@ -101,110 +100,33 @@ export async function POST(
       });
     }
 
-    // 5. Get sender profile
-    const { data: senderProfile } = await supabase
-      .from("users")
-      .select("display_name, username")
-      .eq("id", userId)
-      .single();
+    // 5. Call the database function to handle the join logic
+    const { error: joinError } = await supabase.rpc('join_room', {
+      p_room_id: roomId,
+      p_user_id: userId
+    });
 
-    const senderName =
-      senderProfile?.display_name ||
-      senderProfile?.username ||
-      session.user.email ||
-      "A user";
-
-    const now = new Date().toISOString();
-    const isPrivate = room.is_private;
-    const table = isPrivate ? "room_participants" : "room_members";
-    const finalStatus = isPrivate ? "pending" : "accepted";
-
-    // 6. Insert membership
-    const { error: insertError } = await supabase.from(table).upsert(
-      {
-        room_id: roomId,
-        user_id: userId,
-        status: finalStatus,
-        joined_at: now,
-        active: true,
-        updated_at: now,
-      },
-      {
-        onConflict: isPrivate
-          ? "room_participants_room_id_user_id_key"
-          : "room_members_room_id_user_id_unique",
-      }
-    );
-
-    if (insertError) {
-      console.error(`[join] ${table} insert error:`, insertError.message);
+    if (joinError) {
+      console.error("[join] join_room function error:", joinError.message);
       return NextResponse.json(
         {
           success: false,
           error: "Failed to join room",
           code: "JOIN_FAILED",
-          details: insertError.message,
+          details: joinError.message,
         },
         { status: 400 }
       );
     }
 
-    // 7. Notifications
-    if (isPrivate) {
-      // notify owner
-      if (room.created_by) {
-        await supabase.from("notifications").insert({
-          user_id: room.created_by,
-          sender_id: userId,
-          room_id: roomId,
-          type: "join_request",
-          message: `${senderName} requested to join "${room.name}"`,
-          status: "unread",
-          created_at: now,
-        });
-      }
-
-      // notify user
-      await supabase.from("notifications").insert({
-        user_id: userId,
-        sender_id: userId,
-        room_id: roomId,
-        type: "join_request_sent",
-        message: `You requested to join "${room.name}"`,
-        status: "unread",
-        created_at: now,
-      });
-
+    // 6. Return appropriate response based on room type
+    if (room.is_private) {
       return NextResponse.json({
         success: true,
         status: "pending",
         message: "Join request sent to room owner",
       });
     } else {
-      // notify owner
-      if (room.created_by) {
-        await supabase.from("notifications").insert({
-          user_id: room.created_by,
-          sender_id: userId,
-          room_id: roomId,
-          type: "user_joined",
-          message: `${senderName} joined "${room.name}"`,
-          status: "unread",
-          created_at: now,
-        });
-      }
-
-      // notify user
-      await supabase.from("notifications").insert({
-        user_id: userId,
-        sender_id: userId,
-        room_id: roomId,
-        type: "room_joined",
-        message: `You joined "${room.name}"`,
-        status: "unread",
-        created_at: now,
-      });
-
       return NextResponse.json({
         success: true,
         status: "accepted",

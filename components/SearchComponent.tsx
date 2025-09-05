@@ -5,19 +5,19 @@ import { Button } from "./ui/button";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { User as SupabaseUser } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
-import {
-  Settings,
-  UserIcon,
-  LockIcon,
-  LogOut,
-} from "lucide-react";
+import { Settings, UserIcon, LockIcon, LogOut } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Database } from "@/lib/types/supabase";
 import { toast } from "sonner";
 import { useRoomContext } from "@/lib/store/RoomContext";
 import { useDebounce } from "use-debounce";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
 
 type UserProfile = Database["public"]["Tables"]["users"]["Row"];
 type Room = Database["public"]["Tables"]["rooms"]["Row"];
@@ -29,10 +29,14 @@ type RoomWithMembershipCount = Room & {
   memberCount: number;
 };
 
-export default function SearchComponent({ user }: { user: SupabaseUser | undefined }) {
+export default function SearchComponent({
+  user,
+}: {
+  user: SupabaseUser | undefined;
+}) {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchType, setSearchType] = useState<"rooms" | "users" | null>(null);
+  const [searchType, setSearchType] = useState<"rooms" | "users">("rooms");
   const [roomResults, setRoomResults] = useState<RoomWithMembershipCount[]>([]);
   const [userResults, setUserResults] = useState<UserProfile[]>([]);
   const supabase = supabaseBrowser();
@@ -44,20 +48,23 @@ export default function SearchComponent({ user }: { user: SupabaseUser | undefin
   const [isFaded, setIsFaded] = useState(false);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsFaded(true);
-    }, 2);
+    const timer = setTimeout(() => setIsFaded(true), 2);
     return () => clearTimeout(timer);
   }, []);
 
-  const [debouncedCallback] = useDebounce((value: string) => setSearchQuery(value), 300);
+  const [debouncedCallback] = useDebounce(
+    (value: string) => setSearchQuery(value),
+    300
+  );
   const [debouncedSearchQuery] = useDebounce(searchQuery, 300);
+
   const UUID_REGEX = useMemo(
-    () => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    () =>
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
     []
   );
 
- const { state, joinRoom, leaveRoom } = useRoomContext();
+  const { state, joinRoom, leaveRoom } = useRoomContext();
   const { selectedRoom } = state;
 
   const checkRoomMembership = useCallback(
@@ -81,61 +88,24 @@ export default function SearchComponent({ user }: { user: SupabaseUser | undefin
   const checkRoomParticipation = useCallback(
     async (roomId: string) => {
       if (!user) return null;
-      const { data: memberStatus, error: memberError } = await supabase
+
+      const { data: memberStatus } = await supabase
         .from("room_members")
         .select("status")
         .eq("room_id", roomId)
         .eq("user_id", user.id);
 
-      if (memberError) {
-        console.error(
-          "Error checking room membership for participation status:",
-          memberError
-        );
-      }
+      const { data: participantStatus } = await supabase
+        .from("room_participants")
+        .select("status")
+        .eq("room_id", roomId)
+        .eq("user_id", user.id);
 
-      const { data: participantStatus, error: participantError } =
-        await supabase
-          .from("room_participants")
-          .select("status")
-          .eq("room_id", roomId)
-          .eq("user_id", user.id);
+      if (memberStatus?.[0]?.status === "accepted") return "accepted";
+      if (participantStatus?.[0]?.status === "accepted") return "accepted";
+      if (memberStatus?.[0]?.status === "pending") return "pending";
+      if (participantStatus?.[0]?.status === "pending") return "pending";
 
-      if (participantError) {
-        console.error(
-          "Error checking room participation status:",
-          participantError
-        );
-      }
-
-      if (
-        memberStatus &&
-        memberStatus.length > 0 &&
-        memberStatus[0].status === "accepted"
-      ) {
-        return "accepted";
-      }
-      if (
-        participantStatus &&
-        participantStatus.length > 0 &&
-        participantStatus[0].status === "accepted"
-      ) {
-        return "accepted";
-      }
-      if (
-        memberStatus &&
-        memberStatus.length > 0 &&
-        memberStatus[0].status === "pending"
-      ) {
-        return "pending";
-      }
-      if (
-        participantStatus &&
-        participantStatus.length > 0 &&
-        participantStatus[0].status === "pending"
-      ) {
-        return "pending";
-      }
       return null;
     },
     [user, supabase]
@@ -148,146 +118,124 @@ export default function SearchComponent({ user }: { user: SupabaseUser | undefin
     [debouncedCallback]
   );
 
-  // SearchComponent.tsx
-const fetchSearchResults = useCallback(async () => {
-  if (!user || !searchType) {
-    setIsLoading(false);
-    setRoomResults([]);
-    setUserResults([]);
-    return;
-  }
-
-  setIsLoading(true);
-  try {
-    if (searchType === "rooms") {
-      const apiQuery = debouncedSearchQuery.trim()
-        ? `?q=${encodeURIComponent(debouncedSearchQuery.trim())}&limit=${limit}&offset=${offset}`
-        : `?limit=${limit}&offset=${offset}`;
-      const response = await fetch(`/api/rooms/all${apiQuery}`);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const { rooms: fetchedRooms } = await response.json();
-      console.log("fetchSearchResults - Fetched rooms:", fetchedRooms); // Debug log
-
-      // Validate room IDs
-      const invalidRooms = fetchedRooms.filter((room: Room) => !UUID_REGEX.test(room.id));
-      if (invalidRooms.length > 0) {
-        console.error("Invalid room IDs found:", invalidRooms);
-        toast.error("Some rooms have invalid IDs");
-      }
-
-      if (isMounted.current) {
-        const roomIds = fetchedRooms.map((room: Room) => room.id);
-        console.log("Room IDs:", roomIds); // Debug log
-
-        const { data: membersData } = await supabase
-          .from("room_members")
-          .select("room_id, user_id")
-          .in("room_id", roomIds)
-          .eq("status", "accepted");
-
-        const { data: participantsData } = await supabase
-          .from("room_participants")
-          .select("room_id, user_id")
-          .in("room_id", roomIds)
-          .eq("status", "accepted");
-
-        const memberCounts = new Map<string, Set<string>>();
-
-        membersData?.forEach((m: Pick<RoomMemberRow, "room_id" | "user_id">) => {
-          if (!memberCounts.has(m.room_id)) {
-            memberCounts.set(m.room_id, new Set());
-          }
-          memberCounts.get(m.room_id)!.add(m.user_id);
-        });
-
-        participantsData?.forEach((p: { room_id: string; user_id: string }) => {
-          if (!memberCounts.has(p.room_id)) {
-            memberCounts.set(p.room_id, new Set());
-          }
-          memberCounts.get(p.room_id)!.add(p.user_id);
-        });
-
-        const roomsWithDetailedStatus = await Promise.all(
-          fetchedRooms.map(async (room: Room) => ({
-            ...room,
-            participationStatus: await checkRoomParticipation(room.id),
-            memberCount: memberCounts.get(room.id)?.size ?? 0,
-            isMember: await checkRoomMembership(room.id),
-          }))
-        );
-        console.log("Rooms with detailed status:", roomsWithDetailedStatus); // Debug log
-        setRoomResults(roomsWithDetailedStatus);
-      }
-    } else if (searchType === "users") {
-      // ... (unchanged user search logic)
-    }
-  } catch (error) {
-    console.error("Search error:", error);
-    if (isMounted.current) {
-      toast.error(
-        error instanceof Error ? error.message : "An error occurred while searching"
-      );
+  const fetchSearchResults = useCallback(async () => {
+    if (!user || !searchType) {
+      setIsLoading(false);
       setRoomResults([]);
       setUserResults([]);
-    }
-  } finally {
-    if (isMounted.current) {
-      setIsLoading(false);
-    }
-  }
-}, [
-  supabase,
-  user,
-  debouncedSearchQuery,
-  checkRoomParticipation,
-  checkRoomMembership,
-  limit,
-  offset,
-  searchType,
-  UUID_REGEX,
-]);
-
-
-const handleJoinRoom = useCallback(
-  async (roomId: string) => {
-    if (!user) {
-      toast.error("You must be logged in to join a room");
       return;
     }
-    console.log("Attempting to join room with ID:", roomId); // Debug log
-    if (!roomId) {
-      toast.error("No room ID provided.");
-      return;
-    }
-    if (!UUID_REGEX.test(roomId)) {
-      console.error("Invalid room ID format in handleJoinRoom:", roomId);
-      toast.error("Invalid room ID format");
-      return;
-    }
-    await joinRoom(roomId);
-  },
-  [user, UUID_REGEX, joinRoom]
-);
 
-  const handleSearchByType = (type: "rooms" | "users") => {
-    setSearchType(type);
-    setSearchQuery("");
-    setRoomResults([]);
-    setUserResults([]);
-  };
+    setIsLoading(true);
+    try {
+      if (searchType === "rooms") {
+        const apiQuery = debouncedSearchQuery.trim()
+          ? `?q=${encodeURIComponent(
+              debouncedSearchQuery.trim()
+            )}&limit=${limit}&offset=${offset}`
+          : `?limit=${limit}&offset=${offset}`;
 
+        const response = await fetch(`/api/rooms/all${apiQuery}`);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
 
-    useEffect(() => {
-      if (searchType) {
-        fetchSearchResults();
+        const { rooms: fetchedRooms } = await response.json();
+
+        if (isMounted.current) {
+          const roomIds = fetchedRooms.map((room: Room) => room.id);
+
+          const { data: membersData } = await supabase
+            .from("room_members")
+            .select("room_id, user_id")
+            .in("room_id", roomIds)
+            .eq("status", "accepted");
+
+          const { data: participantsData } = await supabase
+            .from("room_participants")
+            .select("room_id, user_id")
+            .in("room_id", roomIds)
+            .eq("status", "accepted");
+
+          const memberCounts = new Map<string, Set<string>>();
+
+          membersData?.forEach((m: Pick<RoomMemberRow, "room_id" | "user_id">) => {
+            if (!memberCounts.has(m.room_id)) {
+              memberCounts.set(m.room_id, new Set());
+            }
+            memberCounts.get(m.room_id)!.add(m.user_id);
+          });
+
+          participantsData?.forEach(
+            (p: { room_id: string; user_id: string }) => {
+              if (!memberCounts.has(p.room_id)) {
+                memberCounts.set(p.room_id, new Set());
+              }
+              memberCounts.get(p.room_id)!.add(p.user_id);
+            }
+          );
+
+          const roomsWithDetailedStatus = await Promise.all(
+            fetchedRooms.map(async (room: Room) => ({
+              ...room,
+              participationStatus: await checkRoomParticipation(room.id),
+              memberCount: memberCounts.get(room.id)?.size ?? 0,
+              isMember: await checkRoomMembership(room.id),
+            }))
+          );
+
+          setRoomResults(roomsWithDetailedStatus);
+        }
+      } else if (searchType === "users") {
+        // TODO: Add user search logic
       }
-    }, [debouncedSearchQuery, searchType, fetchSearchResults]);
+    } catch (error) {
+      console.error("Search error:", error);
+      if (isMounted.current) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "An error occurred while searching"
+        );
+        setRoomResults([]);
+        setUserResults([]);
+      }
+    } finally {
+      if (isMounted.current) setIsLoading(false);
+    }
+  }, [
+    supabase,
+    user,
+    debouncedSearchQuery,
+    checkRoomParticipation,
+    checkRoomMembership,
+    limit,
+    offset,
+    searchType,
+  ]);
 
-    useEffect(() => {
-      setSearchType("rooms");
-    }, []); 
+  const handleJoinRoom = useCallback(
+    async (roomId: string) => {
+      if (!user) {
+        toast.error("You must be logged in to join a room");
+        return;
+      }
+
+      if (!UUID_REGEX.test(roomId)) {
+        console.error("Invalid room ID format:", roomId);
+        toast.error("Invalid room ID format");
+        return;
+      }
+
+      console.log("Attempting to join room:", roomId);
+      await joinRoom(roomId);
+    },
+    [user, UUID_REGEX, joinRoom]
+  );
+
+  useEffect(() => {
+    if (searchType) fetchSearchResults();
+  }, [debouncedSearchQuery, searchType, fetchSearchResults]);
 
   const renderRoomSearchResult = (result: RoomWithMembershipCount) => (
     <li
@@ -310,7 +258,8 @@ const handleJoinRoom = useCallback(
             )}
           </div>
           <div className="text-sm text-gray-600 dark:text-gray-400">
-            {result.memberCount} {result.memberCount === 1 ? "member" : "members"}
+            {result.memberCount}{" "}
+            {result.memberCount === 1 ? "member" : "members"}
           </div>
         </div>
       </div>
@@ -327,15 +276,15 @@ const handleJoinRoom = useCallback(
               <Settings className="h-4 w-4" />
             </Button>
 
-<Button
-  size="icon"
-  variant="ghost"
-  onClick={() => leaveRoom(result.id)}
-  className="bg-red-500 hover:bg-red-600 rounded-md text-white"
-  title="Leave Room"
->
-  <LogOut className="h-4 w-4" />
-</Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => leaveRoom(result.id)}
+              className="bg-red-500 hover:bg-red-600 rounded-md text-white"
+              title="Leave Room"
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
           </>
         ) : result.participationStatus === "pending" ? (
           <span className="text-sm text-yellow-500 dark:text-yellow-400">
@@ -371,25 +320,34 @@ const handleJoinRoom = useCallback(
 
       <Input
         type="text"
-        placeholder={searchType === "users" ? "Search users..." : searchType === "rooms" ? "Search rooms..." : "Search..."}
+        placeholder={
+          searchType === "users"
+            ? "Search users..."
+            : searchType === "rooms"
+            ? "Search rooms..."
+            : "Search..."
+        }
         value={searchQuery}
         onChange={handleSearchInputChange}
-        className="
-          mb-4 bg-muted/50 border-border text-foreground 
-          placeholder-muted-foreground rounded-lg 
-          focus:ring-2 focus:ring-indigo-500 
-          focus:border-indigo-500 transition-all
-        "
+        className="mb-4 bg-muted/50 border-border text-foreground placeholder-muted-foreground rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
       />
 
-      <Tabs defaultValue={searchType || "rooms"} onValueChange={(value) => handleSearchByType(value as "rooms" | "users")} className="w-full">
+      <Tabs
+        defaultValue={searchType || "rooms"}
+        onValueChange={(value) =>
+          setSearchType(value as "rooms" | "users")
+        }
+        className="w-full"
+      >
         <TabsList className="grid w-full grid-cols-2 mb-4">
           <TabsTrigger value="rooms">Rooms</TabsTrigger>
           <TabsTrigger value="users">Users</TabsTrigger>
         </TabsList>
         <TabsContent value="rooms">
           <div className="mt-4">
-            <h4 className="font-semibold text-[1em] text-muted-foreground mb-3">Rooms</h4>
+            <h4 className="font-semibold text-[1em] text-muted-foreground mb-3">
+              Rooms
+            </h4>
             <ul className="space-y-[0.1em] overflow-y-auto max-h-[440px] py-[0.2em] rounded-lg scrollbar-none lg:scrollbar-custom">
               {isLoading ? (
                 Array(3)
@@ -412,14 +370,18 @@ const handleJoinRoom = useCallback(
               ) : roomResults.length > 0 ? (
                 roomResults.map((result) => renderRoomSearchResult(result))
               ) : (
-                <li className="text-[1em] text-muted-foreground p-2">No rooms found</li>
+                <li className="text-[1em] text-muted-foreground p-2">
+                  No rooms found
+                </li>
               )}
             </ul>
           </div>
         </TabsContent>
         <TabsContent value="users">
           <div className="mt-4">
-            <h4 className="font-semibold text-[1em] text-muted-foreground mb-3">User Profiles</h4>
+            <h4 className="font-semibold text-[1em] text-muted-foreground mb-3">
+              User Profiles
+            </h4>
             <ul className="space-y-3 overflow-y-auto max-h-[440px] scrollbar-none lg:scrollbar-custom">
               {userResults.map((result) => (
                 <li
@@ -443,7 +405,9 @@ const handleJoinRoom = useCallback(
                       )}
                     </Avatar>
                     <div>
-                      <div className="text-xs text-muted-foreground">{result.username}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {result.username}
+                      </div>
                       <div className="text-[1em] font-medium text-black dark:text-white">
                         {result.display_name}
                       </div>
@@ -467,8 +431,9 @@ const handleJoinRoom = useCallback(
 
       {searchQuery.length === 0 && searchType && (
         <p
-          className={`text-[1em] text-muted-foreground mt-3 transition-opacity duration-500 ${isFaded ? "opacity-0" : "opacity-100"
-            }`}
+          className={`text-[1em] text-muted-foreground mt-3 transition-opacity duration-500 ${
+            isFaded ? "opacity-0" : "opacity-100"
+          }`}
         >
           Showing all {searchType}...
         </p>
@@ -476,8 +441,9 @@ const handleJoinRoom = useCallback(
 
       {isLoading && (
         <p
-          className={`text-[1em] text-muted-foreground mt-3 transition-opacity duration-500 ${isFaded ? "opacity-0" : "opacity-100"
-            }`}
+          className={`text-[1em] text-muted-foreground mt-3 transition-opacity duration-500 ${
+            isFaded ? "opacity-0" : "opacity-100"
+          }`}
         >
           Loading...
         </p>

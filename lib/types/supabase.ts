@@ -434,12 +434,14 @@ export type Database = {
     }
     Functions: {
       accept_notification: {
-        Args: {
-          p_notification_id: string
-          p_room_id: string
-          p_target_user_id: string
-          p_timestamp: string
-        }
+        Args:
+          | {
+              p_notification_id: string
+              p_room_id: string
+              p_target_user_id: string
+              p_timestamp: string
+            }
+          | { p_notification_id: string; p_target_user_id: string }
         Returns: undefined
       }
       clear_stale_typing_status: {
@@ -471,12 +473,7 @@ export type Database = {
         }[]
       }
       join_room: {
-        Args: {
-          p_joined_at?: string
-          p_room_id: string
-          p_status: string
-          p_user_id: string
-        }
+        Args: { p_room_id: string; p_status?: string; p_user_id: string }
         Returns: undefined
       }
       leave_room: {
