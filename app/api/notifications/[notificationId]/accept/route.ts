@@ -1,3 +1,4 @@
+// /app/api/notifications/[notificationId]/accept/route.ts
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
@@ -7,91 +8,89 @@ export async function POST(
   req: NextRequest,
   { params }: { params: { notificationId: string } }
 ) {
-  const supabase = createRouteHandlerClient<Database>({ cookies });
-  const notificationId = params.notificationId;
+  try {
+    const supabase = createRouteHandlerClient<Database>({ cookies });
+    const notificationId = params.notificationId;
 
-  // ✅ Auth check
-  const {
-    data: { session },
-    error: sessionError,
-  } = await supabase.auth.getSession();
+    console.log("[accept_notification] Notification ID:", notificationId);
 
-  if (sessionError || !session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+    // ✅ Auth check
+    const {
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession();
 
-  const currentUserId = session.user.id;
-
-  // ✅ Fetch notification
-  const { data: notif, error: notifError } = await supabase
-    .from("notifications")
-    .select("*")
-    .eq("id", notificationId)
-    .single();
-
-  if (notifError || !notif) {
-    return NextResponse.json(
-      { error: "Notification not found" },
-      { status: 404 }
-    );
-  }
-
-  if (notif.type !== "join_request") {
-    return NextResponse.json({ error: "Not a join request" }, { status: 400 });
-  }
-
-  if (notif.user_id !== currentUserId) {
-    return NextResponse.json({ error: "Not allowed" }, { status: 403 });
-  }
-
-  if (!notif.sender_id || !notif.room_id) {
-    return NextResponse.json(
-      { error: "Notification missing sender_id or room_id" },
-      { status: 400 }
-    );
-  }
-
-  // ✅ Run accept_notification Postgres function
-  const now = new Date().toISOString();
-  const { error: funcError } = await supabase.rpc("accept_notification", {
-    p_notification_id: notificationId,
-    p_target_user_id: notif.sender_id,
-    p_room_id: notif.room_id,
-    p_timestamp: now,
-  });
-
-  if (funcError) {
-    return NextResponse.json({ error: funcError.message }, { status: 500 });
-  }
-
-  // ✅ Fetch room to find owner
-  const { data: room, error: roomError } = await supabase
-    .from("rooms")
-    .select("created_by")
-    .eq("id", notif.room_id)
-    .single();
-
-  if (roomError || !room) {
-    return NextResponse.json({ error: "Room not found" }, { status: 404 });
-  }
-
-  // ✅ Only insert notification if room has an owner
-  if (room.created_by) {
-    const { error: insertError } = await supabase
-      .from("notifications")
-      .insert({
-        user_id: room.created_by as string, // room owner (forced to string)
-        sender_id: notif.sender_id as string, // user who joined
-        room_id: notif.room_id,
-        type: "join_request_accepted",
-        message: `User joined your room.`,
-        created_at: now,
-      });
-
-    if (insertError) {
-      return NextResponse.json({ error: insertError.message }, { status: 500 });
+    if (sessionError || !session?.user) {
+      console.error("[accept_notification] Authentication error:", sessionError?.message);
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-  }
 
-  return NextResponse.json({ success: true });
+    const currentUserId = session.user.id;
+    console.log("[accept_notification] Current user ID:", currentUserId);
+
+    // ✅ Fetch notification
+    const { data: notif, error: notifError } = await supabase
+      .from("notifications")
+      .select("*")
+      .eq("id", notificationId)
+      .single();
+
+    if (notifError || !notif) {
+      console.error("[accept_notification] Notification not found:", notifError?.message);
+      return NextResponse.json(
+        { error: "Notification not found" },
+        { status: 404 }
+      );
+    }
+
+    console.log("[accept_notification] Notification details:", notif);
+
+    // ✅ Check if it's a join request
+    if (notif.type !== "join_request") {
+      console.error("[accept_notification] Not a join request:", notif.type);
+      return NextResponse.json({ error: "Not a join request" }, { status: 400 });
+    }
+
+    // ✅ Check if current user is the notification recipient (room owner)
+    if (notif.user_id !== currentUserId) {
+      console.error("[accept_notification] Permission denied. Notification user:", notif.user_id, "Current user:", currentUserId);
+      return NextResponse.json({ error: "Not allowed" }, { status: 403 });
+    }
+
+    // ✅ Validate required fields
+    if (!notif.sender_id || !notif.room_id) {
+      console.error("[accept_notification] Missing sender_id or room_id:", notif);
+      return NextResponse.json(
+        { error: "Notification missing sender_id or room_id" },
+        { status: 400 }
+      );
+    }
+
+    console.log("[accept_notification] Processing join request from user:", notif.sender_id, "for room:", notif.room_id);
+
+    // ✅ Call the updated accept_notification function
+    const { error: funcError } = await supabase.rpc("accept_notification", {
+      p_notification_id: notificationId,
+      p_target_user_id: currentUserId // The room owner who is accepting the request
+    });
+
+    if (funcError) {
+      console.error("[accept_notification] RPC function error:", funcError.message);
+      return NextResponse.json({ error: funcError.message }, { status: 500 });
+    }
+
+    console.log("[accept_notification] Successfully processed join request");
+
+    return NextResponse.json({ 
+      success: true,
+      message: "Join request accepted successfully"
+    });
+
+  } catch (err: any) {
+    console.error("[accept_notification] Unexpected error:", err.message, err.stack);
+    return NextResponse.json(
+      { error: "Internal server error", details: err.message },
+      { status: 500 }
+    );
+  }
 }

@@ -1,3 +1,4 @@
+// /app/api/rooms/[roomId]/join/route.ts
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
@@ -9,14 +10,14 @@ export const dynamic = "force-dynamic";
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { roomid: string } } // FIXED: Use lowercase 'roomid'
+  { params }: { params: { roomid: string } }
 ) {
   try {
     const supabase = createRouteHandlerClient<Database>({ cookies });
-    const { roomid: roomId } = params; // FIXED: Extract as roomid and alias to roomId
+    const { roomid: roomId } = params;
 
     console.log("[join] Params received:", params);
-    console.log("[join] Room ID extracted:", roomId); // Add this for debugging
+    console.log("[join] Room ID extracted:", roomId);
 
     // 1. Validate room ID
     if (!roomId || !UUID_REGEX.test(roomId)) {
@@ -100,33 +101,163 @@ export async function POST(
       });
     }
 
-    // 5. Call the database function to handle the join logic
-    const { error: joinError } = await supabase.rpc('join_room', {
-      p_room_id: roomId,
-      p_user_id: userId
-    });
+    // 5. Get sender profile
+    const { data: senderProfile } = await supabase
+      .from("users")
+      .select("display_name, username")
+      .eq("id", userId)
+      .single();
 
-    if (joinError) {
-      console.error("[join] join_room function error:", joinError.message);
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Failed to join room",
-          code: "JOIN_FAILED",
-          details: joinError.message,
-        },
-        { status: 400 }
-      );
-    }
+    const senderName = senderProfile?.display_name || senderProfile?.username || session.user.email || "A user";
 
-    // 6. Return appropriate response based on room type
-    if (room.is_private) {
+    const now = new Date().toISOString();
+    const isPrivate = room.is_private;
+
+    // 6. Handle public vs private room logic
+    if (isPrivate) {
+      // Private room: Add to participants with pending status
+      const { error: insertError } = await supabase
+        .from("room_participants")
+        .upsert(
+          {
+            room_id: roomId,
+            user_id: userId,
+            status: "pending",
+            joined_at: now,
+            active: true,
+            created_at: now,
+          },
+          {
+            onConflict: "room_id, user_id",
+          }
+        );
+
+      if (insertError) {
+        console.error("[join] room_participants insert error:", insertError.message);
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Failed to send join request",
+            code: "JOIN_REQUEST_FAILED",
+            details: insertError.message,
+          },
+          { status: 400 }
+        );
+      }
+
+      // Notify room owner about join request (using valid 'join_request' type)
+      if (room.created_by && room.created_by !== userId) {
+        await supabase.from("notifications").insert({
+          user_id: room.created_by,
+          sender_id: userId,
+          room_id: roomId,
+          type: "join_request", // VALID type from constraint
+          message: `${senderName} requested to join "${room.name}"`,
+          status: "unread",
+          created_at: now,
+        });
+      }
+
+      // Notify user that request was sent (using valid 'notification_unread' type)
+      await supabase.from("notifications").insert({
+        user_id: userId,
+        sender_id: userId,
+        room_id: roomId,
+        type: "notification_unread", // VALID type from constraint
+        message: `You requested to join "${room.name}"`,
+        status: "unread",
+        created_at: now,
+      });
+
       return NextResponse.json({
         success: true,
         status: "pending",
         message: "Join request sent to room owner",
       });
     } else {
+      // Public room: Add to both participants and members tables
+      const { error: participantsError } = await supabase
+        .from("room_participants")
+        .upsert(
+          {
+            room_id: roomId,
+            user_id: userId,
+            status: "accepted",
+            joined_at: now,
+            active: true,
+            created_at: now,
+          },
+          {
+            onConflict: "room_id, user_id",
+          }
+        );
+
+      if (participantsError) {
+        console.error("[join] room_participants insert error:", participantsError.message);
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Failed to join room",
+            code: "JOIN_FAILED",
+            details: participantsError.message,
+          },
+          { status: 400 }
+        );
+      }
+
+      const { error: membersError } = await supabase
+        .from("room_members")
+        .upsert(
+          {
+            room_id: roomId,
+            user_id: userId,
+            status: "accepted",
+            joined_at: now,
+            active: true,
+            updated_at: now,
+          },
+          {
+            onConflict: "room_id, user_id",
+          }
+        );
+
+      if (membersError) {
+        console.error("[join] room_members insert error:", membersError.message);
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Failed to join room",
+            code: "JOIN_FAILED",
+            details: membersError.message,
+          },
+          { status: 400 }
+        );
+      }
+
+      // Notify room owner about user joining (using valid 'user_joined' type)
+      if (room.created_by && room.created_by !== userId) {
+        await supabase.from("notifications").insert({
+          user_id: room.created_by,
+          sender_id: userId,
+          room_id: roomId,
+          type: "user_joined", // VALID type from constraint
+          message: `${senderName} joined "${room.name}"`,
+          status: "unread",
+          created_at: now,
+        });
+      }
+
+      // Notify user about successful join (using valid 'notification_unread' type)
+      await supabase.from("notifications").insert({
+        user_id: userId,
+        sender_id: userId,
+        room_id: roomId,
+        type: "notification_unread", // VALID type from constraint
+        message: `You joined "${room.name}"`,
+        status: "unread",
+        created_at: now,
+      });
+
       return NextResponse.json({
         success: true,
         status: "accepted",
@@ -134,7 +265,6 @@ export async function POST(
         roomJoined: room,
       });
     }
-    
   } catch (err: any) {
     console.error("[join] Server error:", err.message, err.stack);
     return NextResponse.json(
