@@ -119,6 +119,35 @@ export type Database = {
           },
         ]
       }
+      message_read_status: {
+        Row: {
+          id: string
+          message_id: string
+          read_at: string | null
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          message_id: string
+          read_at?: string | null
+          user_id: string
+        }
+        Update: {
+          id?: string
+          message_id?: string
+          read_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_read_status_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           created_at: string
@@ -492,6 +521,23 @@ export type Database = {
           p_room_id: string
         }
         Returns: undefined
+      }
+      mark_message_read: {
+        Args: { p_message_id: string; p_user_id: string }
+        Returns: {
+          id: string
+          message_id: string
+          user_id: string
+          read_at: string | null
+        }
+      }
+      batch_mark_messages_read: {
+        Args: { p_message_ids: string[]; p_user_id: string }
+        Returns: {
+          message_id: string
+          user_id: string
+          read_at: string | null
+        }[]
       }
       upsert_typing_status: {
         Args: { p_is_typing: boolean; p_room_id: string; p_user_id: string }
