@@ -21,7 +21,7 @@ export default function DirectChat({ chatId, otherUserId }: DirectMessageProps) 
   const supabase = useMemo(() => supabaseBrowser(), []);
   const { typingUsers, startTyping } = useTypingStatus(chatId, 'direct');
   const isTyping = typingUsers.some(u => u.user_id === otherUserId);
-  
+
   // Fetch initial messages
   useEffect(() => {
     const fetchMessages = async () => {
@@ -42,7 +42,7 @@ export default function DirectChat({ chatId, otherUserId }: DirectMessageProps) 
 
         if (error) throw error;
         setMessages(data.reverse());
-        
+
         // Mark messages as read
         const messagesFromOthers = data.filter(msg => msg.sender_id !== user?.id);
         if (messagesFromOthers.length > 0) {
@@ -123,7 +123,7 @@ export default function DirectChat({ chatId, otherUserId }: DirectMessageProps) 
     if (!user) return;
 
     const channel = supabase.channel(`typing:${chatId}`);
-    
+
     channel
       .on('broadcast', { event: 'typing' }, ({ payload }) => {
         if (payload.userId === otherUserId) {
@@ -172,19 +172,17 @@ export default function DirectChat({ chatId, otherUserId }: DirectMessageProps) 
           <Message
             key={message.id}
             message={message}
-            isOwnMessage={message.sender_id === user?.id}
-            showReadReceipt={true}
           />
         ))}
       </div>
-      
+
       {isTyping && (
         <div className="px-4 py-2 text-sm text-gray-500">
           User is typing...
         </div>
       )}
 
-      <ChatInput user={user} onSend={handleSend} />
+      <ChatInput user={user} />
     </div>
   );
 }
