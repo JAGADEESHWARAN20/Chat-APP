@@ -1,8 +1,6 @@
 // /app/api/rooms/[roomId]/join/route.ts
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
-import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
-import { Database } from "@/lib/types/supabase";
+import { supabaseServer } from "@/lib/supabase/server";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const dynamic = "force-dynamic";
@@ -12,14 +10,7 @@ export async function POST(
   { params }: { params: Promise<{ roomId: string }> }
 ) {
   try {
-    const cookieStore = await cookies();
-    const supabase = createRouteHandlerClient<Database>({ 
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value;
-        },
-      }
-    });
+    const supabase = await supabaseServer();
     const { roomId } = await params;
 
     if (!roomId || !UUID_REGEX.test(roomId)) {
