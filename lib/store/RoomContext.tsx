@@ -165,35 +165,38 @@ export function RoomProvider({
 }) {
   const [state, dispatch] = useReducer(roomReducer, initialState);
   const supabase = supabaseBrowser();
-const acceptJoinNotification = useCallback(
-  async (roomId: string) => {
-    try {
-      const { data: room } = await supabase
-        .from("rooms")
-        .select("*")
-        .eq("id", roomId)
-        .single();
+  const acceptJoinNotification = useCallback(
+    async (notificationId: string) => {
+      try {
+        const res = await fetch(`/api/notifications/${notificationId}/accept`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        });
 
-      if (!room) throw new Error("Room not found after acceptance");
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || "Failed to accept join request");
+        }
 
-      const roomWithMembership: RoomWithMembershipCount = {
-        ...room,
-        isMember: true,
-        participationStatus: "accepted",
-        memberCount: 0, // will be updated by realtime
-      };
+        // ✅ Use real room + memberCount from API
+        const roomWithMembership: RoomWithMembershipCount = {
+          ...data.room,
+          isMember: true,
+          participationStatus: "accepted",
+          memberCount: data.memberCount ?? 0,
+        };
 
-      dispatch({ type: "ADD_ROOM", payload: roomWithMembership });
-      dispatch({ type: "SET_SELECTED_ROOM", payload: roomWithMembership });
+        dispatch({ type: "ADD_ROOM", payload: roomWithMembership });
+        dispatch({ type: "SET_SELECTED_ROOM", payload: roomWithMembership });
 
-      toast.success(`Accepted join request for room: ${room.name}`);
-    } catch (err) {
-      console.error("Error in acceptJoinNotification:", err);
-      toast.error("Failed to update room after acceptance");
-    }
-  },
-  [supabase] // supabase is stable, no dependencies needed
-);
+        toast.success(data.message || `Accepted join request for ${data.room.name}`);
+      } catch (err: any) {
+        console.error("Error in acceptJoinNotification:", err);
+        toast.error(err.message || "Failed to update room after acceptance");
+      }
+    },
+    []
+  );
 
 
   const checkRoomMembership = useCallback(
