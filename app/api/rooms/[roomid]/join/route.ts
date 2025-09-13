@@ -9,11 +9,18 @@ export const dynamic = "force-dynamic";
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { roomid: string } }
+  { params }: { params: Promise<{ roomId: string }> }
 ) {
   try {
-    const supabase = createRouteHandlerClient<Database>({ cookies });
-    const { roomid: roomId } = params;
+    const cookieStore = await cookies();
+    const supabase = createRouteHandlerClient<Database>({ 
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value;
+        },
+      }
+    });
+    const { roomId } = await params;
 
     if (!roomId || !UUID_REGEX.test(roomId)) {
       return NextResponse.json({ error: "Invalid room ID" }, { status: 400 });
