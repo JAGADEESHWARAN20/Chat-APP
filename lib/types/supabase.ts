@@ -465,6 +465,10 @@ export type Database = {
           user_id: string
         }[]
       }
+      handle_room_join_request: {
+        Args: { p_room_id: string; p_user_id: string }
+        Returns: undefined
+      }
       join_room: {
         Args: { p_room_id: string; p_status?: string; p_user_id: string }
         Returns: undefined
