@@ -25,7 +25,24 @@ export function useNotificationHandler() {
           filter: `user_id=eq.${user.id}`,
         },
         async (payload) => {
-          const notification = payload.new;
+          const rawNotification = payload.new;
+          
+          // Transform the raw notification to match Inotification interface
+          const notification = {
+            id: rawNotification.id,
+            message: rawNotification.message,
+            created_at: rawNotification.created_at,
+            status: rawNotification.status,
+            type: rawNotification.type,
+            sender_id: rawNotification.sender_id,
+            user_id: rawNotification.user_id,
+            room_id: rawNotification.room_id,
+            join_status: rawNotification.join_status,
+            direct_chat_id: rawNotification.direct_chat_id,
+            users: rawNotification.sender || null,
+            recipient: rawNotification.recipient || null,
+            rooms: rawNotification.room || null,
+          };
           
           // Add to notification store
           await addNotification(notification);
@@ -33,7 +50,7 @@ export function useNotificationHandler() {
           // Determine notification type and display appropriate toast
           switch (notification.type) {
             case 'message':
-              toast.info(`New message from ${notification.sender?.username || 'someone'}`, {
+              toast.info(`New message from ${notification.users?.username || 'someone'}`, {
                 description: notification.message,
                 action: {
                   label: 'View',
@@ -43,13 +60,13 @@ export function useNotificationHandler() {
               break;
 
             case 'room_join':
-              toast.success(`${notification.sender?.username || 'Someone'} joined ${notification.room?.name || 'the room'}`, {
+              toast.success(`${notification.users?.username || 'Someone'} joined ${notification.rooms?.name || 'the room'}`, {
                 description: notification.message
               });
               break;
 
             case 'room_leave':
-              toast.info(`${notification.sender?.username || 'Someone'} left ${notification.room?.name || 'the room'}`, {
+              toast.info(`${notification.users?.username || 'Someone'} left ${notification.rooms?.name || 'the room'}`, {
                 description: notification.message
               });
               break;
@@ -73,9 +90,16 @@ export function useNotificationHandler() {
       .on(
         'presence',
         { event: 'leave' },
-        ({ leftPresence }) => {
-          if (leftPresence?.user_id && leftPresence?.room_id) {
-            toast.info(`${leftPresence.username || 'Someone'} left the chat`);
+        (payload) => {
+          // According to Supabase types, the payload for 'leave' is RealtimePresenceLeavePayload
+          // which has a 'leftPresences' array, not 'leftPresence'
+          const leftPresences = (payload as { leftPresences?: any[] }).leftPresences;
+          if (Array.isArray(leftPresences)) {
+            leftPresences.forEach((user) => {
+              if (user?.user_id && user?.room_id) {
+                toast.info(`${user.username || 'Someone'} left the chat`);
+              }
+            });
           }
         }
       )
