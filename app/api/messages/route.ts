@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
 
           // Fetch the sender's username
           const { data: user, error: userError } = await supabase
-               .from("users")
+               .from("profiles")
                .select("username")
                .eq("id", userId)
                .single();
@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
           // Insert notifications for each member
           const notifications = members.map((member) => ({
                user_id: member.user_id,
-               type: "new_message",
+               type: "message",
                room_id: roomId,
                sender_id: userId,
                message: `sent a message in ${room.name}: "${content}"`,

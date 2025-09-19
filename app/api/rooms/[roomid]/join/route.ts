@@ -67,7 +67,7 @@ export async function POST(
 
     // ✅ Sender name
     const { data: senderProfile } = await supabase
-      .from("users")
+      .from("profiles")
       .select("display_name, username")
       .eq("id", userId)
       .single();

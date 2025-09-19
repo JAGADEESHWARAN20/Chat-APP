@@ -3,12 +3,12 @@ import { supabaseBrowser } from "@/lib/supabase/browser";
 import { toast } from "sonner";
 import { Database } from "@/lib/types/supabase";
 
-type UserType = {
+type ProfileType = {
   id: string;
-  username: string;
-  display_name: string;
-  avatar_url: string;
-  created_at: string;
+  username: string | null;
+  display_name: string | null;
+  avatar_url: string | null;
+  created_at: string | null;
 };
 
 type RoomType = {
@@ -22,8 +22,8 @@ type RoomType = {
 type NotificationRow = Database["public"]["Tables"]["notifications"]["Row"];
 
 type NotificationWithRelations = NotificationRow & {
-  sender: UserType | null;
-  recipient: UserType | null;
+  sender: ProfileType | null;
+  recipient: ProfileType | null;
   room: RoomType | null;
 };
 
@@ -38,8 +38,8 @@ export interface Inotification {
   room_id: string | null;
   join_status: string | null;
   direct_chat_id: string | null;
-  users: UserType | null;    // sender
-  recipient: UserType | null;
+  users: ProfileType | null;    // sender (kept name for UI compatibility)
+  recipient: ProfileType | null;
   rooms: RoomType | null;    // room
 }
 
@@ -119,8 +119,8 @@ export const useNotification = create<NotificationState>((set, get) => {
           .select(
             `
             *,
-            sender:users!notifications_sender_id_fkey(*),
-            recipient:users!notifications_user_id_fkey(*),
+            sender:profiles!notifications_sender_id_fkey(id, username, display_name, avatar_url, created_at),
+            recipient:profiles!notifications_user_id_fkey(id, username, display_name, avatar_url, created_at),
             room:rooms(*)
           `
           )

@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
-import type { Database } from "@/database.types";
+import { supabaseBrowser } from "@/lib/supabase/browser";
+import type { Database } from "@/lib/types/supabase";
 import { useTypingStatus } from "@/hooks/useTypingStatus";
 
 interface TypingIndicatorProps {
@@ -11,22 +11,27 @@ interface TypingIndicatorProps {
 }
 
 export default function TypingIndicator({ roomId, currentUserId }: TypingIndicatorProps) {
-  const supabase = createClientComponentClient<Database>();
+  const supabase = supabaseBrowser();
   const [userNames, setUserNames] = useState<Record<string, string>>({});
   const { typingUsers } = useTypingStatus(roomId, currentUserId || "");
 
   // Fetch display names for typing users
   useEffect(() => {
+    let isActive = true;
+
     if (typingUsers.length === 0) {
       setUserNames({});
-      return;
+      return () => {
+        isActive = false;
+      };
     }
 
     const fetchUserNames = async () => {
       try {
-        const userIds = typingUsers.map((u) => u.user_id);
+        const userIds = typingUsers.map((u) => u.user_id).filter(Boolean);
+        if (userIds.length === 0) return;
         const { data, error } = await supabase
-          .from("users")
+          .from("profiles")
           .select("id, display_name")
           .in("id", userIds);
 
@@ -35,18 +40,22 @@ export default function TypingIndicator({ roomId, currentUserId }: TypingIndicat
           return;
         }
 
-        const nameMap = data.reduce((acc, user) => {
-          acc[user.id] = user.display_name || "Someone";
+        const safeData = Array.isArray(data) ? data : [];
+        const nameMap = safeData.reduce((acc, user) => {
+          acc[user.id as string] = user.display_name || "Someone";
           return acc;
         }, {} as Record<string, string>);
 
-        setUserNames(nameMap);
+        if (isActive) setUserNames(nameMap);
       } catch (error) {
         console.error("Unexpected error fetching user names:", error);
       }
     };
 
     fetchUserNames();
+    return () => {
+      isActive = false;
+    };
   }, [typingUsers, supabase]);
 
   // Debugging

@@ -30,7 +30,7 @@ export default function DirectChat({ chatId, otherUserId }: DirectMessageProps) 
           .from('messages')
           .select(`
             *,
-            profiles:sender_id (
+            profiles:profiles!messages_sender_id_fkey (
               id,
               username,
               avatar_url
@@ -49,7 +49,7 @@ export default function DirectChat({ chatId, otherUserId }: DirectMessageProps) 
           try {
             await Promise.all(
               messagesFromOthers.map(msg =>
-                supabase.rpc('mark_message_read', {
+                supabase.rpc('mark_message_read' as any, {
                   p_message_id: msg.id,
                   p_user_id: user?.id
                 })
@@ -89,19 +89,26 @@ export default function DirectChat({ chatId, otherUserId }: DirectMessageProps) 
         async (payload) => {
           const newMessage = payload.new;
 
-          // Fetch sender details
-          const { data: sender } = await supabase
-            .from('profiles')
-            .select('id, username, avatar_url')
-            .eq('id', newMessage.sender_id)
+          // Enrich via FK select to keep shape consistent
+          const { data: enriched, error: enrichError } = await supabase
+            .from('messages')
+            .select(`
+              *,
+              profiles:profiles!messages_sender_id_fkey (
+                id,
+                username,
+                avatar_url
+              )
+            `)
+            .eq('id', newMessage.id)
             .single();
 
-          setMessages(prev => [...prev, { ...newMessage, profiles: sender }]);
+          setMessages(prev => [...prev, enriched || newMessage]);
 
           // Mark message as read if from other user
           if (newMessage.sender_id !== user?.id) {
             try {
-              await supabase.rpc('mark_message_read', {
+              await supabase.rpc('mark_message_read' as any, {
                 p_message_id: newMessage.id,
                 p_user_id: user.id
               });
