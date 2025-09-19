@@ -522,23 +522,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      mark_message_read: {
-        Args: { p_message_id: string; p_user_id: string }
-        Returns: {
-          id: string
-          message_id: string
-          user_id: string
-          read_at: string | null
-        }
-      }
-      batch_mark_messages_read: {
-        Args: { p_message_ids: string[]; p_user_id: string }
-        Returns: {
-          message_id: string
-          user_id: string
-          read_at: string | null
-        }[]
-      }
       upsert_typing_status: {
         Args: { p_is_typing: boolean; p_room_id: string; p_user_id: string }
         Returns: {
