@@ -466,6 +466,10 @@ export type Database = {
         Args: { p_notification_id: string; p_target_user_id: string }
         Returns: undefined
       }
+      batch_mark_messages_read: {
+        Args: { p_message_ids: string[]; p_user_id: string }
+        Returns: undefined
+      }
       clear_stale_typing_status: {
         Args: { p_room_id: string; p_stale_threshold?: unknown }
         Returns: {
