@@ -1,12 +1,13 @@
-import { useEffect, useState, useMemo } from 'react';
-import { useDirectChatStore } from '@/lib/store/directChatStore';
-import { supabaseBrowser } from '@/lib/supabase/browser';
-import { useUser } from '@/lib/store/user';
-import Message from '@/components/Message';
-import ChatInput from '@/components/ChatInput';
-import { useTypingStatus } from '@/hooks/useTypingStatus';
-import { toast } from 'sonner';
-import type { Imessage } from '@/lib/store/messages';
+"use client";
+
+import { useEffect, useState, useMemo } from "react";
+import { supabaseBrowser } from "@/lib/supabase/browser";
+import { useUser } from "@/lib/store/user";
+import Message from "@/components/Message";
+import ChatInput from "@/components/ChatInput";
+import { useTypingStatus } from "@/hooks/useTypingStatus";
+import { toast } from "sonner";
+import type { Imessage } from "@/lib/store/messages";
 
 interface DirectMessageProps {
   chatId: string;
@@ -14,160 +15,117 @@ interface DirectMessageProps {
 }
 
 export default function DirectChat({ chatId, otherUserId }: DirectMessageProps) {
-  // use the store message type expected by Message component
   const [messages, setMessages] = useState<Imessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { user } = useUser();
   const supabase = useMemo(() => supabaseBrowser(), []);
-  const { typingUsers, startTyping } = useTypingStatus(chatId, 'direct');
+  const { typingUsers, startTyping } = useTypingStatus(chatId, "direct");
+  const isTyping = typingUsers.some((u) => u.user_id === otherUserId);
 
-  // use correct field from TypingPresence (hook exports user_id)
-  const isTyping = typingUsers.some(u => u.user_id === otherUserId);
-  
   // Fetch initial messages
   useEffect(() => {
     const fetchMessages = async () => {
+      if (!user) return;
+
       try {
         const { data, error } = await supabase
-          .from('messages')
-          .select(`
+          .from("messages")
+          .select(
+            `
             *,
-            profiles:sender_id (
+            profiles:profiles!messages_sender_id_fkey (
               id,
               username,
-              avatar_url
+              avatar_url,
+              display_name
             )
-          `)
-          .eq('direct_chat_id', chatId)
-          .order('created_at', { ascending: false })
+          `
+          )
+          .eq("direct_chat_id", chatId)
+          .order("created_at", { ascending: false })
           .limit(50);
 
         if (error) throw error;
 
-        // Cast incoming data to the store's Imessage shape.
-        // Ensure room_id is null for direct messages to match Imessage.DirectMessage typing.
-        const msgs = (data ?? []).reverse().map((m: any) => {
-          const casted: Imessage = {
-            ...m,
-            // enforce direct message shape expected by store types
-            room_id: null,
-            direct_chat_id: m.direct_chat_id ?? null,
-            dm_thread_id: m.dm_thread_id ?? null,
-            profiles: m.profiles ?? null,
-          } as Imessage;
-          return casted;
-        });
+        const messagesWithProfiles = (data || []).map((msg: any) => ({
+          ...msg,
+        }) as Imessage);
 
-        setMessages(msgs);
-        
-        // Mark messages as read (only for messages from the other user)
-        if ((data ?? []).length > 0 && user?.id) {
-          const toUpsert = (data as any[])
-            .filter((msg: any) => msg.sender_id !== user.id)
-            .map((msg: any) => ({
-              message_id: msg.id,
-              user_id: user.id,
-              read_at: new Date().toISOString()
-            }));
-          if (toUpsert.length > 0) {
-            await supabase.from('message_read_status').upsert(toUpsert);
-          }
+        setMessages(messagesWithProfiles.reverse());
+
+        // Mark messages as read
+        const unreadMessages = (data || []).filter(
+          (msg: any) => msg.sender_id !== user.id
+        );
+        if (unreadMessages.length > 0) {
+          await supabase.rpc("batch_mark_messages_read", {
+            p_message_ids: unreadMessages.map((m: any) => m.id),
+            p_user_id: user.id,
+          });
         }
       } catch (error) {
-        toast.error('Error loading messages');
-        console.error('Error:', error);
+        toast.error("Error loading messages");
+        console.error("Error:", error);
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchMessages();
-  }, [chatId, user?.id, supabase]);
+  }, [chatId, user, supabase]);
 
-  // Subscribe to new messages and read-status updates
+  // Subscribe to new messages and read status
   useEffect(() => {
-  const channel = supabase.channel(`direct_chat:${chatId}`);
+    if (!user) return;
 
-    // New messages
-    channel.on(
-      'postgres_changes',
-      {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'messages',
-        filter: `direct_chat_id=eq.${chatId}`,
-      },
-      async (payload: any) => {
-        const newMessage = payload.new as any;
+    const channel = supabase.channel(`direct_chat:${chatId}`);
 
-        // Fetch sender details
-        const { data: sender } = await supabase
-          .from('profiles')
-          .select('id, username, avatar_url')
-          .eq('id', newMessage.sender_id)
-          .single();
+    channel
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+          filter: `direct_chat_id=eq.${chatId}`,
+        },
+        async (payload) => {
+          const newMessage = payload.new as any;
 
-        const messageWithProfile: Imessage = {
-          ...newMessage,
-          room_id: null,
-          direct_chat_id: newMessage.direct_chat_id ?? null,
-          dm_thread_id: newMessage.dm_thread_id ?? null,
-          profiles: sender ?? null,
-        } as Imessage;
+          const { data: sender } = await supabase
+            .from("profiles")
+            .select("id, username, avatar_url, display_name")
+            .eq("id", newMessage.sender_id)
+            .single();
 
-        setMessages(prev => [...prev, messageWithProfile]);
+          const msgWithProfile = { ...newMessage, profiles: sender } as Imessage;
 
-        // Mark message as read if from other user
-        if (newMessage.sender_id !== user?.id && user?.id) {
-          await supabase.from('message_read_status').upsert({
-            message_id: newMessage.id,
-            user_id: user.id,
-            read_at: new Date().toISOString()
-          });
+          setMessages((prev) => [...prev, msgWithProfile]);
+
+          // Mark message as read if from other user
+          if (newMessage.sender_id !== user.id) {
+            await supabase.rpc("batch_mark_messages_read", {
+              p_message_ids: [newMessage.id],
+              p_user_id: user.id,
+            });
+          }
         }
-      }
-    );
-
-    // Read status updates: subscribe to all inserts and filter client-side
-    channel.on(
-      'postgres_changes',
-      {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'message_read_status',
-      },
-      (payload: any) => {
-        const readStatus = payload.new as any;
-        // Only react when the other user has marked a message read
-        if (readStatus.user_id === otherUserId) {
-          setMessages(prev =>
-            prev.map(m =>
-              m.id === readStatus.message_id
-                ? ({ ...m, read_at: readStatus.read_at })
-                : m
-            )
-          );
-        }
-      }
-    );
-
-    channel.subscribe();
+      )
+      .subscribe();
 
     return () => {
-      try {
-        channel.unsubscribe();
-      } catch (e) {
-        // ignore unsubscribe errors
-      }
+      channel.unsubscribe();
     };
-  }, [chatId, otherUserId, user?.id, supabase]);
+  }, [chatId, user, supabase, otherUserId]);
 
-  // Subscribe to typing status broadcast channel
+  // Subscribe to typing status
   useEffect(() => {
-  const typingChannel = supabase.channel(`typing:${chatId}`);
-    
+    if (!user) return;
+
+    const typingChannel = supabase.channel(`typing:${chatId}`);
+
     typingChannel
-      .on('broadcast', { event: 'typing' }, ({ payload }: any) => {
+      .on("broadcast", { event: "typing" }, ({ payload }) => {
         if (payload.user_id === otherUserId) {
           startTyping();
         }
@@ -175,44 +133,40 @@ export default function DirectChat({ chatId, otherUserId }: DirectMessageProps) 
       .subscribe();
 
     return () => {
-      try {
-        typingChannel.unsubscribe();
-      } catch (e) {
-        // ignore
-      }
+      typingChannel.unsubscribe();
     };
-  }, [chatId, otherUserId, startTyping, supabase]);
+  }, [chatId, otherUserId, startTyping, supabase, user]);
 
-  // Send message (kept local but ChatInput in this project expects only `user` prop,
-  // so we do not pass onMessageSend prop to ChatInput to match its type)
   const handleSend = async (text: string) => {
+    if (!user) return;
+
     try {
       const { data, error } = await supabase
-        .from('messages')
+        .from("messages")
         .insert({
           direct_chat_id: chatId,
-          sender_id: user?.id,
+          sender_id: user.id,
           text,
         })
-        .select()
+        .select(
+          `
+          *,
+          profiles:profiles!messages_sender_id_fkey (
+            id,
+            username,
+            avatar_url,
+            display_name
+          )
+        `
+        )
         .single();
 
       if (error) throw error;
 
-      const inserted = data as any;
-      const messageWithProfile: Imessage = {
-        ...inserted,
-        room_id: null,
-        direct_chat_id: inserted.direct_chat_id ?? chatId,
-        dm_thread_id: inserted.dm_thread_id ?? null,
-        profiles: { id: user?.id, username: user?.username ?? null, avatar_url: user?.avatar_url ?? null }
-      } as Imessage;
-
-      // optimistic UI update
-      setMessages(prev => [...prev, messageWithProfile]);
+      setMessages((prev) => [...prev, (data as any) as Imessage]);
     } catch (error) {
-      toast.error('Failed to send message');
-      console.error('Error:', error);
+      toast.error("Failed to send message");
+      console.error("Error:", error);
     }
   };
 
@@ -224,20 +178,14 @@ export default function DirectChat({ chatId, otherUserId }: DirectMessageProps) 
     <div className="flex flex-col h-full">
       <div className="flex-1 overflow-y-auto px-4 py-2 space-y-4">
         {messages.map((message) => (
-          <Message
-            key={(message as any).id}
-            message={message}
-          />
+          <Message key={message.id} message={message} />
         ))}
       </div>
-      
+
       {isTyping && (
-        <div className="px-4 py-2 text-sm text-gray-500">
-          User is typing...
-        </div>
+        <div className="px-4 py-2 text-sm text-gray-500">User is typing...</div>
       )}
 
-      {/* ChatInput component in this project expects only `user` prop; do not pass unknown props */}
       <ChatInput user={user} />
     </div>
   );
