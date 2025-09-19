@@ -98,27 +98,23 @@ export const useMessage = create<MessageState>()((set, get) => ({
     })),
 
  // useMessage.tsx
-subscribeToRoom: (roomId?: string, directChatId?: string, dmThreadId?: string) =>
+subscribeToRoom: (roomId?: string, directChatId?: string) =>
   set((state) => {
     if (state.currentSubscription) {
       state.currentSubscription.unsubscribe();
     }
 
-    if (!roomId && !directChatId && !dmThreadId) {
+    if (!roomId && !directChatId) {
       return { currentSubscription: null };
     }
 
     const filter = roomId
       ? `room_id=eq.${roomId}`
-      : directChatId
-      ? `direct_chat_id=eq.${directChatId}`
-      : `dm_thread_id=eq.${dmThreadId}`;
+      : `direct_chat_id=eq.${directChatId}`;
 
     const channelName = roomId
       ? `room:${roomId}`
-      : directChatId
-      ? `direct_chat:${directChatId}`
-      : `dm_thread:${dmThreadId}`;
+      : `direct_chat:${directChatId}`;
 
     const subscription = supabaseBrowser()
       .channel(channelName)

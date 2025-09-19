@@ -48,7 +48,6 @@ export async function GET(
         is_edited,
         room_id,
         direct_chat_id,
-        dm_thread_id,
         status,
         profiles:profiles!messages_sender_id_fkey (
           id,

@@ -8,7 +8,7 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 export async function POST(req: NextRequest) {
   try {
     const supabase = createRouteHandlerClient<Database>({ cookies });
-    const { roomId, directChatId, dmThreadId, text } = await req.json();
+    const { roomId, directChatId, text } = await req.json();
 
     // Verify session
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
@@ -27,9 +27,9 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    if (!roomId && !directChatId && !dmThreadId) {
+    if (!roomId && !directChatId) {
       return NextResponse.json(
-        { success: false, error: "Room ID, Direct Chat ID, or DM Thread ID required", code: "INVALID_TARGET" },
+        { success: false, error: "Room ID or Direct Chat ID required", code: "INVALID_TARGET" },
         { status: 400 }
       );
     }
@@ -51,12 +51,7 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    if (dmThreadId && !UUID_REGEX.test(dmThreadId)) {
-      return NextResponse.json(
-        { success: false, error: "Invalid DM thread ID format", code: "INVALID_DM_THREAD_ID" },
-        { status: 400 }
-      );
-    }
+    
 
     // Verify membership/participation
     if (roomId) {
@@ -85,18 +80,6 @@ export async function POST(req: NextRequest) {
           { status: 403 }
         );
       }
-    } else if (dmThreadId) {
-      const { data: thread } = await supabase
-        .from("direct_message_threads")
-        .select("user1_id, user2_id")
-        .eq("id", dmThreadId)
-        .single();
-      if (!thread || (thread.user1_id !== userId && thread.user2_id !== userId)) {
-        return NextResponse.json(
-          { success: false, error: "Not a participant in this DM thread", code: "NOT_A_PARTICIPANT" },
-          { status: 403 }
-        );
-      }
     }
 
     // Insert message
@@ -106,7 +89,6 @@ export async function POST(req: NextRequest) {
         text: text.trim(),
         room_id: roomId || null,
         direct_chat_id: directChatId || null,
-        dm_thread_id: dmThreadId || null,
         sender_id: userId,
         created_at: new Date().toISOString(),
         status: "sent",
@@ -120,7 +102,6 @@ export async function POST(req: NextRequest) {
         is_edited,
         room_id,
         direct_chat_id,
-        dm_thread_id,
         status,
         profiles:profiles!messages_sender_id_fkey (
           id,

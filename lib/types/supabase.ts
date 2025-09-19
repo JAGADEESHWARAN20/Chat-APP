@@ -63,91 +63,6 @@ export type Database = {
           },
         ]
       }
-      direct_message_threads: {
-        Row: {
-          created_at: string
-          id: string
-          status: string | null
-          user1_id: string
-          user2_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          status?: string | null
-          user1_id: string
-          user2_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          status?: string | null
-          user1_id?: string
-          user2_id?: string
-        }
-        Relationships: []
-      }
-      direct_messages_typing: {
-        Row: {
-          created_at: string | null
-          id: string
-          is_typing: boolean | null
-          room_id: string | null
-          user_id: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          id?: string
-          is_typing?: boolean | null
-          room_id?: string | null
-          user_id?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          id?: string
-          is_typing?: boolean | null
-          room_id?: string | null
-          user_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "direct_messages_typing_room_id_fkey"
-            columns: ["room_id"]
-            isOneToOne: false
-            referencedRelation: "direct_chats"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      message_read_status: {
-        Row: {
-          id: string
-          message_id: string
-          read_at: string | null
-          user_id: string
-        }
-        Insert: {
-          id?: string
-          message_id: string
-          read_at?: string | null
-          user_id: string
-        }
-        Update: {
-          id?: string
-          message_id?: string
-          read_at?: string | null
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "message_read_status_message_id_fkey"
-            columns: ["message_id"]
-            isOneToOne: false
-            referencedRelation: "messages"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       messages: {
         Row: {
           created_at: string
@@ -188,13 +103,6 @@ export type Database = {
             columns: ["direct_chat_id"]
             isOneToOne: false
             referencedRelation: "direct_chats"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "messages_dm_thread_id_fkey"
-            columns: ["dm_thread_id"]
-            isOneToOne: false
-            referencedRelation: "direct_message_threads"
             referencedColumns: ["id"]
           },
           {
