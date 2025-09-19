@@ -159,9 +159,7 @@ export default function DirectChat({ chatId, otherUserId }: DirectMessageProps) 
         .single();
 
       if (error) throw error;
-
-      // Optimistically add message to UI
-      setMessages(prev => [...prev, data]);
+      // Do not append here; rely on realtime INSERT to add enriched message with profiles
     } catch (error) {
       toast.error('Failed to send message');
       console.error('Error:', error);

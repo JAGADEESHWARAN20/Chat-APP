@@ -75,14 +75,14 @@ export default function ListMessages() {
             ...msg,
             profiles: msg.profiles
               ? {
-                  id: msg.profiles.id,
-                  avatar_url: msg.profiles.avatar_url || null,
-                  display_name: msg.profiles.display_name || null,
-                  username: msg.profiles.username || null,
-                  created_at: msg.profiles.created_at || null,
-                  bio: msg.profiles.bio || null,
-                  updated_at: msg.profiles.updated_at || null,
-                }
+                id: msg.profiles.id,
+                avatar_url: msg.profiles.avatar_url || null,
+                display_name: msg.profiles.display_name || null,
+                username: msg.profiles.username || null,
+                created_at: msg.profiles.created_at || null,
+                bio: msg.profiles.bio || null,
+                updated_at: msg.profiles.updated_at || null,
+              }
               : null,
           }));
           setMessages(formattedMessages);
@@ -120,10 +120,10 @@ export default function ListMessages() {
             const messagePayload = payload.new as MessageRow;
             if (messagePayload.room_id !== selectedRoom.id) return;
 
-            if (
-              payload.eventType === "INSERT" &&
-              !optimisticIds.includes(messagePayload.id)
-            ) {
+            if (payload.eventType === "INSERT") {
+              if (optimisticIds.includes(messagePayload.id)) {
+                return; // skip, already added optimistically
+              }
               supabase
                 .from("profiles")
                 .select("*")
@@ -135,6 +135,8 @@ export default function ListMessages() {
                     return;
                   }
                   if (user) {
+                    // prevent duplicate in case same id already exists
+                    if (messages.some(m => m.id === messagePayload.id)) return;
                     const newMessage: Imessage = {
                       id: messagePayload.id,
                       created_at: messagePayload.created_at,
@@ -160,9 +162,9 @@ export default function ListMessages() {
                     if (
                       scrollRef.current &&
                       scrollRef.current.scrollTop <
-                        scrollRef.current.scrollHeight -
-                          scrollRef.current.clientHeight -
-                          10
+                      scrollRef.current.scrollHeight -
+                      scrollRef.current.clientHeight -
+                      10
                     ) {
                       setNotification((prev) => prev + 1);
                     }
