@@ -7,11 +7,12 @@ export const dynamic = "force-dynamic";
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: Promise<{ roomId: string }> }
+  { params }: { params: { roomId: string } }
 ) {
+  const { roomId } = params;
+
   try {
     const supabase = await supabaseServer();
-    const { roomId } = await params;
 
     if (!roomId || !UUID_REGEX.test(roomId)) {
       return NextResponse.json({ error: "Invalid room ID" }, { status: 400 });
