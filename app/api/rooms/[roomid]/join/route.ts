@@ -15,15 +15,15 @@ export async function POST(
   try {
     const supabase = await supabaseServer();
 
-    // ✅ Validate roomId
-    if (!roomId || !UUID_REGEX.test(roomId)) {
+    // ✅ FIXED: More flexible room ID validation
+    if (!roomId || roomId.trim().length === 0) {
       return NextResponse.json(
         { error: "Invalid room ID" },
         { status: 400 }
       );
     }
 
-    // ✅ Auth
+    // ✅ Auth - FIXED: Extract userId here
     const {
       data: { session },
     } = await supabase.auth.getSession();
@@ -33,15 +33,17 @@ export async function POST(
         { status: 401 }
       );
     }
-    const userId = session.user.id;
+    const userId = session.user.id; // ✅ ADD THIS LINE
 
-    // ✅ Fetch room
+    // ✅ Enhanced room existence check
     const { data: room, error: roomError } = await supabase
       .from("rooms")
       .select("id, name, created_by, is_private")
       .eq("id", roomId)
       .single();
+
     if (roomError || !room) {
+      console.error("Room not found:", roomId, roomError);
       return NextResponse.json(
         { error: "Room not found" },
         { status: 404 }
