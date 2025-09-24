@@ -33,6 +33,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
+import { useRoomContext } from "@/lib/store/RoomContext";
 
 interface NotificationsProps {
   isOpen: boolean;
@@ -86,10 +87,11 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
     removeNotification,
   } = useNotification();
   const { setSelectedRoom } = useRoomStore();
+  const { fetchAvailableRooms } = useRoomContext();
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(false);
   const supabase = supabaseBrowser();
   const isMobile = useMediaQuery("(max-width: 768px)");
+  const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!user?.id) return;
@@ -108,144 +110,202 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
   }, [user?.id, fetchNotifications, subscribeToNotifications, unsubscribeFromNotifications]);
 
   const handleAccept = async (id: string, roomId: string | null, type: string) => {
-    if (!user || !roomId) return toast.error("Missing data for action.");
+    if (!user || !roomId) {
+      return toast.error("Missing data for action.");
+    }
+    if (loadingIds.has(id)) return; // Prevent duplicate calls
 
-    setIsLoading(true);
+    setLoadingIds((prev) => new Set([...prev, id]));
+
     try {
+      // Optimistic remove
+      removeNotification(id);
+
       const res = await fetch(`/api/notifications/${id}/accept`, { method: "POST" });
-      if (!res.ok) throw new Error("Failed to accept notification");
+      const data = await res.json();
 
-      await markAsRead(id);
-      await removeNotification(id);
-
-      if (["room_invite", "join_request"].includes(type)) {
-        const { data: room, error } = await supabase
-          .from("rooms")
-          .select("*")
-          .eq("id", roomId)
-          .single();
-
-        if (error || !room) throw new Error("Room fetch failed");
-
-        const enrichedRoom = await transformRoom(room, user.id, supabase);
-        setSelectedRoom(enrichedRoom);
-        onClose();
-        router.refresh();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to accept notification");
       }
 
-      toast.success("Request accepted.");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error accepting.");
+      await markAsRead(id);
+      await fetchAvailableRooms(); // Sync rooms list
+
+      // Refresh notifications to ensure DB consistency
+      await fetchNotifications(user.id);
+
+      // Handle room-specific logic
+      if (["room_invite", "join_request"].includes(type)) {
+        let retries = 3;
+        let room: Room | null = null;
+        while (retries > 0) {
+          const { data: fetchedRoom, error } = await supabase
+            .from("rooms")
+            .select("*")
+            .eq("id", roomId)
+            .single();
+
+          if (error) {
+            if (retries === 1) throw error;
+            await new Promise((resolve) => setTimeout(resolve, 1000)); // Retry delay
+            retries--;
+            continue;
+          }
+
+          room = fetchedRoom;
+          break;
+        }
+
+        if (room) {
+          const enrichedRoom = await transformRoom(room, user.id, supabase);
+          setSelectedRoom(enrichedRoom);
+          toast.success(`Joined ${room.name} successfully!`);
+          router.push(`/chat/${roomId}`); // Navigate to room
+        }
+      } else {
+        toast.success("Notification accepted.");
+      }
+    } catch (err: any) {
+      // Rollback optimistic update
+      await fetchNotifications(user.id);
+      toast.error(err.message || "Error accepting notification.");
     } finally {
-      setIsLoading(false);
+      setLoadingIds((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(id);
+        return newSet;
+      });
     }
   };
 
-  const handleReject = async (id: string, senderId: string, roomId: string) => {
-    if (!user || !senderId || !roomId) return toast.error("Missing data for reject.");
+  const handleReject = async (id: string, senderId: string | null, roomId: string | null) => {
+    if (!user || !senderId || !roomId) {
+      return toast.error("Missing data for reject.");
+    }
+    if (loadingIds.has(id)) return;
 
-    setIsLoading(true);
+    setLoadingIds((prev) => new Set([...prev, id]));
+
     try {
+      // Optimistic remove
+      removeNotification(id);
+
       const res = await fetch(`/api/notifications/reject`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ notification_id: id, sender_id: senderId, room_id: roomId }),
       });
+      const data = await res.json();
 
-      if (!res.ok) throw new Error("Reject failed");
+      if (!res.ok) {
+        throw new Error(data.error || "Reject failed");
+      }
+
       await markAsRead(id);
-      await removeNotification(id);
+      await fetchNotifications(user.id); // Refresh for consistency
       toast.success("Request rejected.");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Reject error.");
+    } catch (err: any) {
+      // Rollback
+      await fetchNotifications(user.id);
+      toast.error(err.message || "Reject error.");
     } finally {
-      setIsLoading(false);
+      setLoadingIds((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(id);
+        return newSet;
+      });
     }
   };
 
   const handleDeleteNotification = useCallback(
     async (id: string) => {
-      if (!user) return toast.error("Login required.");
+      if (!user || loadingIds.has(id)) return toast.error("Login required or in progress.");
 
-      setIsLoading(true);
+      setLoadingIds((prev) => new Set([...prev, id]));
+
       try {
         const res = await fetch(`/api/notifications/${id}`, { method: "DELETE" });
-        if (!res.ok) throw new Error("Delete failed");
+        const data = await res.json();
 
-        await removeNotification(id);
+        if (!res.ok) {
+          throw new Error(data.error || "Delete failed");
+        }
+
+        removeNotification(id);
         toast.success("Notification deleted.");
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error deleting.");
+      } catch (err: any) {
+        toast.error(err.message || "Error deleting.");
       } finally {
-        setIsLoading(false);
+        setLoadingIds((prev) => {
+          const newSet = new Set(prev);
+          newSet.delete(id);
+          return newSet;
+        });
       }
     },
-    [user, removeNotification]
+    [user, removeNotification, loadingIds]
   );
 
-  
-const getNotificationDisplay = useCallback((n: Inotification) => {
-  const sender = n.users?.display_name || n.users?.username || "Someone";
-  const room = n.rooms?.name || "a room";
+  const getNotificationDisplay = useCallback((n: Inotification) => {
+    const sender = n.users?.display_name || n.users?.username || "Someone";
+    const room = n.rooms?.name || "a room";
 
-  switch (n.type) {
-    case "room_invite":
-      return { 
-        icon: <UserPlus className="h-4 w-4 text-blue-500" />, 
-        text: `${sender} invited you to join ${room}` 
-      };
+    switch (n.type) {
+      case "room_invite":
+        return {
+          icon: <UserPlus className="h-4 w-4 text-blue-500" />,
+          text: `${sender} invited you to join ${room}`,
+        };
 
-    case "join_request":
-      return { 
-        icon: <Mail className="h-4 w-4 text-purple-500" />, 
-        text: `${sender} requested to join ${room}` 
-      };
+      case "join_request":
+        return {
+          icon: <Mail className="h-4 w-4 text-purple-500" />,
+          text: `${sender} requested to join ${room}`,
+        };
 
-    case "user_joined":
-      return { 
-        icon: <UserCheck className="h-4 w-4 text-green-500" />, 
-        text: n.message || `${sender} joined ${room}` 
-      };
+      case "user_joined":
+        return {
+          icon: <UserCheck className="h-4 w-4 text-green-500" />,
+          text: n.message || `${sender} joined ${room}`,
+        };
 
-    case "message":
-      return { 
-        icon: <Mail className="h-4 w-4 text-green-500" />, 
-        text: `New message from ${sender} in ${room}` 
-      };
+      case "message":
+        return {
+          icon: <Mail className="h-4 w-4 text-green-500" />,
+          text: `New message from ${sender} in ${room}`,
+        };
 
-    case "join_request_accepted":
-      return { 
-        icon: <UserCheck className="h-4 w-4 text-green-600" />, 
-        text: n.message || `Your request to join ${room} was accepted.` 
-      };
+      case "join_request_accepted":
+        return {
+          icon: <UserCheck className="h-4 w-4 text-green-600" />,
+          text: n.message || `Your request to join ${room} was accepted.`,
+        };
 
-    case "join_request_rejected":
-      return { 
-        icon: <UserX className="h-4 w-4 text-red-600" />, 
-        text: n.message || `Your request to join ${room} was rejected.` 
-      };
+      case "join_request_rejected":
+        return {
+          icon: <UserX className="h-4 w-4 text-red-600" />,
+          text: n.message || `Your request to join ${room} was rejected.`,
+        };
 
-    case "room_left":
-      return { 
-        icon: <LogOut className="h-4 w-4 text-gray-500" />, 
-        text: n.message || `${sender} left ${room}.` 
-      };
+      case "room_left":
+        return {
+          icon: <LogOut className="h-4 w-4 text-gray-500" />,
+          text: n.message || `${sender} left ${room}.`,
+        };
 
-    // 👇 Optional: handle old rows created before we removed "notification_unread"
-    case "notification_unread":
-      return { 
-        icon: <Mail className="h-4 w-4 text-gray-400" />, 
-        text: n.message || "New notification" 
-      };
+      case "notification_unread":
+        return {
+          icon: <Mail className="h-4 w-4 text-gray-400" />,
+          text: n.message || "New notification",
+        };
 
-    default:
-      return { 
-        icon: <Mail className="h-4 w-4 text-gray-400" />, 
-        text: n.message || "New notification" 
-      };
-  }
-}, []);
-
+      default:
+        return {
+          icon: <Mail className="h-4 w-4 text-gray-400" />,
+          text: n.message || "New notification",
+        };
+    }
+  }, []);
 
   const shouldShowActions = useCallback((n: Inotification) => {
     return (n.type === "room_invite" || n.type === "join_request") && n.status !== "read";
@@ -277,29 +337,30 @@ const getNotificationDisplay = useCallback((n: Inotification) => {
             <div className="space-y-2">
               {notifications.map((n) => {
                 const { icon, text } = getNotificationDisplay(n);
+                const isLoading = loadingIds.has(n.id);
 
                 return (
                   <Swipeable
                     key={n.id}
-                    onSwipeLeft={() => handleAccept(n.id, n.room_id || null, n.type)}
-                    onSwipeRight={() => handleReject(n.id, n.sender_id!, n.room_id!)}
+                    onSwipeLeft={() => !isLoading && handleAccept(n.id, n.room_id || null, n.type)}
+                    onSwipeRight={() => !isLoading && handleReject(n.id, n.sender_id || null, n.room_id || null)}
                   >
                     <div
-                      className={`p-4 flex items-start space-x-4 hover:bg-muted/50 relative ${
+                      className={`p-4 flex items-start space-x-4 hover:bg-muted/50 relative transition-all ${
                         n.status === "read" ? "opacity-50" : ""
-                      }`}
+                      } ${isLoading ? "opacity-75 cursor-not-allowed" : ""}`}
                     >
-                      <Avatar className="h-10 w-10">
+                      <Avatar className="h-10 w-10 flex-shrink-0">
                         <AvatarImage src={n.users?.avatar_url || ""} alt={n.users?.username || "User"} />
                         <AvatarFallback>
                           {(n.users?.username || "U")[0].toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
 
-                      <div className="flex-1 space-y-1">
+                      <div className="flex-1 space-y-1 min-w-0">
                         <div className="flex items-center gap-2 text-sm">
                           {icon}
-                          <span>{text}</span>
+                          <span className="truncate">{text}</span>
                         </div>
                         <p className="text-xs text-muted-foreground">
                           {new Date(n.created_at || "").toLocaleString()}
@@ -307,11 +368,14 @@ const getNotificationDisplay = useCallback((n: Inotification) => {
                       </div>
 
                       {shouldShowActions(n) ? (
-                        <div className="flex space-x-2">
+                        <div className="flex space-x-2 flex-shrink-0">
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => handleReject(n.id, n.sender_id!, n.room_id!)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleReject(n.id, n.sender_id || null, n.room_id || null);
+                            }}
                             disabled={isLoading}
                           >
                             <X className="h-4 w-4" />
@@ -319,7 +383,10 @@ const getNotificationDisplay = useCallback((n: Inotification) => {
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => handleAccept(n.id, n.room_id || null, n.type)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAccept(n.id, n.room_id || null, n.type);
+                            }}
                             disabled={isLoading}
                           >
                             <Check className="h-4 w-4" />
@@ -328,16 +395,27 @@ const getNotificationDisplay = useCallback((n: Inotification) => {
                       ) : (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
+                            <Button variant="ghost" size="icon" disabled={isLoading}>
                               <MoreVertical className="w-4 h-4" />
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleDeleteNotification(n.id)}>
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteNotification(n.id);
+                              }}
+                              disabled={isLoading}
+                            >
                               <Trash2 className="mr-2 h-4 w-4" /> Delete
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
+                      )}
+                      {isLoading && (
+                        <div className="absolute inset-0 bg-black/20 rounded flex items-center justify-center">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                        </div>
                       )}
                     </div>
                   </Swipeable>

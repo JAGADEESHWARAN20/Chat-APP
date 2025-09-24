@@ -12,17 +12,12 @@ export async function POST(
     const supabase = createRouteHandlerClient<Database>({ cookies });
     const notificationId = params.notificationId;
 
-    // ✅ Auth check
-    const {
-      data: { session },
-      error: sessionError,
-    } = await supabase.auth.getSession();
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     if (sessionError || !session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const currentUserId = session.user.id;
 
-    // ✅ Fetch notification
     const { data: notif, error: notifError } = await supabase
       .from("notifications")
       .select("*")
@@ -32,12 +27,10 @@ export async function POST(
       return NextResponse.json({ error: "Notification not found" }, { status: 404 });
     }
 
-    // ✅ Only handle join_request notifications
     if (notif.type !== "join_request") {
       return NextResponse.json({ error: "Not a join request" }, { status: 400 });
     }
 
-    // ✅ Ensure current user is the recipient (room owner)
     if (notif.user_id !== currentUserId) {
       return NextResponse.json({ error: "Not allowed" }, { status: 403 });
     }
@@ -46,16 +39,18 @@ export async function POST(
       return NextResponse.json({ error: "Missing sender_id or room_id" }, { status: 400 });
     }
 
-    // ✅ Call RPC to accept
-    const { error: funcError } = await supabase.rpc("accept_notification", {
-      p_notification_id: notificationId,
-      p_target_user_id: currentUserId,
-    });
-    if (funcError) {
-      return NextResponse.json({ error: funcError.message }, { status: 500 });
+    let retries = 2;
+    while (retries >= 0) {
+      const { error: funcError } = await supabase.rpc("accept_notification", {
+        p_notification_id: notificationId,
+        p_target_user_id: currentUserId,
+      });
+      if (!funcError) break;
+      if (retries === 0) return NextResponse.json({ error: funcError.message }, { status: 500 });
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      retries--;
     }
 
-    // ✅ Fetch updated room
     const { data: room, error: roomError } = await supabase
       .from("rooms")
       .select("id, name, is_private, created_by, created_at")
@@ -65,18 +60,23 @@ export async function POST(
       return NextResponse.json({ error: "Room not found after acceptance" }, { status: 404 });
     }
 
-    // ✅ Count accepted members
     const { count: memberCount } = await supabase
       .from("room_members")
       .select("*", { count: "exact", head: true })
       .eq("room_id", notif.room_id)
       .eq("status", "accepted");
+    const { count: participantCount } = await supabase
+      .from("room_participants")
+      .select("*", { count: "exact", head: true })
+      .eq("room_id", notif.room_id)
+      .eq("status", "accepted");
+    const totalMemberCount = (memberCount ?? 0) + (participantCount ?? 0);
 
     return NextResponse.json({
       success: true,
       message: "Join request accepted successfully",
       room,
-      memberCount: memberCount ?? 0,
+      memberCount: totalMemberCount,
     });
   } catch (err: any) {
     return NextResponse.json(
