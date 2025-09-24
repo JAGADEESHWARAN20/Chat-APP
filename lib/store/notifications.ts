@@ -102,8 +102,10 @@ export const useNotification = create<NotificationState>((set, get) => {
         .from("notifications")
         .update({ status: "read" })
         .eq("id", notificationId);
-      if (error) toast.error("Failed to mark notification as read");
-      else {
+      if (error) {
+        console.error("Mark as read error:", error);
+        toast.error("Failed to mark notification as read");
+      } else {
         set({
           notifications: get().notifications.map((n) =>
             n.id === notificationId ? { ...n, status: "read" } : n
@@ -130,9 +132,9 @@ export const useNotification = create<NotificationState>((set, get) => {
 
         if (error) throw error;
 
-        set({
-          notifications: (data as NotificationWithRelations[]).map(transformNotification),
-        });
+        const transformed = (data as NotificationWithRelations[]).map(transformNotification);
+        console.log("Fetched notifications:", transformed.length, transformed); // Debug log
+        set({ notifications: transformed });
       } catch (err) {
         console.error("Error fetching notifications:", err);
         if (retries > 0) {
@@ -140,6 +142,8 @@ export const useNotification = create<NotificationState>((set, get) => {
             () => get().fetchNotifications(userId, page, limit, retries - 1),
             1000
           );
+        } else {
+          toast.error("Failed to fetch notifications after retries.");
         }
       }
     },
@@ -157,13 +161,17 @@ export const useNotification = create<NotificationState>((set, get) => {
           },
           (payload) => {
             const newNotif = payload.new as NotificationWithRelations;
+            const transformed = transformNotification(newNotif);
+            console.log("New realtime notification:", transformed); // Debug log
             set((state) => ({
-              notifications: [transformNotification(newNotif), ...state.notifications],
+              notifications: [transformed, ...state.notifications],
             }));
             toast("🔔 New notification received");
           }
         )
-        .subscribe();
+        .subscribe((status) => {
+          console.log("Subscription status:", status); // Debug log
+        });
     },
 
     unsubscribeFromNotifications: () => {

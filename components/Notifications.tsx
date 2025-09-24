@@ -51,19 +51,23 @@ const transformRoom = async (
   userId: string,
   supabase: ReturnType<typeof supabaseBrowser>
 ): Promise<RoomWithMembership> => {
-  const { data: membership } = await supabase
+  const { data: membership, error: membershipError } = await supabase
     .from("room_members")
     .select("status")
     .eq("room_id", room.id)
     .eq("user_id", userId)
     .single();
 
-  const { data: participation } = await supabase
+  if (membershipError) console.error("Membership fetch error:", membershipError);
+
+  const { data: participation, error: participationError } = await supabase
     .from("room_participants")
     .select("status")
     .eq("room_id", room.id)
     .eq("user_id", userId)
     .single();
+
+  if (participationError) console.error("Participation fetch error:", participationError);
 
   let participationStatus: string | null = null;
   if (membership) participationStatus = membership.status;
@@ -71,7 +75,7 @@ const transformRoom = async (
 
   return {
     ...room,
-    isMember: membership?.status === "accepted",
+    isMember: membership?.status === "accepted" || participation?.status === "accepted",
     participationStatus,
   };
 };
@@ -101,6 +105,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
         await fetchNotifications(user.id);
         subscribeToNotifications(user.id);
       } catch (err) {
+        console.error("Init notifications error:", err);
         toast.error("Failed to load notifications.");
       }
     };
@@ -113,13 +118,12 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
     if (!user || !roomId) {
       return toast.error("Missing data for action.");
     }
-    if (loadingIds.has(id)) return; // Prevent duplicate calls
+    if (loadingIds.has(id)) return;
 
     setLoadingIds((prev) => new Set([...prev, id]));
 
     try {
-      // Optimistic remove
-      removeNotification(id);
+      removeNotification(id); // Optimistic
 
       const res = await fetch(`/api/notifications/${id}/accept`, { method: "POST" });
       const data = await res.json();
@@ -129,12 +133,10 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
       }
 
       await markAsRead(id);
-      await fetchAvailableRooms(); // Sync rooms list
+      await fetchAvailableRooms();
 
-      // Refresh notifications to ensure DB consistency
-      await fetchNotifications(user.id);
+      await fetchNotifications(user.id); // Refresh list
 
-      // Handle room-specific logic
       if (["room_invite", "join_request"].includes(type)) {
         let retries = 3;
         let room: Room | null = null;
@@ -146,8 +148,9 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
             .single();
 
           if (error) {
+            console.error("Room fetch error:", error);
             if (retries === 1) throw error;
-            await new Promise((resolve) => setTimeout(resolve, 1000)); // Retry delay
+            await new Promise((resolve) => setTimeout(resolve, 1000));
             retries--;
             continue;
           }
@@ -160,14 +163,16 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
           const enrichedRoom = await transformRoom(room, user.id, supabase);
           setSelectedRoom(enrichedRoom);
           toast.success(`Joined ${room.name} successfully!`);
-          router.push(`/chat/${roomId}`); // Navigate to room
+          router.push(`/chat/${roomId}`);
+          router.refresh();
+        } else {
+          toast.warning("Room joined but couldn't load details.");
         }
       } else {
         toast.success("Notification accepted.");
       }
     } catch (err: any) {
-      // Rollback optimistic update
-      await fetchNotifications(user.id);
+      await fetchNotifications(user.id); // Rollback
       toast.error(err.message || "Error accepting notification.");
     } finally {
       setLoadingIds((prev) => {
@@ -187,25 +192,22 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
     setLoadingIds((prev) => new Set([...prev, id]));
 
     try {
-      // Optimistic remove
-      removeNotification(id);
+      removeNotification(id); // Optimistic
 
       const res = await fetch(`/api/notifications/reject`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ notification_id: id, sender_id: senderId, room_id: roomId }),
       });
-      const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || "Reject failed");
+        throw new Error((await res.json()).error || "Reject failed");
       }
 
       await markAsRead(id);
-      await fetchNotifications(user.id); // Refresh for consistency
+      await fetchNotifications(user.id);
       toast.success("Request rejected.");
     } catch (err: any) {
-      // Rollback
       await fetchNotifications(user.id);
       toast.error(err.message || "Reject error.");
     } finally {
@@ -225,10 +227,9 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
 
       try {
         const res = await fetch(`/api/notifications/${id}`, { method: "DELETE" });
-        const data = await res.json();
 
         if (!res.ok) {
-          throw new Error(data.error || "Delete failed");
+          throw new Error((await res.json()).error || "Delete failed");
         }
 
         removeNotification(id);
@@ -243,7 +244,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
         });
       }
     },
-    [user, removeNotification, loadingIds]
+    [user, loadingIds, removeNotification]
   );
 
   const getNotificationDisplay = useCallback((n: Inotification) => {
@@ -252,57 +253,58 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
 
     switch (n.type) {
       case "room_invite":
-        return {
-          icon: <UserPlus className="h-4 w-4 text-blue-500" />,
-          text: `${sender} invited you to join ${room}`,
+        return { 
+          icon: <UserPlus className="h-4 w-4 text-blue-500" />, 
+          text: `${sender} invited you to join ${room}` 
         };
 
       case "join_request":
-        return {
-          icon: <Mail className="h-4 w-4 text-purple-500" />,
-          text: `${sender} requested to join ${room}`,
+        return { 
+          icon: <Mail className="h-4 w-4 text-purple-500" />, 
+          text: `${sender} requested to join ${room}` 
         };
 
       case "user_joined":
-        return {
-          icon: <UserCheck className="h-4 w-4 text-green-500" />,
-          text: n.message || `${sender} joined ${room}`,
+        return { 
+          icon: <UserCheck className="h-4 w-4 text-green-500" />, 
+          text: n.message || `${sender} joined ${room}` 
         };
 
       case "message":
-        return {
-          icon: <Mail className="h-4 w-4 text-green-500" />,
-          text: `New message from ${sender} in ${room}`,
+        return { 
+          icon: <Mail className="h-4 w-4 text-green-500" />, 
+          text: `New message from ${sender} in ${room}` 
         };
 
       case "join_request_accepted":
-        return {
-          icon: <UserCheck className="h-4 w-4 text-green-600" />,
-          text: n.message || `Your request to join ${room} was accepted.`,
+        return { 
+          icon: <UserCheck className="h-4 w-4 text-green-600" />, 
+          text: n.message || `Your request to join ${room} was accepted` 
         };
 
       case "join_request_rejected":
-        return {
-          icon: <UserX className="h-4 w-4 text-red-600" />,
-          text: n.message || `Your request to join ${room} was rejected.`,
+        return { 
+          icon: <UserX className="h-4 w-4 text-red-600" />, 
+          text: n.message || `Your request to join ${room} was rejected` 
         };
 
       case "room_left":
-        return {
-          icon: <LogOut className="h-4 w-4 text-gray-500" />,
-          text: n.message || `${sender} left ${room}.`,
+        return { 
+          icon: <LogOut className="h-4 w-4 text-gray-500" />, 
+          text: n.message || `${sender} left ${room}.` 
         };
 
+      // 👇 Optional: handle old rows created before we removed "notification_unread"
       case "notification_unread":
-        return {
-          icon: <Mail className="h-4 w-4 text-gray-400" />,
-          text: n.message || "New notification",
+        return { 
+          icon: <Mail className="h-4 w-4 text-gray-400" />, 
+          text: n.message || "New notification" 
         };
 
       default:
-        return {
-          icon: <Mail className="h-4 w-4 text-gray-400" />,
-          text: n.message || "New notification",
+        return { 
+          icon: <Mail className="h-4 w-4 text-gray-400" />, 
+          text: n.message || "New notification" 
         };
     }
   }, []);
@@ -342,40 +344,37 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
                 return (
                   <Swipeable
                     key={n.id}
-                    onSwipeLeft={() => !isLoading && handleAccept(n.id, n.room_id || null, n.type)}
-                    onSwipeRight={() => !isLoading && handleReject(n.id, n.sender_id || null, n.room_id || null)}
+                    onSwipeLeft={() => !isLoading && handleAccept(n.id, n.room_id, n.type)}
+                    onSwipeRight={() => !isLoading && handleReject(n.id, n.sender_id, n.room_id)}
                   >
                     <div
-                      className={`p-4 flex items-start space-x-4 hover:bg-muted/50 relative transition-all ${
+                      className={`p-4 flex items-start space-x-4 hover:bg-muted/50 relative ${
                         n.status === "read" ? "opacity-50" : ""
                       } ${isLoading ? "opacity-75 cursor-not-allowed" : ""}`}
                     >
-                      <Avatar className="h-10 w-10 flex-shrink-0">
+                      <Avatar className="h-10 w-10">
                         <AvatarImage src={n.users?.avatar_url || ""} alt={n.users?.username || "User"} />
                         <AvatarFallback>
                           {(n.users?.username || "U")[0].toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
 
-                      <div className="flex-1 space-y-1 min-w-0">
+                      <div className="flex-1 space-y-1">
                         <div className="flex items-center gap-2 text-sm">
                           {icon}
-                          <span className="truncate">{text}</span>
+                          <span>{text}</span>
                         </div>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-gray-400">
                           {new Date(n.created_at || "").toLocaleString()}
                         </p>
                       </div>
 
                       {shouldShowActions(n) ? (
-                        <div className="flex space-x-2 flex-shrink-0">
+                        <div className="flex space-x-2">
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleReject(n.id, n.sender_id || null, n.room_id || null);
-                            }}
+                            onClick={() => handleReject(n.id, n.sender_id, n.room_id)}
                             disabled={isLoading}
                           >
                             <X className="h-4 w-4" />
@@ -383,10 +382,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleAccept(n.id, n.room_id || null, n.type);
-                            }}
+                            onClick={() => handleAccept(n.id, n.room_id, n.type)}
                             disabled={isLoading}
                           >
                             <Check className="h-4 w-4" />
@@ -395,18 +391,12 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
                       ) : (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" disabled={isLoading}>
+                            <Button variant="ghost" size="icon">
                               <MoreVertical className="w-4 h-4" />
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteNotification(n.id);
-                              }}
-                              disabled={isLoading}
-                            >
+                            <DropdownMenuItem onClick={() => handleDeleteNotification(n.id)}>
                               <Trash2 className="mr-2 h-4 w-4" /> Delete
                             </DropdownMenuItem>
                           </DropdownMenuContent>
@@ -414,7 +404,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
                       )}
                       {isLoading && (
                         <div className="absolute inset-0 bg-black/20 rounded flex items-center justify-center">
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                         </div>
                       )}
                     </div>

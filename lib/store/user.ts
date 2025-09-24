@@ -1,4 +1,3 @@
-// lib/store/user.ts
 import { create } from "zustand";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 
@@ -33,11 +32,15 @@ export const useUser = create<UserState>((set, get) => ({
 
     const supabase = supabaseBrowser();
 
-    const { data: profile } = await supabase
+    const { data: profile, error } = await supabase
       .from("profiles")
       .select("*")
       .eq("id", authUser.id)
       .single();
+
+    if (error) {
+      console.error("Profile fetch error:", error);
+    }
 
     set({ authUser, profile, user: { ...authUser, profile } }); // 👈 expose combined object
   },
