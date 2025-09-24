@@ -2,75 +2,142 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 
-const UUID_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const dynamic = "force-dynamic";
 
 export async function POST(
-  req: NextRequest,
-  { params }: { params: { roomId: string } }
+  request: NextRequest,
+  context: { params: Promise<{ roomId: string }> }
 ) {
-  console.log("🔍 API Route - params:", params);
-  console.log("🔍 API Route - roomId from params:", params.roomId);
-  const { roomId } = params;
-
   try {
-    const supabase = await supabaseServer();
-
-    // ✅ FIXED: More flexible room ID validation
+    console.log("=== JOIN API STARTED ===");
+    
+    // ✅ Multiple ways to extract roomId for debugging
+    const params = await context.params;
+    const roomIdFromParams = params.roomId;
+    
+    // Alternative: extract from URL path
+    const url = new URL(request.url);
+    const pathname = url.pathname;
+    const pathSegments = pathname.split('/').filter(segment => segment.length > 0);
+    const roomIdFromPath = pathSegments[pathSegments.length - 2]; // roomId is before 'join'
+    
+    console.log("🔍 DEBUG INFO:");
+    console.log("roomIdFromParams:", roomIdFromParams);
+    console.log("roomIdFromPath:", roomIdFromPath);
+    console.log("Full URL:", request.url);
+    console.log("Pathname:", pathname);
+    console.log("Path segments:", pathSegments);
+    
+    // Use the first valid roomId
+    const roomId = roomIdFromParams || roomIdFromPath;
+    
+    console.log("Final roomId to use:", roomId);
+    console.log("roomId length:", roomId?.length);
+    console.log("roomId trimmed length:", roomId?.trim().length);
+    console.log("Is roomId empty?", !roomId || roomId.trim().length === 0);
+    
     if (!roomId || roomId.trim().length === 0) {
-      return NextResponse.json(
-        { error: "Invalid room ID" },
-        { status: 400 }
-      );
+      console.log("❌ VALIDATION FAILED - Room ID is empty");
+      return NextResponse.json({ 
+        error: "Invalid room ID",
+        debug: {
+          roomIdFromParams,
+          roomIdFromPath,
+          pathname,
+          pathSegments,
+          receivedRoomId: roomId,
+          timestamp: new Date().toISOString()
+        }
+      }, { status: 400 });
     }
 
-    // ✅ Auth - FIXED: Extract userId here
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
+    console.log("✅ Room ID validation passed");
+    
+    const supabase = await supabaseServer();
+    
+    // ✅ Auth check
+    const { data: { session }, error: authError } = await supabase.auth.getSession();
+    
+    if (authError) {
+      console.error("Auth error:", authError);
+      return NextResponse.json({ error: "Authentication error" }, { status: 401 });
+    }
+    
     if (!session?.user) {
-      return NextResponse.json(
-        { error: "Authentication required" },
-        { status: 401 }
-      );
+      console.error("No session found");
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     }
-    const userId = session.user.id; // ✅ ADD THIS LINE
-
-    // ✅ Enhanced room existence check
+    
+    const userId = session.user.id;
+    console.log("User ID:", userId);
+    
+    // ✅ Enhanced room existence check with better error handling
+    console.log("Checking room existence in database...");
     const { data: room, error: roomError } = await supabase
       .from("rooms")
       .select("id, name, created_by, is_private")
       .eq("id", roomId)
       .single();
 
+    if (roomError) {
+      console.error("Room database error:", roomError);
+      console.error("Error details:", {
+        code: roomError.code,
+        message: roomError.message,
+        details: roomError.details,
+        hint: roomError.hint
+      });
+    }
+
     if (roomError || !room) {
-      console.error("Room not found:", roomId, roomError);
+      console.error("Room not found:", roomId);
       return NextResponse.json(
-        { error: "Room not found" },
+        { 
+          error: "Room not found",
+          debug: {
+            roomId,
+            databaseError: roomError?.message,
+            timestamp: new Date().toISOString()
+          }
+        },
         { status: 404 }
       );
     }
 
+    console.log("✅ Room found:", room.name, room.id);
+    
     // ✅ Check if user is already a member
-    const { data: existingMember } = await supabase
+    console.log("Checking existing membership...");
+    const { data: existingMember, error: memberError } = await supabase
       .from("room_members")
       .select("status")
       .eq("room_id", roomId)
       .eq("user_id", userId)
       .maybeSingle();
 
-    const { data: existingParticipant } = await supabase
+    if (memberError) {
+      console.error("Member check error:", memberError);
+    }
+
+    const { data: existingParticipant, error: participantError } = await supabase
       .from("room_participants")
       .select("status")
       .eq("room_id", roomId)
       .eq("user_id", userId)
       .maybeSingle();
 
+    if (participantError) {
+      console.error("Participant check error:", participantError);
+    }
+
+    console.log("Existing member status:", existingMember?.status);
+    console.log("Existing participant status:", existingParticipant?.status);
+
     if (
       existingMember?.status === "accepted" ||
       existingParticipant?.status === "accepted"
     ) {
+      console.log("User already a member");
       return NextResponse.json({
         success: true,
         status: "accepted",
@@ -80,6 +147,7 @@ export async function POST(
     }
 
     if (existingParticipant?.status === "pending") {
+      console.log("Join request already pending");
       return NextResponse.json({
         success: true,
         status: "pending",
@@ -88,11 +156,16 @@ export async function POST(
     }
 
     // ✅ Sender display name
-    const { data: senderProfile } = await supabase
+    console.log("Fetching sender profile...");
+    const { data: senderProfile, error: profileError } = await supabase
       .from("profiles")
       .select("display_name, username")
       .eq("id", userId)
       .single();
+
+    if (profileError) {
+      console.error("Profile fetch error:", profileError);
+    }
 
     const senderName =
       senderProfile?.display_name ||
@@ -100,11 +173,15 @@ export async function POST(
       session.user.email ||
       "A user";
 
+    console.log("Sender name:", senderName);
+
     const now = new Date().toISOString();
 
     // 🔹 Handle Private Room (join request)
     if (room.is_private) {
-      await supabase.from("room_participants").upsert(
+      console.log("Handling private room join request...");
+      
+      const { error: upsertError } = await supabase.from("room_participants").upsert(
         {
           room_id: roomId,
           user_id: userId,
@@ -116,9 +193,17 @@ export async function POST(
         { onConflict: "room_id, user_id" }
       );
 
+      if (upsertError) {
+        console.error("Private room upsert error:", upsertError);
+        return NextResponse.json(
+          { error: "Failed to send join request" },
+          { status: 500 }
+        );
+      }
+
       // notify room owner
       if (room.created_by && room.created_by !== userId) {
-        await supabase.from("notifications").insert({
+        const { error: notificationError } = await supabase.from("notifications").insert({
           user_id: room.created_by,
           sender_id: userId,
           room_id: roomId,
@@ -127,8 +212,13 @@ export async function POST(
           status: "unread",
           created_at: now,
         });
+
+        if (notificationError) {
+          console.error("Notification error:", notificationError);
+        }
       }
 
+      console.log("✅ Private room join request sent");
       return NextResponse.json({
         success: true,
         status: "pending",
@@ -137,7 +227,9 @@ export async function POST(
     }
 
     // 🔹 Handle Public Room (auto-join)
-    await supabase.from("room_participants").upsert(
+    console.log("Handling public room auto-join...");
+    
+    const { error: participantUpsertError } = await supabase.from("room_participants").upsert(
       {
         room_id: roomId,
         user_id: userId,
@@ -149,7 +241,15 @@ export async function POST(
       { onConflict: "room_id, user_id" }
     );
 
-    await supabase.from("room_members").upsert(
+    if (participantUpsertError) {
+      console.error("Public room participant upsert error:", participantUpsertError);
+      return NextResponse.json(
+        { error: "Failed to join room" },
+        { status: 500 }
+      );
+    }
+
+    const { error: memberUpsertError } = await supabase.from("room_members").upsert(
       {
         room_id: roomId,
         user_id: userId,
@@ -161,9 +261,17 @@ export async function POST(
       { onConflict: "room_id, user_id" }
     );
 
+    if (memberUpsertError) {
+      console.error("Public room member upsert error:", memberUpsertError);
+      return NextResponse.json(
+        { error: "Failed to join room" },
+        { status: 500 }
+      );
+    }
+
     // notify room owner
     if (room.created_by && room.created_by !== userId) {
-      await supabase.from("notifications").insert({
+      const { error: notificationError } = await supabase.from("notifications").insert({
         user_id: room.created_by,
         sender_id: userId,
         room_id: roomId,
@@ -172,15 +280,25 @@ export async function POST(
         status: "unread",
         created_at: now,
       });
+
+      if (notificationError) {
+        console.error("Join notification error:", notificationError);
+      }
     }
 
     // ✅ Count members for response
-    const { count: memberCount } = await supabase
+    console.log("Counting room members...");
+    const { count: memberCount, error: countError } = await supabase
       .from("room_members")
       .select("*", { count: "exact", head: true })
       .eq("room_id", roomId)
       .eq("status", "accepted");
 
+    if (countError) {
+      console.error("Member count error:", countError);
+    }
+
+    console.log("✅ Public room join successful");
     return NextResponse.json({
       success: true,
       status: "accepted",
@@ -188,10 +306,20 @@ export async function POST(
       roomJoined: room,
       memberCount: memberCount ?? 0,
     });
+
   } catch (err: any) {
-    console.error("Join API error:", err);
+    console.error("💥 JOIN API UNEXPECTED ERROR:", err);
+    console.error("Error stack:", err.stack);
+    
     return NextResponse.json(
-      { error: "Internal server error", details: err.message },
+      { 
+        error: "Internal server error", 
+        details: err.message,
+        debug: process.env.NODE_ENV === 'development' ? {
+          stack: err.stack,
+          timestamp: new Date().toISOString()
+        } : undefined
+      },
       { status: 500 }
     );
   }
