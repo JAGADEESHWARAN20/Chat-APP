@@ -10,6 +10,8 @@ export async function POST(
   req: NextRequest,
   { params }: { params: { roomId: string } }
 ) {
+  console.log("🔍 API Route - params:", params);
+  console.log("🔍 API Route - roomId from params:", params.roomId);
   const { roomId } = params;
 
   try {
