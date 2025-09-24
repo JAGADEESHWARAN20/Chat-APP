@@ -20,6 +20,7 @@ import { Imessage } from "./messages";
 type Room = Database["public"]["Tables"]["rooms"]["Row"];
 type RoomMemberRow = Database["public"]["Tables"]["room_members"]["Row"];
 type DirectChat = Database["public"]["Tables"]["direct_chats"]["Row"];
+type UserProfile = Database["public"]["Tables"]["users"]["Row"];
 
 export type RoomWithMembershipCount = Room & {
   isMember: boolean;
@@ -135,7 +136,7 @@ function roomReducer(state: RoomState, action: RoomAction): RoomState {
   }
 }
 
-// ---- Context ----
+// Update RoomContextType to include fetchAllUsers
 interface RoomContextType {
   state: RoomState;
   fetchAvailableRooms: () => Promise<void>;
@@ -147,10 +148,9 @@ interface RoomContextType {
   createRoom: (name: string, isPrivate: boolean) => Promise<void>;
   checkRoomMembership: (roomId: string) => Promise<boolean>;
   checkRoomParticipation: (roomId: string) => Promise<string | null>;
-  addMessage: (message: Imessage) => void;   // ✅ add this
-  // Inside RoomContextType
-acceptJoinNotification: (roomId: string) => Promise<void>;
-
+  addMessage: (message: Imessage) => void;
+  acceptJoinNotification: (roomId: string) => Promise<void>;
+  fetchAllUsers: () => Promise<UserProfile[]>;
 }
 
 const RoomContext = createContext<RoomContextType | undefined>(undefined);
@@ -242,8 +242,8 @@ export function RoomProvider({
     },
     [user, supabase]
   );
+// In RoomContext.tsx
 
-// RoomContext.tsx (in fetchAvailableRooms)
 const fetchAvailableRooms = useCallback(async () => {
   if (!user) {
     dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
@@ -253,76 +253,80 @@ const fetchAvailableRooms = useCallback(async () => {
 
   dispatch({ type: "SET_LOADING", payload: true });
   try {
-    const { data: memberships, error: membersError } = await supabase
-      .from("room_members")
-      .select("room_id, rooms(id, name, is_private, created_by, created_at), status")
-      .eq("user_id", user.id)
-      .eq("status", "accepted");
+    // Fetch all rooms
+    const { data: allRooms, error: roomsError } = await supabase
+      .from("rooms")
+      .select("id, name, is_private, created_by, created_at");
 
-    const { data: participants, error: participantsError } = await supabase
-      .from("room_participants")
-      .select("room_id, rooms(id, name, is_private, created_by, created_at), status")
-      .eq("user_id", user.id)
-      .eq("status", "accepted");
-
-    if (membersError || participantsError) {
-      console.error("Error fetching rooms:", membersError || participantsError);
+    if (roomsError) {
+      console.error("Error fetching all rooms:", roomsError);
       dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
       dispatch({ type: "SET_LOADING", payload: false });
       return;
     }
 
-    console.log("Fetched memberships:", memberships); // Debug log
-    console.log("Fetched participants:", participants); // Debug log
+    // Fetch user's memberships and participations
+    const { data: memberships, error: membersError } = await supabase
+      .from("room_members")
+      .select("room_id, status")
+      .eq("user_id", user.id);
+    const { data: participations, error: participantsError } = await supabase
+      .from("room_participants")
+      .select("room_id, status")
+      .eq("user_id", user.id);
 
-    const joinedRoomsRaw = [
-      ...(memberships || []).map((m) => ({ ...m.rooms, status: m.status! })),
-      ...(participants || []).map((p) => ({ ...p.rooms, status: p.status! })),
-    ].reduce((acc, room) => {
-      if (!acc.find((r) => r.id === room.id)) acc.push(room);
-      return acc;
-    }, [] as (Room & { status: string })[]);
+    if (membersError || participantsError) {
+      console.error("Error fetching memberships/participations:", membersError || participantsError);
+      dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
+      dispatch({ type: "SET_LOADING", payload: false });
+      return;
+    }
 
-    const roomIds = joinedRoomsRaw.map((r) => r.id);
+    // Combine membership data
+    const membershipMap = new Map();
+    (memberships || []).forEach((m) => membershipMap.set(m.room_id, m.status));
+    (participations || []).forEach((p) => membershipMap.set(p.room_id, p.status));
+
+    // Fetch member counts for all rooms
+    const roomIds = allRooms.map((r) => r.id);
     let countsMap = new Map<string, number>();
-
     if (roomIds.length > 0) {
-      const { data: membersData, error: membersError } = await supabase
+      const { data: membersData, error: membersCountError } = await supabase
         .from("room_members")
         .select("room_id, user_id")
         .in("room_id", roomIds)
         .eq("status", "accepted");
-      const { data: participantsData, error: participantsError } = await supabase
+      const { data: participantsData, error: participantsCountError } = await supabase
         .from("room_participants")
         .select("room_id, user_id")
         .in("room_id", roomIds)
         .eq("status", "accepted");
 
-      if (membersError || participantsError) {
-        console.error("Error fetching member counts:", membersError || participantsError);
+      if (membersCountError || participantsCountError) {
+        console.error("Error fetching member counts:", membersCountError || participantsCountError);
+      } else {
+        const uniqueUsers = new Map<string, Set<string>>();
+        membersData?.forEach((m) => {
+          if (!uniqueUsers.has(m.room_id)) uniqueUsers.set(m.room_id, new Set());
+          uniqueUsers.get(m.room_id)!.add(m.user_id);
+        });
+        participantsData?.forEach((p) => {
+          if (!uniqueUsers.has(p.room_id)) uniqueUsers.set(p.room_id, new Set());
+          uniqueUsers.get(p.room_id)!.add(p.user_id);
+        });
+        countsMap = new Map([...uniqueUsers].map(([roomId, users]) => [roomId, users.size]));
       }
-
-      const uniqueUsers = new Map<string, Set<string>>();
-      membersData?.forEach((m: { room_id: string; user_id: string }) => {
-        if (!uniqueUsers.has(m.room_id)) uniqueUsers.set(m.room_id, new Set());
-        uniqueUsers.get(m.room_id)!.add(m.user_id);
-      });
-      participantsData?.forEach((p: { room_id: string; user_id: string }) => {
-        if (!uniqueUsers.has(p.room_id)) uniqueUsers.set(p.room_id, new Set());
-        uniqueUsers.get(p.room_id)!.add(p.user_id);
-      });
-
-      countsMap = new Map([...uniqueUsers].map(([roomId, users]) => [roomId, users.size]));
     }
 
-    const joinedRooms: RoomWithMembershipCount[] = joinedRoomsRaw.map((room) => ({
+    // Transform rooms with membership info
+    const roomsWithMembership: RoomWithMembershipCount[] = allRooms.map((room) => ({
       ...room,
       memberCount: countsMap.get(room.id) ?? 0,
-      isMember: room.status === "accepted",
-      participationStatus: room.status,
+      isMember: membershipMap.get(room.id) === "accepted",
+      participationStatus: membershipMap.get(room.id) || null,
     }));
 
-    dispatch({ type: "SET_AVAILABLE_ROOMS", payload: joinedRooms });
+    dispatch({ type: "SET_AVAILABLE_ROOMS", payload: roomsWithMembership });
   } catch (error) {
     console.error("Error fetching rooms:", error);
     dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
@@ -331,6 +335,28 @@ const fetchAvailableRooms = useCallback(async () => {
     dispatch({ type: "SET_LOADING", payload: false });
   }
 }, [user, supabase]);
+
+const fetchAllUsers = useCallback(async () => {
+  if (!user) {
+    return [];
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from("users")
+      .select("id, username, display_name, avatar_url, created_at");
+    if (error) {
+      console.error("Error fetching users:", error);
+      return [];
+    }
+    return data || [];
+  } catch (error) {
+    console.error("Error fetching users:", error);
+    return [];
+  }
+}, [user, supabase]);
+
+
 
 
 
@@ -518,7 +544,9 @@ const addMessage = useCallback((message: Imessage) => {
     if (user?.id) fetchAvailableRooms();
   }, [user, fetchAvailableRooms]);
 
-  const value: RoomContextType = {
+
+  // Update the value object in RoomProvider
+const value: RoomContextType = {
   state,
   fetchAvailableRooms,
   setSelectedRoom,
@@ -529,8 +557,9 @@ const addMessage = useCallback((message: Imessage) => {
   createRoom,
   checkRoomMembership,
   checkRoomParticipation,
-  addMessage, // ✅ expose
-  acceptJoinNotification, // ✅ expose
+  addMessage,
+  acceptJoinNotification,
+  fetchAllUsers,
 };
 
 
