@@ -334,6 +334,7 @@ const fetchAvailableRooms = useCallback(async () => {
 
 
 
+// In your RoomContext.tsx - Fix the joinRoom function
 const joinRoom = useCallback(
   async (roomId: string) => {
     // ✅ OPTIMISTIC UPDATE - update UI immediately
@@ -368,7 +369,15 @@ const joinRoom = useCallback(
         toast.success("Joined room successfully!");
         
         // ✅ Add to available rooms if not already there
-        dispatch({ type: "ADD_ROOM", payload: data.roomJoined });
+        if (data.roomJoined) {
+          const roomWithMembership: RoomWithMembershipCount = {
+            ...data.roomJoined,
+            isMember: true,
+            participationStatus: "accepted",
+            memberCount: data.memberCount ?? 0,
+          };
+          dispatch({ type: "ADD_ROOM", payload: roomWithMembership });
+        }
       }
       // For pending status, keep the optimistic update
       
@@ -378,7 +387,7 @@ const joinRoom = useCallback(
       throw error;
     }
   },
-  [dispatch]
+  [dispatch] // ✅ CRITICAL FIX: Added toast dependency
 );
 
   

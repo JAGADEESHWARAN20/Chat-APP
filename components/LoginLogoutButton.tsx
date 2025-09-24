@@ -70,7 +70,7 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
                   <ChevronsUpDown className="h-4 w-4 ml-2" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-[200px] p-2">
+              <PopoverContent className="w-[200px] p-2 z-[100000000]">
                 <div className="flex flex-col gap-2">
                   <Link href={`/profile/${user.id}`}>
                     <Button variant="ghost" size="sm" className="w-full">
