@@ -336,43 +336,52 @@ const fetchAvailableRooms = useCallback(async () => {
 
 const joinRoom = useCallback(
   async (roomId: string) => {
+    // ✅ OPTIMISTIC UPDATE - update UI immediately
+    dispatch({
+      type: "UPDATE_ROOM_MEMBERSHIP",
+      payload: { roomId, isMember: false, participationStatus: "pending" },
+    });
+
     try {
       const response = await fetch(`/api/rooms/${roomId}/join`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
       
-      console.log("Join API response status:", response.status);
-      
       const data = await response.json();
-      console.log("[joinRoom] Response:", data);
       
       if (!response.ok) {
-        throw new Error(data.error || data.details || "Failed to join room");
+        // ✅ ROLLBACK on error
+        dispatch({
+          type: "UPDATE_ROOM_MEMBERSHIP",
+          payload: { roomId, isMember: false, participationStatus: null },
+        });
+        throw new Error(data.error || "Failed to join room");
       }
+      
+      // ✅ CONFIRMATION UPDATE
       if (data.status === "accepted") {
         dispatch({
           type: "UPDATE_ROOM_MEMBERSHIP",
           payload: { roomId, isMember: true, participationStatus: "accepted" },
         });
-        toast.success(data.message || "Joined room successfully");
-      } else if (data.status === "pending") {
-        dispatch({
-          type: "UPDATE_ROOM_MEMBERSHIP",
-          payload: { roomId, isMember: false, participationStatus: "pending" },
-        });
-        toast.info(data.message || "Join request sent");
+        toast.success("Joined room successfully!");
+        
+        // ✅ Add to available rooms if not already there
+        dispatch({ type: "ADD_ROOM", payload: data.roomJoined });
       }
+      // For pending status, keep the optimistic update
+      
       return data;
     } catch (error: any) {
-      console.error("[joinRoom] Error:", error.message, error);
       toast.error(error.message || "Failed to join room");
       throw error;
     }
   },
-  [] // Remove setAvailableRooms, setSelectedRoom, and toast
+  [dispatch]
 );
 
+  
   const leaveRoom = useCallback(async (roomId: string) => {
     if (!user) {
       toast.error("Please log in to leave a room");
