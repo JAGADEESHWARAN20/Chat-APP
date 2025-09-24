@@ -20,7 +20,13 @@ import { Imessage } from "./messages";
 type Room = Database["public"]["Tables"]["rooms"]["Row"];
 type RoomMemberRow = Database["public"]["Tables"]["room_members"]["Row"];
 type DirectChat = Database["public"]["Tables"]["direct_chats"]["Row"];
-type Profile = Database["public"]["Tables"]["profiles"]["Row"];
+type PartialProfile = {
+  id: string;
+  username: string | null;
+  display_name: string | null;
+  avatar_url: string | null;
+  created_at: string | null;
+};
 
 export type RoomWithMembershipCount = Room & {
   isMember: boolean;
@@ -136,7 +142,7 @@ function roomReducer(state: RoomState, action: RoomAction): RoomState {
   }
 }
 
-// Update RoomContextType to include fetchAllUsers
+// ---- Context ----
 interface RoomContextType {
   state: RoomState;
   fetchAvailableRooms: () => Promise<void>;
@@ -149,8 +155,8 @@ interface RoomContextType {
   checkRoomMembership: (roomId: string) => Promise<boolean>;
   checkRoomParticipation: (roomId: string) => Promise<string | null>;
   addMessage: (message: Imessage) => void;
-  acceptJoinNotification: (notificationId: string) => Promise<void>;
-  fetchAllUsers: () => Promise<Profile[]>;
+  acceptJoinNotification: (roomId: string) => Promise<void>;
+  fetchAllUsers: () => Promise<PartialProfile[]>;
 }
 
 const RoomContext = createContext<RoomContextType | undefined>(undefined);
@@ -259,6 +265,7 @@ export function RoomProvider({
       if (roomsError) {
         console.error("Error fetching all rooms:", roomsError);
         dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
+        dispatch({ type: "SET_LOADING", payload: false });
         return;
       }
 
@@ -266,7 +273,6 @@ export function RoomProvider({
         .from("room_members")
         .select("room_id, status")
         .eq("user_id", user.id);
-
       const { data: participations, error: participantsError } = await supabase
         .from("room_participants")
         .select("room_id, status")
@@ -275,12 +281,13 @@ export function RoomProvider({
       if (membersError || participantsError) {
         console.error("Error fetching memberships/participations:", membersError || participantsError);
         dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
+        dispatch({ type: "SET_LOADING", payload: false });
         return;
       }
 
       const membershipMap = new Map();
-      memberships?.forEach((m) => membershipMap.set(m.room_id, m.status));
-      participations?.forEach((p) => membershipMap.set(p.room_id, p.status));
+      (memberships || []).forEach((m) => membershipMap.set(m.room_id, m.status));
+      (participations || []).forEach((p) => membershipMap.set(p.room_id, p.status));
 
       const roomIds = allRooms.map((r) => r.id);
       let countsMap = new Map<string, number>();
@@ -322,8 +329,8 @@ export function RoomProvider({
       dispatch({ type: "SET_AVAILABLE_ROOMS", payload: roomsWithMembership });
     } catch (error) {
       console.error("Error fetching rooms:", error);
-      toast.error("An error occurred while fetching rooms");
       dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
+      toast.error("An error occurred while fetching rooms");
     } finally {
       dispatch({ type: "SET_LOADING", payload: false });
     }
@@ -338,6 +345,7 @@ export function RoomProvider({
       const { data, error } = await supabase
         .from("profiles")
         .select("id, username, display_name, avatar_url, created_at");
+
       if (error) {
         console.error("Error fetching profiles:", error);
         return [];

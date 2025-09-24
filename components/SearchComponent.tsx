@@ -19,7 +19,15 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 
-type UserProfile = Database["public"]["Tables"]["users"]["Row"];
+// Limited type for fetched profiles (matches select fields)
+type PartialProfile = {
+  id: string;
+  username: string | null;
+  display_name: string | null;
+  avatar_url: string | null;
+  created_at: string | null;
+};
+
 type Room = Database["public"]["Tables"]["rooms"]["Row"];
 
 type RoomWithMembershipCount = Room & {
@@ -36,7 +44,7 @@ export default function SearchComponent({
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [searchType, setSearchType] = useState<"rooms" | "users">("rooms");
-  const [userResults, setUserResults] = useState<UserProfile[]>([]);
+  const [userResults, setUserResults] = useState<PartialProfile[]>([]);
   const supabase = supabaseBrowser();
   const isMounted = useRef(true);
   const [isLoading, setIsLoading] = useState(false);
@@ -47,6 +55,10 @@ export default function SearchComponent({
     return () => clearTimeout(timer);
   }, []);
 
+  const [debouncedCallback] = useDebounce(
+    (value: string) => setSearchQuery(value),
+    300
+  );
   const [debouncedSearchQuery] = useDebounce(searchQuery, 300);
 
   const UUID_REGEX = useMemo(
@@ -55,14 +67,15 @@ export default function SearchComponent({
     []
   );
 
+  // ✅ Use global state from context
   const { state, joinRoom, leaveRoom, fetchAvailableRooms, fetchAllUsers } = useRoomContext();
   const { availableRooms, isLoading: roomsLoading } = state;
 
   const handleSearchInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      setSearchQuery(e.target.value);
+      debouncedCallback(e.target.value);
     },
-    []
+    [debouncedCallback]
   );
 
   const fetchUserResults = useCallback(async () => {
@@ -71,13 +84,13 @@ export default function SearchComponent({
       setUserResults([]);
       return;
     }
-
+    
     setIsLoading(true);
     try {
       const users = await fetchAllUsers();
       if (debouncedSearchQuery.trim()) {
         const filteredUsers = users.filter(
-          (u: UserProfile) =>
+          (u) =>
             u.username?.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
             u.display_name?.toLowerCase().includes(debouncedSearchQuery.toLowerCase())
         );
@@ -98,21 +111,26 @@ export default function SearchComponent({
     } finally {
       if (isMounted.current) setIsLoading(false);
     }
-  }, [searchType, user, debouncedSearchQuery,fetchAllUsers]);
+  }, [searchType, user, debouncedSearchQuery, fetchAllUsers]);
 
   useEffect(() => {
     if (searchType === "users") {
       fetchUserResults();
-    } else if (searchType === "rooms") {
-      fetchAvailableRooms();
     }
-  }, [searchType, fetchUserResults, fetchAvailableRooms]);
+  }, [searchType, fetchUserResults]); 
+
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
   const roomResults = useMemo(() => {
     if (!debouncedSearchQuery.trim()) {
       return availableRooms;
     }
-    return availableRooms.filter((room) =>
+    
+    return availableRooms.filter(room =>
       room.name.toLowerCase().includes(debouncedSearchQuery.toLowerCase())
     );
   }, [availableRooms, debouncedSearchQuery]);
@@ -144,12 +162,6 @@ export default function SearchComponent({
     [user, UUID_REGEX, joinRoom, fetchAvailableRooms]
   );
 
-  useEffect(() => {
-    return () => {
-      isMounted.current = false;
-    };
-  }, []);
-
   const renderRoomSearchResult = (result: RoomWithMembershipCount) => (
     <li
       key={result.id}
@@ -171,7 +183,8 @@ export default function SearchComponent({
             )}
           </div>
           <div className="text-sm text-gray-600 dark:text-gray-400">
-            {result.memberCount} {result.memberCount === 1 ? "member" : "members"}
+            {result.memberCount}{" "}
+            {result.memberCount === 1 ? "member" : "members"}
           </div>
         </div>
       </div>
@@ -248,7 +261,9 @@ export default function SearchComponent({
 
       <Tabs
         defaultValue={searchType || "rooms"}
-        onValueChange={(value) => setSearchType(value as "rooms" | "users")}
+        onValueChange={(value) =>
+          setSearchType(value as "rooms" | "users")
+        }
         className="w-full"
       >
         <TabsList className="grid w-full grid-cols-2 mb-4">
@@ -316,7 +331,6 @@ export default function SearchComponent({
                   <li
                     key={result.id}
                     className="flex items-center justify-between p-2 rounded-lg hover:bg-accent transition-colors"
-                    onClick={() => router.push(`/profile/${result.username || result.id}`)}
                   >
                     <div className="flex items-center gap-3">
                       <Avatar className="h-10 w-10">
