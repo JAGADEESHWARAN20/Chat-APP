@@ -37,14 +37,11 @@ export default function ListMessages() {
   const handleOnScroll = useCallback(() => {
     if (!scrollRef.current) return;
     const scrollContainer = scrollRef.current;
-    const isScroll =
-      scrollContainer.scrollTop <
-      scrollContainer.scrollHeight - scrollContainer.clientHeight - 10;
-    setUserScrolled(isScroll);
-    if (
-      scrollContainer.scrollTop ===
-      scrollContainer.scrollHeight - scrollContainer.clientHeight
-    ) {
+    const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
+    const isNearBottom = scrollHeight - scrollTop <= clientHeight + 10;
+    setUserScrolled(!isNearBottom);
+
+    if (isNearBottom) {
       setNotification(0);
     }
   }, []);
@@ -55,55 +52,72 @@ export default function ListMessages() {
       top: scrollRef.current.scrollHeight,
       behavior: "smooth",
     });
-    // focus after scroll so keyboard users keep context
     scrollRef.current?.focus();
   }, []);
 
   // Load initial messages
   useEffect(() => {
-    if (!selectedRoom?.id) return;
+    if (!selectedRoom?.id) {
+      setMessages([]);
+      return;
+    }
+
+    let isMounted = true;
 
     const loadInitialMessages = async () => {
       setIsLoading(true);
       try {
         const res = await fetch(`/api/messages/${selectedRoom.id}`);
-        if (!res.ok) throw new Error(await res.text());
+        if (!res.ok) {
+          throw new Error(await res.text());
+        }
 
-        const { messages } = await res.json();
-        if (messages && Array.isArray(messages)) {
-          const formattedMessages = messages.map((msg: any) => ({
+        const { messages: fetchedMessages } = await res.json();
+        if (fetchedMessages && Array.isArray(fetchedMessages)) {
+          const formattedMessages = fetchedMessages.map((msg: any) => ({
             ...msg,
             profiles: msg.profiles
               ? {
-                id: msg.profiles.id,
-                avatar_url: msg.profiles.avatar_url || null,
-                display_name: msg.profiles.display_name || null,
-                username: msg.profiles.username || null,
-                created_at: msg.profiles.created_at || null,
-                bio: msg.profiles.bio || null,
-                updated_at: msg.profiles.updated_at || null,
-              }
+                  id: msg.profiles.id,
+                  avatar_url: msg.profiles.avatar_url ?? null,
+                  display_name: msg.profiles.display_name ?? null,
+                  username: msg.profiles.username ?? null,
+                  created_at: msg.profiles.created_at ?? null,
+                  bio: msg.profiles.bio ?? null,
+                  updated_at: msg.profiles.updated_at ?? null,
+                }
               : null,
           }));
-          setMessages(formattedMessages);
-        } else {
+          if (isMounted) {
+            setMessages(formattedMessages);
+          }
+        } else if (isMounted) {
           console.warn("No messages or invalid messages format received");
           setMessages([]);
         }
       } catch (error) {
-        toast.error("Failed to load messages");
-        console.error(error);
+        if (isMounted) {
+          toast.error("Failed to load messages");
+          console.error(error);
+          setMessages([]);
+        }
       } finally {
-        setIsLoading(false);
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     };
 
     loadInitialMessages();
+
+    return () => {
+      isMounted = false;
+    };
   }, [selectedRoom?.id, setMessages]);
 
   // Set up real-time subscriptions
   useEffect(() => {
-    if (!selectedRoom) return;
+    if (!selectedRoom?.id) return;
 
     const messageChannel = supabase
       .channel(`room_messages_${selectedRoom.id}`)
@@ -117,73 +131,76 @@ export default function ListMessages() {
         },
         (payload) => {
           try {
-            const messagePayload = payload.new as MessageRow;
-            if (messagePayload.room_id !== selectedRoom.id) return;
+            const messagePayload = payload.new as MessageRow | null;
+            if (!messagePayload || messagePayload.room_id !== selectedRoom.id) {
+              return;
+            }
 
             if (payload.eventType === "INSERT") {
               if (optimisticIds.includes(messagePayload.id)) {
-                return; // skip, already added optimistically
+                return; // Skip, already added optimistically
               }
+
               supabase
                 .from("profiles")
                 .select("*")
                 .eq("id", messagePayload.sender_id)
                 .single<ProfileRow>()
-                .then(({ data: user, error }) => {
+                .then(({ data: profile, error }) => {
                   if (error) {
                     toast.error(error.message);
                     return;
                   }
-                  if (user) {
-                    // prevent duplicate in case same id already exists
-                    if (messages.some(m => m.id === messagePayload.id)) return;
-                    const newMessage: Imessage = {
-                      id: messagePayload.id,
-                      created_at: messagePayload.created_at,
-                      is_edited: messagePayload.is_edited,
-                      sender_id: messagePayload.sender_id,
-                      room_id: messagePayload.room_id,
-                      direct_chat_id: messagePayload.direct_chat_id,
-                      dm_thread_id: messagePayload.dm_thread_id,
-                      status: messagePayload.status,
-                      text: messagePayload.text,
-                      profiles: {
-                        id: user.id,
-                        avatar_url: user.avatar_url || null,
-                        display_name: user.display_name || null,
-                        username: user.username || null,
-                        created_at: user.created_at || null,
-                        bio: user.bio || null,
-                        updated_at: user.updated_at || null,
-                      },
-                    };
-                    addMessage(newMessage);
+                  if (!profile) return;
 
-                    if (
-                      scrollRef.current &&
-                      scrollRef.current.scrollTop <
+                  // Prevent duplicate insertion
+                  if (messages.some((m) => m.id === messagePayload.id)) {
+                    return;
+                  }
+
+                  const newMessage: Imessage = {
+                    id: messagePayload.id,
+                    created_at: messagePayload.created_at,
+                    is_edited: messagePayload.is_edited,
+                    sender_id: messagePayload.sender_id,
+                    room_id: messagePayload.room_id,
+                    direct_chat_id: messagePayload.direct_chat_id,
+                    dm_thread_id: messagePayload.dm_thread_id,
+                    status: messagePayload.status,
+                    text: messagePayload.text,
+                    profiles: {
+                      id: profile.id,
+                      avatar_url: profile.avatar_url ?? null,
+                      display_name: profile.display_name ?? null,
+                      username: profile.username ?? null,
+                      created_at: profile.created_at ?? null,
+                      bio: profile.bio ?? null,
+                      updated_at: profile.updated_at ?? null,
+                    },
+                  };
+                  addMessage(newMessage);
+
+                  if (
+                    scrollRef.current &&
+                    scrollRef.current.scrollTop <
                       scrollRef.current.scrollHeight -
-                      scrollRef.current.clientHeight -
-                      10
-                    ) {
-                      setNotification((prev) => prev + 1);
-                    }
+                        scrollRef.current.clientHeight -
+                        10
+                  ) {
+                    setNotification((prev) => prev + 1);
                   }
                 });
             } else if (payload.eventType === "UPDATE") {
-              optimisticUpdateMessage(messagePayload.id, {
-                id: messagePayload.id,
-                text: messagePayload.text,
-                is_edited: messagePayload.is_edited,
-                created_at: messagePayload.created_at,
-                sender_id: messagePayload.sender_id,
-                room_id: messagePayload.room_id,
-                direct_chat_id: messagePayload.direct_chat_id,
-                dm_thread_id: messagePayload.dm_thread_id,
-                status: messagePayload.status,
-              });
+              const oldMessage = messages.find((m) => m.id === messagePayload.id);
+              if (oldMessage) {
+                optimisticUpdateMessage(messagePayload.id, {
+                  ...oldMessage,
+                  text: messagePayload.text,
+                  is_edited: messagePayload.is_edited,
+                });
+              }
             } else if (payload.eventType === "DELETE") {
-              optimisticDeleteMessage(payload.old.id);
+              optimisticDeleteMessage((payload.old as MessageRow).id);
             }
           } catch (err) {
             toast.error("Error processing real-time message update");
@@ -196,29 +213,43 @@ export default function ListMessages() {
     return () => {
       supabase.removeChannel(messageChannel);
     };
-  }, [selectedRoom, optimisticIds, addMessage, optimisticUpdateMessage, optimisticDeleteMessage, supabase]);
+  }, [
+    selectedRoom?.id,
+    optimisticIds,
+    addMessage,
+    optimisticUpdateMessage,
+    optimisticDeleteMessage,
+    supabase,
+    messages, // Added to deps for safe re-subscription if messages change, but guarded inside
+  ]);
 
-  // Auto-scroll when new messages arrive
+  // Auto-scroll when new messages arrive (only if not user-scrolled)
+  const prevMessagesLength = useRef(messages.length);
   useEffect(() => {
-    if (scrollRef.current && !userScrolled) {
+    if (
+      scrollRef.current &&
+      !userScrolled &&
+      prevMessagesLength.current < messages.length
+    ) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, userScrolled]);
+    prevMessagesLength.current = messages.length;
+  }, [messages.length, userScrolled]); // Depend on length instead of full array to avoid unnecessary scrolls
 
-  // Memoized filtered messages
+  // Memoized filtered and sorted messages
   const filteredMessages = useMemo(() => {
-    if (!messages || !Array.isArray(messages)) {
+    if (!messages || !Array.isArray(messages) || !selectedRoom?.id) {
       return [];
     }
     return messages
-      .filter((msg) => msg && msg.room_id === selectedRoom?.id)
+      .filter((msg): msg is Imessage => msg && msg.room_id === selectedRoom.id)
       .sort(
         (a, b) =>
           new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
       );
   }, [messages, selectedRoom?.id]);
 
-  const SkeletonMessage = () => (
+  const SkeletonMessage = React.memo(() => (
     <div className="flex gap-2 animate-pulse">
       <div className="w-10 h-10 rounded-full bg-gray-700" />
       <div className="flex-1 space-y-2">
@@ -226,76 +257,74 @@ export default function ListMessages() {
         <div className="h-3 bg-gray-700 rounded w-3/4" />
       </div>
     </div>
-  );
+  ));
+
+  SkeletonMessage.displayName = "SkeletonMessage";
+
+  if (!selectedRoom?.id) {
+    return (
+      <div className="flex items-center justify-center h-[80vh] text-gray-500">
+        <p>Select a room to start chatting</p>
+      </div>
+    );
+  }
 
   return (
     <>
       <div
         id="message-container"
-        // Make it programmatically focusable for focus restore
         tabIndex={0}
         role="region"
         aria-label="Messages"
-        className="flex-1 flex overflow-y-scroll flex-col p-1 h-[80vh]  outline-none "
+        aria-live="polite"
+        className="flex-1 flex overflow-y-auto flex-col p-1 h-[80vh] outline-none scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent"
         ref={scrollRef}
         onScroll={handleOnScroll}
       >
         {isLoading ? (
-          Array.from({ length: 18 }).map((_, index) => (
-            <SkeletonMessage key={index} />
-          ))
+          <div className="space-y-4 p-4">
+            {Array.from({ length: 18 }, (_, index) => (
+              <SkeletonMessage key={index} />
+            ))}
+          </div>
         ) : (
-          <>
-            <div className="space-y-[.5vw]">
-              {filteredMessages && filteredMessages.length > 0 ? (
-                filteredMessages.map((value) => {
-                  try {
-                    return <Message key={value.id} message={value} />;
-                  } catch (error) {
-                    console.error("Error rendering message:", error);
-                    return (
-                      <div key={value.id} className="p-2 text-red-500">
-                        Error rendering message
-                      </div>
-                    );
-                  }
-                })
-              ) : (
-                <div className="flex items-center justify-center h-32 text-gray-500">
-                  <p>No messages yet. Start a conversation!</p>
-                </div>
-              )}
-              {selectedRoom?.id && user?.id && (
-                <TypingIndicator
-                  roomId={selectedRoom.id}
-                  currentUserId={user.id}
-                />
-              )}
-            </div>
-          </>
+          <div className="space-y-2 px-4 py-2">
+            {filteredMessages.length > 0 ? (
+              filteredMessages.map((message) => (
+                <Message key={message.id} message={message} />
+              ))
+            ) : (
+              <div className="flex items-center justify-center h-32 text-gray-500">
+                <p>No messages yet. Start a conversation!</p>
+              </div>
+            )}
+            {user?.id && <TypingIndicator roomId={selectedRoom.id} currentUserId={user.id} />}
+          </div>
         )}
 
-        {/* Portaled dialogs live here; controlled open avoids ghost focus */}
+        {/* Portaled dialogs */}
         <DeleteAlert />
         <EditAlert />
       </div>
 
       {userScrolled && (
-        <div className="absolute bottom-20 w-full">
-          {notification ? (
-            <div
-              className="w-36 mx-auto bg-indigo-500 p-1 rounded-md cursor-pointer"
+        <div className="fixed bottom-20 left-1/2 transform -translate-x-1/2 z-10">
+          {notification > 0 ? (
+            <button
+              className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-md text-sm transition-colors"
               onClick={scrollDown}
+              aria-label={`Scroll to view ${notification} new messages`}
             >
-              <h1>New {notification} messages</h1>
-            </div>
+              New {notification} messages
+            </button>
           ) : (
-            <div
-              className="w-10 h-10 bg-blue-500 rounded-full justify-center items-center flex mx-auto border cursor-pointer hover:scale-110 transition-all"
+            <button
+              className="w-10 h-10 bg-blue-500 hover:bg-blue-600 rounded-full flex justify-center items-center transition-all hover:scale-110 shadow-lg"
               onClick={scrollDown}
+              aria-label="Scroll to bottom"
             >
-              <ArrowDown />
-            </div>
+              <ArrowDown className="w-5 h-5" />
+            </button>
           )}
         </div>
       )}
