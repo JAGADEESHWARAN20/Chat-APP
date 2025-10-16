@@ -15,17 +15,9 @@ export default function TypingIndicator({ roomId, currentUserId }: TypingIndicat
   const [userNames, setUserNames] = useState<Record<string, string>>({});
   const { typingUsers } = useTypingStatus(roomId, currentUserId || "");
 
-  // Filter out current user and stale entries
+  // Filter out current user and ensure is_typing is true
   const filteredTypers = typingUsers
-    .filter((u) => {
-      // Filter out current user
-      if (u.user_id === currentUserId) return false;
-      
-      // Filter out stale entries (older than 3 seconds)
-      const lastUpdated = new Date(u.last_updated).getTime();
-      const now = new Date().getTime();
-      return (now - lastUpdated) < 3000; // 3 seconds threshold
-    })
+    .filter((u) => u.user_id !== currentUserId && u.is_typing)
     .map((u) => u.user_id);
 
   // Fetch display names for typing users
@@ -54,7 +46,7 @@ export default function TypingIndicator({ roomId, currentUserId }: TypingIndicat
 
         const safeData = Array.isArray(data) ? data : [];
         const nameMap = safeData.reduce((acc, user) => {
-          acc[user.id as string] = user.display_name || "Someone";
+          acc[user.id] = user.display_name || "Someone";
           return acc;
         }, {} as Record<string, string>);
 
@@ -71,7 +63,7 @@ export default function TypingIndicator({ roomId, currentUserId }: TypingIndicat
     };
   }, [filteredTypers, supabase]);
 
-  // Debugging
+  // Enhanced debugging
   useEffect(() => {
     console.log("Typing Indicator Debug:", {
       roomId,

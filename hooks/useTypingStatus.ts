@@ -5,113 +5,150 @@ import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import type { Database } from "@/database.types";
 import debounce from "lodash.debounce";
 
-type TypingPresence = {
+type TypingUser = {
   user_id: string;
   is_typing: boolean;
-  last_updated: string;
-  room_id: string;
+  updated_at: string;
 };
 
 export function useTypingStatus(roomId: string, userId: string | null) {
   const supabase = createClientComponentClient<Database>();
-  const [typingUsers, setTypingUsers] = useState<TypingPresence[]>([]);
+  const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
 
-  // Clean up stale typing status
-  const cleanupStaleTyping = useCallback(async () => {
+  // Update typing status in database using RPC functions with type assertions
+  const updateTypingStatus = useCallback(async (isTyping: boolean) => {
+    if (!userId || !roomId) return;
+    
+    try {
+      // Use RPC with type assertion since the functions exist in database but not in types
+      const { error } = await (supabase.rpc as any)('upsert_typing_status', {
+        p_room_id: roomId,
+        p_user_id: userId,
+        p_is_typing: isTyping
+      });
+
+      if (error) {
+        console.error("Error updating typing status:", error);
+      } else {
+        console.log(`✅ Typing status updated: ${isTyping} for user ${userId}`);
+      }
+    } catch (error) {
+      console.error("Unexpected error updating typing status:", error);
+    }
+  }, [userId, roomId, supabase]);
+
+  // Fetch current typing users from database using RPC
+  const fetchTypingUsers = useCallback(async () => {
     if (!roomId) return;
     
     try {
-      // Remove locally stale entries (older than 3 seconds)
-      const staleThreshold = new Date(Date.now() - 3000).toISOString();
-      setTypingUsers(prev => 
-        prev.filter(user => user.last_updated > staleThreshold)
-      );
-    } catch (error) {
-      console.error("Error cleaning up stale typing status:", error);
-    }
-  }, [roomId]);
+      const { data, error } = await (supabase.rpc as any)('get_typing_users', {
+        p_room_id: roomId,
+        p_stale_threshold: '3 seconds'
+      });
 
-  // --- Broadcast typing state ---
-  const sendTypingStatus = useCallback(
-    async (isTyping: boolean) => {
-      if (!userId || !roomId) return;
-      
-      try {
-        await supabase.channel(`room:${roomId}`).send({
-          type: "broadcast",
-          event: isTyping ? "typing" : "stopped_typing",
-          payload: {
-            user_id: userId,
-            room_id: roomId,
-            is_typing: isTyping,
-            last_updated: new Date().toISOString(),
-          },
-        });
-      } catch (error) {
-        console.error("Error sending typing status:", error);
+      if (error) {
+        console.error("Error fetching typing users:", error);
+        return;
       }
-    },
-    [userId, roomId, supabase]
-  );
+
+      if (data) {
+        console.log("📝 Fetched typing users:", data);
+        // Filter to only include users who are currently typing
+        const activeTypingUsers = data.filter((user: TypingUser) => user.is_typing);
+        setTypingUsers(activeTypingUsers);
+      }
+    } catch (error) {
+      console.error("Unexpected error fetching typing users:", error);
+    }
+  }, [roomId, supabase]);
 
   // --- Debounced stop typing ---
   const debouncedStopTyping = useMemo(
     () =>
       debounce(() => {
-        sendTypingStatus(false);
-      }, 2000), // Fixed: 2000ms instead of 20ms
-    [sendTypingStatus]
+        console.log("🛑 Auto-stopping typing (debounced)");
+        updateTypingStatus(false);
+      }, 2000),
+    [updateTypingStatus]
   );
 
   // --- Call this when user types ---
   const startTyping = useCallback(() => {
     if (!userId || !roomId) return;
     
-    sendTypingStatus(true);
+    console.log("⌨️ User started typing");
+    updateTypingStatus(true);
     debouncedStopTyping(); // reset stop timer
-  }, [sendTypingStatus, debouncedStopTyping, userId, roomId]);
+  }, [updateTypingStatus, debouncedStopTyping, userId, roomId]);
 
-  // --- Subscribe to typing events ---
+  // --- Real-time subscription using broadcast as fallback ---
   useEffect(() => {
-    if (!roomId) return;
+    if (!roomId || !userId) return;
 
-    const channel = supabase
-      .channel(`room-typing-${roomId}`, {
-        config: { 
-          broadcast: { self: false },
-          presence: { key: roomId }
-        },
+    console.log("🔔 Setting up typing status listeners for room:", roomId);
+
+    // Initial fetch
+    fetchTypingUsers();
+
+    // Use broadcast channel for real-time updates since we can't subscribe to typing_status table
+    const channel = supabase.channel(`typing-broadcast-${roomId}`, {
+      config: {
+        broadcast: { self: false }
+      }
+    });
+
+    // Listen for typing events from other users
+    channel
+      .on('broadcast', { event: 'user_typing' }, ({ payload }) => {
+        console.log("📢 Received typing broadcast:", payload);
+        if (payload.room_id === roomId && payload.user_id !== userId) {
+          // Add or update typing user
+          setTypingUsers(prev => {
+            const filtered = prev.filter(u => u.user_id !== payload.user_id);
+            return [...filtered, {
+              user_id: payload.user_id,
+              is_typing: true,
+              updated_at: new Date().toISOString()
+            }];
+          });
+
+          // Auto-remove after 3 seconds if no further updates
+          setTimeout(() => {
+            setTypingUsers(prev => 
+              prev.filter(u => u.user_id !== payload.user_id || u.updated_at > payload.updated_at)
+            );
+          }, 3000);
+        }
       })
-      .on("broadcast", { event: "typing" }, ({ payload }) => {
-        console.log("Received typing event:", payload);
-        setTypingUsers((prev) => {
-          const filtered = prev.filter((u) => u.user_id !== payload.user_id);
-          return [...filtered, payload];
-        });
-      })
-      .on("broadcast", { event: "stopped_typing" }, ({ payload }) => {
-        console.log("Received stopped_typing event:", payload);
-        setTypingUsers((prev) =>
-          prev.filter((u) => u.user_id !== payload.user_id)
-        );
+      .on('broadcast', { event: 'user_stopped_typing' }, ({ payload }) => {
+        console.log("📢 Received stopped typing broadcast:", payload);
+        if (payload.room_id === roomId) {
+          setTypingUsers(prev => 
+            prev.filter(u => u.user_id !== payload.user_id)
+          );
+        }
       })
       .subscribe((status) => {
-        console.log(`Typing channel ${roomId} subscription:`, status);
+        console.log(`🔔 Typing broadcast channel status:`, status);
       });
 
-    // Cleanup interval for stale typing status
-    const cleanupInterval = setInterval(cleanupStaleTyping, 2000);
+    // Polling fallback to sync with database (every 2 seconds)
+    const pollingInterval = setInterval(fetchTypingUsers, 2000);
 
     return () => {
+      console.log("🧹 Cleaning up typing status listeners");
       debouncedStopTyping.cancel();
       supabase.removeChannel(channel);
-      clearInterval(cleanupInterval);
+      clearInterval(pollingInterval);
+      
+      // Clean up user's typing status when leaving
+      updateTypingStatus(false).catch(console.error);
     };
-  }, [roomId, supabase, debouncedStopTyping, cleanupStaleTyping]);
+  }, [roomId, userId, supabase, fetchTypingUsers, debouncedStopTyping, updateTypingStatus]);
 
   return { 
     typingUsers, 
-    startTyping,
-    sendTypingStatus 
+    startTyping 
   };
 }
