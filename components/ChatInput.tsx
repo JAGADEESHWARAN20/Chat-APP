@@ -1,7 +1,7 @@
 // ChatInput.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useMessage } from "@/lib/store/messages";
 import { useRoomContext } from "@/lib/store/RoomContext";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,8 @@ import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
 import { User as SupabaseUser } from "@supabase/supabase-js";
 import { Imessage } from "@/lib/store/messages";
-import { Send } from "lucide-react"
+import { Send } from "lucide-react";
+import { useTypingStatus } from "@/hooks/useTypingStatus";
 
 export default function ChatInput({ user }: { user: SupabaseUser }) {
   const [text, setText] = useState("");
@@ -18,8 +19,23 @@ export default function ChatInput({ user }: { user: SupabaseUser }) {
   const { state } = useRoomContext();
   const { selectedRoom, selectedDirectChat } = state;
 
-  // ChatInput.tsx
-  // ChatInput.tsx (inside handleSend)
+  // Get typing functionality
+  const { startTyping } = useTypingStatus(
+    selectedRoom?.id || "", 
+    user?.id || null
+  );
+
+  // Handle input changes with typing indicator
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const newText = e.target.value;
+    setText(newText);
+    
+    // Trigger typing indicator when user starts typing
+    if (newText.trim() && selectedRoom?.id) {
+      startTyping();
+    }
+  }, [startTyping, selectedRoom?.id]);
+
   const handleSend = async () => {
     if (!user) {
       toast.error("You must be logged in to send messages");
@@ -79,8 +95,12 @@ export default function ChatInput({ user }: { user: SupabaseUser }) {
       toast.success("Message sent");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to send message");
-      // Optionally remove optimistic message on failure
-      // useMessage.getState().optimisticDeleteMessage(optimisticId);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      handleSend();
     }
   };
 
@@ -88,11 +108,13 @@ export default function ChatInput({ user }: { user: SupabaseUser }) {
     <div className="flex gap-2">
       <Input
         value={text}
-        onChange={(e) => setText(e.target.value)}
+        onChange={handleInputChange}
+        onKeyDown={handleKeyDown}
         placeholder="Type a message..."
-        onKeyDown={(e) => e.key === "Enter" && handleSend()}
       />
-      <Button onClick={handleSend}><Send className="w-[2em] h-[2em]" /></Button>
+      <Button onClick={handleSend}>
+        <Send className="w-[1.2em] h-[1.2em]" />
+      </Button>
     </div>
   );
 }
