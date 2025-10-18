@@ -1,7 +1,7 @@
 // components/TypingIndicator.tsx - FIXED VERSION
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import type { Database } from "@/lib/types/supabase";
 import { useTypingStatus } from "@/hooks/useTypingStatus";
@@ -18,13 +18,14 @@ export default function TypingIndicator({ roomId, currentUserId }: TypingIndicat
   
   const { typingUsers } = useTypingStatus(roomId, currentUserId || "");
 
-  // Filter out current user and only show users who are actually typing
-  const activeTypers = typingUsers
-    .filter((u) => u.user_id !== currentUserId && u.is_typing)
-    .map((u) => u.user_id);
-
-  // Remove duplicates
-  const uniqueTypers = [...new Set(activeTypers)];
+  // Memoize the active typers calculation
+  const uniqueTypers = useMemo(() => {
+    const activeTypers = typingUsers
+      .filter((u) => u.user_id !== currentUserId && u.is_typing)
+      .map((u) => u.user_id);
+    
+    return [...new Set(activeTypers)];
+  }, [typingUsers, currentUserId]);
 
   // Fetch display names for typing users
   useEffect(() => {
