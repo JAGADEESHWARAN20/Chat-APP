@@ -1,3 +1,4 @@
+// components/ListMessages.tsx - FIXED RESPONSIVE VERSION
 "use client";
 
 import { Imessage, useMessage } from "@/lib/store/messages";
@@ -138,7 +139,7 @@ export default function ListMessages() {
 
             if (payload.eventType === "INSERT") {
               if (optimisticIds.includes(messagePayload.id)) {
-                return; // Skip, already added optimistically
+                return;
               }
 
               supabase
@@ -153,7 +154,6 @@ export default function ListMessages() {
                   }
                   if (!profile) return;
 
-                  // Prevent duplicate insertion
                   if (messages.some((m) => m.id === messagePayload.id)) {
                     return;
                   }
@@ -220,10 +220,10 @@ export default function ListMessages() {
     optimisticUpdateMessage,
     optimisticDeleteMessage,
     supabase,
-    messages, // Added to deps for safe re-subscription if messages change, but guarded inside
+    messages,
   ]);
 
-  // Auto-scroll when new messages arrive (only if not user-scrolled)
+  // Auto-scroll when new messages arrive
   const prevMessagesLength = useRef(messages.length);
   useEffect(() => {
     if (
@@ -234,7 +234,7 @@ export default function ListMessages() {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
     prevMessagesLength.current = messages.length;
-  }, [messages.length, userScrolled]); // Depend on length instead of full array to avoid unnecessary scrolls
+  }, [messages.length, userScrolled]);
 
   // Memoized filtered and sorted messages
   const filteredMessages = useMemo(() => {
@@ -263,41 +263,38 @@ export default function ListMessages() {
 
   if (!selectedRoom?.id) {
     return (
-      <div className="flex items-center justify-center h-[80vh] text-gray-500">
+      <div className="flex items-center justify-center h-full text-gray-500">
         <p>Select a room to start chatting</p>
       </div>
     );
   }
 
   return (
-    <>
-         <div
+    <div className="flex flex-col w-full h-full">
+      {/* Messages Scroll Area */}
+      <div
         id="message-container"
         tabIndex={0}
         role="region"
         aria-label="Messages"
         aria-live="polite"
-        className="flex-1 flex overflow-y-auto flex-col p-1 outline-none scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent"
+        className="flex-1 overflow-y-auto px-4 py-2 space-y-2 min-h-0 w-full scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent"
         ref={scrollRef}
         onScroll={handleOnScroll}
       >
         {isLoading ? (
-          <div className="space-y-4 p-4">
-            {Array.from({ length: 18 }, (_, index) => (
+          <div className="space-y-4">
+            {Array.from({ length: 8 }, (_, index) => (
               <SkeletonMessage key={index} />
             ))}
           </div>
+        ) : filteredMessages.length > 0 ? (
+          filteredMessages.map((message) => (
+            <Message key={message.id} message={message} />
+          ))
         ) : (
-          <div className="space-y-2 px-4 py-2">
-            {filteredMessages.length > 0 ? (
-              filteredMessages.map((message) => (
-                <Message key={message.id} message={message} />
-              ))
-            ) : (
-              <div className="flex items-center justify-center h-32 text-gray-500">
-                <p>No messages yet. Start a conversation!</p>
-              </div>
-            )}
+          <div className="flex items-center justify-center h-full text-gray-500">
+            <p>No messages yet. Start a conversation!</p>
           </div>
         )}
 
@@ -306,7 +303,7 @@ export default function ListMessages() {
         <EditAlert />
       </div>
 
-      {/* Typing Indicator - OUTSIDE the scrollable container */}
+      {/* Typing Indicator - Between messages and input */}
       {user?.id && selectedRoom?.id && (
         <TypingIndicator 
           roomId={selectedRoom.id} 
@@ -314,12 +311,12 @@ export default function ListMessages() {
         />
       )}
 
-      {/* Scroll to bottom button - OUTSIDE the container */}
+      {/* Scroll to bottom button */}
       {userScrolled && (
-        <div className="fixed bottom-20 left-1/2 transform -translate-x-1/2 z-10">
+        <div className="fixed bottom-24 left-1/2 transform -translate-x-1/2 z-10">
           {notification > 0 ? (
             <button
-              className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-md text-sm transition-colors"
+              className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-md text-sm transition-colors shadow-lg"
               onClick={scrollDown}
               aria-label={`Scroll to view ${notification} new messages`}
             >
@@ -336,6 +333,6 @@ export default function ListMessages() {
           )}
         </div>
       )}
-    </>
+    </div>
   );
 }
