@@ -271,13 +271,13 @@ export default function ListMessages() {
 
   return (
     <>
-      <div
+         <div
         id="message-container"
         tabIndex={0}
         role="region"
         aria-label="Messages"
         aria-live="polite"
-        className="flex-1 flex overflow-y-auto flex-col p-1 h-[80vh] outline-none scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent"
+        className="flex-1 flex overflow-y-auto flex-col p-1 outline-none scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent"
         ref={scrollRef}
         onScroll={handleOnScroll}
       >
@@ -298,7 +298,6 @@ export default function ListMessages() {
                 <p>No messages yet. Start a conversation!</p>
               </div>
             )}
-            {user?.id && <TypingIndicator roomId={selectedRoom.id} currentUserId={user.id} />}
           </div>
         )}
 
@@ -307,6 +306,15 @@ export default function ListMessages() {
         <EditAlert />
       </div>
 
+      {/* Typing Indicator - OUTSIDE the scrollable container */}
+      {user?.id && selectedRoom?.id && (
+        <TypingIndicator 
+          roomId={selectedRoom.id} 
+          currentUserId={user.id} 
+        />
+      )}
+
+      {/* Scroll to bottom button - OUTSIDE the container */}
       {userScrolled && (
         <div className="fixed bottom-20 left-1/2 transform -translate-x-1/2 z-10">
           {notification > 0 ? (

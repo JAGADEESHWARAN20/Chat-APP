@@ -1,4 +1,4 @@
-// components/TypingIndicator.tsx - FULLY DEBUGGED VERSION
+// components/TypingIndicator.tsx - FIXED VISIBILITY VERSION
 "use client";
 
 import React, { useEffect, useState, useMemo } from "react";
@@ -84,36 +84,28 @@ export default function TypingIndicator({ roomId, currentUserId }: TypingIndicat
     };
   }, [uniqueTypers, supabase]);
 
-  // Debug logging
-  useEffect(() => {
-    console.log("[TypingIndicator] Render debug:", {
-      roomId,
-      currentUserId,
-      typingUsers: typingUsers.length,
-      uniqueTypers: uniqueTypers.length,
-      userNames,
-    });
-  }, [typingUsers, uniqueTypers, userNames, roomId, currentUserId]);
+  // Get display names for typing users
+  const typingNames = useMemo(() => {
+    return uniqueTypers
+      .map((id) => {
+        const name = userNames[id];
+        console.log(`[TypingIndicator] Getting name for ${id}: ${name}`);
+        return name;
+      })
+      .filter(Boolean);
+  }, [uniqueTypers, userNames]);
+
+  console.log("[TypingIndicator] Render check:", {
+    typingUsersLength: typingUsers.length,
+    uniqueTypersLength: uniqueTypers.length,
+    typingNamesLength: typingNames.length,
+    typingNames,
+    shouldRender: typingNames.length > 0,
+  });
 
   // Don't show if no one typing
-  if (uniqueTypers.length === 0) {
-    console.log("[TypingIndicator] Not rendering: no typers");
-    return null;
-  }
-
-  // Get display names for typing users
-  const typingNames = uniqueTypers
-    .map((id) => {
-      const name = userNames[id];
-      console.log(`[TypingIndicator] Getting name for ${id}: ${name}`);
-      return name;
-    })
-    .filter(Boolean);
-
-  console.log("[TypingIndicator] typingNames:", typingNames);
-
   if (typingNames.length === 0) {
-    console.log("[TypingIndicator] Not rendering: no names loaded yet");
+    console.log("[TypingIndicator] Not rendering: no names or no typers");
     return null;
   }
 
@@ -129,11 +121,19 @@ export default function TypingIndicator({ roomId, currentUserId }: TypingIndicat
     displayText = `${otherNames}, and ${lastName} are typing...`;
   }
 
-  console.log("[TypingIndicator] Rendering with text:", displayText);
+  console.log("[TypingIndicator] RENDERING with text:", displayText);
 
+  // Render with visible styling and proper structure
   return (
-    <div className="text-gray-400 italic text-sm px-4 py-2 animate-pulse">
-      {displayText}
+    <div 
+      className="w-full bg-gray-100 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 px-4 py-3 text-gray-600 dark:text-gray-300 italic text-sm"
+      style={{
+        minHeight: "44px",
+        display: "flex",
+        alignItems: "center",
+      }}
+    >
+      <span className="animate-pulse">{displayText}</span>
     </div>
   );
 }
