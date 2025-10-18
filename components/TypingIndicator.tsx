@@ -1,4 +1,4 @@
-// components/TypingIndicator.tsx - FIXED VERSION
+// components/TypingIndicator.tsx - FULLY DEBUGGED VERSION
 "use client";
 
 import React, { useEffect, useState, useMemo } from "react";
@@ -14,17 +14,22 @@ interface TypingIndicatorProps {
 export default function TypingIndicator({ roomId, currentUserId }: TypingIndicatorProps) {
   const supabase = supabaseBrowser();
   const [userNames, setUserNames] = useState<Record<string, string>>({});
-  const [loadingNames, setLoadingNames] = useState(false);
   
   const { typingUsers } = useTypingStatus(roomId, currentUserId || "");
 
   // Memoize the active typers calculation
   const uniqueTypers = useMemo(() => {
     const activeTypers = typingUsers
-      .filter((u) => u.user_id !== currentUserId && u.is_typing)
+      .filter((u) => {
+        const shouldInclude = u.user_id !== currentUserId && u.is_typing;
+        console.log(`[TypingIndicator] Filter check for ${u.user_id}: is_typing=${u.is_typing}, currentUserId=${currentUserId}, shouldInclude=${shouldInclude}`);
+        return shouldInclude;
+      })
       .map((u) => u.user_id);
     
-    return [...new Set(activeTypers)];
+    const deduped = [...new Set(activeTypers)];
+    console.log(`[TypingIndicator] uniqueTypers:`, deduped);
+    return deduped;
   }, [typingUsers, currentUserId]);
 
   // Fetch display names for typing users
@@ -33,42 +38,42 @@ export default function TypingIndicator({ roomId, currentUserId }: TypingIndicat
 
     const fetchUserNames = async () => {
       if (uniqueTypers.length === 0) {
+        console.log("[TypingIndicator] No typers, clearing names");
         setUserNames({});
-        setLoadingNames(false);
         return;
       }
 
-      setLoadingNames(true);
+      console.log(`[TypingIndicator] Fetching names for ${uniqueTypers.length} users:`, uniqueTypers);
+
       try {
-        const { data, error } = await supabase
+        const { data, error } = await (supabase as any)
           .from("profiles")
           .select("id, display_name, username")
           .in("id", uniqueTypers);
 
         if (error) {
-          console.error("Error fetching user names:", error);
-          setLoadingNames(false);
+          console.error("[TypingIndicator] Error fetching user names:", error);
           return;
         }
 
         if (!Array.isArray(data)) {
-          console.warn("Unexpected data format:", data);
-          setLoadingNames(false);
+          console.warn("[TypingIndicator] Unexpected data format:", data);
           return;
         }
 
         const nameMap = data.reduce((acc, user) => {
-          acc[user.id] = user.display_name || user.username || "Someone";
+          const name = user.display_name || user.username || "Someone";
+          acc[user.id] = name;
+          console.log(`[TypingIndicator] Mapped ${user.id} -> ${name}`);
           return acc;
         }, {} as Record<string, string>);
 
         if (isActive) {
+          console.log("[TypingIndicator] Setting user names:", nameMap);
           setUserNames(nameMap);
-          setLoadingNames(false);
         }
       } catch (error) {
-        console.error("Unexpected error fetching user names:", error);
-        if (isActive) setLoadingNames(false);
+        console.error("[TypingIndicator] Unexpected error fetching user names:", error);
       }
     };
 
@@ -81,27 +86,34 @@ export default function TypingIndicator({ roomId, currentUserId }: TypingIndicat
 
   // Debug logging
   useEffect(() => {
-    console.log("TypingIndicator Debug:", {
+    console.log("[TypingIndicator] Render debug:", {
       roomId,
       currentUserId,
-      allTypingUsers: typingUsers,
-      activeTypers: uniqueTypers,
+      typingUsers: typingUsers.length,
+      uniqueTypers: uniqueTypers.length,
       userNames,
-      loadingNames
     });
-  }, [typingUsers, uniqueTypers, userNames, loadingNames, roomId, currentUserId]);
+  }, [typingUsers, uniqueTypers, userNames, roomId, currentUserId]);
 
-  // Don't show indicator if no one is typing
-  if (uniqueTypers.length === 0 || loadingNames) {
+  // Don't show if no one typing
+  if (uniqueTypers.length === 0) {
+    console.log("[TypingIndicator] Not rendering: no typers");
     return null;
   }
 
   // Get display names for typing users
   const typingNames = uniqueTypers
-    .map((id) => userNames[id] || "Someone")
+    .map((id) => {
+      const name = userNames[id];
+      console.log(`[TypingIndicator] Getting name for ${id}: ${name}`);
+      return name;
+    })
     .filter(Boolean);
 
+  console.log("[TypingIndicator] typingNames:", typingNames);
+
   if (typingNames.length === 0) {
+    console.log("[TypingIndicator] Not rendering: no names loaded yet");
     return null;
   }
 
@@ -116,6 +128,8 @@ export default function TypingIndicator({ roomId, currentUserId }: TypingIndicat
     const lastName = typingNames[typingNames.length - 1];
     displayText = `${otherNames}, and ${lastName} are typing...`;
   }
+
+  console.log("[TypingIndicator] Rendering with text:", displayText);
 
   return (
     <div className="text-gray-400 italic text-sm px-4 py-2 animate-pulse">
