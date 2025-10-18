@@ -1,4 +1,4 @@
-// ChatInput.tsx - Updated version with broadcast
+// ChatInput.tsx - FIXED VERSION
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
@@ -34,7 +34,9 @@ export default function ChatInput({ user }: { user: SupabaseUser }) {
     if (!selectedRoom?.id || !user?.id) return;
     
     try {
-      await (supabase.channel as any)(`typing-broadcast-${selectedRoom.id}`).send({
+      const channel = supabase.channel(`typing-broadcast-${selectedRoom.id}`);
+      
+      await channel.send({
         type: 'broadcast',
         event: isTyping ? 'user_typing' : 'user_stopped_typing',
         payload: {
@@ -43,6 +45,8 @@ export default function ChatInput({ user }: { user: SupabaseUser }) {
           updated_at: new Date().toISOString()
         }
       });
+
+      console.log(`Broadcasting ${isTyping ? 'typing' : 'stopped'} to room ${selectedRoom.id}`);
     } catch (error) {
       console.error("Error broadcasting typing status:", error);
     }
@@ -53,8 +57,9 @@ export default function ChatInput({ user }: { user: SupabaseUser }) {
     const newText = e.target.value;
     setText(newText);
     
-    // Trigger typing indicator
-    if (newText.trim() && selectedRoom?.id) {
+    // Only trigger typing when text is being added
+    if (newText.trim().length > 0 && selectedRoom?.id) {
+      // Trigger both local and broadcast typing
       startTyping();
       broadcastTypingStatus(true);
       
@@ -63,12 +68,12 @@ export default function ChatInput({ user }: { user: SupabaseUser }) {
         clearTimeout(typingTimeoutRef.current);
       }
       
-      // Set timeout to stop typing after 2 seconds of inactivity
+      // Set timeout to stop typing after 3 seconds of inactivity
       typingTimeoutRef.current = setTimeout(() => {
         broadcastTypingStatus(false);
-      }, 2000);
-    } else if (!newText.trim()) {
-      // If text is empty, stop typing immediately
+      }, 3000);
+    } else if (newText.trim().length === 0) {
+      // If text is cleared, stop typing immediately
       broadcastTypingStatus(false);
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
@@ -145,7 +150,8 @@ export default function ChatInput({ user }: { user: SupabaseUser }) {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
       handleSend();
     }
   };
@@ -156,8 +162,10 @@ export default function ChatInput({ user }: { user: SupabaseUser }) {
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
       }
+      // Clean up typing status when unmounting
+      broadcastTypingStatus(false).catch(console.error);
     };
-  }, []);
+  }, [broadcastTypingStatus]);
 
   return (
     <div className="flex gap-2">

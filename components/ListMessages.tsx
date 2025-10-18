@@ -11,7 +11,6 @@ import { Database } from "@/lib/types/supabase";
 import { useRoomContext } from "@/lib/store/RoomContext";
 import TypingIndicator from "./TypingIndicator";
 import { useUser } from "@/lib/store/user";
-import { DebugTypingStatus } from "./DebuggingTyping";
 
 type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
@@ -299,18 +298,7 @@ export default function ListMessages() {
                 <p>No messages yet. Start a conversation!</p>
               </div>
             )}
-            {user?.id && selectedRoom?.id && (
-  <>
-    <TypingIndicator 
-      roomId={selectedRoom.id} 
-      currentUserId={user.id} 
-    />
-    <DebugTypingStatus 
-      roomId={selectedRoom.id} 
-      userId={user.id} 
-    />
-  </>
-)}
+            {user?.id && <TypingIndicator roomId={selectedRoom.id} currentUserId={user.id} />}
           </div>
         )}
 

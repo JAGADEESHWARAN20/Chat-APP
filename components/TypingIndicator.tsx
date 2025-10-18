@@ -1,3 +1,4 @@
+// components/TypingIndicator.tsx - FIXED VERSION
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -13,46 +14,60 @@ interface TypingIndicatorProps {
 export default function TypingIndicator({ roomId, currentUserId }: TypingIndicatorProps) {
   const supabase = supabaseBrowser();
   const [userNames, setUserNames] = useState<Record<string, string>>({});
+  const [loadingNames, setLoadingNames] = useState(false);
+  
   const { typingUsers } = useTypingStatus(roomId, currentUserId || "");
 
-  // Filter out current user and ensure is_typing is true
-  const filteredTypers = typingUsers
+  // Filter out current user and only show users who are actually typing
+  const activeTypers = typingUsers
     .filter((u) => u.user_id !== currentUserId && u.is_typing)
     .map((u) => u.user_id);
+
+  // Remove duplicates
+  const uniqueTypers = [...new Set(activeTypers)];
 
   // Fetch display names for typing users
   useEffect(() => {
     let isActive = true;
 
-    if (filteredTypers.length === 0) {
-      setUserNames({});
-      return;
-    }
-
     const fetchUserNames = async () => {
-      try {
-        const userIds = [...new Set(filteredTypers)]; // Remove duplicates
-        if (userIds.length === 0) return;
+      if (uniqueTypers.length === 0) {
+        setUserNames({});
+        setLoadingNames(false);
+        return;
+      }
 
+      setLoadingNames(true);
+      try {
         const { data, error } = await supabase
           .from("profiles")
-          .select("id, display_name")
-          .in("id", userIds);
+          .select("id, display_name, username")
+          .in("id", uniqueTypers);
 
         if (error) {
           console.error("Error fetching user names:", error);
+          setLoadingNames(false);
           return;
         }
 
-        const safeData = Array.isArray(data) ? data : [];
-        const nameMap = safeData.reduce((acc, user) => {
-          acc[user.id] = user.display_name || "Someone";
+        if (!Array.isArray(data)) {
+          console.warn("Unexpected data format:", data);
+          setLoadingNames(false);
+          return;
+        }
+
+        const nameMap = data.reduce((acc, user) => {
+          acc[user.id] = user.display_name || user.username || "Someone";
           return acc;
         }, {} as Record<string, string>);
 
-        if (isActive) setUserNames(nameMap);
+        if (isActive) {
+          setUserNames(nameMap);
+          setLoadingNames(false);
+        }
       } catch (error) {
         console.error("Unexpected error fetching user names:", error);
+        if (isActive) setLoadingNames(false);
       }
     };
 
@@ -61,33 +76,44 @@ export default function TypingIndicator({ roomId, currentUserId }: TypingIndicat
     return () => {
       isActive = false;
     };
-  }, [filteredTypers, supabase]);
+  }, [uniqueTypers, supabase]);
 
-  // Enhanced debugging
+  // Debug logging
   useEffect(() => {
-    console.log("Typing Indicator Debug:", {
+    console.log("TypingIndicator Debug:", {
       roomId,
       currentUserId,
       allTypingUsers: typingUsers,
-      filteredTypers,
-      userNames
+      activeTypers: uniqueTypers,
+      userNames,
+      loadingNames
     });
-  }, [typingUsers, filteredTypers, userNames, roomId, currentUserId]);
+  }, [typingUsers, uniqueTypers, userNames, loadingNames, roomId, currentUserId]);
 
-  if (filteredTypers.length === 0) {
+  // Don't show indicator if no one is typing
+  if (uniqueTypers.length === 0 || loadingNames) {
     return null;
   }
 
-  // Map user IDs to display names
-  const names = filteredTypers.map((id) => userNames[id] || "Someone");
-  
+  // Get display names for typing users
+  const typingNames = uniqueTypers
+    .map((id) => userNames[id] || "Someone")
+    .filter(Boolean);
+
+  if (typingNames.length === 0) {
+    return null;
+  }
+
+  // Format the display text
   let displayText = "";
-  if (names.length === 1) {
-    displayText = `${names[0]} is typing...`;
-  } else if (names.length === 2) {
-    displayText = `${names[0]} and ${names[1]} are typing...`;
+  if (typingNames.length === 1) {
+    displayText = `${typingNames[0]} is typing...`;
+  } else if (typingNames.length === 2) {
+    displayText = `${typingNames[0]} and ${typingNames[1]} are typing...`;
   } else {
-    displayText = `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]} are typing...`;
+    const otherNames = typingNames.slice(0, -1).join(", ");
+    const lastName = typingNames[typingNames.length - 1];
+    displayText = `${otherNames}, and ${lastName} are typing...`;
   }
 
   return (
