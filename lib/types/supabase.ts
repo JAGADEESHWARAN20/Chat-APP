@@ -339,7 +339,22 @@ export type Database = {
           updated_at?: string | null
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "typing_status_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "typing_status_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       users: {
         Row: {
@@ -377,15 +392,6 @@ export type Database = {
       batch_mark_messages_read: {
         Args: { p_message_ids: string[]; p_user_id: string }
         Returns: undefined
-      }
-      clear_stale_typing_status: {
-        Args: { p_room_id: string; p_stale_threshold?: unknown }
-        Returns: {
-          is_typing: boolean | null
-          room_id: string
-          updated_at: string | null
-          user_id: string
-        }[]
       }
       create_room_with_member: {
         Args: {
@@ -433,15 +439,6 @@ export type Database = {
           p_room_id: string
         }
         Returns: undefined
-      }
-      upsert_typing_status: {
-        Args: { p_is_typing: boolean; p_room_id: string; p_user_id: string }
-        Returns: {
-          is_typing: boolean | null
-          room_id: string
-          updated_at: string | null
-          user_id: string
-        }
       }
     }
     Enums: {
