@@ -1,4 +1,4 @@
-// ChatInput.tsx - FIXED VERSION
+// components/ChatInput.tsx - COMPLETE WORKING VERSION
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
@@ -12,8 +12,6 @@ import { User as SupabaseUser } from "@supabase/supabase-js";
 import { Imessage } from "@/lib/store/messages";
 import { Send } from "lucide-react";
 import { useTypingStatus } from "@/hooks/useTypingStatus";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
-import type { Database } from "@/database.types";
 
 export default function ChatInput({ user }: { user: SupabaseUser }) {
   const [text, setText] = useState("");
@@ -21,82 +19,63 @@ export default function ChatInput({ user }: { user: SupabaseUser }) {
   const { state } = useRoomContext();
   const { selectedRoom, selectedDirectChat } = state;
   const typingTimeoutRef = useRef<NodeJS.Timeout>();
-  const supabase = createClientComponentClient<Database>();
 
-  // Get typing functionality
+  // Get typing functionality from hook
   const { startTyping } = useTypingStatus(
-    selectedRoom?.id || "", 
+    selectedRoom?.id || "",
     user?.id || null
   );
 
-  // Broadcast typing status to other users
-  const broadcastTypingStatus = useCallback(async (isTyping: boolean) => {
-    if (!selectedRoom?.id || !user?.id) return;
-    
-    try {
-      const channel = supabase.channel(`typing-broadcast-${selectedRoom.id}`);
-      
-      await channel.send({
-        type: 'broadcast',
-        event: isTyping ? 'user_typing' : 'user_stopped_typing',
-        payload: {
-          user_id: user.id,
-          room_id: selectedRoom.id,
-          updated_at: new Date().toISOString()
-        }
+  console.log("[ChatInput] Render:", {
+    hasRoom: !!selectedRoom?.id,
+    hasUser: !!user?.id,
+  });
+
+  // Handle input changes
+  const handleInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const newText = e.target.value;
+      setText(newText);
+
+      console.log("[ChatInput] Input changed:", {
+        textLength: newText.length,
+        isTrimmed: newText.trim().length > 0,
+        roomId: selectedRoom?.id,
       });
 
-      console.log(`Broadcasting ${isTyping ? 'typing' : 'stopped'} to room ${selectedRoom.id}`);
-    } catch (error) {
-      console.error("Error broadcasting typing status:", error);
-    }
-  }, [selectedRoom?.id, user?.id, supabase]);
-
-  // Handle input changes with optimized typing indicator
-  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const newText = e.target.value;
-    setText(newText);
-    
-    // Only trigger typing when text is being added
-    if (newText.trim().length > 0 && selectedRoom?.id) {
-      // Trigger both local and broadcast typing
-      startTyping();
-      broadcastTypingStatus(true);
-      
-      // Clear previous timeout
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
+      // Only trigger typing when text is being added
+      if (newText.trim().length > 0 && selectedRoom?.id) {
+        console.log("[ChatInput] ⌨️ Starting typing indicator");
+        startTyping();
       }
-      
-      // Set timeout to stop typing after 3 seconds of inactivity
-      typingTimeoutRef.current = setTimeout(() => {
-        broadcastTypingStatus(false);
-      }, 3000);
-    } else if (newText.trim().length === 0) {
-      // If text is cleared, stop typing immediately
-      broadcastTypingStatus(false);
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
-    }
-  }, [startTyping, broadcastTypingStatus, selectedRoom?.id]);
+    },
+    [startTyping, selectedRoom?.id]
+  );
 
   const handleSend = async () => {
+    console.log("[ChatInput] Send button clicked", {
+      hasUser: !!user,
+      textLength: text.trim().length,
+      hasRoom: !!selectedRoom,
+      hasDirectChat: !!selectedDirectChat,
+    });
+
     if (!user) {
       toast.error("You must be logged in to send messages");
       return;
     }
+
     if (!text.trim()) {
       toast.error("Message cannot be empty");
       return;
     }
+
     if (!selectedRoom && !selectedDirectChat) {
       toast.error("No room or direct chat selected");
       return;
     }
 
-    // Stop typing when sending message
-    broadcastTypingStatus(false);
+    // Clear typing timeout if any
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
@@ -114,17 +93,20 @@ export default function ChatInput({ user }: { user: SupabaseUser }) {
       status: "sent",
       profiles: {
         id: user.id,
-        display_name: user.user_metadata.display_name || user.email || "",
-        avatar_url: user.user_metadata.avatar_url || "",
-        username: user.user_metadata.username || "",
+        display_name: user.user_metadata?.display_name || user.email || "",
+        avatar_url: user.user_metadata?.avatar_url || "",
+        username: user.user_metadata?.username || "",
         created_at: user.created_at,
         updated_at: null,
         bio: null,
       },
     };
 
+    console.log("[ChatInput] 📤 Sending optimistic message:", optimisticId);
+
     addOptimisticId(optimisticId);
     addMessage(optimisticMessage);
+    setText("");
 
     try {
       const response = await fetch("/api/messages/send", {
@@ -138,14 +120,18 @@ export default function ChatInput({ user }: { user: SupabaseUser }) {
       });
 
       const result = await response.json();
+
       if (!response.ok) {
         throw new Error(result.error || "Failed to send message");
       }
 
-      setText("");
+      console.log("[ChatInput] ✅ Message sent successfully");
       toast.success("Message sent");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to send message");
+      console.error("[ChatInput] ❌ Error sending message:", error);
+      toast.error(
+        error instanceof Error ? error.message : "Failed to send message"
+      );
     }
   };
 
@@ -159,23 +145,28 @@ export default function ChatInput({ user }: { user: SupabaseUser }) {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      console.log("[ChatInput] 🧹 Unmounting");
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
       }
-      // Clean up typing status when unmounting
-      broadcastTypingStatus(false).catch(console.error);
     };
-  }, [broadcastTypingStatus]);
+  }, []);
 
   return (
-    <div className="flex gap-2">
+    <div className="flex gap-2 w-full">
       <Input
         value={text}
         onChange={handleInputChange}
         onKeyDown={handleKeyDown}
         placeholder="Type a message..."
+        disabled={!selectedRoom && !selectedDirectChat}
+        className="flex-1"
       />
-      <Button onClick={handleSend}>
+      <Button
+        onClick={handleSend}
+        disabled={!selectedRoom && !selectedDirectChat}
+        className="gap-2"
+      >
         <Send className="w-[1.2em] h-[1.2em]" />
       </Button>
     </div>

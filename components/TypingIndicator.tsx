@@ -1,7 +1,7 @@
-// components/TypingIndicator.tsx - FIXED VISIBILITY VERSION
+// components/TypingIndicator.tsx - COMPLETE WORKING VERSION
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import type { Database } from "@/lib/types/supabase";
 import { useTypingStatus } from "@/hooks/useTypingStatus";
@@ -11,24 +11,38 @@ interface TypingIndicatorProps {
   currentUserId?: string;
 }
 
-export default function TypingIndicator({ roomId, currentUserId }: TypingIndicatorProps) {
+export default function TypingIndicator({
+  roomId,
+  currentUserId,
+}: TypingIndicatorProps) {
   const supabase = supabaseBrowser();
   const [userNames, setUserNames] = useState<Record<string, string>>({});
-  
+  const [isLoadingNames, setIsLoadingNames] = useState(false);
+
   const { typingUsers } = useTypingStatus(roomId, currentUserId || "");
 
-  // Memoize the active typers calculation
+  console.log("[TypingIndicator] Render cycle:", {
+    roomId,
+    currentUserId,
+    typingUsersCount: typingUsers.length,
+    typingUserIds: typingUsers.map((u) => u.user_id),
+  });
+
+  // Get unique typing user IDs (excluding current user)
   const uniqueTypers = useMemo(() => {
-    const activeTypers = typingUsers
+    const filtered = typingUsers
       .filter((u) => {
-        const shouldInclude = u.user_id !== currentUserId && u.is_typing;
-        console.log(`[TypingIndicator] Filter check for ${u.user_id}: is_typing=${u.is_typing}, currentUserId=${currentUserId}, shouldInclude=${shouldInclude}`);
-        return shouldInclude;
+        const isNotCurrent = u.user_id !== currentUserId;
+        const isTyping = u.is_typing;
+        console.log(
+          `[TypingIndicator] Filter user ${u.user_id}: isTyping=${isTyping}, isNotCurrent=${isNotCurrent}`
+        );
+        return isNotCurrent && isTyping;
       })
       .map((u) => u.user_id);
-    
-    const deduped = [...new Set(activeTypers)];
-    console.log(`[TypingIndicator] uniqueTypers:`, deduped);
+
+    const deduped = [...new Set(filtered)];
+    console.log("[TypingIndicator] Unique typers:", deduped);
     return deduped;
   }, [typingUsers, currentUserId]);
 
@@ -40,10 +54,15 @@ export default function TypingIndicator({ roomId, currentUserId }: TypingIndicat
       if (uniqueTypers.length === 0) {
         console.log("[TypingIndicator] No typers, clearing names");
         setUserNames({});
+        setIsLoadingNames(false);
         return;
       }
 
-      console.log(`[TypingIndicator] Fetching names for ${uniqueTypers.length} users:`, uniqueTypers);
+      setIsLoadingNames(true);
+      console.log(
+        `[TypingIndicator] 🔍 Fetching names for ${uniqueTypers.length} users:`,
+        uniqueTypers
+      );
 
       try {
         const { data, error } = await (supabase as any)
@@ -52,33 +71,53 @@ export default function TypingIndicator({ roomId, currentUserId }: TypingIndicat
           .in("id", uniqueTypers);
 
         if (error) {
-          console.error("[TypingIndicator] Error fetching user names:", error);
+          console.error("[TypingIndicator] ❌ Error fetching user names:", error);
+          if (isActive) {
+            setIsLoadingNames(false);
+          }
           return;
         }
 
         if (!Array.isArray(data)) {
-          console.warn("[TypingIndicator] Unexpected data format:", data);
+          console.warn(
+            "[TypingIndicator] ⚠️ Unexpected data format:",
+            data
+          );
+          if (isActive) {
+            setIsLoadingNames(false);
+          }
           return;
         }
+
+        console.log(
+          `[TypingIndicator] ✅ Fetched ${data.length} profiles:`,
+          data.map((p) => ({ id: p.id, name: p.display_name || p.username }))
+        );
 
         const nameMap = data.reduce((acc, user) => {
           const name = user.display_name || user.username || "Someone";
           acc[user.id] = name;
-          console.log(`[TypingIndicator] Mapped ${user.id} -> ${name}`);
           return acc;
         }, {} as Record<string, string>);
 
         if (isActive) {
-          console.log("[TypingIndicator] Setting user names:", nameMap);
+          console.log("[TypingIndicator] ✅ Setting user names:", nameMap);
           setUserNames(nameMap);
+          setIsLoadingNames(false);
         }
       } catch (error) {
-        console.error("[TypingIndicator] Unexpected error fetching user names:", error);
+        console.error(
+          "[TypingIndicator] ❌ Unexpected error fetching user names:",
+          error
+        );
+        if (isActive) {
+          setIsLoadingNames(false);
+        }
       }
     };
 
     fetchUserNames();
-    
+
     return () => {
       isActive = false;
     };
@@ -95,13 +134,35 @@ export default function TypingIndicator({ roomId, currentUserId }: TypingIndicat
       .filter(Boolean);
   }, [uniqueTypers, userNames]);
 
-  console.log("[TypingIndicator] Render check:", {
+  console.log("[TypingIndicator] Final render check:", {
     typingUsersLength: typingUsers.length,
     uniqueTypersLength: uniqueTypers.length,
     typingNamesLength: typingNames.length,
+    isLoadingNames,
     typingNames,
-    shouldRender: typingNames.length > 0,
+    shouldRender: typingNames.length > 0 || (uniqueTypers.length > 0 && isLoadingNames),
   });
+
+  // Show fallback while loading names
+  if (uniqueTypers.length > 0 && typingNames.length === 0 && isLoadingNames) {
+    console.log("[TypingIndicator] Rendering: loading names...");
+    return (
+      <div
+        className="w-full bg-blue-50 dark:bg-blue-900/20 border-t border-blue-200 dark:border-blue-800 px-4 py-3 text-blue-600 dark:text-blue-300 italic text-sm"
+        style={{
+          minHeight: "44px",
+          display: "flex",
+          alignItems: "center",
+          zIndex: 50,
+          position: "relative",
+        }}
+      >
+        <span className="animate-pulse">
+          {uniqueTypers.length} user{uniqueTypers.length > 1 ? "s" : ""} typing...
+        </span>
+      </div>
+    );
+  }
 
   // Don't show if no one typing
   if (typingNames.length === 0) {
@@ -125,15 +186,36 @@ export default function TypingIndicator({ roomId, currentUserId }: TypingIndicat
 
   // Render with visible styling and proper structure
   return (
-    <div 
-      className="w-full bg-gray-100 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 px-4 py-3 text-gray-600 dark:text-gray-300 italic text-sm"
+    <div
+      className="w-full bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border-t border-indigo-200 dark:border-indigo-800 px-4 py-3 text-indigo-700 dark:text-indigo-300 italic text-sm font-medium"
       style={{
         minHeight: "44px",
         display: "flex",
         alignItems: "center",
+        zIndex: 50,
+        position: "relative",
       }}
+      role="status"
+      aria-live="polite"
+      aria-label="Users typing indicator"
     >
-      <span className="animate-pulse">{displayText}</span>
+      <span className="animate-pulse flex items-center gap-2">
+        <span className="inline-flex gap-1">
+          <span
+            className="inline-block w-2 h-2 bg-indigo-500 rounded-full animate-bounce"
+            style={{ animationDelay: "0ms" }}
+          ></span>
+          <span
+            className="inline-block w-2 h-2 bg-indigo-500 rounded-full animate-bounce"
+            style={{ animationDelay: "150ms" }}
+          ></span>
+          <span
+            className="inline-block w-2 h-2 bg-indigo-500 rounded-full animate-bounce"
+            style={{ animationDelay: "300ms" }}
+          ></span>
+        </span>
+        {displayText}
+      </span>
     </div>
   );
 }

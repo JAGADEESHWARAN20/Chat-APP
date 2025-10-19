@@ -1,4 +1,4 @@
-// components/ListMessages.tsx - FIXED RESPONSIVE VERSION
+// components/ListMessages.tsx - COMPLETE WORKING VERSION
 "use client";
 
 import { Imessage, useMessage } from "@/lib/store/messages";
@@ -33,13 +33,22 @@ export default function ListMessages() {
     optimisticDeleteMessage,
     optimisticUpdateMessage,
   } = useMessage((state) => state);
+
   const supabase = supabaseBrowser();
+
+  console.log("[ListMessages] Render:", {
+    messageCount: messages.length,
+    hasRoom: !!selectedRoom?.id,
+    hasUser: !!user?.id,
+  });
 
   const handleOnScroll = useCallback(() => {
     if (!scrollRef.current) return;
+
     const scrollContainer = scrollRef.current;
     const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
     const isNearBottom = scrollHeight - scrollTop <= clientHeight + 10;
+
     setUserScrolled(!isNearBottom);
 
     if (isNearBottom) {
@@ -59,6 +68,7 @@ export default function ListMessages() {
   // Load initial messages
   useEffect(() => {
     if (!selectedRoom?.id) {
+      console.log("[ListMessages] No room selected, clearing messages");
       setMessages([]);
       return;
     }
@@ -67,14 +77,22 @@ export default function ListMessages() {
 
     const loadInitialMessages = async () => {
       setIsLoading(true);
+      console.log("[ListMessages] 📥 Loading initial messages for room:", selectedRoom.id);
+
       try {
         const res = await fetch(`/api/messages/${selectedRoom.id}`);
+
         if (!res.ok) {
           throw new Error(await res.text());
         }
 
         const { messages: fetchedMessages } = await res.json();
+
         if (fetchedMessages && Array.isArray(fetchedMessages)) {
+          console.log(
+            `[ListMessages] ✅ Loaded ${fetchedMessages.length} messages`
+          );
+
           const formattedMessages = fetchedMessages.map((msg: any) => ({
             ...msg,
             profiles: msg.profiles
@@ -89,17 +107,18 @@ export default function ListMessages() {
                 }
               : null,
           }));
+
           if (isMounted) {
             setMessages(formattedMessages);
           }
         } else if (isMounted) {
-          console.warn("No messages or invalid messages format received");
+          console.warn("[ListMessages] No messages or invalid format");
           setMessages([]);
         }
       } catch (error) {
         if (isMounted) {
+          console.error("[ListMessages] Error loading messages:", error);
           toast.error("Failed to load messages");
-          console.error(error);
           setMessages([]);
         }
       } finally {
@@ -118,7 +137,12 @@ export default function ListMessages() {
 
   // Set up real-time subscriptions
   useEffect(() => {
-    if (!selectedRoom?.id) return;
+    if (!selectedRoom?.id) {
+      console.log("[ListMessages] No room for subscriptions");
+      return;
+    }
+
+    console.log("[ListMessages] 🔔 Setting up real-time subscription for room:", selectedRoom.id);
 
     const messageChannel = supabase
       .channel(`room_messages_${selectedRoom.id}`)
@@ -133,12 +157,17 @@ export default function ListMessages() {
         (payload) => {
           try {
             const messagePayload = payload.new as MessageRow | null;
+
             if (!messagePayload || messagePayload.room_id !== selectedRoom.id) {
+              console.log("[ListMessages] Message not for this room, ignoring");
               return;
             }
 
             if (payload.eventType === "INSERT") {
+              console.log("[ListMessages] 📨 INSERT event:", messagePayload.id);
+
               if (optimisticIds.includes(messagePayload.id)) {
+                console.log("[ListMessages] Message already exists (optimistic), skipping");
                 return;
               }
 
@@ -149,12 +178,18 @@ export default function ListMessages() {
                 .single<ProfileRow>()
                 .then(({ data: profile, error }) => {
                   if (error) {
+                    console.error("[ListMessages] Error fetching profile:", error);
                     toast.error(error.message);
                     return;
                   }
-                  if (!profile) return;
+
+                  if (!profile) {
+                    console.warn("[ListMessages] No profile found");
+                    return;
+                  }
 
                   if (messages.some((m) => m.id === messagePayload.id)) {
+                    console.log("[ListMessages] Message already in state");
                     return;
                   }
 
@@ -178,8 +213,11 @@ export default function ListMessages() {
                       updated_at: profile.updated_at ?? null,
                     },
                   };
+
+                  console.log("[ListMessages] ✅ Adding new message:", newMessage.id);
                   addMessage(newMessage);
 
+                  // Increment notification if scrolled up
                   if (
                     scrollRef.current &&
                     scrollRef.current.scrollTop <
@@ -187,10 +225,13 @@ export default function ListMessages() {
                         scrollRef.current.clientHeight -
                         10
                   ) {
+                    console.log("[ListMessages] 🔔 Incrementing notification");
                     setNotification((prev) => prev + 1);
                   }
                 });
             } else if (payload.eventType === "UPDATE") {
+              console.log("[ListMessages] ✏️ UPDATE event:", messagePayload.id);
+
               const oldMessage = messages.find((m) => m.id === messagePayload.id);
               if (oldMessage) {
                 optimisticUpdateMessage(messagePayload.id, {
@@ -200,17 +241,19 @@ export default function ListMessages() {
                 });
               }
             } else if (payload.eventType === "DELETE") {
+              console.log("[ListMessages] 🗑️ DELETE event");
               optimisticDeleteMessage((payload.old as MessageRow).id);
             }
           } catch (err) {
-            toast.error("Error processing real-time message update");
-            console.error(err);
+            console.error("[ListMessages] Error processing real-time update:", err);
+            toast.error("Error processing message update");
           }
         }
       )
       .subscribe();
 
     return () => {
+      console.log("[ListMessages] 🧹 Removing channel subscription");
       supabase.removeChannel(messageChannel);
     };
   }, [
@@ -231,6 +274,7 @@ export default function ListMessages() {
       !userScrolled &&
       prevMessagesLength.current < messages.length
     ) {
+      console.log("[ListMessages] Auto-scrolling to bottom");
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
     prevMessagesLength.current = messages.length;
@@ -241,12 +285,16 @@ export default function ListMessages() {
     if (!messages || !Array.isArray(messages) || !selectedRoom?.id) {
       return [];
     }
-    return messages
+
+    const filtered = messages
       .filter((msg): msg is Imessage => msg && msg.room_id === selectedRoom.id)
       .sort(
         (a, b) =>
           new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
       );
+
+    console.log("[ListMessages] Filtered to", filtered.length, "messages");
+    return filtered;
   }, [messages, selectedRoom?.id]);
 
   const SkeletonMessage = React.memo(() => (
@@ -305,10 +353,7 @@ export default function ListMessages() {
 
       {/* Typing Indicator - Between messages and input */}
       {user?.id && selectedRoom?.id && (
-        <TypingIndicator 
-          roomId={selectedRoom.id} 
-          currentUserId={user.id} 
-        />
+        <TypingIndicator roomId={selectedRoom.id} currentUserId={user.id} />
       )}
 
       {/* Scroll to bottom button */}
