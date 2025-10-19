@@ -72,19 +72,16 @@ export function useTypingStatus(roomId: string, userId: string | null) {
     }
 
     try {
-      const now = new Date();
-      const timeThreshold = new Date(now.getTime() - STALE_THRESHOLD).toISOString();
-
       console.log(
-        `[Typing] 🔍 Fetching typing users for room: ${roomId}, threshold: ${timeThreshold}`
+        `[Typing] 🔍 Fetching typing users for room: ${roomId}`
       );
 
+      // Simply fetch all is_typing = true, no time threshold
       const { data, error } = await (supabase as any)
         .from("typing_status")
         .select("user_id, is_typing, updated_at")
         .eq("room_id", roomId)
-        .eq("is_typing", true)
-        .gt("updated_at", timeThreshold);
+        .eq("is_typing", true);
 
       if (error) {
         console.error("[Typing] ❌ Fetch error:", error);
@@ -92,11 +89,16 @@ export function useTypingStatus(roomId: string, userId: string | null) {
       }
 
       if (data && Array.isArray(data)) {
+        console.log(
+          `[Typing] 📝 Raw fetch returned ${data.length} records:`,
+          data.map((u: any) => ({ id: u.user_id, updated: u.updated_at }))
+        );
+
         // Filter out current user
         const filtered = data.filter((u: any) => u.user_id !== userId);
         
         console.log(
-          `[Typing] 📝 Fetched ${filtered.length} typing users:`,
+          `[Typing] 📝 After filtering, ${filtered.length} typing users:`,
           filtered.map((u) => u.user_id)
         );
 
@@ -119,6 +121,30 @@ export function useTypingStatus(roomId: string, userId: string | null) {
       }, TYPING_TIMEOUT),
     [updateTypingStatus]
   );
+
+  // Auto-clean stale typing records periodically
+  useEffect(() => {
+    const cleanupStaleRecords = async () => {
+      try {
+        const now = new Date();
+        const staleTime = new Date(now.getTime() - STALE_THRESHOLD).toISOString();
+
+        console.log("[Typing] 🧹 Cleaning stale typing records older than:", staleTime);
+
+        await (supabase as any)
+          .from("typing_status")
+          .update({ is_typing: false })
+          .eq("is_typing", true)
+          .lt("updated_at", staleTime);
+      } catch (error) {
+        console.error("[Typing] Error cleaning stale records:", error);
+      }
+    };
+
+    // Run cleanup every 10 seconds
+    const cleanupInterval = setInterval(cleanupStaleRecords, 10000);
+    return () => clearInterval(cleanupInterval);
+  }, [supabase]);
 
   // Start typing
   const startTyping = useCallback(() => {

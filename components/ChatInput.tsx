@@ -41,15 +41,20 @@ export default function ChatInput({ user }: { user: SupabaseUser }) {
         textLength: newText.length,
         isTrimmed: newText.trim().length > 0,
         roomId: selectedRoom?.id,
+        userId: user?.id,
       });
 
       // Only trigger typing when text is being added
       if (newText.trim().length > 0 && selectedRoom?.id) {
         console.log("[ChatInput] ⌨️ Starting typing indicator");
-        startTyping();
+        try {
+          startTyping();
+        } catch (error) {
+          console.error("[ChatInput] Error calling startTyping:", error);
+        }
       }
     },
-    [startTyping, selectedRoom?.id]
+    [startTyping, selectedRoom?.id, user?.id]
   );
 
   const handleSend = async () => {
