@@ -24,7 +24,7 @@ export default function ListMessages() {
   const { state } = useRoomContext();
   const { selectedRoom } = state;
   const user = useUser((state) => state.user);
-
+  console.log(user);
   const {
     messages,
     setMessages,
