@@ -324,15 +324,15 @@ export default function ListMessages() {
   }
 
   return (
-    <div className="flex flex-col w-full transparent-scrollbar-track overflow-scroll h-full">
-      {/* Messages Scroll Area */}
+    <>
+      {/* Messages Scroll Area - ONLY THIS DIV HAS SCROLL */}
       <div
         id="message-container"
         tabIndex={0}
         role="region"
         aria-label="Messages"
         aria-live="polite"
-        className="flex-1 overflow-y-scroll px-4 py-2 space-y-2 min-h-0 w-full scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent"
+        className="flex-1 overflow-y-auto px-4 py-2 space-y-2 w-full scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent"
         ref={scrollRef}
         onScroll={handleOnScroll}
       >
@@ -384,6 +384,6 @@ export default function ListMessages() {
           )}
         </div>
       )}
-    </div>
+    </>
   );
 }

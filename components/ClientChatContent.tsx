@@ -1,3 +1,4 @@
+// components/ClientChatContent.tsx - UPDATED
 "use client";
 
 import React from "react";
@@ -13,15 +14,22 @@ export default function ClientChatContent({ user }: { user: SupabaseUser | undef
   const { selectedRoom } = state;
 
   return (
-    <div className="h-auto w-full items-center justify-start flex flex-col">
-      <ChatHeader user={user} />
-      <div className="flex-1 h=[90vh] flex w-[100%] flex-col">
+    <div className="h-full w-full flex flex-col">
+      {/* Header - Fixed height, no scroll */}
+      <div className="flex-shrink-0">
+        <ChatHeader user={user} />
+      </div>
+      
+      {/* Main Content Area - Flex container */}
+      <div className="flex-1 flex flex-col min-h-0">
         {user && selectedRoom ? (
           <>
-            <div className="flex-1 h-[80%] ">
+            {/* Messages Area - This will scroll internally via ListMessages */}
+            <div className="flex-1 min-h-0">
               <ChatMessages />
             </div>
-            <div className="flex-shrink-0 pb-2">
+            {/* Input Area - Fixed height, no scroll */}
+            <div className="flex-shrink-0">
               <ChatInput />
             </div>
           </>
