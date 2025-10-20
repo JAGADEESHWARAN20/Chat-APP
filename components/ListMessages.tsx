@@ -324,7 +324,7 @@ export default function ListMessages() {
   }
 
   return (
-    <div className="flex flex-col  w-full h-full">
+    <div className="flex flex-col overflow-y-scroll w-full h-full">
       {/* Messages Scroll Area */}
       <div
         id="message-container"
