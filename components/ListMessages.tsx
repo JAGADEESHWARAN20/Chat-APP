@@ -1,4 +1,4 @@
-// components/ListMessages.tsx - COMPLETE WORKING VERSION
+// components/ListMessages.tsx - UPDATED VERSION
 "use client";
 
 import { Imessage, useMessage } from "@/lib/store/messages";
@@ -358,8 +358,8 @@ export default function ListMessages() {
       </div>
 
       {/* Typing Indicator - Between messages and input */}
-      {user?.id && selectedRoom?.id && (
-        <TypingIndicator roomId={selectedRoom.id} currentUserId={user.id} />
+      {selectedRoom?.id && (
+        <TypingIndicator roomId={selectedRoom.id} />
       )}
 
       {/* Scroll to bottom button */}

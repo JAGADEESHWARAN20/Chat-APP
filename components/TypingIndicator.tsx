@@ -1,25 +1,23 @@
-// components/TypingIndicator.tsx - COMPLETE WORKING VERSION
+// components/TypingIndicator.tsx
 "use client";
 
 import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { supabaseBrowser } from "@/lib/supabase/browser";
-import type { Database } from "@/lib/types/supabase";
 import { useTypingStatus } from "@/hooks/useTypingStatus";
+import { useRoomContext } from "@/lib/store/RoomContext"; // Import RoomContext
 
 interface TypingIndicatorProps {
   roomId: string;
-  currentUserId?: string;
+  // Remove currentUserId prop - we'll get it from RoomContext
 }
 
-export default function TypingIndicator({
-  roomId,
-  currentUserId,
-}: TypingIndicatorProps) {
+export default function TypingIndicator({ roomId }: TypingIndicatorProps) {
   const supabase = supabaseBrowser();
   const [userNames, setUserNames] = useState<Record<string, string>>({});
   const [isLoadingNames, setIsLoadingNames] = useState(false);
-
-  const { typingUsers } = useTypingStatus(roomId, currentUserId || "");
+  const { state } = useRoomContext(); // Get RoomContext
+  const { typingUsers } = useTypingStatus(roomId); // Use hook with only roomId
+  const currentUserId = state.user?.id; // Get current user ID from RoomContext
 
   console.log("[TypingIndicator] Render cycle:", {
     roomId,
@@ -65,7 +63,7 @@ export default function TypingIndicator({
       );
 
       try {
-        const { data, error } = await (supabase as any)
+        const { data, error } = await supabase
           .from("profiles")
           .select("id, display_name, username")
           .in("id", uniqueTypers);
@@ -91,14 +89,14 @@ export default function TypingIndicator({
 
         console.log(
           `[TypingIndicator] ✅ Fetched ${data.length} profiles:`,
-          data.map((p) => ({ id: p.id, name: p.display_name || p.username }))
+          data.map((p: any) => ({ id: p.id, name: p.display_name || p.username }))
         );
 
-        const nameMap = data.reduce((acc, user) => {
+        const nameMap = data.reduce((acc: Record<string, string>, user: any) => {
           const name = user.display_name || user.username || "Someone";
           acc[user.id] = name;
           return acc;
-        }, {} as Record<string, string>);
+        }, {});
 
         if (isActive) {
           console.log("[TypingIndicator] ✅ Setting user names:", nameMap);
@@ -184,7 +182,6 @@ export default function TypingIndicator({
 
   console.log("[TypingIndicator] RENDERING with text:", displayText);
 
-  // Render with visible styling and proper structure
   return (
     <div
       className="w-full bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border-t border-indigo-200 dark:border-indigo-800 px-4 py-3 text-indigo-700 dark:text-indigo-300 italic text-sm font-medium"
