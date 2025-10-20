@@ -1,192 +1,243 @@
-// "use client";
+"use client";
 
-// import { useEffect, useState, useMemo } from "react";
-// import { supabaseBrowser } from "@/lib/supabase/browser";
-// import { useUser } from "@/lib/store/user";
-// import Message from "@/components/Message";
-// import ChatInput from "@/components/ChatInput";
-// import { useTypingStatus } from "@/hooks/useTypingStatus";
-// import { toast } from "sonner";
-// import type { Imessage } from "@/lib/store/messages";
+import { useEffect, useState, useMemo } from "react";
+import { supabaseBrowser } from "@/lib/supabase/browser";
+import { useUser } from "@/lib/store/user";
+import Message from "@/components/Message";
+import ChatInput from "@/components/ChatInput";
+import { useTypingStatus, useDebouncedTyping } from "@/hooks/useTypingStatus";
+import { toast } from "sonner";
+import type { Imessage } from "@/lib/store/messages";
 
-// interface DirectMessageProps {
-//   chatId: string;
-//   otherUserId: string;
-// }
+interface DirectMessageProps {
+  chatId: string;
+  otherUserId: string;
+}
 
-// export default function DirectChat({ chatId, otherUserId }: DirectMessageProps) {
-//   const [messages, setMessages] = useState<Imessage[]>([]);
-//   const [isLoading, setIsLoading] = useState(true);
-//   const { user } = useUser();
-//   const supabase = useMemo(() => supabaseBrowser(), []);
-//   const { typingUsers, startTyping } = useTypingStatus(chatId, "direct");
-//   const isTyping = typingUsers.some((u) => u.user_id === otherUserId);
+export default function DirectChat({ chatId, otherUserId }: DirectMessageProps) {
+  const [messages, setMessages] = useState<Imessage[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const { user } = useUser();
+  const supabase = useMemo(() => supabaseBrowser(), []);
+  
+  // Fixed: useTypingStatus now only accepts roomId (chatId in this case)
+  const { typingUsers, typingDisplayText, isTyping } = useTypingStatus(chatId);
+  const { handleTyping } = useDebouncedTyping(chatId);
 
-//   // Fetch initial messages
-//   useEffect(() => {
-//     const fetchMessages = async () => {
-//       if (!user) return;
+  // Filter typing users to only show the other user
+  const otherUserTyping = useMemo(() => {
+    return typingUsers.some((typingUser) => typingUser.user_id === otherUserId);
+  }, [typingUsers, otherUserId]);
 
-//       try {
-//         const { data, error } = await supabase
-//           .from("messages")
-//           .select(
-//             `
-//             *,
-//             profiles:profiles!messages_sender_id_fkey (
-//               id,
-//               username,
-//               avatar_url,
-//               display_name
-//             )
-//           `
-//           )
-//           .eq("direct_chat_id", chatId)
-//           .order("created_at", { ascending: false })
-//           .limit(50);
+  // Fetch initial messages
+  useEffect(() => {
+    const fetchMessages = async () => {
+      if (!user) return;
 
-//         if (error) throw error;
+      try {
+        const { data, error } = await supabase
+          .from("messages")
+          .select(
+            `
+            *,
+            profiles:profiles!messages_sender_id_fkey (
+              id,
+              username,
+              avatar_url,
+              display_name
+            )
+          `
+          )
+          .eq("direct_chat_id", chatId)
+          .order("created_at", { ascending: false })
+          .limit(50);
 
-//         const messagesWithProfiles = (data || []).map((msg: any) => ({
-//           ...msg,
-//         }) as Imessage);
+        if (error) throw error;
 
-//         setMessages(messagesWithProfiles.reverse());
+        const messagesWithProfiles = (data || []).map((msg: any) => ({
+          ...msg,
+        }) as Imessage);
 
-//         // Mark messages as read
-//         const unreadMessages = (data || []).filter(
-//           (msg: any) => msg.sender_id !== user.id
-//         );
-//         if (unreadMessages.length > 0) {
-//           await supabase.rpc("batch_mark_messages_read", {
-//             p_message_ids: unreadMessages.map((m: any) => m.id),
-//             p_user_id: user.id,
-//           });
-//         }
-//       } catch (error) {
-//         toast.error("Error loading messages");
-//         console.error("Error:", error);
-//       } finally {
-//         setIsLoading(false);
-//       }
-//     };
+        setMessages(messagesWithProfiles.reverse());
 
-//     fetchMessages();
-//   }, [chatId, user, supabase]);
+        // Mark messages as read
+        const unreadMessages = (data || []).filter(
+          (msg: any) => msg.sender_id !== user.id
+        );
+        if (unreadMessages.length > 0) {
+          await supabase.rpc("batch_mark_messages_read", {
+            p_message_ids: unreadMessages.map((m: any) => m.id),
+            p_user_id: user.id,
+          });
+        }
+      } catch (error) {
+        toast.error("Error loading messages");
+        console.error("Error:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-//   // Subscribe to new messages and read status
-//   useEffect(() => {
-//     if (!user) return;
+    fetchMessages();
+  }, [chatId, user, supabase]);
 
-//     const channel = supabase.channel(`direct_chat:${chatId}`);
+  // Subscribe to new messages and read status
+  useEffect(() => {
+    if (!user) return;
 
-//     channel
-//       .on(
-//         "postgres_changes",
-//         {
-//           event: "INSERT",
-//           schema: "public",
-//           table: "messages",
-//           filter: `direct_chat_id=eq.${chatId}`,
-//         },
-//         async (payload) => {
-//           const newMessage = payload.new as any;
+    const channel = supabase.channel(`direct_chat:${chatId}`);
 
-//           const { data: sender } = await supabase
-//             .from("profiles")
-//             .select("id, username, avatar_url, display_name")
-//             .eq("id", newMessage.sender_id)
-//             .single();
+    channel
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+          filter: `direct_chat_id=eq.${chatId}`,
+        },
+        async (payload) => {
+          const newMessage = payload.new as any;
 
-//           const msgWithProfile = { ...newMessage, profiles: sender } as Imessage;
+          const { data: sender } = await supabase
+            .from("profiles")
+            .select("id, username, avatar_url, display_name")
+            .eq("id", newMessage.sender_id)
+            .single();
 
-//           setMessages((prev) => [...prev, msgWithProfile]);
+          const msgWithProfile = { ...newMessage, profiles: sender } as Imessage;
 
-//           // Mark message as read if from other user
-//           if (newMessage.sender_id !== user.id) {
-//             await supabase.rpc("batch_mark_messages_read", {
-//               p_message_ids: [newMessage.id],
-//               p_user_id: user.id,
-//             });
-//           }
-//         }
-//       )
-//       .subscribe();
+          setMessages((prev) => [...prev, msgWithProfile]);
 
-//     return () => {
-//       channel.unsubscribe();
-//     };
-//   }, [chatId, user, supabase, otherUserId]);
+          // Mark message as read if from other user
+          if (newMessage.sender_id !== user.id) {
+            await supabase.rpc("batch_mark_messages_read", {
+              p_message_ids: [newMessage.id],
+              p_user_id: user.id,
+            });
+          }
+        }
+      )
+      .subscribe();
 
-//   // Subscribe to typing status
-//   useEffect(() => {
-//     if (!user) return;
+    return () => {
+      channel.unsubscribe();
+    };
+  }, [chatId, user, supabase, otherUserId]);
 
-//     const typingChannel = supabase.channel(`typing:${chatId}`);
+  const handleSend = async (text: string) => {
+    if (!user) return;
 
-//     typingChannel
-//       .on("broadcast", { event: "typing" }, ({ payload }) => {
-//         if (payload.user_id === otherUserId) {
-//           startTyping();
-//         }
-//       })
-//       .subscribe();
+    try {
+      const { data, error } = await supabase
+        .from("messages")
+        .insert({
+          direct_chat_id: chatId,
+          sender_id: user.id,
+          text,
+        })
+        .select(
+          `
+          *,
+          profiles:profiles!messages_sender_id_fkey (
+            id,
+            username,
+            avatar_url,
+            display_name
+          )
+        `
+        )
+        .single();
 
-//     return () => {
-//       typingChannel.unsubscribe();
-//     };
-//   }, [chatId, otherUserId, startTyping, supabase, user]);
+      if (error) throw error;
 
-//   const handleSend = async (text: string) => {
-//     if (!user) return;
+      setMessages((prev) => [...prev, data as Imessage]);
+    } catch (error) {
+      toast.error("Failed to send message");
+      console.error("Error:", error);
+    }
+  };
 
-//     try {
-//       const { data, error } = await supabase
-//         .from("messages")
-//         .insert({
-//           direct_chat_id: chatId,
-//           sender_id: user.id,
-//           text,
-//         })
-//         .select(
-//           `
-//           *,
-//           profiles:profiles!messages_sender_id_fkey (
-//             id,
-//             username,
-//             avatar_url,
-//             display_name
-//           )
-//         `
-//         )
-//         .single();
+  // Custom ChatInput for direct messages
+  const DirectChatInput = () => {
+    const [text, setText] = useState("");
 
-//       if (error) throw error;
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const newText = e.target.value;
+      setText(newText);
 
-//       setMessages((prev) => [...prev, (data as any) as Imessage]);
-//     } catch (error) {
-//       toast.error("Failed to send message");
-//       console.error("Error:", error);
-//     }
-//   };
+      // Trigger typing indicator when typing
+      if (newText.trim().length > 0) {
+        handleTyping();
+      }
+    };
 
-//   if (isLoading) {
-//     return <div>Loading...</div>;
-//   }
+    const handleSendMessage = () => {
+      if (text.trim()) {
+        handleSend(text.trim());
+        setText("");
+      }
+    };
 
-//   return (
-//     <div className="flex flex-col h-full">
-//       <div className="flex-1 overflow-y-auto px-4 py-2 space-y-4">
-//         {messages.map((message) => (
-//           <Message key={message.id} message={message} />
-//         ))}
-//       </div>
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        handleSendMessage();
+      }
+    };
 
-//       {isTyping && (
-//         <div className="px-4 py-2 text-sm text-gray-500">User is typing...</div>
-//       )}
+    return (
+      <div className="flex gap-2 p-4 border-t bg-background/95">
+        <input
+          value={text}
+          onChange={handleInputChange}
+          onKeyDown={handleKeyDown}
+          placeholder="Type a message..."
+          className="flex-1 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <button
+          onClick={handleSendMessage}
+          disabled={!text.trim()}
+          className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
+        >
+          Send
+        </button>
+      </div>
+    );
+  };
 
-//       <ChatInput />
-//     </div>
-//   );
-// }
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full text-gray-500">
+        Loading messages...
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Messages Area */}
+      <div className="flex-1 overflow-y-auto px-4 py-2 space-y-4">
+        {messages.length > 0 ? (
+          messages.map((message) => (
+            <Message key={message.id} message={message} />
+          ))
+        ) : (
+          <div className="flex items-center justify-center h-full text-gray-500">
+            No messages yet. Start a conversation!
+          </div>
+        )}
+      </div>
+
+      {/* Typing Indicator */}
+      {otherUserTyping && (
+        <div className="px-4 py-2 text-sm text-gray-500 italic">
+          {typingDisplayText || "User is typing..."}
+        </div>
+      )}
+
+      {/* Chat Input */}
+      <DirectChatInput />
+    </div>
+  );
+}
