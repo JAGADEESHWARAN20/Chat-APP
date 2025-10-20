@@ -22,7 +22,7 @@ export default function ClientChatContent({ user }: { user: SupabaseUser | undef
               <ChatMessages />
             </div>
             <div className="flex-shrink-0 pb-2">
-              <ChatInput user={user} />
+              <ChatInput />
             </div>
           </>
         ) : (

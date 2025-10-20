@@ -1,4 +1,4 @@
-// components/ChatInput.tsx - COMPLETE WORKING VERSION
+// components/ChatInput.tsx - UPDATED CORRECTED VERSION
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
@@ -11,27 +11,29 @@ import { v4 as uuidv4 } from "uuid";
 import { User as SupabaseUser } from "@supabase/supabase-js";
 import { Imessage } from "@/lib/store/messages";
 import { Send } from "lucide-react";
-import { useTypingStatus } from "@/hooks/useTypingStatus";
+import { useTypingStatus, useDebouncedTyping } from "@/hooks/useTypingStatus";
 
-export default function ChatInput({ user }: { user: SupabaseUser }) {
+export default function ChatInput() {
   const [text, setText] = useState("");
   const { addMessage, addOptimisticId } = useMessage();
   const { state } = useRoomContext();
-  const { selectedRoom, selectedDirectChat } = state;
-  const typingTimeoutRef = useRef<NodeJS.Timeout>();
+  const { selectedRoom, selectedDirectChat, user: contextUser } = state;
 
-  // Get typing functionality from hook
-  const { startTyping } = useTypingStatus(
-    selectedRoom?.id || "",
-    user?.id || null
-  );
+  // Get user from RoomContext instead of props
+  const user = contextUser;
+
+  // Get typing functionality - only pass roomId since useTypingStatus now gets user from RoomContext
+  const { startTyping, stopTyping } = useTypingStatus(selectedRoom?.id || "");
+  const { handleTyping } = useDebouncedTyping(selectedRoom?.id || "");
 
   console.log("[ChatInput] Render:", {
     hasRoom: !!selectedRoom?.id,
+    hasDirectChat: !!selectedDirectChat?.id,
     hasUser: !!user?.id,
+    userFrom: "RoomContext",
   });
 
-  // Handle input changes
+  // Handle input changes with debounced typing
   const handleInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const newText = e.target.value;
@@ -44,17 +46,17 @@ export default function ChatInput({ user }: { user: SupabaseUser }) {
         userId: user?.id,
       });
 
-      // Only trigger typing when text is being added
-      if (newText.trim().length > 0 && selectedRoom?.id) {
-        console.log("[ChatInput] ⌨️ Starting typing indicator");
+      // Trigger debounced typing indicator when text is being added
+      if (newText.trim().length > 0 && selectedRoom?.id && user?.id) {
+        console.log("[ChatInput] ⌨️ Triggering typing indicator");
         try {
-          startTyping();
+          handleTyping();
         } catch (error) {
-          console.error("[ChatInput] Error calling startTyping:", error);
+          console.error("[ChatInput] Error calling handleTyping:", error);
         }
       }
     },
-    [startTyping, selectedRoom?.id, user?.id]
+    [handleTyping, selectedRoom?.id, user?.id]
   );
 
   const handleSend = async () => {
@@ -80,9 +82,13 @@ export default function ChatInput({ user }: { user: SupabaseUser }) {
       return;
     }
 
-    // Clear typing timeout if any
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
+    // Stop typing indicator immediately when sending
+    if (selectedRoom?.id && user?.id) {
+      try {
+        stopTyping();
+      } catch (error) {
+        console.error("[ChatInput] Error stopping typing:", error);
+      }
     }
 
     const optimisticId = uuidv4();
@@ -147,30 +153,51 @@ export default function ChatInput({ user }: { user: SupabaseUser }) {
     }
   };
 
-  // Cleanup on unmount
+  // Stop typing when component unmounts or room changes
   useEffect(() => {
     return () => {
-      console.log("[ChatInput] 🧹 Unmounting");
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
+      console.log("[ChatInput] 🧹 Unmounting - stopping typing");
+      if (selectedRoom?.id && user?.id) {
+        try {
+          stopTyping();
+        } catch (error) {
+          console.error("[ChatInput] Error stopping typing on unmount:", error);
+        }
       }
     };
-  }, []);
+  }, [selectedRoom?.id, user?.id, stopTyping]);
+
+  // Stop typing when text is cleared
+  useEffect(() => {
+    if (text.trim().length === 0 && selectedRoom?.id && user?.id) {
+      try {
+        stopTyping();
+      } catch (error) {
+        console.error("[ChatInput] Error stopping typing on text clear:", error);
+      }
+    }
+  }, [text, selectedRoom?.id, user?.id, stopTyping]);
 
   return (
-    <div className="flex gap-2 w-full">
+    <div className="flex gap-2 w-full p-4 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <Input
         value={text}
         onChange={handleInputChange}
         onKeyDown={handleKeyDown}
-        placeholder="Type a message..."
+        placeholder={
+          !selectedRoom && !selectedDirectChat 
+            ? "Select a room or chat to start messaging..." 
+            : "Type a message..."
+        }
         disabled={!selectedRoom && !selectedDirectChat}
         className="flex-1"
+        aria-label="Type your message"
       />
       <Button
         onClick={handleSend}
-        disabled={!selectedRoom && !selectedDirectChat}
+        disabled={(!selectedRoom && !selectedDirectChat) || !text.trim()}
         className="gap-2"
+        aria-label="Send message"
       >
         <Send className="w-[1.2em] h-[1.2em]" />
       </Button>
