@@ -87,13 +87,9 @@ export default function ChatMessages() {
   return (
     // This container should NOT have scroll - ListMessages handles scrolling internally
     <div className="h-full">
-      <Suspense fallback={
-        <div className="flex items-center justify-center h-full text-gray-500">
-          Loading messages...
-        </div>
-      }>
+     
         <ListMessages />
-      </Suspense>
+     
     </div>
   );
 }
