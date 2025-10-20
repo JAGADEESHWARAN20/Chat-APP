@@ -1,9 +1,7 @@
-// components/TypingIndicator.tsx - COMPLETE WORKING VERSION
 "use client";
 
-import React, { useEffect, useState, useMemo, useCallback } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { supabaseBrowser } from "@/lib/supabase/browser";
-import type { Database } from "@/lib/types/supabase";
 import { useTypingStatus } from "@/hooks/useTypingStatus";
 
 interface TypingIndicatorProps {
@@ -17,205 +15,84 @@ export default function TypingIndicator({
 }: TypingIndicatorProps) {
   const supabase = supabaseBrowser();
   const [userNames, setUserNames] = useState<Record<string, string>>({});
-  const [isLoadingNames, setIsLoadingNames] = useState(false);
-
   const { typingUsers } = useTypingStatus(roomId, currentUserId || "");
 
-  console.log("[TypingIndicator] Render cycle:", {
-    roomId,
-    currentUserId,
-    typingUsersCount: typingUsers.length,
-    typingUserIds: typingUsers.map((u) => u.user_id),
-  });
+  /** Unique typers (excluding current user) */
+  const uniqueTypers = useMemo(
+    () => [...new Set(typingUsers
+      .filter(u => u.is_typing && u.user_id !== currentUserId)
+      .map(u => u.user_id)
+    )],
+    [typingUsers, currentUserId]
+  );
 
-  // Get unique typing user IDs (excluding current user)
-  const uniqueTypers = useMemo(() => {
-    const filtered = typingUsers
-      .filter((u) => {
-        const isNotCurrent = u.user_id !== currentUserId;
-        const isTyping = u.is_typing;
-        console.log(
-          `[TypingIndicator] Filter user ${u.user_id}: isTyping=${isTyping}, isNotCurrent=${isNotCurrent}`
-        );
-        return isNotCurrent && isTyping;
-      })
-      .map((u) => u.user_id);
-
-    const deduped = [...new Set(filtered)];
-    console.log("[TypingIndicator] Unique typers:", deduped);
-    return deduped;
-  }, [typingUsers, currentUserId]);
-
-  // Fetch display names for typing users
+  /** Fetch user display names only when typers change */
   useEffect(() => {
-    let isActive = true;
+    if (uniqueTypers.length === 0) {
+      setUserNames({});
+      return;
+    }
 
-    const fetchUserNames = async () => {
-      if (uniqueTypers.length === 0) {
-        console.log("[TypingIndicator] No typers, clearing names");
-        setUserNames({});
-        setIsLoadingNames(false);
-        return;
-      }
+    let active = true;
+    (async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, display_name, username")
+        .in("id", uniqueTypers);
 
-      setIsLoadingNames(true);
-      console.log(
-        `[TypingIndicator] 🔍 Fetching names for ${uniqueTypers.length} users:`,
-        uniqueTypers
-      );
+      if (!active || error || !data) return;
+      const nameMap = data.reduce((acc, u) => {
+        acc[u.id] = u.display_name || u.username || "Someone";
+        return acc;
+      }, {} as Record<string, string>);
+      setUserNames(nameMap);
+    })();
 
-      try {
-        const { data, error } = await (supabase as any)
-          .from("profiles")
-          .select("id, display_name, username")
-          .in("id", uniqueTypers);
-
-        if (error) {
-          console.error("[TypingIndicator] ❌ Error fetching user names:", error);
-          if (isActive) {
-            setIsLoadingNames(false);
-          }
-          return;
-        }
-
-        if (!Array.isArray(data)) {
-          console.warn(
-            "[TypingIndicator] ⚠️ Unexpected data format:",
-            data
-          );
-          if (isActive) {
-            setIsLoadingNames(false);
-          }
-          return;
-        }
-
-        console.log(
-          `[TypingIndicator] ✅ Fetched ${data.length} profiles:`,
-          data.map((p) => ({ id: p.id, name: p.display_name || p.username }))
-        );
-
-        const nameMap = data.reduce((acc, user) => {
-          const name = user.display_name || user.username || "Someone";
-          acc[user.id] = name;
-          return acc;
-        }, {} as Record<string, string>);
-
-        if (isActive) {
-          console.log("[TypingIndicator] ✅ Setting user names:", nameMap);
-          setUserNames(nameMap);
-          setIsLoadingNames(false);
-        }
-      } catch (error) {
-        console.error(
-          "[TypingIndicator] ❌ Unexpected error fetching user names:",
-          error
-        );
-        if (isActive) {
-          setIsLoadingNames(false);
-        }
-      }
-    };
-
-    fetchUserNames();
-
-    return () => {
-      isActive = false;
-    };
+    return () => { active = false };
   }, [uniqueTypers, supabase]);
 
-  // Get display names for typing users
-  const typingNames = useMemo(() => {
-    return uniqueTypers
-      .map((id) => {
-        const name = userNames[id];
-        console.log(`[TypingIndicator] Getting name for ${id}: ${name}`);
-        return name;
-      })
-      .filter(Boolean);
-  }, [uniqueTypers, userNames]);
+  /** Resolve typing names */
+  const typingNames = useMemo(
+    () => uniqueTypers.map(id => userNames[id]).filter(Boolean),
+    [uniqueTypers, userNames]
+  );
 
-  console.log("[TypingIndicator] Final render check:", {
-    typingUsersLength: typingUsers.length,
-    uniqueTypersLength: uniqueTypers.length,
-    typingNamesLength: typingNames.length,
-    isLoadingNames,
-    typingNames,
-    shouldRender: typingNames.length > 0 || (uniqueTypers.length > 0 && isLoadingNames),
-  });
+  /** No one typing */
+  if (typingNames.length === 0) return null;
 
-  // Show fallback while loading names
-  if (uniqueTypers.length > 0 && typingNames.length === 0 && isLoadingNames) {
-    console.log("[TypingIndicator] Rendering: loading names...");
-    return (
-      <div
-        className="w-full bg-blue-50 dark:bg-blue-900/20 border-t border-blue-200 dark:border-blue-800 px-4 py-3 text-blue-600 dark:text-blue-300 italic text-sm"
-        style={{
-          minHeight: "44px",
-          display: "flex",
-          alignItems: "center",
-          zIndex: 50,
-          position: "relative",
-        }}
-      >
-        <span className="animate-pulse">
-          {uniqueTypers.length} user{uniqueTypers.length > 1 ? "s" : ""} typing...
-        </span>
-      </div>
-    );
-  }
+  /** Build display string */
+  const displayText =
+    typingNames.length === 1
+      ? `${typingNames[0]} is typing...`
+      : typingNames.length === 2
+      ? `${typingNames[0]} and ${typingNames[1]} are typing...`
+      : `${typingNames.slice(0, -1).join(", ")}, and ${
+          typingNames.at(-1)
+        } are typing...`;
 
-  // Don't show if no one typing
-  if (typingNames.length === 0) {
-    console.log("[TypingIndicator] Not rendering: no names or no typers");
-    return null;
-  }
-
-  // Format the display text
-  let displayText = "";
-  if (typingNames.length === 1) {
-    displayText = `${typingNames[0]} is typing...`;
-  } else if (typingNames.length === 2) {
-    displayText = `${typingNames[0]} and ${typingNames[1]} are typing...`;
-  } else {
-    const otherNames = typingNames.slice(0, -1).join(", ");
-    const lastName = typingNames[typingNames.length - 1];
-    displayText = `${otherNames}, and ${lastName} are typing...`;
-  }
-
-  console.log("[TypingIndicator] RENDERING with text:", displayText);
-
-  // Render with visible styling and proper structure
   return (
     <div
-      className="w-full bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border-t border-indigo-200 dark:border-indigo-800 px-4 py-3 text-indigo-700 dark:text-indigo-300 italic text-sm font-medium"
-      style={{
-        minHeight: "44px",
-        display: "flex",
-        alignItems: "center",
-        zIndex: 50,
-        position: "relative",
-      }}
+      className="w-full bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border-t border-indigo-200 dark:border-indigo-800 px-4 py-3 text-indigo-700 dark:text-indigo-300 italic text-sm font-medium flex items-center z-50 relative"
       role="status"
       aria-live="polite"
-      aria-label="Users typing indicator"
     >
       <span className="animate-pulse flex items-center gap-2">
         <span className="inline-flex gap-1">
-          <span
-            className="inline-block w-2 h-2 bg-indigo-500 rounded-full animate-bounce"
-            style={{ animationDelay: "0ms" }}
-          ></span>
-          <span
-            className="inline-block w-2 h-2 bg-indigo-500 rounded-full animate-bounce"
-            style={{ animationDelay: "150ms" }}
-          ></span>
-          <span
-            className="inline-block w-2 h-2 bg-indigo-500 rounded-full animate-bounce"
-            style={{ animationDelay: "300ms" }}
-          ></span>
+          <Dot delay="0ms" />
+          <Dot delay="150ms" />
+          <Dot delay="300ms" />
         </span>
         {displayText}
       </span>
     </div>
+  );
+}
+
+function Dot({ delay }: { delay: string }) {
+  return (
+    <span
+      className="inline-block w-2 h-2 bg-indigo-500 rounded-full animate-bounce"
+      style={{ animationDelay: delay }}
+    />
   );
 }
