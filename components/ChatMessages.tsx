@@ -1,7 +1,6 @@
-// components/ChatMessages.tsx - UPDATED
 "use client";
 
-import { useEffect, useCallback } from "react";
+import { Suspense, useEffect, useCallback } from "react";
 import ListMessages from "./ListMessages";
 import { useRoomContext } from "@/lib/store/RoomContext";
 import { useDirectChatStore } from "@/lib/store/directChatStore";
@@ -82,14 +81,11 @@ export default function ChatMessages() {
     return () => {
       unsubscribeFromRoom();
     };
-  }, [selectedRoom?.id, selectedDirectChat?.id, unsubscribeFromRoom, fetchMessages]);
+  }, [selectedRoom?.id, selectedDirectChat?.id, unsubscribeFromRoom,fetchMessages]);
 
   return (
-    // This container should NOT have scroll - ListMessages handles scrolling internally
-    <div className="h-full">
-     
-        <ListMessages />
-     
-    </div>
+    <Suspense fallback={<div>Loading messages...</div>}>
+      <ListMessages />
+    </Suspense>
   );
 }
