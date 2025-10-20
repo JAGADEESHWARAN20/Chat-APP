@@ -39,7 +39,7 @@ export default function Page() {
                 aria-label={isSidebarOpen ? "Close sidebar" : "Open sidebar"}
               >
                 
-                  <ChevronRight className="w-5 h-5 rotate-0 duration-[1.5s] transition-all" />
+                  <ChevronRight className="w-5 h-5 rotate-0 duration-[1500ms] transition-all" />
                 
               </button>
 
