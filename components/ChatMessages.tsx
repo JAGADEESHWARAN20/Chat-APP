@@ -1,7 +1,7 @@
 // components/ChatMessages.tsx - UPDATED
 "use client";
 
-import { Suspense, useEffect, useCallback } from "react";
+import { useEffect, useCallback } from "react";
 import ListMessages from "./ListMessages";
 import { useRoomContext } from "@/lib/store/RoomContext";
 import { useDirectChatStore } from "@/lib/store/directChatStore";
