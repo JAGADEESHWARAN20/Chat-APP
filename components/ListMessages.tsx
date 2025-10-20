@@ -324,7 +324,7 @@ export default function ListMessages() {
   }
 
   return (
-    <div className="flex flex-col overflow-y-scroll w-full h-full">
+    <div className="flex flex-col w-full h-full">
       {/* Messages Scroll Area */}
       <div
         id="message-container"
@@ -332,7 +332,7 @@ export default function ListMessages() {
         role="region"
         aria-label="Messages"
         aria-live="polite"
-        className="flex-1 overflow-y-auto px-4 py-2 space-y-2 min-h-0 w-full scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent"
+        className="flex-1 overflow-y-scroll px-4 py-2 space-y-2 min-h-0 w-full scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent"
         ref={scrollRef}
         onScroll={handleOnScroll}
       >
