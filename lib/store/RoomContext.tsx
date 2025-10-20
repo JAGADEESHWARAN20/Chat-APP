@@ -42,6 +42,7 @@ interface RoomState {
   isLoading: boolean;
   isMember: boolean;
   isLeaving: boolean;
+  user:any,
 }
 
 type RoomAction =
@@ -73,6 +74,7 @@ const initialState: RoomState = {
   isLoading: false,
   isMember: false,
   isLeaving: false,
+  user: null,
 };
 
 function roomReducer(state: RoomState, action: RoomAction): RoomState {
@@ -170,6 +172,8 @@ export function RoomProvider({
   user: SupabaseUser | undefined;
 }) {
   const [state, dispatch] = useReducer(roomReducer, initialState);
+  state.user = user;
+  console.log(state.user);
   const supabase = supabaseBrowser();
   const acceptJoinNotification = useCallback(
     async (notificationId: string) => {

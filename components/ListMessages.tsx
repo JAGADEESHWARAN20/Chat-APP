@@ -21,10 +21,15 @@ export default function ListMessages() {
   const [userScrolled, setUserScrolled] = useState(false);
   const [notification, setNotification] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+
+  // ✅ get user and selectedRoom from RoomContext
   const { state } = useRoomContext();
-  const { selectedRoom } = state;
-  const user = useUser((state) => state.user);
-  console.log(user);
+  const { selectedRoom, user: contextUser } = state;
+
+  // ✅ fallback: prefer RoomContext user, but also support global user store
+  const storeUser = useUser((state) => state.user);
+  const user = contextUser ?? storeUser;
+
   const {
     messages,
     setMessages,
@@ -40,6 +45,7 @@ export default function ListMessages() {
     messageCount: messages.length,
     hasRoom: !!selectedRoom?.id,
     hasUser: !!user?.id,
+    userFrom: contextUser ? "RoomContext" : "UserStore",
   });
 
   const handleOnScroll = useCallback(() => {
