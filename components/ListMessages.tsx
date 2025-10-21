@@ -291,7 +291,7 @@ export default function ListMessages() {
     </div>
 
     {/* Typing indicator positioned above input */}
-    <div className="sticky bottom-16 left-0 right-0 z-10">
+    <div className="sticky bottom-5 left-0 right-0 z-10">
       <TypingIndicator />
     </div>
 
