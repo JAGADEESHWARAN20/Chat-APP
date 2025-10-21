@@ -290,7 +290,7 @@ className="flex-1 overflow-y-scroll h-[80vh] pb-4 overflow-x-hidden px-4 py-2 sp
         </div>
 
       </div>
-      <div className="fixed bottom-[2em] w-full flex justify-center items-center h-[3em] ">
+      <div className="fixed bottom-[5em] w-full flex justify-center items-center h-[5em] ">
             <TypingIndicator />
       </div>
 

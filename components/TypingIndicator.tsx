@@ -21,7 +21,6 @@ export default function TypingIndicator() {
               <span key={delay} className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: `${delay}ms` }} />
             ))}
           </div>
-          hi
           <span className="flex-1 truncate min-w-0" title={typingDisplayText}>
             {typingDisplayText}
           </span>
