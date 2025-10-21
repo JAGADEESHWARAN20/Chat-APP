@@ -2,23 +2,18 @@
 
 import { useTheme } from "next-themes";
 import { motion, AnimatePresence } from "framer-motion";
-import { useState, createContext, useContext, CSSProperties } from "react";
+import { useState, createContext, useContext } from "react";
 
 interface ThemeTransitionContextValue {
   triggerTransition: (x: number, y: number, nextTheme: string) => void;
   isDark: boolean;
 }
 
-const ThemeTransitionContext = createContext<ThemeTransitionContextValue | null>(
-  null
-);
+const ThemeTransitionContext = createContext<ThemeTransitionContextValue | null>(null);
 
 export function useThemeTransition() {
   const ctx = useContext(ThemeTransitionContext);
-  if (!ctx)
-    throw new Error(
-      "useThemeTransition must be used inside ThemeTransitionWrapper"
-    );
+  if (!ctx) throw new Error("useThemeTransition must be used inside ThemeTransitionWrapper");
   return ctx;
 }
 
@@ -30,7 +25,7 @@ export default function ThemeTransitionWrapper({
   const { theme, setTheme } = useTheme();
   const isDark = theme === "dark";
 
-  const [circle, setCircle] = useState<{
+  const [transitionState, setTransitionState] = useState<{
     x: number;
     y: number;
     active: boolean;
@@ -43,48 +38,95 @@ export default function ThemeTransitionWrapper({
   });
 
   const triggerTransition = (x: number, y: number, nextTheme: string) => {
-    setCircle({ x, y, active: true, nextTheme });
+    setTransitionState({ x, y, active: true, nextTheme });
 
-    // Wait until animation ends before switching theme
     setTimeout(() => {
-      setCircle((prev) => ({ ...prev, active: false }));
+      setTransitionState(prev => ({ ...prev, active: false }));
       setTheme(nextTheme);
-    }, 420); // matches motion duration
-  };
-
-  const getCircleStyles = (): CSSProperties => {
-    return {
-      background:
-        circle.nextTheme === "dark"
-          ? "hsl(224 71.4% 4.1%)"
-          : "hsl(0 0% 100%)",
-      mixBlendMode: circle.nextTheme === "dark"
-          ? "screen"
-          : "multiply", 
-    };
+    }, 800);
   };
 
   return (
     <ThemeTransitionContext.Provider value={{ triggerTransition, isDark }}>
-      {/* Current theme content */}
-      <div className={`transition-colors duration-300 ${theme}`}>
+      <div className={`transition-colors duration-500 ${theme}`}>
         {children}
       </div>
 
-      {/* Circle animation overlay */}
+      {/* Liquid Morph Overlay */}
       <AnimatePresence>
-        {circle.active && (
+        {transitionState.active && (
           <motion.div
-            initial={{ clipPath: `circle(0% at ${circle.x}px ${circle.y}px)` }}
-            animate={{
-              clipPath: `circle(150% at ${circle.x}px ${circle.y}px)`,
-              opacity: 1,
-            }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.4, ease: "linear" }}
             className="fixed inset-0 z-[99999] pointer-events-none"
-            style={getCircleStyles()}
-          />
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            {/* Liquid Blob */}
+            <motion.div
+              className="absolute rounded-full"
+              style={{
+                background: transitionState.nextTheme === "dark" 
+                  ? "radial-gradient(circle, hsl(224 71.4% 4.1%) 0%, hsl(224 71.4% 4.1%) 100%)"
+                  : "radial-gradient(circle, hsl(0 0% 100%) 0%, hsl(0 0% 100%) 100%)",
+                mixBlendMode: transitionState.nextTheme === "dark" ? "difference" : "screen",
+                left: transitionState.x,
+                top: transitionState.y,
+              }}
+              initial={{
+                width: 0,
+                height: 0,
+                x: "-50%",
+                y: "-50%",
+                scale: 0,
+              }}
+              animate={{
+                width: "300vmax",
+                height: "300vmax",
+                scale: 1,
+              }}
+              exit={{
+                scale: 1.2,
+                opacity: 0,
+              }}
+              transition={{
+                type: "spring",
+                damping: 25,
+                stiffness: 200,
+                duration: 0.8,
+              }}
+            />
+            
+            {/* Ripple Waves */}
+            {[0, 1, 2].map(i => (
+              <motion.div
+                key={i}
+                className="absolute rounded-full border"
+                style={{
+                  borderColor: transitionState.nextTheme === "dark" ? "hsl(224 71.4% 4.1%)" : "hsl(0 0% 100%)",
+                  left: transitionState.x,
+                  top: transitionState.y,
+                }}
+                initial={{
+                  width: 0,
+                  height: 0,
+                  x: "-50%",
+                  y: "-50%",
+                  opacity: 0.8,
+                }}
+                animate={{
+                  width: "100vmax",
+                  height: "100vmax",
+                  opacity: 0,
+                }}
+                transition={{
+                  delay: i * 0.15,
+                  duration: 1.2,
+                  ease: "easeOut",
+                }}
+              />
+            ))}
+          </motion.div>
         )}
       </AnimatePresence>
     </ThemeTransitionContext.Provider>
