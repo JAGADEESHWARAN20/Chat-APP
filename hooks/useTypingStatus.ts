@@ -19,6 +19,7 @@ export function useTypingStatus() {
   const { selectedRoom, user } = state;
 
   const currentUserId = user?.id ?? null;
+  console.log(currentUserId);
   const roomId = selectedRoom?.id ?? null;
 
   const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
