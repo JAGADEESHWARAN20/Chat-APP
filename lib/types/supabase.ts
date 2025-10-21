@@ -119,6 +119,13 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "messages_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "user_display_names"
+            referencedColumns: ["id"]
+          },
         ]
       }
       notifications: {
@@ -181,10 +188,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "notifications_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "user_display_names"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "notifications_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_display_names"
             referencedColumns: ["id"]
           },
         ]
@@ -375,7 +396,15 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      user_display_names: {
+        Row: {
+          display_name: string | null
+          display_text: string | null
+          id: string | null
+          username: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       accept_notification: {
