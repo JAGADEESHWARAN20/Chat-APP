@@ -1,4 +1,3 @@
-// components/TypingIndicator.tsx
 "use client";
 
 import React from "react";
@@ -24,7 +23,7 @@ export default function TypingIndicator() {
   }
 
   return (
-    <div className="sticky bottom-16 left-0 right-0 px-4 py-2 z-40">
+    <div className="relative w-full px-4 py-2 mb-2"> {/* FIXED: Remove sticky, add mb-2 for input spacing */}
       <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg px-4 py-3 text-indigo-700 dark:text-indigo-300 italic text-sm font-medium shadow-sm">
         <div className="flex items-center gap-3">
           {/* Animated dots */}
