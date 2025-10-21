@@ -1,26 +1,29 @@
-// components/TypingIndicator.tsx (Fixed: Null guards for currentUserId, improved memoization, reduced console logs, better loading states)
+// components/TypingIndicator.tsx - UPDATED: Fully leverages RoomContext for user/room IDs (no props needed), improved Supabase integration for profiles, fallback names, and render logic
 "use client";
 
-import React, { useEffect, useState, useMemo, useCallback } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { useTypingStatus } from "@/hooks/useTypingStatus";
 import { useRoomContext } from "@/lib/store/RoomContext";
 
-interface TypingIndicatorProps {
-  roomId: string;
-}
-
-export default function TypingIndicator({ roomId }: TypingIndicatorProps) {
+export default function TypingIndicator() {
   const supabase = supabaseBrowser();
   const [userNames, setUserNames] = useState<Record<string, string>>({});
   const [isLoadingNames, setIsLoadingNames] = useState(false);
+
+  // UPDATED: Get roomId and userId directly from RoomContext (no props needed)
   const { state } = useRoomContext();
-  const currentUserId = state.user?.id ?? null; // Fixed: Nullish coalescing for undefined/null
+  const { selectedRoom } = state;
+  const currentUserId = state.user?.id ?? null;
+  const roomId = selectedRoom?.id ?? null;
+
+  // UPDATED: Pass from context to hook
   const { typingUsers } = useTypingStatus({
-    roomId,
+    roomId: roomId || "",
     userId: currentUserId,
   });
-  // Get unique typing user IDs (excluding current user) - Improved: Stable deps
+
+  // Get unique typing user IDs (excluding current user)
   const uniqueTypers = useMemo(() => {
     return [...new Set(
       typingUsers
@@ -29,9 +32,9 @@ export default function TypingIndicator({ roomId }: TypingIndicatorProps) {
     )];
   }, [typingUsers, currentUserId]);
 
-  // Fetch display names (Improved: Debounce if needed, better error handling, cleanup)
+  // Fetch display names from Supabase profiles (using context user for auth)
   useEffect(() => {
-    if (uniqueTypers.length === 0) {
+    if (uniqueTypers.length === 0 || !roomId || !currentUserId) {
       setUserNames({});
       setIsLoadingNames(false);
       return;
@@ -42,6 +45,7 @@ export default function TypingIndicator({ roomId }: TypingIndicatorProps) {
 
     const fetchUserNames = async () => {
       try {
+        // UPDATED: Use Supabase with context user auth (implicit via browser client)
         const { data, error } = await supabase
           .from("profiles")
           .select("id, display_name, username")
@@ -59,11 +63,17 @@ export default function TypingIndicator({ roomId }: TypingIndicatorProps) {
           return;
         }
 
+        // UPDATED: Build nameMap with Supabase data + fallback
         const nameMap = data.reduce((acc: Record<string, string>, user: any) => {
-          const name = user.display_name || user.username || "Someone";
+          const name = user.display_name || user.username || `User ${user.id.slice(-4)}`;
           acc[user.id] = name;
           return acc;
         }, {});
+
+        // Fallback for any missing users
+        uniqueTypers.forEach(id => {
+          if (!nameMap[id]) nameMap[id] = `User ${id.slice(-4)}`;
+        });
 
         if (isActive) {
           setUserNames(nameMap);
@@ -80,9 +90,9 @@ export default function TypingIndicator({ roomId }: TypingIndicatorProps) {
     return () => {
       isActive = false;
     };
-  }, [uniqueTypers, supabase]); // Stable dep: uniqueTypers changes only when needed
+  }, [uniqueTypers, supabase, roomId, currentUserId]); // UPDATED: Depend on context values
 
-  // Get display names (Improved: Memoized, filter non-null)
+  // Get display names
   const typingNames = useMemo(() => {
     return uniqueTypers
       .map((id) => userNames[id])
@@ -114,7 +124,7 @@ export default function TypingIndicator({ roomId }: TypingIndicatorProps) {
     return null;
   }
 
-  // Format display text (Improved: Cleaner logic)
+  // Format display text
   let displayText = "";
   if (typingNames.length === 1) {
     displayText = `${typingNames[0]} is typing...`;

@@ -1,9 +1,7 @@
-// hooks/useTypingStatus.ts - FIXED: Import and use REALTIME_SUBSCRIBE_STATES for status comparison
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
-import { REALTIME_SUBSCRIBE_STATES } from "@supabase/supabase-js"; // FIXED: Import enum
 import type { Database } from "@/database.types";
 
 type TypingRow = {
@@ -83,7 +81,7 @@ export function useTypingStatus({ roomId, userId, showSelfIndicator = false }: U
     if (!canOperate) return;
     startTyping();
     if (typingTimeout.current) clearTimeout(typingTimeout.current);
-    typingTimeout.current = setTimeout(() => stopTyping(), 2000);
+    typingTimeout.current = setTimeout(() => stopTyping(), 3000); // FIXED: 3s delay for visibility
   }, [startTyping, stopTyping, canOperate]);
 
   useEffect(() => {
@@ -109,11 +107,12 @@ export function useTypingStatus({ roomId, userId, showSelfIndicator = false }: U
 
     const upsertTypingRow = (row: TypingRow) => {
       if (!isActive) return;
+      console.log("[useTypingStatus] Raw row before upsert:", { ...row, is_typing: row.is_typing }); // NEW: Log is_typing
       setTypingUsers((prev) => {
         const filtered = prev.filter((p) => p.user_id !== row.user_id);
         return row.is_typing ? [...filtered, row] : filtered;
       });
-      console.log(`[useTypingStatus] Upserted: ${row.user_id}`);
+      console.log(`[useTypingStatus] Upserted ${row.user_id} (is_typing: ${row.is_typing})`);
     };
 
     const removeTypingRow = (user_id: string) => {
@@ -143,7 +142,7 @@ export function useTypingStatus({ roomId, userId, showSelfIndicator = false }: U
           updated_at: row.updated_at || new Date().toISOString(),
         })) : [];
 
-        console.log(`[useTypingStatus] Initial fetch: ${data.length} typers`, data.map(d => d.user_id));
+        console.log(`[useTypingStatus] Initial fetch: ${data.length} typers (is_typing=true)`, data.map(d => ({ id: d.user_id, typing: d.is_typing })));
 
         if (isActive && userId && !showSelfIndicator) {
           setTypingUsers(data.filter((d) => d.user_id !== userId));
@@ -178,7 +177,7 @@ export function useTypingStatus({ roomId, userId, showSelfIndicator = false }: U
               is_typing: payload.new?.is_typing ?? false,
               updated_at: payload.new?.updated_at || new Date().toISOString(),
             };
-            console.log(`[useTypingStatus] Event ${payload.eventType}: ${row.user_id}`);
+            console.log(`[useTypingStatus] Event ${payload.eventType}: ${row.user_id} (is_typing: ${row.is_typing})`); // NEW: Log is_typing
             
             if (!row || (!showSelfIndicator && userId && row.user_id === userId)) {
               console.log("[useTypingStatus] Skipped self/invalid");
@@ -195,9 +194,9 @@ export function useTypingStatus({ roomId, userId, showSelfIndicator = false }: U
           }
         }
       )
-      .subscribe((status: string) => { // FIXED: Type as 'string' (avoids enum strictness)
+      .subscribe((status: string) => { // FIXED: String type
         console.log(`[useTypingStatus] Sub status: ${status}`);
-        if (status === 'SUBSCRIBED') { // FIXED: String literal
+        if (status === 'SUBSCRIBED') {
           setSubStatus('subscribed');
           doInitialFetch();
         } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {

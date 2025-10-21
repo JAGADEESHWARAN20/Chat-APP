@@ -358,7 +358,7 @@ export default function ListMessages() {
 
         {/* Typing Indicator - FIXED: Sticky footer inside scrollable area for proper layout */}
         <div className="sticky bottom-0 left-0 right-0 bg-transparent pt-2 pb-2 z-10">
-          <TypingIndicator roomId={selectedRoom.id} />
+          <TypingIndicator />
         </div>
 
         {/* Portaled dialogs - Keep outside scroll for overlay */}
