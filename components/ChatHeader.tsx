@@ -2,9 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Button } from "./ui/button";
-
-import { User as SupabaseUser, RealtimePostgresChangesPayload } from "@supabase/supabase-js";
-
+import { User as SupabaseUser } from "@supabase/supabase-js";
 import ChatPresence from "./ChatPresence";
 import {
   Popover,
@@ -17,16 +15,13 @@ import {
   LockIcon,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
-
 import { Switch } from "@/components/ui/switch";
 import { useRoomContext } from "@/lib/store/RoomContext";
 import { useRoomPresence } from "@/hooks/useRoomPresence";
 import { useMessage, Imessage } from "@/lib/store/messages";
 import { useSearchHighlight } from "@/lib/store/SearchHighlightContext";
 
-
 export default function ChatHeader({ user }: { user: SupabaseUser | undefined }) {
-
   const { searchMessages } = useMessage();
   const [searchResults, setSearchResults] = useState<Imessage[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -39,17 +34,17 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const [isMember, setIsMember] = useState(false);
   const { setHighlightedMessageId, setSearchQuery } = useSearchHighlight();
 
-
-
-  // Compute all room IDs for presence tracking
-  const allRoomIds = useMemo(() => {
-    const ids = new Set([
-      ...availableRooms.map((r) => r.id),
-    ]);
-    return Array.from(ids);
+  // Filter rooms to show only those where user is a member
+  const memberRooms = useMemo(() => {
+    return availableRooms.filter(room => room.isMember);
   }, [availableRooms]);
 
-  const onlineCounts = useRoomPresence(allRoomIds);
+  // Compute member room IDs for presence tracking
+  const memberRoomIds = useMemo(() => {
+    return memberRooms.map(room => room.id);
+  }, [memberRooms]);
+
+  const onlineCounts = useRoomPresence(memberRoomIds);
 
   const handleSearch = async (query: string) => {
     setMessageSearchQuery(query);
@@ -131,7 +126,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                       key={msg.id}
                       className="p-2 rounded-md bg-accent hover:bg-accent/70 cursor-pointer"
                       onClick={() => {
-                        // Highlight and scroll to this message in ListMessages
                         setHighlightedMessageId(msg.id);
                         document.getElementById(`msg-${msg.id}`)?.scrollIntoView({
                           behavior: "smooth",
@@ -139,7 +133,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                         });
                         setIsMessageSearchOpen(false);
 
-                        // Clear highlight after 3 seconds
                         setTimeout(() => {
                           setHighlightedMessageId(null);
                         }, 3000);
@@ -155,7 +148,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                   <p className="text-sm text-muted-foreground">Type to search messages...</p>
                 )}
               </div>
-
             </div>
           </PopoverContent>
         </Popover>
@@ -190,55 +182,64 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                 !max-w-[95vw]
                 !max-h-[99vh]
                 shadow-xl
+                overflow-hidden
               "
           >
-            <div className="p-[.3vw]">
-              <h3 className="font-semibold text-[1.1em] mb-2">Switch Room</h3>
+            <div className="p-[.3vw] h-full flex flex-col">
+              <h3 className="font-semibold text-[1.1em] mb-4">Switch Room</h3>
 
-              {availableRooms.length === 0 ? (
-                <p className="text-[1em] text-muted-foreground">No rooms available</p>
+              {memberRooms.length === 0 ? (
+                <div className="flex-1 flex items-center justify-center">
+                  <p className="text-[1em] text-muted-foreground text-center">
+                    You haven&lsquo;t joined any rooms yet
+                  </p>
+                </div>
               ) : (
-                <ul className="space-y-0 overflow-y-auto max-h-[calc(100vh-200px)] scrollbar-none lg:scrollbar-custom">
-                  {availableRooms.map((room) => (
-                    <li
-                      key={room.id}
-                      className="
-                          flex items-center justify-between p-3 rounded-lg 
-                          bg-transparent hover:bg-accent/50 transition-colors border-b border-border/50
-                        "
-                    >
-                      <div className="flex items-center gap-3">
-                        {/* Room icon */}
-                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-500/10">
-                          <span className="text-lg font-semibold text-indigo-500">
-                            {room.name.charAt(0).toUpperCase()}
-                          </span>
-                        </div>
-
-                        {/* Room info */}
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold">{room.name}</span>
-                            {room.is_private && (
-                              <LockIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                            )}
-                          </div>
-                          <p className="text-[0.8em] px-2 py-1 text-center text-green-800 dark:text-white bg-green-500/20 dark:bg-green-500/20 border border-green-500/30 dark:border-green-500/30 rounded-full">{onlineCounts.get(room.id) ?? 0} active</p>
-                        </div>
-                      </div>
-
-                      {/* Toggle switch */}
-                      <Switch
-                        checked={selectedRoom?.id === room.id}
-                        onCheckedChange={() => handleRoomSwitch(room.id)}
+                <div className="flex-1 overflow-hidden">
+                  <ul className="space-y-2 h-full overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-transparent">
+                    {memberRooms.map((room) => (
+                      <li
+                        key={room.id}
                         className="
-                            data-[state=checked]:bg-indigo-600 
-                            data-[state=unchecked]:bg-muted
+                            flex items-center justify-between p-3 rounded-lg 
+                            bg-transparent hover:bg-accent/50 transition-colors border border-border/30
                           "
-                      />
-                    </li>
-                  ))}
-                </ul>
+                      >
+                        <div className="flex items-center gap-3">
+                          {/* Room icon */}
+                          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-500/10">
+                            <span className="text-lg font-semibold text-indigo-500">
+                              {room.name.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+
+                          {/* Room info */}
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold">{room.name}</span>
+                              {room.is_private && (
+                                <LockIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                              )}
+                            </div>
+                            <p className="text-[0.8em] px-2 py-1 text-center text-green-800 dark:text-white bg-green-500/20 dark:bg-green-500/20 border border-green-500/30 dark:border-green-500/30 rounded-full">
+                              {onlineCounts.get(room.id) ?? 0} active
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Toggle switch */}
+                        <Switch
+                          checked={selectedRoom?.id === room.id}
+                          onCheckedChange={() => handleRoomSwitch(room.id)}
+                          className="
+                              data-[state=checked]:bg-indigo-600 
+                              data-[state=unchecked]:bg-muted
+                            "
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
             </div>
           </PopoverContent>
