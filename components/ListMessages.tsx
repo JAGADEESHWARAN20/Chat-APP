@@ -1,4 +1,3 @@
-// components/ListMessages.tsx - FIXED: Null guard for selectedRoom.id in handleRealtimePayload
 "use client";
 
 import { Imessage, useMessage } from "@/lib/store/messages";
@@ -37,13 +36,6 @@ export default function ListMessages() {
 
   const supabase = supabaseBrowser();
 
-  console.log("[ListMessages] Render:", {
-    messageCount: messages.length,
-    hasRoom: !!selectedRoom?.id,
-    hasUser: !!user?.id,
-    userFrom: contextUser ? "RoomContext" : "UserStore",
-  });
-
   const handleOnScroll = useCallback(() => {
     if (!scrollRef.current) return;
 
@@ -67,7 +59,6 @@ export default function ListMessages() {
   // Load initial messages
   useEffect(() => {
     if (!selectedRoom?.id) {
-      console.log("[ListMessages] No room selected, clearing messages");
       setMessages([]);
       return;
     }
@@ -76,7 +67,6 @@ export default function ListMessages() {
 
     const loadInitialMessages = async () => {
       setIsLoading(true);
-      console.log("[ListMessages] 📥 Loading initial messages for room:", selectedRoom.id);
 
       try {
         const res = await fetch(`/api/messages/${selectedRoom.id}`);
@@ -85,7 +75,6 @@ export default function ListMessages() {
         const { messages: fetchedMessages } = await res.json();
 
         if (fetchedMessages && Array.isArray(fetchedMessages)) {
-          console.log(`[ListMessages] ✅ Loaded ${fetchedMessages.length} messages`);
           const formattedMessages = fetchedMessages.map((msg: any) => ({
             ...msg,
             profiles: msg.profiles
@@ -103,7 +92,6 @@ export default function ListMessages() {
 
           if (isMounted) setMessages(formattedMessages);
         } else if (isMounted) {
-          console.warn("[ListMessages] No messages or invalid format");
           setMessages([]);
         }
       } catch (error) {
@@ -130,7 +118,6 @@ export default function ListMessages() {
       try {
         const messagePayload = payload.new as MessageRow | null;
 
-        // FIXED: Null check for selectedRoom
         if (!messagePayload || !selectedRoom || messagePayload.room_id !== selectedRoom.id) return;
 
         if (payload.eventType === "INSERT") {
@@ -262,48 +249,53 @@ export default function ListMessages() {
     );
   }
 
-// In ListMessages.tsx - More precise height calculation
-return (
-  <div className="h-full flex flex-col min-h-0 overflow-hidden">
-    {/* Messages Scroll Area */}
-    <div
-      ref={scrollRef}
-      onScroll={handleOnScroll}
-      className="flex-1 overflow-y-auto px-4 py-2 space-y-2 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent"
-      style={{ 
-        maxWidth: "100%",
-        // More precise calculation:
-        // 100vh - header(4rem) - input(4rem) - typingIndicator(approx 4rem) - padding(1rem)
-        height: "calc(100vh - 13rem)"
-      }}
-    >
-       <div className="w-full max-w-full">
-        {isLoading ? (
-          <div className="space-y-4">
-            {Array.from({ length: 8 }, (_, index) => (
-              <SkeletonMessage key={index} />
-            ))}
-          </div>
-        ) : filteredMessages.length > 0 ? (
-          filteredMessages.map((message) => (
-            <Message key={message.id} message={message} />
-          ))
-        ) : (
-          <div className="flex items-center justify-center h-full text-gray-500">
-            <p>No messages yet. Start a conversation!</p>
-          </div>
-        )}
+  return (
+    <div className="h-full flex flex-col min-h-0 overflow-hidden">
+      {/* Messages Scroll Area */}
+      <div
+        ref={scrollRef}
+        onScroll={handleOnScroll}
+        className="flex-1 overflow-y-auto px-4 py-2 space-y-2 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent"
+        style={{ 
+          height: "calc(100vh - 8rem)" // Adjusted for animated typing indicator
+        }}
+      >
+        <div className="w-full max-w-full">
+          {isLoading ? (
+            <div className="space-y-4">
+              {Array.from({ length: 8 }, (_, index) => (
+                <SkeletonMessage key={index} />
+              ))}
+            </div>
+          ) : filteredMessages.length > 0 ? (
+            filteredMessages.map((message) => (
+              <Message key={message.id} message={message} />
+            ))
+          ) : (
+            <div className="flex items-center justify-center h-full text-gray-500">
+              <p>No messages yet. Start a conversation!</p>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
 
-
-    {/* Typing Indicator */}
-    <div className="flex-shrink-0 min-h-[3rem]">
+      {/* Animated Typing Indicator - No fixed height */}
       <TypingIndicator />
-    </div>
 
-    <DeleteAlert />
-    <EditAlert />
-  </div>
-);
+      {/* Notification button */}
+      {notification > 0 && (
+        <div className="absolute bottom-20 right-4">
+          <button
+            onClick={scrollDown}
+            className="bg-primary text-primary-foreground px-4 py-2 rounded-lg shadow-lg hover:bg-primary/90 transition-colors"
+          >
+            {notification} new message{notification > 1 ? 's' : ''}
+          </button>
+        </div>
+      )}
+
+      <DeleteAlert />
+      <EditAlert />
+    </div>
+  );
 }
