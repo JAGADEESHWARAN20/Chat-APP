@@ -268,7 +268,7 @@ export default function ListMessages() {
       <div
         ref={scrollRef}
         onScroll={handleOnScroll}
-        className="flex-1 overflow-y-scroll h-[80vh] overflow-x-hidden px-4 py-2 space-y-4 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent"
+        className="flex-1 overflow-y-scroll h-[80vh] pb-4 overflow-x-hidden px-4 py-2 space-y-4 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent"
         style={{ maxWidth: "100%" }}
       >
         <div className="w-full max-w-full">
