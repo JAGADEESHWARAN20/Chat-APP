@@ -1,49 +1,30 @@
 "use client";
 
 import React from "react";
-import { useTypingStatus } from "@/hooks/useTypingStatus";
+import { useRoomContext } from "@/lib/store/RoomContext";
 
 export default function TypingIndicator() {
-  const { 
-    typingUsers, 
-    typingDisplayText, 
-    canOperate
-  } = useTypingStatus();
+  const { state } = useRoomContext();
+  const { typingDisplayText, typingUsers } = state;
+  const canOperate = Boolean(state.selectedRoom?.id || state.selectedDirectChat?.id);
 
-  console.log("[TypingIndicator] Render:", {
-    typingUsers: typingUsers.length,
-    displayText: typingDisplayText,
-    canOperate,
-    shouldShow: typingUsers.length > 0 && canOperate
-  });
-
-  // Don't render if no typing users or not in a room
-  if (typingUsers.length === 0 || !canOperate) {
-    return null;
-  }
+  if (typingUsers.length === 0 || !canOperate || !typingDisplayText) return null;
 
   return (
-    <div className="relative w-full px-4 py-2 mb-2"> {/* FIXED: Remove sticky, add mb-2 for input spacing */}
-      <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg px-4 py-3 text-indigo-700 dark:text-indigo-300 italic text-sm font-medium shadow-sm">
+    <div className="relative w-full px-4 py-2 mb-2 animate-fadeIn"> {/* Fade via Tailwind or CSS */}
+      <div 
+        role="status" 
+        aria-live="polite" 
+        aria-atomic="true"
+        className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg px-4 py-3 text-indigo-700 dark:text-indigo-300 italic text-sm font-medium shadow-sm"
+      >
         <div className="flex items-center gap-3">
-          {/* Animated dots */}
           <div className="flex gap-1 flex-shrink-0">
-            <span 
-              className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce" 
-              style={{ animationDelay: "0ms" }} 
-            />
-            <span 
-              className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce" 
-              style={{ animationDelay: "150ms" }} 
-            />
-            <span 
-              className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce" 
-              style={{ animationDelay: "300ms" }} 
-            />
+            {[0, 150, 300].map(delay => (
+              <span key={delay} className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: `${delay}ms` }} />
+            ))}
           </div>
-          
-          {/* Typing text */}
-          <span className="flex-1 truncate min-w-0">
+          <span className="flex-1 truncate min-w-0" title={typingDisplayText}> {/* Tooltip */}
             {typingDisplayText}
           </span>
         </div>
