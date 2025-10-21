@@ -1,14 +1,14 @@
-// hooks/useTypingStatus.ts - FULL FIXED: Broadcast for instant realtime (no DB lag), typed events/payloads, fast start/stop (1.5s expire), RoomContext integration, TS-safe
+// hooks/useTypingStatus.ts - FIXED: Added logs for setTypingUsers, ensured payload has is_typing, filter logs, state propagation debug
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import type { Database } from "@/database.types";
 import { useRoomContext } from "@/lib/store/RoomContext";
 
 type TypingUser = {
   user_id: string;
-  is_typing: boolean; // FIXED: Add is_typing for filter
+  is_typing: boolean;
   display_name?: string;
   username?: string;
 };
@@ -28,42 +28,40 @@ export function useTypingStatus({ roomId, showSelfIndicator = false }: UseTyping
 
   const canOperate = Boolean(roomId && currentUserId);
 
-  // Broadcast start (instant)
   const startTyping = useCallback(() => {
     if (!canOperate || !channelRef.current) return;
+    const payload = {
+      user_id: currentUserId,
+      is_typing: true,
+      display_name: state.user?.user_metadata?.display_name,
+      username: state.user?.user_metadata?.username,
+    };
     channelRef.current.send({
       type: 'broadcast',
       event: 'typing_start',
-      payload: {
-        user_id: currentUserId,
-        is_typing: true,
-        display_name: state.user?.user_metadata?.display_name,
-        username: state.user?.user_metadata?.username,
-      },
+      payload,
     });
-    console.log("[useTypingStatus] ✅ startTyping broadcast");
+    console.log("[useTypingStatus] ✅ startTyping broadcast:", payload);
   }, [canOperate, currentUserId, state.user]);
 
-  // Broadcast stop (instant)
   const stopTyping = useCallback(() => {
     if (!canOperate || !channelRef.current) return;
+    const payload = { user_id: currentUserId, is_typing: false };
     channelRef.current.send({
       type: 'broadcast',
       event: 'typing_stop',
-      payload: { user_id: currentUserId, is_typing: false },
+      payload,
     });
-    console.log("[useTypingStatus] ✅ stopTyping broadcast");
+    console.log("[useTypingStatus] ✅ stopTyping broadcast:", payload);
   }, [canOperate, currentUserId]);
 
-  // Handle typing (on keydown for instant, 1.5s expire for quick stop)
   const handleTyping = useCallback(() => {
     if (!canOperate) return;
     startTyping();
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => stopTyping(), 1500); // FAST: 1.5s
+    timeoutRef.current = setTimeout(() => stopTyping(), 1500);
   }, [startTyping, stopTyping, canOperate]);
 
-  // Broadcast listener (instant events)
   useEffect(() => {
     if (!roomId || !canOperate) {
       setTypingUsers([]);
@@ -72,24 +70,30 @@ export function useTypingStatus({ roomId, showSelfIndicator = false }: UseTyping
 
     const channel = supabase.channel(`room-typing-${roomId}`);
 
-    // FIXED: Typed broadcast with schema filter
     channel
       .on('broadcast', { event: 'typing_start' }, ({ payload }: { payload: TypingUser }) => {
-        if (payload.user_id === currentUserId) return; // Skip self
+        console.log("[useTypingStatus] Received typing_start payload:", payload);
+        if (payload.user_id === currentUserId) return;
         setTypingUsers((prev) => {
           const filtered = prev.filter((u) => u.user_id !== payload.user_id);
-          return [...filtered, { ...payload, is_typing: true }];
+          const newUser = { ...payload, is_typing: true };
+          const updated = [...filtered, newUser];
+          console.log("[useTypingStatus] Updated typingUsers after start:", updated.map(u => u.user_id));
+          return updated;
         });
-        console.log("[useTypingStatus] Typing start:", payload.user_id);
       })
       .on('broadcast', { event: 'typing_stop' }, ({ payload }: { payload: TypingUser }) => {
-        setTypingUsers((prev) => prev.filter((u) => u.user_id !== payload.user_id));
-        console.log("[useTypingStatus] Typing stop:", payload.user_id);
+        console.log("[useTypingStatus] Received typing_stop payload:", payload);
+        setTypingUsers((prev) => {
+          const updated = prev.filter((u) => u.user_id !== payload.user_id);
+          console.log("[useTypingStatus] Updated typingUsers after stop:", updated.map(u => u.user_id));
+          return updated;
+        });
       })
       .subscribe((status: string) => {
         console.log(`[useTypingStatus] Sub: ${status}`);
         if (status === 'SUBSCRIBED') {
-          stopTyping(); // Initial cleanup
+          stopTyping();
         }
       });
 
@@ -103,11 +107,13 @@ export function useTypingStatus({ roomId, showSelfIndicator = false }: UseTyping
     };
   }, [supabase, roomId, currentUserId, stopTyping, showSelfIndicator]);
 
-  // Display text
-  const typingDisplayText = typingUsers
-    .filter(u => u.is_typing)
-    .map(u => u.display_name || u.username || `User ${u.user_id.slice(-4)}`)
-    .join(', ');
+  const typingDisplayText = useMemo(() => {
+    const active = typingUsers.filter(u => u.is_typing);
+    const names = active.map(u => u.display_name || u.username || `User ${u.user_id.slice(-4)}`);
+    const text = names.join(', ');
+    console.log("[useTypingStatus] typingDisplayText:", text, "active users:", active.length);
+    return text;
+  }, [typingUsers]);
 
   return {
     typingUsers,
