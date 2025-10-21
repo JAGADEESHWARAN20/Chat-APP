@@ -553,6 +553,47 @@ export function RoomProvider({
     if (state.user?.id) fetchAvailableRooms();
   }, [state.user, fetchAvailableRooms]);
 
+  // subscribe to changes on room_members and room_participants
+  // call handleCountUpdate with the room_id touched so we recompute counts centrally
+  useEffect(() => {
+    const channel = supabase
+      .channel("room-counts") // friendly name
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "room_members" },
+        (payload: { new: { room_id?: string } | null; old: { room_id?: string } | null }) => {
+          try {
+            const roomId = payload.new?.room_id ?? payload.old?.room_id;
+            if (roomId) handleCountUpdate(roomId);
+          } catch (err) {
+            console.error("[RoomProvider] room_members realtime handler error:", err);
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "room_participants" },
+        (payload: { new: { room_id?: string } | null; old: { room_id?: string } | null }) => {
+          try {
+            const roomId = payload.new?.room_id ?? payload.old?.room_id;
+            if (roomId) handleCountUpdate(roomId);
+          } catch (err) {
+            console.error("[RoomProvider] room_participants realtime handler error:", err);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      try {
+        // cleanup
+        supabase.removeChannel(channel);
+      } catch (err) {
+        console.warn("[RoomProvider] error removing room-counts channel:", err);
+      }
+    };
+  }, [supabase, handleCountUpdate]);
+
   const value: RoomContextType = {
     state,
     fetchAvailableRooms,
