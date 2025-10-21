@@ -428,39 +428,58 @@ export function RoomProvider({
     return participationStatus;
   }, [state.user, supabase]);
 
- // Update the handleCountUpdate function to count total members:
-// Update handleCountUpdate to handle all rooms properly
-const handleCountUpdate = useCallback((room_id: string | undefined) => {
+const handleCountUpdate = useCallback(async (room_id: string | undefined) => {
   if (!room_id) return;
   
-  // Count total members for the specific room
-  Promise.all([
-    supabase
-      .from("room_members")
-      .select("user_id", { count: "exact", head: true })
-      .eq("room_id", room_id)
-      .eq("status", "accepted"),
-    supabase
-      .from("room_participants")
-      .select("user_id", { count: "exact", head: true })
-      .eq("room_id", room_id)
-      .eq("status", "accepted")
-  ]).then(([membersResult, participantsResult]) => {
+  try {
+    // Count total members for the specific room
+    const [membersResult, participantsResult] = await Promise.all([
+      supabase
+        .from("room_members")
+        .select("user_id", { count: "exact", head: true })
+        .eq("room_id", room_id)
+        .eq("status", "accepted"),
+      supabase
+        .from("room_participants")
+        .select("user_id", { count: "exact", head: true })
+        .eq("room_id", room_id)
+        .eq("status", "accepted")
+    ]);
+
     const memberCount = membersResult.count ?? 0;
     const participantCount = participantsResult.count ?? 0;
-    const totalCount = memberCount + participantCount;
+    
+    // Since users can be in both tables, we need to fetch and deduplicate
+    const [membersData, participantsData] = await Promise.all([
+      supabase
+        .from("room_members")
+        .select("user_id")
+        .eq("room_id", room_id)
+        .eq("status", "accepted"),
+      supabase
+        .from("room_participants")
+        .select("user_id")
+        .eq("room_id", room_id)
+        .eq("status", "accepted")
+    ]);
+
+    const uniqueUsers = new Set<string>();
+    (membersData.data || []).forEach(m => uniqueUsers.add(m.user_id));
+    (participantsData.data || []).forEach(p => uniqueUsers.add(p.user_id));
+    
+    const totalCount = uniqueUsers.size;
+
+    console.log(`Updated room ${room_id} member count:`, totalCount);
     
     dispatch({
       type: "UPDATE_ROOM_MEMBER_COUNT",
       payload: { roomId: room_id, memberCount: totalCount },
     });
-  });
+  } catch (error) {
+    console.error("Error updating room count:", error);
+  }
 }, [supabase]);
 
-
-// In your fetchAvailableRooms function, replace the counting logic:
-
-// In your fetchAvailableRooms function, update the counting logic:
 
 const fetchAvailableRooms = useCallback(async () => {
   if (!state.user) {
@@ -483,6 +502,7 @@ const fetchAvailableRooms = useCallback(async () => {
 
     const roomIds = allRooms.map((r) => r.id);
 
+    // Get current user's membership status
     const { data: memberships } = await supabase
       .from("room_members")
       .select("room_id, status")
@@ -501,53 +521,71 @@ const fetchAvailableRooms = useCallback(async () => {
       if (!membershipMap.has(p.room_id)) membershipMap.set(p.room_id, p.status);
     });
 
-    // COUNT TOTAL MEMBERS FOR ALL ROOMS (REGARDLESS OF USER MEMBERSHIP) - FIXED
-    const { data: allMembersData } = await supabase
+    // COUNT TOTAL MEMBERS FOR EACH ROOM - FIXED VERSION
+    const { data: allMembersData, error: membersError } = await supabase
       .from("room_members")
       .select("room_id, user_id")
       .in("room_id", roomIds)
       .eq("status", "accepted");
 
-    const { data: allParticipantsData } = await supabase
+    const { data: allParticipantsData, error: participantsError } = await supabase
       .from("room_participants")
       .select("room_id, user_id")
       .in("room_id", roomIds)
       .eq("status", "accepted");
 
-    // Count unique users per room for ALL rooms
-    const totalCountsMap = new Map<string, number>();
-    const uniqueUsersPerRoom = new Map<string, Set<string>>();
+    if (membersError || participantsError) {
+      console.error("Error counting members:", membersError || participantsError);
+    }
+
+    // Create a map to count unique users per room
+    const memberCounts = new Map<string, number>();
     
-    // Initialize all rooms with empty sets
+    // Initialize all rooms with 0 count
     roomIds.forEach(roomId => {
-      uniqueUsersPerRoom.set(roomId, new Set());
+      memberCounts.set(roomId, 0);
     });
-    
-    // Count room_members for ALL rooms
-    (allMembersData || []).forEach((m) => {
-      if (uniqueUsersPerRoom.has(m.room_id)) {
-        uniqueUsersPerRoom.get(m.room_id)!.add(m.user_id);
+
+    // Count unique users from room_members
+    const membersByRoom = new Map<string, Set<string>>();
+    (allMembersData || []).forEach(({ room_id, user_id }) => {
+      if (!membersByRoom.has(room_id)) {
+        membersByRoom.set(room_id, new Set());
       }
+      membersByRoom.get(room_id)!.add(user_id);
     });
-    
-    // Count room_participants for ALL rooms
-    (allParticipantsData || []).forEach((p) => {
-      if (uniqueUsersPerRoom.has(p.room_id)) {
-        uniqueUsersPerRoom.get(p.room_id)!.add(p.user_id);
+
+    // Count unique users from room_participants
+    const participantsByRoom = new Map<string, Set<string>>();
+    (allParticipantsData || []).forEach(({ room_id, user_id }) => {
+      if (!participantsByRoom.has(room_id)) {
+        participantsByRoom.set(room_id, new Set());
       }
+      participantsByRoom.get(room_id)!.add(user_id);
     });
-    
-    // Convert to counts for ALL rooms
-    uniqueUsersPerRoom.forEach((users, roomId) => {
-      totalCountsMap.set(roomId, users.size);
+
+    // Combine counts from both tables (avoiding duplicates)
+    roomIds.forEach(roomId => {
+      const memberUsers = membersByRoom.get(roomId) || new Set();
+      const participantUsers = participantsByRoom.get(roomId) || new Set();
+      
+      // Combine unique users from both tables
+      const allUsers = new Set([...memberUsers, ...participantUsers]);
+      memberCounts.set(roomId, allUsers.size);
     });
 
     const roomsWithMembership: RoomWithMembershipCount[] = allRooms.map((room) => ({
       ...room,
-      memberCount: totalCountsMap.get(room.id) ?? 0, // Total members count for ALL rooms
+      memberCount: memberCounts.get(room.id) || 0, // Total members count
       isMember: (membershipMap.get(room.id) ?? null) === "accepted",
       participationStatus: membershipMap.get(room.id) ?? null,
     }));
+
+    console.log("Fetched rooms with member counts:", roomsWithMembership.map(r => ({
+      name: r.name,
+      memberCount: r.memberCount,
+      isMember: r.isMember
+    })));
 
     dispatch({ type: "SET_AVAILABLE_ROOMS", payload: roomsWithMembership });
   } catch (error) {
