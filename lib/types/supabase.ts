@@ -397,6 +397,19 @@ export type Database = {
           id: string
         }[]
       }
+      get_rooms_with_counts: {
+        Args: { user_id: string }
+        Returns: {
+          created_at: string
+          created_by: string
+          id: string
+          is_member: boolean
+          is_private: boolean
+          member_count: number
+          name: string
+          participation_status: string
+        }[]
+      }
       get_typing_users: {
         Args: { p_room_id: string; p_stale_threshold?: unknown }
         Returns: {
