@@ -22,7 +22,7 @@ export default function ChatInput() {
 
   // FIXED: Pass only roomId (userId internal)
   const roomId = selectedRoom?.id || "";
-  const { startTyping, stopTyping } = useTypingStatus({ roomId });
+  const { startTyping, stopTyping } = useTypingStatus();
 
   const canSend = Boolean(text.trim()) && !isSending && (selectedRoom || selectedDirectChat) && user;
   const hasActiveChat = Boolean(selectedRoom || selectedDirectChat);
