@@ -53,7 +53,7 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
             </SheetTitle>
           </SheetHeader>
 
-          <div className="flex flex-col h-full justify-between items-center gap-4 mt-6">
+          <div className="flex flex-col h-[80vh] justify-between items-center gap-4 mt-6">
             <div>
             <div className="flex items-center justify-center z-[999999]">
               <ThemeToggleButton />
