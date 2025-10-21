@@ -7,7 +7,6 @@ import Message from "./Message";
 import { DeleteAlert, EditAlert } from "./MessasgeActions";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { toast } from "sonner";
-import { ArrowDown } from "lucide-react";
 import { Database } from "@/lib/types/supabase";
 import { useRoomContext } from "@/lib/store/RoomContext";
 import TypingIndicator from "./TypingIndicator";

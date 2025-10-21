@@ -146,16 +146,26 @@ export default function Page() {
           </div>
         </header>
 
-        {/* Main content */}
+        {/* Main content - KEY FIX: Render both tabs but control visibility */}
         <main className="flex-1 flex w-full overflow-hidden">
-          {activeTab === "home" ? (
+          {/* Home Tab - Always rendered but hidden when not active */}
+          <div className={cn(
+            "flex-1 w-full transition-opacity duration-300",
+            activeTab === "home" ? "opacity-100 block" : "opacity-0 hidden"
+          )}>
             <ChatLayout
               user={user}
               isOpen={isSidebarOpen}
               onClose={() => setIsSidebarOpen(false)}
             />
-          ) : (
-            <div className="flex-1 w-full px-4 sm:px-6 lg:px-8 py-4 sm:py-6 overflow-y-auto">
+          </div>
+          
+          {/* Search Tab - Always rendered but hidden when not active */}
+          <div className={cn(
+            "flex-1 w-full transition-opacity duration-300",
+            activeTab === "search" ? "opacity-100 block" : "opacity-0 hidden"
+          )}>
+            <div className="w-full px-4 sm:px-6 lg:px-8 py-4 sm:py-6 overflow-y-auto">
               <div className="max-w-6xl mx-auto">
                 <div className="mb-6">
                   <h2 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">
@@ -168,7 +178,7 @@ export default function Page() {
                 <SearchComponent user={user} />
               </div>
             </div>
-          )}
+          </div>
         </main>
 
         <InitUser user={user} />
