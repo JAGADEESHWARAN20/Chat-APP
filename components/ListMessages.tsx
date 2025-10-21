@@ -263,8 +263,9 @@ export default function ListMessages() {
     );
   }
 
-  return (
-    <div className="flex-1 flex flex-col h-[80vh] pb-2 min-h-0 overflow-hidden">
+  // In ListMessages.tsx - update the return section
+return (
+  <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
     <div
       ref={scrollRef}
       onScroll={handleOnScroll}
@@ -288,16 +289,15 @@ export default function ListMessages() {
           </div>
         )}
       </div>
-          {/* Typing indicator positioned above input */}
-    <div className="sticky bottom-0 left-0 right-0 z-10">
+    </div>
+
+    {/* Typing Indicator - only takes space when active */}
+    <div className="flex-shrink-0">
       <TypingIndicator />
     </div>
-    </div>
-
-
 
     <DeleteAlert />
     <EditAlert />
   </div>
-  );
+);
 }
