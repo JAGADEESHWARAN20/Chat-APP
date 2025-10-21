@@ -226,56 +226,86 @@ export function RoomProvider({
     typingTimeoutRef.current = setTimeout(() => stopTyping(), 3000); // 3s debounce
   }, [startTyping, stopTyping, canOperateTyping]);
 
-  // Typing channel setup
-  useEffect(() => {
-    if (!canOperateTyping) {
-      dispatch({ type: "SET_TYPING_USERS", payload: [] });
-      dispatch({ type: "SET_TYPING_TEXT", payload: "" });
-      return;
+
+  
+  // Typing users ref to avoid stale closures
+const typingUsersRef = useRef<TypingUser[]>([]);
+typingUsersRef.current = state.typingUsers;
+
+// Updated Typing channel setup
+useEffect(() => {
+  if (!canOperateTyping) {
+    dispatch({ type: "SET_TYPING_USERS", payload: [] });
+    dispatch({ type: "SET_TYPING_TEXT", payload: "" });
+    return;
+  }
+
+  // Create Supabase channel
+  const channel = supabase.channel(`typing-${chatId}`, {
+    config: { broadcast: { self: false }, presence: { key: currentUserId ?? "anon" } },
+  });
+
+  // Handle typing_start
+  const handleTypingStart = ({ payload }: { payload: TypingUser }) => {
+    if (payload.user_id === currentUserId) return;
+
+    const newTypingUsers = [...typingUsersRef.current];
+    const existing = newTypingUsers.find((u) => u.user_id === payload.user_id);
+
+    if (existing) {
+      existing.is_typing = true;
+    } else {
+      newTypingUsers.push({ ...payload, is_typing: true });
     }
 
-    const channel = supabase.channel(`typing-${chatId}`);
-    channel
-      // For typing_start (around line 245)
-.on("broadcast", { event: "typing_start" }, ({ payload }: { payload: TypingUser }) => {
-  if (payload.user_id === currentUserId) return;
-  
-  // FIXED: Compute new array BEFORE dispatch (no updater fn)
-  const newTypingUsers = (state.typingUsers as TypingUser[]).map((u) =>
-    u.user_id === payload.user_id ? { ...u, is_typing: true } : u
-  );
-  if (!newTypingUsers.some((u) => u.user_id === payload.user_id)) {
-    newTypingUsers.push({ ...payload, is_typing: true });
-  }
-  
-  dispatch({ type: "SET_TYPING_USERS", payload: newTypingUsers });
-})
+    dispatch({ type: "SET_TYPING_USERS", payload: newTypingUsers });
+  };
 
-// For typing_stop (around line 258)
-.on("broadcast", { event: "typing_stop" }, ({ payload }: { payload: { user_id: string } }) => {
-  // FIXED: Compute new array BEFORE dispatch (no updater fn)
-  const newTypingUsers = (state.typingUsers as TypingUser[]).filter((u) => u.user_id !== payload.user_id);
-  
-  dispatch({ type: "SET_TYPING_USERS", payload: newTypingUsers });
-})
-      .subscribe();
+  // Handle typing_stop
+  const handleTypingStop = ({ payload }: { payload: { user_id: string } }) => {
+    const newTypingUsers = typingUsersRef.current.filter((u) => u.user_id !== payload.user_id);
+    dispatch({ type: "SET_TYPING_USERS", payload: newTypingUsers });
+  };
 
-    typingChannelRef.current = channel;
+  // Subscribe to events
+  channel.on("broadcast", { event: "typing_start" }, handleTypingStart);
+  channel.on("broadcast", { event: "typing_stop" }, handleTypingStop);
 
-    return () => {
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-        typingTimeoutRef.current = null;
+  channel.subscribe((status) => {
+    if (status === "SUBSCRIBED") {
+      console.log(`[Typing Channel] Connected → ${chatId}`);
+    }
+  });
+
+  typingChannelRef.current = channel;
+
+  // Cleanup on unmount or chat/user change
+  return () => {
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = null;
+    }
+
+    if (typingChannelRef.current) {
+      // Send stopTyping safely before removing channel
+      if (currentUserId) {
+        typingChannelRef.current.send({
+          type: "broadcast",
+          event: "typing_stop",
+          payload: { user_id: currentUserId },
+        });
       }
-      stopTyping();
-      if (typingChannelRef.current) {
-        supabase.removeChannel(typingChannelRef.current);
-        typingChannelRef.current = null;
-      }
-      dispatch({ type: "SET_TYPING_USERS", payload: [] });
-      dispatch({ type: "SET_TYPING_TEXT", payload: "" });
-    };
-  }, [supabase, chatId, canOperateTyping, currentUserId, startTyping, stopTyping]);
+
+      supabase.removeChannel(typingChannelRef.current);
+      typingChannelRef.current = null;
+    }
+
+    // Clear typing users and display text
+    dispatch({ type: "SET_TYPING_USERS", payload: [] });
+    dispatch({ type: "SET_TYPING_TEXT", payload: "" });
+  };
+}, [supabase, chatId, canOperateTyping, currentUserId, stopTyping]);
+
 
   // Compute typing display text
   useEffect(() => {
