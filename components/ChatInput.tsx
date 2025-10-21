@@ -1,4 +1,4 @@
-// FIXED ChatInput.tsx
+// components/ChatInput.tsx - UPDATED PART
 "use client";
 
 import React, { useState, useCallback, useEffect, useRef } from "react";
@@ -20,26 +20,35 @@ export default function ChatInput() {
   const { state } = useRoomContext();
   const { selectedRoom, selectedDirectChat, user } = state;
 
-  const roomId = selectedRoom?.id || "";
-  const { handleTyping, stopTyping } = useTypingStatus(); // ✅ Use handleTyping instead of start/stop
+  // FIXED: Use handleTyping instead of start/stop directly
+  const { handleTyping, stopTyping } = useTypingStatus();
 
   const canSend = Boolean(text.trim()) && !isSending && (selectedRoom || selectedDirectChat) && user;
   const hasActiveChat = Boolean(selectedRoom || selectedDirectChat);
 
-  // ✅ FIXED: Use debounced handleTyping
+  // FIXED: Use handleTyping for proper debouncing
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const newText = e.target.value;
     setText(newText);
-    if (hasActiveChat && roomId) {
+    
+    // Only trigger typing if we have text and active chat
+    if (newText.trim().length > 0 && hasActiveChat) {
       handleTyping();
     }
-  }, [handleTyping, hasActiveChat, roomId]);
+  }, [handleTyping, hasActiveChat]);
+
+  // FIXED: Stop typing when input loses focus
+  const handleBlur = useCallback(() => {
+    if (hasActiveChat) {
+      stopTyping();
+    }
+  }, [stopTyping, hasActiveChat]);
 
   const handleSend = useCallback(async () => {
     if (!canSend) return;
 
     setIsSending(true);
-    // stopTyping is called automatically by the debounce in handleTyping
+    stopTyping(); // Stop typing when sending
 
     const optimisticId = uuidv4();
     const optimisticMessage: Imessage = {
@@ -90,7 +99,7 @@ export default function ChatInput() {
       setIsSending(false);
       inputRef.current?.focus();
     }
-  }, [canSend, text, user, selectedRoom, selectedDirectChat, addOptimisticId, addMessage]);
+  }, [canSend, text, user, selectedRoom, selectedDirectChat, addOptimisticId, addMessage, stopTyping]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -99,17 +108,14 @@ export default function ChatInput() {
     }
   }, [handleSend]);
 
+  // Cleanup typing on unmount
   useEffect(() => {
     return () => {
-      if (hasActiveChat && roomId) stopTyping();
+      if (hasActiveChat) {
+        stopTyping();
+      }
     };
-  }, [hasActiveChat, roomId, stopTyping]);
-
-  useEffect(() => {
-    if (hasActiveChat) {
-      inputRef.current?.focus();
-    }
-  }, [hasActiveChat]);
+  }, [hasActiveChat, stopTyping]);
 
   return (
     <div className="flex gap-2 w-full border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -117,6 +123,7 @@ export default function ChatInput() {
         ref={inputRef}
         value={text}
         onChange={handleInputChange}
+        onBlur={handleBlur}
         onKeyDown={handleKeyDown}
         placeholder={hasActiveChat ? "Type a message..." : "Select a room or chat to start messaging..."}
         className="flex-1 min-h-[44px] resize-none focus-visible:ring-2 focus-visible:ring-indigo-500"
