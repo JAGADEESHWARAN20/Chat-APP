@@ -1,4 +1,4 @@
-// components/ChatInput.tsx - FULL: RoomContext for user/room, typing on input change, optimistic send, keyboard support, cleanup, fast UX
+// components/ChatInput.tsx - FIXED: Removed userId from hook call (internal from RoomContext), typing start on text > 0 (change), stop on empty/blur, input always focused/typable, button disabled only when invalid
 "use client";
 
 import React, { useState, useCallback, useEffect, useRef } from "react";
@@ -20,29 +20,37 @@ export default function ChatInput() {
   const { state } = useRoomContext();
   const { selectedRoom, selectedDirectChat, user } = state;
 
-  // UPDATED: Use RoomContext for roomId/userId, pass only roomId to hook (internal user pull)
+  // FIXED: Pass only roomId (userId internal)
   const roomId = selectedRoom?.id || "";
   const { startTyping, stopTyping } = useTypingStatus({ roomId });
 
   const canSend = Boolean(text.trim()) && !isSending && (selectedRoom || selectedDirectChat) && user;
+  const hasActiveChat = Boolean(selectedRoom || selectedDirectChat);
 
-  // Input change: Typing logic
+  // Input change: Start typing if text > 0, stop if empty
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const newText = e.target.value;
     setText(newText);
-    if (newText.trim().length > 0 && roomId && user) {
-      startTyping();
-    } else if (roomId && user) {
-      stopTyping();
+    if (newText.trim().length > 0 && hasActiveChat && roomId) {
+      startTyping(); // Show indicator on typing
+    } else if (hasActiveChat && roomId) {
+      stopTyping(); // Hide on empty
     }
-  }, [startTyping, stopTyping, roomId, user]);
+  }, [startTyping, stopTyping, hasActiveChat, roomId]);
+
+  // Blur: Stop typing if empty
+  const handleBlur = useCallback(() => {
+    if (text.trim().length === 0 && hasActiveChat && roomId) {
+      stopTyping(); // Hide if focused but empty
+    }
+  }, [stopTyping, text, hasActiveChat, roomId]);
 
   // Send message
   const handleSend = useCallback(async () => {
     if (!canSend) return;
 
     setIsSending(true);
-    stopTyping();
+    stopTyping(); // Hide indicator on send
 
     const optimisticId = uuidv4();
     const optimisticMessage: Imessage = {
@@ -69,7 +77,7 @@ export default function ChatInput() {
     addOptimisticId(optimisticId);
     addMessage(optimisticMessage);
     const sendText = text.trim();
-    setText("");
+    setText(""); // Clear text (triggers stopTyping via change)
 
     try {
       const res = await fetch("/api/messages/send", {
@@ -92,6 +100,7 @@ export default function ChatInput() {
       toast.error("Failed to send message");
     } finally {
       setIsSending(false);
+      inputRef.current?.focus(); // FIXED: Re-focus after send
     }
   }, [canSend, text, user, selectedRoom, selectedDirectChat, addOptimisticId, addMessage, stopTyping]);
 
@@ -106,31 +115,33 @@ export default function ChatInput() {
   // Cleanup typing on unmount/room change
   useEffect(() => {
     return () => {
-      if (roomId && user) stopTyping();
+      if (hasActiveChat && roomId) stopTyping();
     };
-  }, [roomId, user, stopTyping]);
+  }, [hasActiveChat, roomId, stopTyping]);
 
-  // Auto-focus
+  // Auto-focus when room changes
   useEffect(() => {
-    inputRef.current?.focus();
-  }, [roomId]);
+    if (hasActiveChat) {
+      inputRef.current?.focus();
+    }
+  }, [hasActiveChat]);
 
-  if (!user || (!selectedRoom && !selectedDirectChat)) return null;
-
+  // FIXED: Always render input (placeholder changes), button disabled if no chat/text
   return (
-    <div className="flex gap-2 w-full border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 p-4">
+    <div className="flex gap-2 w-full border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <Input
         ref={inputRef}
         value={text}
         onChange={handleInputChange}
+        onBlur={handleBlur} // FIXED: Stop on blur if empty
         onKeyDown={handleKeyDown}
-        placeholder="Type a message..."
-        disabled={isSending || !canSend}
+        placeholder={hasActiveChat ? "Type a message..." : "Select a room or chat to start messaging..."}
         className="flex-1 min-h-[44px] resize-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+        disabled={isSending} // FIXED: Input disabled only during send (brief)
       />
       <Button
         onClick={handleSend}
-        disabled={!canSend}
+        disabled={!canSend || isSending}
         className="gap-2 h-[44px] px-4"
         size="sm"
       >
