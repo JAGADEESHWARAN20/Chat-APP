@@ -1,4 +1,4 @@
-// components/ListMessages.tsx - FIXED LAYOUT: Vertical-only scroll, TypingIndicator as sticky footer, overflow-x-hidden, text wrapping
+// components/ListMessages.tsx - FIXED: Null guard for selectedRoom.id in handleRealtimePayload
 "use client";
 
 import { Imessage, useMessage } from "@/lib/store/messages";
@@ -22,11 +22,8 @@ export default function ListMessages() {
   const [notification, setNotification] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
 
-  // ✅ get user and selectedRoom from RoomContext
   const { state } = useRoomContext();
   const { selectedRoom, user: contextUser } = state;
-
-  // ✅ fallback: prefer RoomContext user, but also support global user store
   const storeUser = useUser((state) => state.user);
   const user = contextUser ?? storeUser;
 
@@ -56,10 +53,7 @@ export default function ListMessages() {
     const isNearBottom = scrollHeight - scrollTop <= clientHeight + 10;
 
     setUserScrolled(!isNearBottom);
-
-    if (isNearBottom) {
-      setNotification(0);
-    }
+    if (isNearBottom) setNotification(0);
   }, []);
 
   const scrollDown = useCallback(() => {
@@ -87,18 +81,12 @@ export default function ListMessages() {
 
       try {
         const res = await fetch(`/api/messages/${selectedRoom.id}`);
-
-        if (!res.ok) {
-          throw new Error(await res.text());
-        }
+        if (!res.ok) throw new Error(await res.text());
 
         const { messages: fetchedMessages } = await res.json();
 
         if (fetchedMessages && Array.isArray(fetchedMessages)) {
-          console.log(
-            `[ListMessages] ✅ Loaded ${fetchedMessages.length} messages`
-          );
-
+          console.log(`[ListMessages] ✅ Loaded ${fetchedMessages.length} messages`);
           const formattedMessages = fetchedMessages.map((msg: any) => ({
             ...msg,
             profiles: msg.profiles
@@ -114,9 +102,7 @@ export default function ListMessages() {
               : null,
           }));
 
-          if (isMounted) {
-            setMessages(formattedMessages);
-          }
+          if (isMounted) setMessages(formattedMessages);
         } else if (isMounted) {
           console.warn("[ListMessages] No messages or invalid format");
           setMessages([]);
@@ -128,9 +114,7 @@ export default function ListMessages() {
           setMessages([]);
         }
       } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
+        if (isMounted) setIsLoading(false);
       }
     };
 
@@ -141,17 +125,86 @@ export default function ListMessages() {
     };
   }, [selectedRoom?.id, setMessages]);
 
-  // Set up real-time subscriptions
+  // Memoized realtime handler
+  const handleRealtimePayload = useCallback(
+    (payload: any) => {
+      try {
+        const messagePayload = payload.new as MessageRow | null;
+
+        // FIXED: Null check for selectedRoom
+        if (!messagePayload || !selectedRoom || messagePayload.room_id !== selectedRoom.id) return;
+
+        if (payload.eventType === "INSERT") {
+          if (optimisticIds.includes(messagePayload.id)) return;
+
+          supabase
+            .from("profiles")
+            .select("*")
+            .eq("id", messagePayload.sender_id)
+            .single<ProfileRow>()
+            .then(({ data: profile, error }) => {
+              if (error || !profile) return;
+
+              if (messages.some((m) => m.id === messagePayload.id)) return;
+
+              const newMessage: Imessage = {
+                id: messagePayload.id,
+                created_at: messagePayload.created_at,
+                is_edited: messagePayload.is_edited,
+                sender_id: messagePayload.sender_id,
+                room_id: messagePayload.room_id,
+                direct_chat_id: messagePayload.direct_chat_id,
+                dm_thread_id: messagePayload.dm_thread_id,
+                status: messagePayload.status,
+                text: messagePayload.text,
+                profiles: {
+                  id: profile.id,
+                  avatar_url: profile.avatar_url ?? null,
+                  display_name: profile.display_name ?? null,
+                  username: profile.username ?? null,
+                  created_at: profile.created_at ?? null,
+                  bio: profile.bio ?? null,
+                  updated_at: profile.updated_at ?? null,
+                },
+              };
+
+              addMessage(newMessage);
+
+              if (
+                scrollRef.current &&
+                scrollRef.current.scrollTop <
+                  scrollRef.current.scrollHeight - scrollRef.current.clientHeight - 10
+              ) {
+                setNotification((prev) => prev + 1);
+              }
+            });
+        } else if (payload.eventType === "UPDATE") {
+          const oldMessage = messages.find((m) => m.id === messagePayload.id);
+          if (oldMessage) {
+            optimisticUpdateMessage(messagePayload.id, {
+              ...oldMessage,
+              text: messagePayload.text,
+              is_edited: messagePayload.is_edited,
+            });
+          }
+        } else if (payload.eventType === "DELETE") {
+          optimisticDeleteMessage((payload.old as MessageRow).id);
+        }
+      } catch (err) {
+        console.error("[ListMessages] Realtime error:", err);
+        toast.error("Error processing message update");
+      }
+    },
+    [selectedRoom, optimisticIds, supabase, messages, addMessage, optimisticUpdateMessage, optimisticDeleteMessage]
+  );
+
+  // Real-time subscription
   useEffect(() => {
-    if (!selectedRoom?.id) {
-      console.log("[ListMessages] No room for subscriptions");
-      return;
-    }
+    if (!selectedRoom?.id) return;
 
-    console.log("[ListMessages] 🔔 Setting up real-time subscription for room:", selectedRoom.id);
+    const messageChannel = supabase.channel(`room_messages_${selectedRoom.id}`);
 
-    const messageChannel = supabase
-      .channel(`room_messages_${selectedRoom.id}`)
+    messageChannel
       .on(
         "postgres_changes",
         {
@@ -160,119 +213,16 @@ export default function ListMessages() {
           table: "messages",
           filter: `room_id=eq.${selectedRoom.id}`,
         },
-        (payload) => {
-          try {
-            const messagePayload = payload.new as MessageRow | null;
-
-            if (!messagePayload || messagePayload.room_id !== selectedRoom.id) {
-              console.log("[ListMessages] Message not for this room, ignoring");
-              return;
-            }
-
-            if (payload.eventType === "INSERT") {
-              console.log("[ListMessages] 📨 INSERT event:", messagePayload.id);
-
-              if (optimisticIds.includes(messagePayload.id)) {
-                console.log("[ListMessages] Message already exists (optimistic), skipping");
-                return;
-              }
-
-              supabase
-                .from("profiles")
-                .select("*")
-                .eq("id", messagePayload.sender_id)
-                .single<ProfileRow>()
-                .then(({ data: profile, error }) => {
-                  if (error) {
-                    console.error("[ListMessages] Error fetching profile:", error);
-                    toast.error(error.message);
-                    return;
-                  }
-
-                  if (!profile) {
-                    console.warn("[ListMessages] No profile found");
-                    return;
-                  }
-
-                  if (messages.some((m) => m.id === messagePayload.id)) {
-                    console.log("[ListMessages] Message already in state");
-                    return;
-                  }
-
-                  const newMessage: Imessage = {
-                    id: messagePayload.id,
-                    created_at: messagePayload.created_at,
-                    is_edited: messagePayload.is_edited,
-                    sender_id: messagePayload.sender_id,
-                    room_id: messagePayload.room_id,
-                    direct_chat_id: messagePayload.direct_chat_id,
-                    dm_thread_id: messagePayload.dm_thread_id,
-                    status: messagePayload.status,
-                    text: messagePayload.text,
-                    profiles: {
-                      id: profile.id,
-                      avatar_url: profile.avatar_url ?? null,
-                      display_name: profile.display_name ?? null,
-                      username: profile.username ?? null,
-                      created_at: profile.created_at ?? null,
-                      bio: profile.bio ?? null,
-                      updated_at: profile.updated_at ?? null,
-                    },
-                  };
-
-                  console.log("[ListMessages] ✅ Adding new message:", newMessage.id);
-                  addMessage(newMessage);
-
-                  // Increment notification if scrolled up
-                  if (
-                    scrollRef.current &&
-                    scrollRef.current.scrollTop <
-                      scrollRef.current.scrollHeight -
-                        scrollRef.current.clientHeight -
-                        10
-                  ) {
-                    console.log("[ListMessages] 🔔 Incrementing notification");
-                    setNotification((prev) => prev + 1);
-                  }
-                });
-            } else if (payload.eventType === "UPDATE") {
-              console.log("[ListMessages] ✏️ UPDATE event:", messagePayload.id);
-
-              const oldMessage = messages.find((m) => m.id === messagePayload.id);
-              if (oldMessage) {
-                optimisticUpdateMessage(messagePayload.id, {
-                  ...oldMessage,
-                  text: messagePayload.text,
-                  is_edited: messagePayload.is_edited,
-                });
-              }
-            } else if (payload.eventType === "DELETE") {
-              console.log("[ListMessages] 🗑️ DELETE event");
-              optimisticDeleteMessage((payload.old as MessageRow).id);
-            }
-          } catch (err) {
-            console.error("[ListMessages] Error processing real-time update:", err);
-            toast.error("Error processing message update");
-          }
-        }
+        handleRealtimePayload
       )
       .subscribe();
 
     return () => {
-      console.log("[ListMessages] 🧹 Removing channel subscription");
       supabase.removeChannel(messageChannel);
     };
-  }, [
-    selectedRoom?.id,
-    optimisticIds,
-    addMessage,
-    optimisticUpdateMessage,
-    optimisticDeleteMessage,
-    supabase,
-    messages,
-  ]);
+  }, [selectedRoom?.id, supabase, handleRealtimePayload]);
 
-  // Auto-scroll when new messages arrive
+  // Auto-scroll
   const prevMessagesLength = useRef(messages.length);
   useEffect(() => {
     if (
@@ -280,27 +230,17 @@ export default function ListMessages() {
       !userScrolled &&
       prevMessagesLength.current < messages.length
     ) {
-      console.log("[ListMessages] Auto-scrolling to bottom");
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
     prevMessagesLength.current = messages.length;
   }, [messages.length, userScrolled]);
 
-  // Memoized filtered and sorted messages
+  // Filtered messages
   const filteredMessages = useMemo(() => {
-    if (!messages || !Array.isArray(messages) || !selectedRoom?.id) {
-      return [];
-    }
-
-    const filtered = messages
+    if (!messages || !Array.isArray(messages) || !selectedRoom?.id) return [];
+    return messages
       .filter((msg): msg is Imessage => msg && msg.room_id === selectedRoom.id)
-      .sort(
-        (a, b) =>
-          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-      );
-
-    console.log("[ListMessages] Filtered to", filtered.length, "messages");
-    return filtered;
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
   }, [messages, selectedRoom?.id]);
 
   const SkeletonMessage = React.memo(() => (
@@ -324,20 +264,13 @@ export default function ListMessages() {
   }
 
   return (
-    <>
-      {/* Messages Scroll Area - FIXED: overflow-y-auto only, overflow-x-hidden, full width constraint */}
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
       <div
-        id="message-container"
-        tabIndex={0}
-        role="region"
-        aria-label="Messages"
-        aria-live="polite"
-        className="flex-1 overflow-y-scroll h-[80vh] overflow-x-hidden px-4 py-2 space-y-4 w-full scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent relative"
-        style={{ /* Ensure no horizontal scroll */ maxWidth: '100%' }}
         ref={scrollRef}
         onScroll={handleOnScroll}
+        className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-2 space-y-4 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent"
+        style={{ maxWidth: "100%" }}
       >
-        {/* Messages Content */}
         <div className="w-full max-w-full">
           {isLoading ? (
             <div className="space-y-4">
@@ -355,39 +288,15 @@ export default function ListMessages() {
             </div>
           )}
         </div>
-
-        {/* Typing Indicator - FIXED: Sticky footer inside scrollable area for proper layout */}
-        <div className="sticky bottom-0 left-0 right-0 bg-transparent pt-2 pb-2 z-10">
-          <TypingIndicator />
-        </div>
-
-        {/* Portaled dialogs - Keep outside scroll for overlay */}
-        <DeleteAlert />
-        <EditAlert />
+        <div className="pb-12" />
       </div>
 
-      {/* Scroll to bottom button - FIXED: Position relative to input, avoid overlap */}
-      {userScrolled && (
-        <div className="fixed bottom-20 right-4 z-20"> {/* Adjusted: bottom-20 to clear input + TypingIndicator */}
-          {notification > 0 ? (
-            <button
-              className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-md text-sm transition-colors shadow-lg"
-              onClick={scrollDown}
-              aria-label={`Scroll to view ${notification} new messages`}
-            >
-              New {notification} messages
-            </button>
-          ) : (
-            <button
-              className="w-12 h-12 bg-blue-500 hover:bg-blue-600 rounded-full flex justify-center items-center transition-all hover:scale-110 shadow-lg"
-              onClick={scrollDown}
-              aria-label="Scroll to bottom"
-            >
-              <ArrowDown className="w-5 h-5" />
-            </button>
-          )}
-        </div>
-      )}
-    </>
+      <div className="flex-shrink-0 sticky bottom-0 left-0 right-0 z-10 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
+        <TypingIndicator />
+      </div>
+
+      <DeleteAlert />
+      <EditAlert />
+    </div>
   );
 }
