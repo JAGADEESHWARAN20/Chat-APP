@@ -264,11 +264,11 @@ export default function ListMessages() {
   }
 
   return (
-    <div className="flex-1 flex flex-col h-[80vh] min-h-0 overflow-hidden">
+    <div className="flex-1 flex flex-col h-[80vh] pb-2 min-h-0 overflow-hidden">
     <div
       ref={scrollRef}
       onScroll={handleOnScroll}
-      className="flex-1 overflow-y-auto px-4 py-2 space-y-4 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent"
+      className="flex-1 overflow-y-auto px-4 py-2 space-y-2 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent"
       style={{ maxWidth: "100%" }}
     >
       <div className="w-full max-w-full">
@@ -288,12 +288,13 @@ export default function ListMessages() {
           </div>
         )}
       </div>
-    </div>
-
-    {/* Typing indicator positioned above input */}
+          {/* Typing indicator positioned above input */}
     <div className="sticky bottom-0 left-0 right-0 z-10">
       <TypingIndicator />
     </div>
+    </div>
+
+
 
     <DeleteAlert />
     <EditAlert />
