@@ -291,9 +291,9 @@ className="flex-1 overflow-y-scroll h-[80vh] pb-4 overflow-x-hidden px-4 py-2 sp
 
       </div>
 
-      <div className="flex-shrink-0 sticky bottom-0 left-0 right-0 z-10 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
-        <TypingIndicator />
-      </div>
+      <TypingIndicator />
+      {/* <div className="flex-shrink-0 sticky bottom-0 left-0 right-0 z-10 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
+      </div> */}
 
       <DeleteAlert />
       <EditAlert />
