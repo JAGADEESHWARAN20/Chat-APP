@@ -18,10 +18,10 @@ export default function ChatInput() {
   const { selectedRoom, selectedDirectChat, user } = state;
 
   // ✅ Fixed call: pass both roomId and userId
-  const { startTyping, stopTyping } = useTypingStatus(
-    selectedRoom?.id || "",
-    user?.id || null
-  );
+  const { startTyping, stopTyping } = useTypingStatus({
+    roomId: selectedRoom?.id || "",
+    userId: user?.id || null
+  });
 
   const handleInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -107,7 +107,7 @@ export default function ChatInput() {
   }, [selectedRoom?.id, user?.id, stopTyping]);
 
   return (
-    <div className="flex gap-2 w-full p-4 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <div className="flex gap-2 w-full border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <Input
         value={text}
         onChange={handleInputChange}

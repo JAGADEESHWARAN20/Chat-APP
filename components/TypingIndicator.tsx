@@ -16,8 +16,10 @@ export default function TypingIndicator({ roomId }: TypingIndicatorProps) {
   const [isLoadingNames, setIsLoadingNames] = useState(false);
   const { state } = useRoomContext();
   const currentUserId = state.user?.id ?? null; // Fixed: Nullish coalescing for undefined/null
-  const { typingUsers } = useTypingStatus(roomId, currentUserId);
-
+  const { typingUsers } = useTypingStatus({
+    roomId,
+    userId: currentUserId,
+  });
   // Get unique typing user IDs (excluding current user) - Improved: Stable deps
   const uniqueTypers = useMemo(() => {
     return [...new Set(

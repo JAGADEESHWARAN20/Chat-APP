@@ -332,7 +332,7 @@ export default function ListMessages() {
         role="region"
         aria-label="Messages"
         aria-live="polite"
-        className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-2 space-y-4 w-full scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent relative"
+        className="flex-1 overflow-y-scroll h-[80vh] overflow-x-hidden px-4 py-2 space-y-4 w-full scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent relative"
         style={{ /* Ensure no horizontal scroll */ maxWidth: '100%' }}
         ref={scrollRef}
         onScroll={handleOnScroll}
