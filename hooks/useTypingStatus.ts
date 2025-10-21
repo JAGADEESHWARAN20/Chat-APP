@@ -1,7 +1,7 @@
-// hooks/useTypingStatus.ts
+// hooks/useTypingStatus.ts - Updated version
 "use client";
 
-import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { useEffect, useCallback, useRef, useMemo } from "react";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import type { Database } from "@/lib/types/supabase";
 import { useRoomContext } from "@/lib/store/RoomContext";
@@ -15,14 +15,12 @@ type TypingUser = {
 
 export function useTypingStatus() {
   const supabase = createClientComponentClient<Database>();
-  const { state } = useRoomContext();
-  const { selectedRoom, user } = state;
+  const { state, updateTypingUsers, updateTypingText } = useRoomContext();
+  const { selectedRoom, user, typingUsers } = state;
 
   const currentUserId = user?.id ?? null;
-  console.log(currentUserId);
   const roomId = selectedRoom?.id ?? null;
 
-  const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -68,13 +66,13 @@ export function useTypingStatus() {
     
     timeoutRef.current = setTimeout(() => {
       stopTyping();
-    }, 1000);
+    }, 2000);
   }, [startTyping, stopTyping, canOperate]);
 
   // --- SETUP CHANNEL + BROADCAST LISTENERS ---
   useEffect(() => {
     if (!canOperate) {
-      setTypingUsers([]);
+      updateTypingUsers([]);
       return;
     }
 
@@ -88,25 +86,27 @@ export function useTypingStatus() {
         
         if (payload.user_id === currentUserId) return;
 
-        setTypingUsers((prev) => {
-          const exists = prev.some((u) => u.user_id === payload.user_id);
-          if (exists) {
-            return prev.map(u => 
-              u.user_id === payload.user_id 
-                ? { ...u, is_typing: true }
-                : u
-            );
-          } else {
-            return [...prev, { ...payload, is_typing: true }];
-          }
-        });
+        const currentTypingUsers = typingUsers;
+        const exists = currentTypingUsers.some((u) => u.user_id === payload.user_id);
+        
+        let updatedUsers: TypingUser[];
+        if (exists) {
+          updatedUsers = currentTypingUsers.map(u => 
+            u.user_id === payload.user_id 
+              ? { ...u, is_typing: true }
+              : u
+          );
+        } else {
+          updatedUsers = [...currentTypingUsers, { ...payload, is_typing: true }];
+        }
+        
+        updateTypingUsers(updatedUsers);
       })
       .on("broadcast", { event: "typing_stop" }, ({ payload }: { payload: TypingUser }) => {
         console.log("[useTypingStatus] 🛑 RECEIVED typing_stop:", payload.user_id);
         
-        setTypingUsers((prev) => {
-          return prev.filter((u) => u.user_id !== payload.user_id);
-        });
+        const updatedUsers = typingUsers.filter((u) => u.user_id !== payload.user_id);
+        updateTypingUsers(updatedUsers);
       })
       .subscribe((status) => {
         console.log(`[useTypingStatus] 📡 Channel status: ${status}`);
@@ -128,9 +128,9 @@ export function useTypingStatus() {
         channelRef.current = null;
       }
       
-      setTypingUsers([]);
+      updateTypingUsers([]);
     };
-  }, [supabase, roomId, currentUserId, canOperate, stopTyping]);
+  }, [supabase, roomId, currentUserId, canOperate, stopTyping, updateTypingUsers, typingUsers]);
 
   // --- COMPUTE TYPING TEXT ---
   const typingDisplayText = useMemo(() => {
@@ -144,14 +144,19 @@ export function useTypingStatus() {
       (u) => u.display_name || u.username || `User ${u.user_id.slice(-4)}`
     );
     
+    let text = "";
     if (active.length === 1) {
-      return `${names[0]} is typing...`;
+      text = `${names[0]} is typing...`;
     } else if (active.length === 2) {
-      return `${names[0]} and ${names[1]} are typing...`;
+      text = `${names[0]} and ${names[1]} are typing...`;
     } else {
-      return `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]} are typing...`;
+      text = `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]} are typing...`;
     }
-  }, [typingUsers]);
+    
+    // Update the context with computed text
+    updateTypingText(text);
+    return text;
+  }, [typingUsers, updateTypingText]);
 
   return {
     typingUsers,

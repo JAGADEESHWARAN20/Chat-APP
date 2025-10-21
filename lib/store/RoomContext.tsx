@@ -1,3 +1,4 @@
+// lib/store/RoomContext.tsx
 "use client";
 
 import React, {
@@ -178,8 +179,8 @@ interface RoomContextType {
   addMessage: (message: Imessage) => void;
   acceptJoinNotification: (roomId: string) => Promise<void>;
   fetchAllUsers: () => Promise<PartialProfile[]>;
-  handleTyping: () => void;
-  stopTyping: () => void;
+  updateTypingUsers: (users: TypingUser[]) => void;
+  updateTypingText: (text: string) => void;
 }
 
 const RoomContext = createContext<RoomContextType | undefined>(undefined);
@@ -195,137 +196,6 @@ export function RoomProvider({
   const [state, dispatch] = useReducer(roomReducer, initialState);
   const supabase = supabaseBrowser();
 
-  // Typing refs and callbacks
-  const typingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const currentUserId = state.user?.id ?? null;
-  const chatId = state.selectedRoom?.id ?? state.selectedDirectChat?.id ?? null;
-  const canOperateTyping = Boolean(chatId && currentUserId);
-
-  // Typing functions
-  const startTyping = useCallback(() => {
-    if (!canOperateTyping || !typingChannelRef.current) return;
-    const payload: TypingUser = {
-      user_id: currentUserId!,
-      is_typing: true,
-      display_name: state.user?.user_metadata?.display_name,
-      username: state.user?.user_metadata?.username,
-    };
-    typingChannelRef.current.send({ type: "broadcast", event: "typing_start", payload });
-  }, [canOperateTyping, currentUserId, state.user]);
-
-  const stopTyping = useCallback(() => {
-    if (!canOperateTyping || !typingChannelRef.current) return;
-    typingChannelRef.current.send({ type: "broadcast", event: "typing_stop", payload: { user_id: currentUserId!, is_typing: false } });
-  }, [canOperateTyping, currentUserId]);
-
-  const handleTyping = useCallback(() => {
-    if (!canOperateTyping) return;
-    startTyping();
-    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    typingTimeoutRef.current = setTimeout(() => stopTyping(), 3000); // 3s debounce
-  }, [startTyping, stopTyping, canOperateTyping]);
-
-
-  
-  // Typing users ref to avoid stale closures
-const typingUsersRef = useRef<TypingUser[]>([]);
-typingUsersRef.current = state.typingUsers;
-
-// Updated Typing channel setup
-useEffect(() => {
-  if (!canOperateTyping) {
-    dispatch({ type: "SET_TYPING_USERS", payload: [] });
-    dispatch({ type: "SET_TYPING_TEXT", payload: "" });
-    return;
-  }
-
-  // Create Supabase channel
-  const channel = supabase.channel(`typing-${chatId}`, {
-    config: { broadcast: { self: false }, presence: { key: currentUserId ?? "anon" } },
-  });
-
-  // Handle typing_start
-  const handleTypingStart = ({ payload }: { payload: TypingUser }) => {
-    if (payload.user_id === currentUserId) return;
-
-    const newTypingUsers = [...typingUsersRef.current];
-    const existing = newTypingUsers.find((u) => u.user_id === payload.user_id);
-
-    if (existing) {
-      existing.is_typing = true;
-    } else {
-      newTypingUsers.push({ ...payload, is_typing: true });
-    }
-
-    dispatch({ type: "SET_TYPING_USERS", payload: newTypingUsers });
-  };
-
-  // Handle typing_stop
-  const handleTypingStop = ({ payload }: { payload: { user_id: string } }) => {
-    const newTypingUsers = typingUsersRef.current.filter((u) => u.user_id !== payload.user_id);
-    dispatch({ type: "SET_TYPING_USERS", payload: newTypingUsers });
-  };
-
-  // Subscribe to events
-  channel.on("broadcast", { event: "typing_start" }, handleTypingStart);
-  channel.on("broadcast", { event: "typing_stop" }, handleTypingStop);
-
-  channel.subscribe((status) => {
-    if (status === "SUBSCRIBED") {
-      console.log(`[Typing Channel] Connected → ${chatId}`);
-    }
-  });
-
-  typingChannelRef.current = channel;
-
-  // Cleanup on unmount or chat/user change
-  return () => {
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-      typingTimeoutRef.current = null;
-    }
-
-    if (typingChannelRef.current) {
-      // Send stopTyping safely before removing channel
-      if (currentUserId) {
-        typingChannelRef.current.send({
-          type: "broadcast",
-          event: "typing_stop",
-          payload: { user_id: currentUserId },
-        });
-      }
-
-      supabase.removeChannel(typingChannelRef.current);
-      typingChannelRef.current = null;
-    }
-
-    // Clear typing users and display text
-    dispatch({ type: "SET_TYPING_USERS", payload: [] });
-    dispatch({ type: "SET_TYPING_TEXT", payload: "" });
-  };
-}, [supabase, chatId, canOperateTyping, currentUserId, stopTyping]);
-
-
-  // Compute typing display text
-  useEffect(() => {
-    const active = state.typingUsers.filter((u) => u.is_typing);
-    let text = "";
-    if (active.length > 0) {
-      const names = active.map(
-        (u) => u.display_name || u.username || `User ${u.user_id.slice(-4)}`
-      );
-      if (active.length === 1) {
-        text = `${names[0]} is typing...`;
-      } else if (active.length === 2) {
-        text = `${names[0]} and ${names[1]} are typing...`;
-      } else {
-        text = `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]} are typing...`;
-      }
-    }
-    dispatch({ type: "SET_TYPING_TEXT", payload: text });
-  }, [state.typingUsers]);
-
   // Set user
   useEffect(() => {
     dispatch({ type: "SET_USER", payload: user ?? null });
@@ -337,8 +207,19 @@ useEffect(() => {
       dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
       dispatch({ type: "SET_SELECTED_ROOM", payload: null });
       dispatch({ type: "SET_SELECTED_DIRECT_CHAT", payload: null });
+      dispatch({ type: "SET_TYPING_USERS", payload: [] });
+      dispatch({ type: "SET_TYPING_TEXT", payload: "" });
     }
   }, [user]);
+
+  // Helper functions for typing
+  const updateTypingUsers = useCallback((users: TypingUser[]) => {
+    dispatch({ type: "SET_TYPING_USERS", payload: users });
+  }, []);
+
+  const updateTypingText = useCallback((text: string) => {
+    dispatch({ type: "SET_TYPING_TEXT", payload: text });
+  }, []);
 
   const acceptJoinNotification = useCallback(async (roomId: string) => {
     try {
@@ -666,80 +547,8 @@ useEffect(() => {
       addMessageToStore(message);
     }
   }, [messages, addMessageToStore]);
-  
 
-  // Real-time subscriptions
- // 🧠 FIXED: Realtime channel subscription (Supabase v2 syntax)
-useEffect(() => {
-  if (!canOperateTyping) {
-    dispatch({ type: "SET_TYPING_USERS", payload: [] });
-    dispatch({ type: "SET_TYPING_TEXT", payload: "" });
-    return;
-  }
-
-  // Create typing channel
-  const channel = supabase.channel(`typing-${chatId}`, {
-    config: {
-      broadcast: { self: false }, // ✅ correct prop, no postgres_changes
-      presence: { key: currentUserId ?? "anon" },
-    },
-  });
-
-  // Listen for typing_start
-  channel.on(
-    "broadcast",
-    { event: "typing_start" },
-    ({ payload }: { payload: TypingUser }) => {
-      if (payload.user_id === currentUserId) return;
-
-      const newTypingUsers = [...state.typingUsers];
-      const existing = newTypingUsers.find((u) => u.user_id === payload.user_id);
-      if (existing) {
-        existing.is_typing = true;
-      } else {
-        newTypingUsers.push({ ...payload, is_typing: true });
-      }
-      dispatch({ type: "SET_TYPING_USERS", payload: newTypingUsers });
-    }
-  );
-
-  // Listen for typing_stop
-  channel.on(
-    "broadcast",
-    { event: "typing_stop" },
-    ({ payload }: { payload: { user_id: string } }) => {
-      const newTypingUsers = state.typingUsers.filter(
-        (u) => u.user_id !== payload.user_id
-      );
-      dispatch({ type: "SET_TYPING_USERS", payload: newTypingUsers });
-    }
-  );
-
-  // ✅ Correct subscribe call (no "postgres_changes")
-  channel.subscribe((status) => {
-    if (status === "SUBSCRIBED") {
-      console.log(`[Typing Channel] Connected → ${chatId}`);
-    }
-  });
-
-  typingChannelRef.current = channel;
-
-  return () => {
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-      typingTimeoutRef.current = null;
-    }
-    stopTyping();
-    if (typingChannelRef.current) {
-      supabase.removeChannel(typingChannelRef.current);
-      typingChannelRef.current = null;
-    }
-    dispatch({ type: "SET_TYPING_USERS", payload: [] });
-    dispatch({ type: "SET_TYPING_TEXT", payload: "" });
-  };
-}, [supabase, chatId, canOperateTyping, currentUserId, startTyping, stopTyping, state.typingUsers]);
-
-
+  // Auto-fetch rooms when user changes
   useEffect(() => {
     if (state.user?.id) fetchAvailableRooms();
   }, [state.user, fetchAvailableRooms]);
@@ -758,8 +567,8 @@ useEffect(() => {
     addMessage,
     acceptJoinNotification,
     fetchAllUsers,
-    handleTyping,
-    stopTyping,
+    updateTypingUsers,
+    updateTypingText,
   };
 
   return <RoomContext.Provider value={value}>{children}</RoomContext.Provider>;
