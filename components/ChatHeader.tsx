@@ -29,9 +29,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const [isMessageSearchOpen, setIsMessageSearchOpen] = useState(false);
   const [messageSearchQuery, setMessageSearchQuery] = useState("");
   const { state, switchRoom } = useRoomContext();
-  const { selectedRoom, availableRooms, isLoading } = state;
-  const isMounted = useRef(true);
-  const [isMember, setIsMember] = useState(false);
+  const { selectedRoom, availableRooms } = state;
   const { setHighlightedMessageId, setSearchQuery } = useSearchHighlight();
 
   // Filter rooms to show only those where user is a member
@@ -70,20 +68,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     },
     [switchRoom]
   );
-
-  useEffect(() => {
-    return () => {
-      isMounted.current = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (selectedRoom && user) {
-      setIsMember(selectedRoom.isMember);
-    } else {
-      setIsMember(false);
-    }
-  }, [selectedRoom, user]);
 
   return (
     <header className="h-[3.6em] lg:w-[50vw] w-[95vw] flex items-center justify-between px-[1em] py-[1em] glass-gradient-header text-foreground bg-background z-10 dark:text-foreground dark:bg-background">
