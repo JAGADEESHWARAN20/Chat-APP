@@ -52,7 +52,7 @@ export function useTypingStatus() {
     if (!canOperate) return;
     startTyping();
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(stopTyping, 1500);
+    timeoutRef.current = setTimeout(stopTyping, 1000);
   }, [startTyping, stopTyping, canOperate]);
 
   // --- SETUP CHANNEL + BROADCAST LISTENERS ---
