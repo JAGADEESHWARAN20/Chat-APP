@@ -195,6 +195,7 @@ export function RoomProvider({
 }) {
   const [state, dispatch] = useReducer(roomReducer, initialState);
   const supabase = supabaseBrowser();
+  const profilesCache = useRef<Map<string, PartialProfile>>(new Map()); // Cache profiles
 
   // Set user
   useEffect(() => {
@@ -220,6 +221,128 @@ export function RoomProvider({
   const updateTypingText = useCallback((text: string) => {
     dispatch({ type: "SET_TYPING_TEXT", payload: text });
   }, []);
+
+  // Fetch profile for user_ids (on demand, cache)
+  const fetchProfiles = useCallback(async (userIds: string[]) => {
+    const uncachedIds = userIds.filter(id => !profilesCache.current.has(id));
+    if (uncachedIds.length === 0) return;
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, username, display_name")
+      .in("id", uncachedIds);
+
+    if (error) {
+      console.error("Failed to fetch profiles:", error);
+      return;
+    }
+
+    (data || []).forEach((profile: any) =>
+      profilesCache.current.set(profile.id, {
+        id: profile.id,
+        username: profile.username ?? null,
+        display_name: profile.display_name ?? null,
+        avatar_url: null,
+        created_at: null,
+      })
+    );
+  }, [supabase]);
+
+  // Realtime typing subscription
+  useEffect(() => {
+    if (!state.selectedRoom?.id) return;
+
+    const roomId = state.selectedRoom.id;
+    const channel = supabase.channel(`typing:${roomId}`);
+
+    channel
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "typing_status",
+          filter: `room_id=eq.${roomId}`,
+        },
+        async (payload) => {
+          const typingRecords = await supabase
+            .from("typing_status")
+            .select("user_id, is_typing, updated_at")
+            .eq("room_id", roomId)
+            .gt("updated_at", new Date(Date.now() - 5000).toISOString()) // Recent only (<5s)
+            .eq("is_typing", true);
+
+          if (typingRecords.error) return;
+
+          const typingUserIds = typingRecords.data.map(record => record.user_id);
+          await fetchProfiles(typingUserIds);
+
+          const updatedTypingUsers: TypingUser[] = typingUserIds.map(id => {
+            const p = profilesCache.current.get(id);
+            return {
+              user_id: id,
+              is_typing: true,
+              display_name: (p?.display_name ?? undefined) as string | undefined,
+              username: (p?.username ?? undefined) as string | undefined,
+            } as TypingUser;
+          });
+
+          updateTypingUsers(updatedTypingUsers);
+        }
+      )
+      .subscribe();
+
+    // Cleanup stale typing every 2s
+    const interval = setInterval(async () => {
+      // Re-fetch recent to clear stale
+      const typingRecords = await supabase
+        .from("typing_status")
+        .select("user_id, is_typing, updated_at")
+        .eq("room_id", roomId)
+        .gt("updated_at", new Date(Date.now() - 5000).toISOString())
+        .eq("is_typing", true);
+
+      if (typingRecords.data) {
+        const typingUserIds = typingRecords.data.map(record => record.user_id);
+        await fetchProfiles(typingUserIds);
+        const updatedTypingUsers: TypingUser[] = typingUserIds.map(id => {
+          const p = profilesCache.current.get(id);
+          return {
+            user_id: id,
+            is_typing: true,
+            display_name: (p?.display_name ?? undefined) as string | undefined,
+            username: (p?.username ?? undefined) as string | undefined,
+          } as TypingUser;
+        });
+        updateTypingUsers(updatedTypingUsers);
+      } else {
+        updateTypingUsers([]);
+      }
+    }, 2000);
+
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(interval);
+    };
+  }, [state.selectedRoom?.id, supabase, fetchProfiles, updateTypingUsers]);
+
+  // Compute typing text from users
+  useEffect(() => {
+    const typingNames = state.typingUsers
+      .map(user => user.display_name || user.username || "User")
+      .filter(Boolean);
+
+    let text = "";
+    if (typingNames.length === 1) {
+      text = `${typingNames[0]} is typing...`;
+    } else if (typingNames.length === 2) {
+      text = `${typingNames[0]} and ${typingNames[1]} are typing...`;
+    } else if (typingNames.length > 2) {
+  text = "Several people are typing...";
+    }
+
+    updateTypingText(text);
+  }, [state.typingUsers, updateTypingText]);
 
   const acceptJoinNotification = useCallback(async (roomId: string) => {
     try {
