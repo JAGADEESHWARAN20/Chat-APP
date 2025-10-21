@@ -2,13 +2,16 @@
 "use client";
 
 import React from "react";
-import { useTypingStatus } from "@/hooks/useTypingStatus";
+import { useRoomContext } from "@/lib/store/RoomContext";
 
 export default function TypingIndicator() {
-  const { typingDisplayText, typingUsers, canOperate } = useTypingStatus();
+  const { state } = useRoomContext();
+  const { typingDisplayText, typingUsers, selectedRoom } = state;
 
-  // Only show if there are active typers and we have display text
-  if (typingUsers.length === 0 || !canOperate || !typingDisplayText) return null;
+  // Only show if we have an active room and typing users
+  if (!selectedRoom?.id || typingUsers.length === 0 || !typingDisplayText) {
+    return null;
+  }
 
   return (
     <div className="relative w-full px-4 py-2 mb-2 animate-fadeIn">

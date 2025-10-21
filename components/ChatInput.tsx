@@ -31,13 +31,13 @@ export default function ChatInput() {
     const newText = e.target.value;
     setText(newText);
     
-    // Only trigger typing if we have text and active chat
+    // Trigger typing indicator when text is not empty
     if (newText.trim().length > 0 && hasActiveChat) {
       handleTyping();
     }
   }, [handleTyping, hasActiveChat]);
 
-  // FIXED: Stop typing when input loses focus
+  // Add onBlur to stop typing
   const handleBlur = useCallback(() => {
     if (hasActiveChat) {
       stopTyping();
