@@ -1,126 +1,145 @@
 "use client";
 
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
-import { Button } from "./ui/button";
-import { LogOut, Menu, ChevronsUpDown } from "lucide-react";
+// Essential imports from React, Next.js, and Supabase
+import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { User as SupabaseUser } from "@supabase/supabase-js";
-import { Database } from "@/database.types";
+
+// Import UI components from shadcn/ui - assuming this project structure
+import { Button } from "./ui/button";
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
+  SheetFooter,
 } from "@/components/ui/sheet";
-import Link from "next/link";
-
-import { useState } from "react";
-import ThemeToggleButton from "./ThemeToggle";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
+// Lucide React for icons
+import { LogOut, Menu, ChevronsUpDown, User as UserIcon } from "lucide-react";
+
+// Assuming these are your type definitions
+import { Database } from "@/database.types";
+import ThemeToggleButton from "./ThemeToggle";
+
+// Component Props Interface
 interface LoginLogoutButtonProps {
-  user: SupabaseUser | undefined | null;
+  user: SupabaseUser | null;
 }
 
+/**
+ * A responsive and theme-aware component that displays login/signup buttons
+ * for logged-out users, and a side menu with user actions for logged-in users.
+ */
 export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
   const router = useRouter();
   const supabase = createClientComponentClient<Database>();
   const [isSheetOpen, setIsSheetOpen] = useState(false);
 
+  // Function to handle user logout
   const handleLogout = async () => {
     await supabase.auth.signOut();
+    setIsSheetOpen(false); // Close the sheet on logout
     router.refresh();
     router.push("/");
   };
 
+  // Display user's name or a fallback
+  const userName = user?.user_metadata?.username || user?.email || "My Account";
+
+  // Render this part if the user is authenticated
   if (user) {
     return (
       <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
         <SheetTrigger asChild>
-          <button title="menu" className="w-[2em] h-[2em] flex items-center p-[.35em]">
+          <Button variant="ghost" size="icon" aria-label="Open menu">
             <Menu className="h-5 w-5" />
-          </button>
+          </Button>
         </SheetTrigger>
-        <SheetContent side="right" className="w-[300px]">
-          <SheetHeader>
-            <SheetTitle className="flex items-center gap-2 z-[99999]">
-              Menu
-            </SheetTitle>
+        <SheetContent className="flex flex-col">
+          <SheetHeader className="text-left">
+            <SheetTitle>Menu</SheetTitle>
+            <SheetDescription>
+              Manage your account, preferences, and more.
+            </SheetDescription>
           </SheetHeader>
 
-          <div className="flex flex-col gap-4 mt-6">
-            {/* Theme toggle */}
-            <div className="flex items-center justify-center z-[999999]">
-              <ThemeToggleButton />
-            </div>
-
-            {/* Username popover */}
-            <Popover>
-              <PopoverTrigger asChild>
+          {/* Main content area of the sheet */}
+          <div className="flex-grow py-4">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
                 <Button
                   variant="outline"
-                  className="w-full flex items-center justify-between z-[999999]"
+                  className="w-full justify-between"
                 >
-                  <span className="truncate">{user?.user_metadata?.username || user.email}</span>
-                  <ChevronsUpDown className="h-4 w-4 ml-2" />
+                  <span className="truncate">{userName}</span>
+                  <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
                 </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[200px] p-2 z-[100000000]">
-                <div className="flex flex-col gap-2">
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-56" align="end" forceMount>
+                <DropdownMenuLabel>
+                  Signed in as
+                  <span className="block truncate font-normal text-sm text-muted-foreground">
+                    {user.email}
+                  </span>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
                   <Link href={`/profile/${user.id}`}>
-                    <Button variant="ghost" size="sm" className="w-full">
-                      View Profile
-                    </Button>
+                    <UserIcon className="mr-2 h-4 w-4" />
+                    <span>View Profile</span>
                   </Link>
-                  <Link href={`/profile/${user.id}/edit`}>
-                    <Button variant="ghost" size="sm" className="w-full">
-                      Edit Profile
-                    </Button>
-                  </Link>
-                </div>
-              </PopoverContent>
-            </Popover>
+                </DropdownMenuItem>
+                {/* Add other menu items here if needed */}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
 
-            {/* Logout */}
+          {/* Footer section pushed to the bottom */}
+          <SheetFooter className="mt-auto flex flex-col gap-4 pt-4 border-t">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Theme</span>
+              <ThemeToggleButton />
+            </div>
             <Button
               onClick={handleLogout}
-              variant="ghost"
-              size="sm"
-              className="text-red-500 hover:text-red-600 hover:bg-red-100/10 z-[999999]"
+              variant="destructive"
+              className="w-full"
             >
-              <LogOut className="h-4 w-4 mr-2" /> Logout
+              <LogOut className="h-4 w-4 mr-2" />
+              Logout
             </Button>
-          </div>
+          </SheetFooter>
         </SheetContent>
       </Sheet>
     );
   }
 
+  // Render this part for logged-out users
   return (
     <div className="flex items-center gap-2">
-      <Link href="/auth/login">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-blue-500 hover:text-blue-600 hover:bg-blue-100/10"
-        >
+      <Button asChild variant="ghost" size="sm">
+        <Link href="/auth/login">
           Sign In
-        </Button>
-      </Link>
-      <Link href="/auth/register">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-green-500 hover:text-green-600 hover:bg-green-100/10"
-        >
+        </Link>
+      </Button>
+      <Button asChild size="sm">
+        <Link href="/auth/register">
           Sign Up
-        </Button>
-      </Link>
+        </Link>
+      </Button>
     </div>
   );
 }
