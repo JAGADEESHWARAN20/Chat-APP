@@ -1,4 +1,4 @@
-// components/ClientChatContent.tsx - FIXED LAYOUT
+// components/ClientChatContent.tsx
 "use client";
 
 import React from "react";
@@ -14,22 +14,22 @@ export default function ClientChatContent({ user }: { user: SupabaseUser | undef
   const { selectedRoom } = state;
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden"> {/* FIXED: Use h-screen for full viewport height */}
+    <div className="h-screen flex flex-col overflow-hidden">
       {/* Header - Fixed height */}
-      <div className="flex-shrink-0 h-16 border-b border-gray-200 dark:border-gray-700"> {/* FIXED: Use h-16 instead of [4em] */}
+      <div className="flex-shrink-0 h-16 border-b border-gray-200 dark:border-gray-700">
         <ChatHeader user={user} />
       </div>
       
-      {/* Main Content Area - FIXED: flex-1 with proper constraints */}
+      {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
         {user && selectedRoom ? (
           <>
-            {/* Messages Area - FIXED: flex-1 with overflow-hidden */}
+            {/* ChatMessages Area - Takes remaining space */}
             <div className="flex-1 min-h-0 overflow-hidden">
               <ChatMessages />
             </div>
             {/* Input Area - Fixed height */}
-            <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-700">
+            <div className="flex-shrink-0 h-16 border-t border-gray-200 dark:border-gray-700">
               <ChatInput />
             </div>
           </>

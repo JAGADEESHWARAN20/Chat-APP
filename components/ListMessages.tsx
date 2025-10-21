@@ -263,16 +263,22 @@ export default function ListMessages() {
     );
   }
 
-  // In ListMessages.tsx - update the return section
+// In ListMessages.tsx - More precise height calculation
 return (
-  <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+  <div className="h-full flex flex-col min-h-0 overflow-hidden">
+    {/* Messages Scroll Area */}
     <div
       ref={scrollRef}
       onScroll={handleOnScroll}
       className="flex-1 overflow-y-auto px-4 py-2 space-y-2 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent"
-      style={{ maxWidth: "100%" }}
+      style={{ 
+        maxWidth: "100%",
+        // More precise calculation:
+        // 100vh - header(4rem) - input(4rem) - typingIndicator(approx 4rem) - padding(1rem)
+        height: "calc(100vh - 13rem)"
+      }}
     >
-      <div className="w-full max-w-full">
+       <div className="w-full max-w-full">
         {isLoading ? (
           <div className="space-y-4">
             {Array.from({ length: 8 }, (_, index) => (
@@ -284,15 +290,16 @@ return (
             <Message key={message.id} message={message} />
           ))
         ) : (
-          <div className="flex items-center justify-center h-32 text-gray-500">
+          <div className="flex items-center justify-center h-full text-gray-500">
             <p>No messages yet. Start a conversation!</p>
           </div>
         )}
       </div>
     </div>
 
-    {/* Typing Indicator - only takes space when active */}
-    <div className="flex-shrink-0">
+
+    {/* Typing Indicator */}
+    <div className="flex-shrink-0 min-h-[3rem]">
       <TypingIndicator />
     </div>
 
