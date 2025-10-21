@@ -1,17 +1,15 @@
+// components/TypingIndicator.tsx
 "use client";
 
 import React from "react";
-import { useRoomContext } from "@/lib/store/RoomContext";
+import { useTypingStatus } from "@/hooks/useTypingStatus";
 
 export default function TypingIndicator() {
-  const { state } = useRoomContext();
-  const { typingDisplayText, typingUsers } = state;
-  const canOperate = Boolean(state.selectedRoom?.id || state.selectedDirectChat?.id);
+  const { typingDisplayText, typingUsers, canOperate } = useTypingStatus();
 
-  if (typingUsers.length === 0 || !canOperate || !typingDisplayText) return null;
-
+console.log(typingDisplayText,typingUsers,canOperate)
   return (
-    <div className="relative w-full px-4 py-2 mb-2 animate-fadeIn"> {/* Fade via Tailwind or CSS */}
+    <div className="relative w-full px-4 py-2 mb-2 animate-fadeIn">
       <div 
         role="status" 
         aria-live="polite" 
@@ -24,7 +22,8 @@ export default function TypingIndicator() {
               <span key={delay} className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: `${delay}ms` }} />
             ))}
           </div>
-          <span className="flex-1 truncate min-w-0" title={typingDisplayText}> {/* Tooltip */}
+          hi
+          <span className="flex-1 truncate min-w-0" title={typingDisplayText}>
             {typingDisplayText}
           </span>
         </div>
