@@ -7,7 +7,7 @@ import { useTypingStatus } from "@/hooks/useTypingStatus";
 export default function TypingIndicator() {
   const { typingDisplayText, typingUsers, canOperate } = useTypingStatus();
 
-console.log(typingDisplayText,typingUsers,canOperate)
+console.log(typingDisplayText,typingUsers,canOperate+"hdhtdgxgydgnggj")
   return (
     <div className="relative w-full px-4 py-2 mb-2 animate-fadeIn">
       <div 
