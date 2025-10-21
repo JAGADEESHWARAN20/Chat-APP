@@ -53,8 +53,8 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
             </SheetTitle>
           </SheetHeader>
 
-          <div className="flex flex-col gap-4 mt-6">
-            {/* Theme toggle */}
+          <div className="flex flex-col h-full justify-between items-center gap-4 mt-6">
+            <div>
             <div className="flex items-center justify-center z-[999999]">
               <ThemeToggleButton />
             </div>
@@ -86,7 +86,9 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
               </PopoverContent>
             </Popover>
 
-            {/* Logout */}
+            </div>             
+            <div>
+                   
             <Button
               onClick={handleLogout}
               variant="ghost"
@@ -95,6 +97,7 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
             >
               <LogOut className="h-4 w-4 mr-2" /> Logout
             </Button>
+</div>
           </div>
         </SheetContent>
       </Sheet>
