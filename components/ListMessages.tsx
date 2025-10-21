@@ -265,37 +265,38 @@ export default function ListMessages() {
 
   return (
     <div className="flex-1 flex flex-col h-[85vh] min-h-0 overflow-hidden">
-      <div
-        ref={scrollRef}
-        onScroll={handleOnScroll}
-className="flex-1 overflow-y-scroll h-[80vh] pb-4 overflow-x-hidden px-4 py-2 space-y-4 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent pb-[calc(4rem+theme(spacing.2))]" 
-        style={{ maxWidth: "100%" }}
-      >
-        <div className="w-full max-w-full">
-          {isLoading ? (
-            <div className="space-y-4">
-              {Array.from({ length: 8 }, (_, index) => (
-                <SkeletonMessage key={index} />
-              ))}
-            </div>
-          ) : filteredMessages.length > 0 ? (
-            filteredMessages.map((message) => (
-              <Message key={message.id} message={message} />
-            ))
-          ) : (
-            <div className="flex items-center justify-center h-32 text-gray-500">
-              <p>No messages yet. Start a conversation!</p>
-            </div>
-          )}
-        </div>
-
+    <div
+      ref={scrollRef}
+      onScroll={handleOnScroll}
+      className="flex-1 overflow-y-auto px-4 py-2 space-y-4 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent"
+      style={{ maxWidth: "100%" }}
+    >
+      <div className="w-full max-w-full">
+        {isLoading ? (
+          <div className="space-y-4">
+            {Array.from({ length: 8 }, (_, index) => (
+              <SkeletonMessage key={index} />
+            ))}
+          </div>
+        ) : filteredMessages.length > 0 ? (
+          filteredMessages.map((message) => (
+            <Message key={message.id} message={message} />
+          ))
+        ) : (
+          <div className="flex items-center justify-center h-32 text-gray-500">
+            <p>No messages yet. Start a conversation!</p>
+          </div>
+        )}
       </div>
-      <div className="fixed bottom-[5em] w-full flex justify-center items-center h-[5em] ">
-            <TypingIndicator />
-      </div>
-
-      <DeleteAlert />
-      <EditAlert />
     </div>
+
+    {/* Typing indicator positioned above input */}
+    <div className="sticky bottom-16 left-0 right-0 z-10">
+      <TypingIndicator />
+    </div>
+
+    <DeleteAlert />
+    <EditAlert />
+  </div>
   );
 }
