@@ -1,4 +1,4 @@
-// components/TypingIndicator.tsx - FULL FIXED: No props (RoomContext for all), instant render from broadcast, fallback names, quick show/hide, TS-safe
+// components/TypingIndicator.tsx - FIXED: Render on typingUsers.length, enhanced logging, higher z-index, TS-safe, no props (RoomContext)
 "use client";
 
 import React, { useMemo } from "react";
@@ -8,25 +8,41 @@ import { useRoomContext } from "@/lib/store/RoomContext";
 export default function TypingIndicator() {
   const { state } = useRoomContext();
   const { selectedRoom } = state;
-  const roomId = selectedRoom?.id ?? null;
+  const roomId = selectedRoom?.id ?? "";
 
-  // UPDATED: No args - hook uses RoomContext internally for user/room
-  const { typingUsers, typingDisplayText } = useTypingStatus({ roomId: roomId || '' });
+  // Use hook with roomId (userId internal via RoomContext)
+  const { typingUsers, typingDisplayText } = useTypingStatus({ roomId });
 
-  // No typers? No render
-  if (typingUsers.length === 0 || !roomId) return null;
+  // Log typingUsers state for debugging
+  console.log("[TypingIndicator] typingUsers:", typingUsers, "roomId:", roomId, "displayText:", typingDisplayText);
 
-  console.log("[TypingIndicator] Instant render for", typingUsers.length, "typers:", typingDisplayText);
+  // Only hide if no typers (looser condition for visibility)
+  if (typingUsers.length === 0) return null;
+
+  // Log render event
+  console.log("[TypingIndicator] Rendering for", typingUsers.length, "typers:", typingDisplayText);
 
   return (
-    <div className="w-full bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border-t border-indigo-200 dark:border-indigo-800 px-4 py-3 text-indigo-700 dark:text-indigo-300 italic text-sm font-medium">
+    <div
+      className="w-full bg-gradient-to-r from-indigo-100 to-purple-100 dark:from-indigo-900/30 dark:to-purple-900/30 border-t border-indigo-200 dark:border-indigo-800 px-4 py-2 text-indigo-700 dark:text-indigo-300 italic text-sm font-medium z-20"
+      style={{ position: "sticky", bottom: 0 }}
+    >
       <span className="animate-pulse flex items-center gap-2">
         <span className="inline-flex gap-1">
-          <span className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: "0ms" }}></span>
-          <span className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: "150ms" }}></span>
-          <span className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></span>
+          <span
+            className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce"
+            style={{ animationDelay: "0ms" }}
+          ></span>
+          <span
+            className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce"
+            style={{ animationDelay: "150ms" }}
+          ></span>
+          <span
+            className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce"
+            style={{ animationDelay: "300ms" }}
+          ></span>
         </span>
-        {typingDisplayText || `${typingUsers.length} user${typingUsers.length > 1 ? 's' : ''} typing...`}
+        {typingDisplayText || `${typingUsers.length} user${typingUsers.length > 1 ? "s" : ""} typing...`}
       </span>
     </div>
   );
