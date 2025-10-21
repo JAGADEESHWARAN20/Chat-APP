@@ -1,4 +1,4 @@
-// components/ListMessages.tsx - UPDATED VERSION
+// components/ListMessages.tsx - FIXED LAYOUT: Vertical-only scroll, TypingIndicator as sticky footer, overflow-x-hidden, text wrapping
 "use client";
 
 import { Imessage, useMessage } from "@/lib/store/messages";
@@ -304,11 +304,11 @@ export default function ListMessages() {
   }, [messages, selectedRoom?.id]);
 
   const SkeletonMessage = React.memo(() => (
-    <div className="flex gap-2 animate-pulse">
-      <div className="w-10 h-10 rounded-full bg-gray-700" />
-      <div className="flex-1 space-y-2">
+    <div className="flex gap-2 animate-pulse w-full">
+      <div className="w-10 h-10 rounded-full bg-gray-700 flex-shrink-0" />
+      <div className="flex-1 space-y-2 min-w-0">
         <div className="h-4 bg-gray-700 rounded w-1/4" />
-        <div className="h-3 bg-gray-700 rounded w-3/4" />
+        <div className="h-3 bg-gray-700 rounded w-3/4 break-all" />
       </div>
     </div>
   ));
@@ -317,7 +317,7 @@ export default function ListMessages() {
 
   if (!selectedRoom?.id) {
     return (
-      <div className="flex items-center justify-center h-full text-gray-500">
+      <div className="flex items-center justify-center h-full text-gray-500 overflow-hidden">
         <p>Select a room to start chatting</p>
       </div>
     );
@@ -325,46 +325,50 @@ export default function ListMessages() {
 
   return (
     <>
-      {/* Messages Scroll Area - ONLY THIS DIV HAS SCROLL */}
+      {/* Messages Scroll Area - FIXED: overflow-y-auto only, overflow-x-hidden, full width constraint */}
       <div
         id="message-container"
         tabIndex={0}
         role="region"
         aria-label="Messages"
         aria-live="polite"
-        className="flex-1 overflow-y-auto px-4 py-2 space-y-2 w-full scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent"
+        className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-2 space-y-4 w-full scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent relative"
+        style={{ /* Ensure no horizontal scroll */ maxWidth: '100%' }}
         ref={scrollRef}
         onScroll={handleOnScroll}
       >
-        {isLoading ? (
-          <div className="space-y-4">
-            {Array.from({ length: 8 }, (_, index) => (
-              <SkeletonMessage key={index} />
-            ))}
-          </div>
-        ) : filteredMessages.length > 0 ? (
-          filteredMessages.map((message) => (
-            <Message key={message.id} message={message} />
-          ))
-        ) : (
-          <div className="flex items-center justify-center h-full text-gray-500">
-            <p>No messages yet. Start a conversation!</p>
-          </div>
-        )}
+        {/* Messages Content */}
+        <div className="w-full max-w-full">
+          {isLoading ? (
+            <div className="space-y-4">
+              {Array.from({ length: 8 }, (_, index) => (
+                <SkeletonMessage key={index} />
+              ))}
+            </div>
+          ) : filteredMessages.length > 0 ? (
+            filteredMessages.map((message) => (
+              <Message key={message.id} message={message} />
+            ))
+          ) : (
+            <div className="flex items-center justify-center h-32 text-gray-500">
+              <p>No messages yet. Start a conversation!</p>
+            </div>
+          )}
+        </div>
 
-        {/* Portaled dialogs */}
+        {/* Typing Indicator - FIXED: Sticky footer inside scrollable area for proper layout */}
+        <div className="sticky bottom-0 left-0 right-0 bg-transparent pt-2 pb-2 z-10">
+          <TypingIndicator roomId={selectedRoom.id} />
+        </div>
+
+        {/* Portaled dialogs - Keep outside scroll for overlay */}
         <DeleteAlert />
         <EditAlert />
       </div>
 
-      {/* Typing Indicator - Between messages and input */}
-      {selectedRoom?.id && (
-        <TypingIndicator roomId={selectedRoom.id} />
-      )}
-
-      {/* Scroll to bottom button */}
+      {/* Scroll to bottom button - FIXED: Position relative to input, avoid overlap */}
       {userScrolled && (
-        <div className="fixed bottom-24 left-1/2 transform -translate-x-1/2 z-10">
+        <div className="fixed bottom-20 right-4 z-20"> {/* Adjusted: bottom-20 to clear input + TypingIndicator */}
           {notification > 0 ? (
             <button
               className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-md text-sm transition-colors shadow-lg"
@@ -375,7 +379,7 @@ export default function ListMessages() {
             </button>
           ) : (
             <button
-              className="w-10 h-10 bg-blue-500 hover:bg-blue-600 rounded-full flex justify-center items-center transition-all hover:scale-110 shadow-lg"
+              className="w-12 h-12 bg-blue-500 hover:bg-blue-600 rounded-full flex justify-center items-center transition-all hover:scale-110 shadow-lg"
               onClick={scrollDown}
               aria-label="Scroll to bottom"
             >
