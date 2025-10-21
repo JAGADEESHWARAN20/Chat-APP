@@ -4,10 +4,11 @@ import { useEffect, useState, useMemo } from "react";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { useUser } from "@/lib/store/user";
 import Message from "@/components/Message";
-import ChatInput from "@/components/ChatInput";
-import { useTypingStatus, useDebouncedTyping } from "@/hooks/useTypingStatus";
+import { useTypingStatus } from "@/hooks/useTypingStatus";
 import { toast } from "sonner";
 import type { Imessage } from "@/lib/store/messages";
+import { useRef } from "react";
+import debounce from "lodash.debounce";
 
 interface DirectMessageProps {
   chatId: string;
@@ -21,14 +22,12 @@ export default function DirectChat({ chatId, otherUserId }: DirectMessageProps) 
   const supabase = useMemo(() => supabaseBrowser(), []);
   
   // Fixed: useTypingStatus now only accepts roomId (chatId in this case)
-  const { typingUsers, typingDisplayText, isTyping } = useTypingStatus(chatId);
-  const { handleTyping } = useDebouncedTyping(chatId);
-
-  // Filter typing users to only show the other user
-  const otherUserTyping = useMemo(() => {
-    return typingUsers.some((typingUser) => typingUser.user_id === otherUserId);
-  }, [typingUsers, otherUserId]);
-
+  const { typingUsers, startTyping, stopTyping } = useTypingStatus(
+    chatId,
+    user?.id ?? null
+  );
+  
+ 
   // Fetch initial messages
   useEffect(() => {
     const fetchMessages = async () => {
@@ -162,13 +161,20 @@ export default function DirectChat({ chatId, otherUserId }: DirectMessageProps) 
   const DirectChatInput = () => {
     const [text, setText] = useState("");
 
+    const debouncedStop = useRef(debounce(() => stopTyping(), 2000)).current;
+    useEffect(() => {
+      return () => {
+        debouncedStop.cancel();
+      };
+    }, [debouncedStop]);
+    
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const newText = e.target.value;
       setText(newText);
-
-      // Trigger typing indicator when typing
+    
       if (newText.trim().length > 0) {
-        handleTyping();
+        startTyping();
+        debouncedStop();
       }
     };
 
@@ -229,12 +235,15 @@ export default function DirectChat({ chatId, otherUserId }: DirectMessageProps) 
         )}
       </div>
 
-      {/* Typing Indicator */}
-      {otherUserTyping && (
-        <div className="px-4 py-2 text-sm text-gray-500 italic">
-          {typingDisplayText || "User is typing..."}
-        </div>
-      )}
+      {typingUsers.length > 0 && (
+  <div className="px-4 py-2 text-sm text-gray-500 italic">
+    {typingUsers
+      .filter(u => u.user_id === otherUserId)
+      .map(u => u.user_id) // replace with username if you store it
+      .join(", ") + " is typing..."}
+  </div>
+)}
+
 
       {/* Chat Input */}
       <DirectChatInput />

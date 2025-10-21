@@ -1,7 +1,6 @@
-// hooks/useTypingStatus.ts
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import type { Database } from "@/database.types";
 
@@ -13,15 +12,14 @@ type TypingRow = {
   updated_at: string;
 };
 
-
 export function useTypingStatus(roomId: string, userId: string | null) {
   const supabase = createClientComponentClient<Database>();
   const [typingUsers, setTypingUsers] = useState<TypingRow[]>([]);
 
-  // No-op if missing required identifiers
-  const canOperate = Boolean(roomId);
+  const canOperate = Boolean(roomId && userId);
 
-  // Start typing - writes a row (or upserts)
+  // -------------------------------
+  // Start typing
   const startTyping = useCallback(async () => {
     if (!canOperate || !userId) return;
     try {
@@ -41,7 +39,8 @@ export function useTypingStatus(roomId: string, userId: string | null) {
     }
   }, [supabase, roomId, userId, canOperate]);
 
-  // Stop typing - sets is_typing false
+  // -------------------------------
+  // Stop typing
   const stopTyping = useCallback(async () => {
     if (!canOperate || !userId) return;
     try {
@@ -58,21 +57,34 @@ export function useTypingStatus(roomId: string, userId: string | null) {
     }
   }, [supabase, roomId, userId, canOperate]);
 
-  // Realtime subscription: only realtime, no polling
+  // -------------------------------
+  // Debounced typing helper
+  const typingTimeout = useRef<NodeJS.Timeout | null>(null);
+  const handleTyping = useCallback(() => {
+    if (!canOperate) return;
+
+    startTyping();
+
+    if (typingTimeout.current) clearTimeout(typingTimeout.current);
+
+    typingTimeout.current = setTimeout(() => {
+      stopTyping();
+    }, 2000); // stop typing after 2 seconds of inactivity
+  }, [startTyping, stopTyping, canOperate]);
+
+  // -------------------------------
+  // Realtime subscription
   useEffect(() => {
-    if (!canOperate) {
+    if (!roomId) {
       setTypingUsers([]);
       return;
     }
 
     let isActive = true;
 
-    // Helper to set typing users safely (exclude duplicates)
     const upsertTypingRow = (row: TypingRow) => {
       setTypingUsers((prev) => {
-        // remove any existing entry for this user
         const filtered = prev.filter((p) => p.user_id !== row.user_id);
-        // if is_typing is true, add it; otherwise, just return filtered
         return row.is_typing ? [...filtered, row] : filtered;
       });
     };
@@ -81,7 +93,7 @@ export function useTypingStatus(roomId: string, userId: string | null) {
       setTypingUsers((prev) => prev.filter((p) => p.user_id !== user_id));
     };
 
-    // One-time initial fetch to populate current typers (optional, fast)
+    // Initial fetch
     (async () => {
       try {
         const res = await (supabase as any)
@@ -91,9 +103,7 @@ export function useTypingStatus(roomId: string, userId: string | null) {
           .eq("is_typing", true);
 
         const data: TypingRow[] = Array.isArray(res.data) ? res.data : [];
-
         if (isActive) {
-          // Exclude current user's own typing status
           setTypingUsers(data.filter((d) => d.user_id !== userId));
         }
       } catch (err) {
@@ -101,10 +111,8 @@ export function useTypingStatus(roomId: string, userId: string | null) {
       }
     })();
 
-    // Subscribe to realtime changes for this room
-    const channelName = `room-typing-${roomId}`;
     const channel = (supabase as any)
-      .channel(channelName)
+      .channel(`room-typing-${roomId}`)
       .on(
         "postgres_changes",
         {
@@ -114,50 +122,42 @@ export function useTypingStatus(roomId: string, userId: string | null) {
           filter: `room_id=eq.${roomId}`,
         },
         (payload: any) => {
-          // payload.eventType: INSERT | UPDATE | DELETE
-          // payload.new / payload.old
           try {
-            if (payload?.eventType === "INSERT" || payload?.eventType === "UPDATE") {
-              const row: TypingRow = payload.new;
-              if (!row) return;
+            const row: TypingRow = payload.new;
+            if (!row) return;
+            if (row.user_id === userId) return;
 
-              // ignore our own typing events
-              if (row.user_id === userId) return;
-
+            if (payload.eventType === "INSERT" || payload.eventType === "UPDATE") {
               upsertTypingRow(row);
-            } else if (payload?.eventType === "DELETE") {
-              const oldRow: TypingRow = payload.old;
-              if (!oldRow) return;
-              if (oldRow.user_id === userId) return;
-              removeTypingRow(oldRow.user_id);
+            } else if (payload.eventType === "DELETE") {
+              removeTypingRow(payload.old.user_id);
             }
           } catch (err) {
             console.error("[useTypingStatus] realtime handler error:", err);
           }
         }
       )
-      .subscribe((status: any) => {
-        // optional: log subscription status
-        // console.debug("[useTypingStatus] channel status:", status);
-      });
+      .subscribe();
 
-    // Cleanup on unmount or room change
     return () => {
       isActive = false;
-      try {
-        // remove subscription channel
+      if ((supabase as any).removeChannel) {
         (supabase as any).removeChannel(channel);
-      } catch (err) {
-        // best-effort removal
-        console.warn("[useTypingStatus] removeChannel failed:", err);
       }
-      // Do not automatically change DB on unmount here — leave to callers to call stopTyping if needed.
     };
-  }, [supabase, roomId, userId, canOperate]);
+  }, [supabase, roomId, userId]);
+
+  // -------------------------------
+  // Display text for UI: "User1 is typing..." or "User1, User2 are typing..."
+  const typingDisplayText = typingUsers
+    .map((u) => u.user_id) // replace with user name if available
+    .join(", ");
 
   return {
     typingUsers,
     startTyping,
     stopTyping,
+    handleTyping, // debounced
+    typingDisplayText, // helper for UI
   } as const;
 }
