@@ -1,6 +1,7 @@
+// components/ChatInput.tsx - FULL: RoomContext for user/room, typing on input change, optimistic send, keyboard support, cleanup, fast UX
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import { useMessage } from "@/lib/store/messages";
 import { useRoomContext } from "@/lib/store/RoomContext";
 import { Input } from "@/components/ui/input";
@@ -9,60 +10,57 @@ import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
 import { Imessage } from "@/lib/store/messages";
 import { Send } from "lucide-react";
-import { useTypingStatus } from "@/hooks/useTypingStatus"; // ✅ removed useDebouncedTyping
+import { useTypingStatus } from "@/hooks/useTypingStatus";
 
 export default function ChatInput() {
   const [text, setText] = useState("");
+  const [isSending, setIsSending] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
   const { addMessage, addOptimisticId } = useMessage();
   const { state } = useRoomContext();
   const { selectedRoom, selectedDirectChat, user } = state;
 
-  // ✅ Fixed call: pass both roomId and userId
-  const { startTyping, stopTyping } = useTypingStatus({
-    roomId: selectedRoom?.id || "",
-    userId: user?.id || null
-  });
+  // UPDATED: Use RoomContext for roomId/userId, pass only roomId to hook (internal user pull)
+  const roomId = selectedRoom?.id || "";
+  const { startTyping, stopTyping } = useTypingStatus({ roomId });
 
-  const handleInputChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const newText = e.target.value;
-      setText(newText);
+  const canSend = Boolean(text.trim()) && !isSending && (selectedRoom || selectedDirectChat) && user;
 
-      if (newText.trim().length > 0 && selectedRoom?.id && user?.id) {
-        startTyping();
-      } else if (selectedRoom?.id && user?.id) {
-        stopTyping();
-      }
-    },
-    [startTyping, stopTyping, selectedRoom?.id, user?.id]
-  );
+  // Input change: Typing logic
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const newText = e.target.value;
+    setText(newText);
+    if (newText.trim().length > 0 && roomId && user) {
+      startTyping();
+    } else if (roomId && user) {
+      stopTyping();
+    }
+  }, [startTyping, stopTyping, roomId, user]);
 
-  const handleSend = async () => {
-    if (!user) return toast.error("You must be logged in to send messages");
-    if (!text.trim()) return toast.error("Message cannot be empty");
-    if (!selectedRoom && !selectedDirectChat)
-      return toast.error("No room or direct chat selected");
+  // Send message
+  const handleSend = useCallback(async () => {
+    if (!canSend) return;
 
+    setIsSending(true);
     stopTyping();
 
     const optimisticId = uuidv4();
     const optimisticMessage: Imessage = {
       id: optimisticId,
       text: text.trim(),
-      sender_id: user.id,
+      sender_id: user!.id,
       room_id: selectedRoom?.id || null,
       direct_chat_id: selectedDirectChat?.id || null,
       dm_thread_id: null,
       created_at: new Date().toISOString(),
       is_edited: false,
-      status: "sent",
+      status: "sending",
       profiles: {
-        id: user.id,
-        display_name:
-          user.user_metadata?.display_name || user.email || "Anonymous",
-        avatar_url: user.user_metadata?.avatar_url || "",
-        username: user.user_metadata?.username || "",
-        created_at: user.created_at,
+        id: user!.id,
+        display_name: user!.user_metadata?.display_name || user!.email || "Anonymous",
+        avatar_url: user!.user_metadata?.avatar_url || "",
+        username: user!.user_metadata?.username || "",
+        created_at: user!.created_at,
         updated_at: null,
         bio: null,
       },
@@ -70,6 +68,7 @@ export default function ChatInput() {
 
     addOptimisticId(optimisticId);
     addMessage(optimisticMessage);
+    const sendText = text.trim();
     setText("");
 
     try {
@@ -79,53 +78,64 @@ export default function ChatInput() {
         body: JSON.stringify({
           roomId: selectedRoom?.id,
           directChatId: selectedDirectChat?.id,
-          text: text.trim(),
+          text: sendText,
         }),
       });
 
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || "Failed to send message");
 
+      addMessage({ ...optimisticMessage, id: result.messageId || optimisticId, status: "sent" });
       toast.success("Message sent");
     } catch (error) {
-      console.error(error);
+      console.error("[ChatInput] Send error:", error);
       toast.error("Failed to send message");
+    } finally {
+      setIsSending(false);
     }
-  };
+  }, [canSend, text, user, selectedRoom, selectedDirectChat, addOptimisticId, addMessage, stopTyping]);
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  // Keyboard send
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
-  };
+  }, [handleSend]);
 
+  // Cleanup typing on unmount/room change
   useEffect(() => {
     return () => {
-      if (selectedRoom?.id && user?.id) stopTyping();
+      if (roomId && user) stopTyping();
     };
-  }, [selectedRoom?.id, user?.id, stopTyping]);
+  }, [roomId, user, stopTyping]);
+
+  // Auto-focus
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, [roomId]);
+
+  if (!user || (!selectedRoom && !selectedDirectChat)) return null;
 
   return (
-    <div className="flex gap-2 w-full border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <div className="flex gap-2 w-full border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 p-4">
       <Input
+        ref={inputRef}
         value={text}
         onChange={handleInputChange}
         onKeyDown={handleKeyDown}
-        placeholder={
-          !selectedRoom && !selectedDirectChat
-            ? "Select a room or chat to start messaging..."
-            : "Type a message..."
-        }
-        disabled={!selectedRoom && !selectedDirectChat}
-        className="flex-1"
+        placeholder="Type a message..."
+        disabled={isSending || !canSend}
+        className="flex-1 min-h-[44px] resize-none focus-visible:ring-2 focus-visible:ring-indigo-500"
       />
       <Button
         onClick={handleSend}
-        disabled={(!selectedRoom && !selectedDirectChat) || !text.trim()}
-        className="gap-2"
+        disabled={!canSend}
+        className="gap-2 h-[44px] px-4"
+        size="sm"
       >
-        <Send className="w-[1.2em] h-[1.2em]" />
+        <Send className="w-4 h-4" />
+        {isSending ? "Sending..." : "Send"}
       </Button>
     </div>
   );
