@@ -17,7 +17,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { useRoomContext } from "@/lib/store/RoomContext";
-import { useActiveUsers } from "@/hooks/useActiveUsers";
 import { useMessage, Imessage } from "@/lib/store/messages";
 import { useSearchHighlight } from "@/lib/store/SearchHighlightContext";
 import { RoomActiveUsers } from "@/components/reusable/RoomActiveUsers";
