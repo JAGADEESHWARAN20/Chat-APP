@@ -118,7 +118,7 @@ export default function ChatInput() {
   }, [hasActiveChat, stopTyping]);
 
   return (
-    <div className="flex gap-2 w-full border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <div className="flex gap-2 p-2 w-full border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <Input
         ref={inputRef}
         value={text}

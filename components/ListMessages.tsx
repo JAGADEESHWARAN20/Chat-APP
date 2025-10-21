@@ -264,7 +264,7 @@ export default function ListMessages() {
   }
 
   return (
-    <div className="flex-1 flex flex-col h-[85vh] min-h-0 overflow-hidden">
+    <div className="flex-1 flex flex-col h-[80vh] min-h-0 overflow-hidden">
     <div
       ref={scrollRef}
       onScroll={handleOnScroll}
@@ -291,7 +291,7 @@ export default function ListMessages() {
     </div>
 
     {/* Typing indicator positioned above input */}
-    <div className="sticky bottom-5 left-0 right-0 z-10">
+    <div className="sticky bottom-0 left-0 right-0 z-10">
       <TypingIndicator />
     </div>
 
