@@ -287,21 +287,23 @@ export function RoomProvider({
     return participationStatus;
   }, [state.user, supabase]);
 
-  const handleCountUpdate = useCallback(async (room_id: string | undefined) => {
-    if (!room_id) return;
-    const { count: membersCount } = await supabase
-      .from("room_members")
-      .select("*", { count: "exact", head: true })
-      .eq("room_id", room_id)
-      .eq("status", "accepted");
-    const { count: participantsCount } = await supabase
-      .from("room_participants")
-      .select("*", { count: "exact", head: true })
-      .eq("room_id", room_id)
-      .eq("status", "accepted");
-    const totalCount = (membersCount ?? 0) + (participantsCount ?? 0);
-    dispatch({ type: "UPDATE_ROOM_MEMBER_COUNT", payload: { roomId: room_id, memberCount: totalCount } });
-  }, [supabase]);
+ // Remove realtime counting entirely or limit it to total members
+const handleCountUpdate = useCallback((room_id: string | undefined) => {
+  // Keep this only if you still want total member count (not presence)
+  if (!room_id) return;
+  supabase
+    .from("room_members")
+    .select("*", { count: "exact", head: true })
+    .eq("room_id", room_id)
+    .eq("status", "accepted")
+    .then(({ count }) => {
+      dispatch({
+        type: "UPDATE_ROOM_MEMBER_COUNT",
+        payload: { roomId: room_id, memberCount: count ?? 0 },
+      });
+    });
+}, [supabase]);
+
 
   const fetchAvailableRooms = useCallback(async () => {
     if (!state.user) {
