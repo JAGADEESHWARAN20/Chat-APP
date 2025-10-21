@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
-import type { Database } from "@/database.types";
+import type { Database } from "@/lib/types/supabase";
 import { useRoomContext } from "@/lib/store/RoomContext";
 
 type TypingUser = {
@@ -31,14 +31,14 @@ export function useTypingStatus() {
   const startTyping = useCallback(() => {
     if (!canOperate || !channelRef.current) return;
     
+    console.log("[useTypingStatus] 🔵 START TYPING:", currentUserId);
+    
     const payload: TypingUser = {
       user_id: currentUserId!,
       is_typing: true,
       display_name: user?.user_metadata?.display_name,
       username: user?.user_metadata?.username,
     };
-    
-    console.log("[useTypingStatus] 🔵 START TYPING:", payload.user_id);
     channelRef.current.send({ type: "broadcast", event: "typing_start", payload });
   }, [canOperate, currentUserId, user]);
 
@@ -46,12 +46,12 @@ export function useTypingStatus() {
   const stopTyping = useCallback(() => {
     if (!canOperate || !channelRef.current) return;
     
+    console.log("[useTypingStatus] 🟣 STOP TYPING:", currentUserId);
+    
     const payload = { 
       user_id: currentUserId!, 
       is_typing: false 
     };
-    
-    console.log("[useTypingStatus] 🟣 STOP TYPING:", payload.user_id);
     channelRef.current.send({ type: "broadcast", event: "typing_stop", payload });
   }, [canOperate, currentUserId]);
 
@@ -61,12 +61,10 @@ export function useTypingStatus() {
     
     startTyping();
     
-    // Clear existing timeout
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
     }
     
-    // Set new timeout to stop typing
     timeoutRef.current = setTimeout(() => {
       stopTyping();
     }, 1000);
@@ -87,7 +85,6 @@ export function useTypingStatus() {
       .on("broadcast", { event: "typing_start" }, ({ payload }: { payload: TypingUser }) => {
         console.log("[useTypingStatus] 🟢 RECEIVED typing_start:", payload.user_id);
         
-        // Ignore self
         if (payload.user_id === currentUserId) return;
 
         setTypingUsers((prev) => {
