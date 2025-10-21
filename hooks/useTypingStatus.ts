@@ -8,37 +8,46 @@ import { useRoomContext } from "@/lib/store/RoomContext";
 export function useTypingStatus() {
   const supabase = createClientComponentClient<Database>();
   const { state, updateTypingUsers, updateTypingText } = useRoomContext();
-  const { selectedRoom, user, typingUsers } = state;
+  const { selectedRoom, user } = state;
 
   const currentUserId = user?.id ?? null;
   const roomId = selectedRoom?.id ?? null;
 
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const typingUsersRef = useRef(state.typingUsers);
 
-  // --- NEW: Keep typingUsers always fresh ---
-  const typingUsersRef = useRef(typingUsers);
+  // Keep ref updated
   useEffect(() => {
-    typingUsersRef.current = typingUsers;
-  }, [typingUsers]);
-  // ------------------------------------------
+    typingUsersRef.current = state.typingUsers;
+  }, [state.typingUsers]);
 
   const canOperate = Boolean(roomId && currentUserId);
+
+  // Fetch user profiles efficiently
+  const fetchUserProfiles = useCallback(async (userIds: string[]) => {
+    if (userIds.length === 0) return [];
+
+    const { data: profiles, error } = await supabase
+      .from("profiles")
+      .select("id, username, display_name")
+      .in("id", userIds);
+
+    if (error) {
+      console.error("Error fetching profiles:", error);
+      return [];
+    }
+
+    return profiles || [];
+  }, [supabase]);
 
   const handleTyping = useCallback(() => {
     if (!canOperate || !channelRef.current) return;
 
-    const payload = {
-      user_id: currentUserId!,
-      is_typing: true,
-      display_name: user?.user_metadata?.display_name,
-      username: user?.user_metadata?.username,
-    };
-
     channelRef.current.send({
       type: "broadcast",
       event: "typing_start",
-      payload,
+      payload: { user_id: currentUserId!, is_typing: true },
     });
 
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -52,7 +61,7 @@ export function useTypingStatus() {
         });
       }
     }, 2000);
-  }, [canOperate, currentUserId, user]);
+  }, [canOperate, currentUserId]);
 
   const stopTyping = useCallback(() => {
     if (!canOperate || !channelRef.current) return;
@@ -78,26 +87,32 @@ export function useTypingStatus() {
     const channel = supabase.channel(`room-typing-${roomId}`);
 
     channel
-      .on("broadcast", { event: "typing_start" }, ({ payload }) => {
+      .on("broadcast", { event: "typing_start" }, async ({ payload }) => {
         if (payload.user_id === currentUserId) return;
 
-        // --- Use ref for always-fresh typingUsers ---
         const updatedUsers = [...typingUsersRef.current];
-        const existingIndex = updatedUsers.findIndex(
-          (u) => u.user_id === payload.user_id
-        );
+        const existingIndex = updatedUsers.findIndex(u => u.user_id === payload.user_id);
 
         if (existingIndex >= 0) {
           updatedUsers[existingIndex] = { ...updatedUsers[existingIndex], is_typing: true };
         } else {
-          updatedUsers.push({ ...payload, is_typing: true });
+          // Fetch profile for new typing user
+          const profiles = await fetchUserProfiles([payload.user_id]);
+          const profile = profiles[0];
+          
+          updatedUsers.push({
+            user_id: payload.user_id,
+            is_typing: true,
+            display_name: profile?.display_name || undefined,
+            username: profile?.username || undefined,
+          });
         }
 
         updateTypingUsers(updatedUsers);
       })
       .on("broadcast", { event: "typing_stop" }, ({ payload }) => {
         updateTypingUsers(
-          typingUsersRef.current.filter((u) => u.user_id !== payload.user_id)
+          typingUsersRef.current.filter(u => u.user_id !== payload.user_id)
         );
       })
       .subscribe();
@@ -111,21 +126,22 @@ export function useTypingStatus() {
       }
       updateTypingUsers([]);
     };
-  }, [supabase, roomId, currentUserId, canOperate, updateTypingUsers, stopTyping]);
+  }, [supabase, roomId, currentUserId, canOperate, updateTypingUsers, stopTyping, fetchUserProfiles]);
 
+  // Generate display text with proper names
   useEffect(() => {
-    const activeTypers = typingUsers.filter((u) => u.is_typing);
+    const activeTypers = state.typingUsers.filter(u => u.is_typing);
 
     if (activeTypers.length === 0) {
       updateTypingText("");
       return;
     }
 
-    const names = activeTypers.map(
-      (u) => u.display_name || u.username || `User ${u.user_id.slice(-4)}`
+    const names = activeTypers.map(u => 
+      u.display_name || u.username || `User ${u.user_id?.slice(-4) || 'Unknown'}`
     );
-    let text = "";
 
+    let text = "";
     if (activeTypers.length === 1) {
       text = `${names[0]} is typing...`;
     } else if (activeTypers.length === 2) {
@@ -135,10 +151,10 @@ export function useTypingStatus() {
     }
 
     updateTypingText(text);
-  }, [typingUsers, updateTypingText]);
+  }, [state.typingUsers, updateTypingText]);
 
   return {
-    typingUsers,
+    typingUsers: state.typingUsers,
     typingDisplayText: state.typingDisplayText,
     handleTyping,
     stopTyping,

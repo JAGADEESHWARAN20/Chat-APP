@@ -28,6 +28,12 @@ type PartialProfile = {
   created_at: string | null;
 };
 
+// Small cached profile shape used only for typing indicators
+type CachedProfile = {
+  display_name?: string;
+  username?: string;
+};
+
 export type RoomWithMembershipCount = Room & {
   isMember: boolean;
   participationStatus: string | null;
@@ -195,7 +201,7 @@ export function RoomProvider({
 }) {
   const [state, dispatch] = useReducer(roomReducer, initialState);
   const supabase = supabaseBrowser();
-  const profilesCache = useRef<Map<string, PartialProfile>>(new Map()); // Cache profiles
+  const profilesCache = useRef<Map<string, CachedProfile>>(new Map()); // Cache profiles (lightweight)
 
   // Set user
   useEffect(() => {
@@ -222,12 +228,12 @@ export function RoomProvider({
     dispatch({ type: "SET_TYPING_TEXT", payload: text });
   }, []);
 
-  // Fetch profile for user_ids (on demand, cache)
+  // Fetch profile for user_ids (on demand, cache) - optimized
   const fetchProfiles = useCallback(async (userIds: string[]) => {
-    const uncachedIds = userIds.filter(id => !profilesCache.current.has(id));
+    const uncachedIds = userIds.filter((id) => !profilesCache.current.has(id));
     if (uncachedIds.length === 0) return;
 
-    const { data, error } = await supabase
+    const { data: profiles, error } = await supabase
       .from("profiles")
       .select("id, username, display_name")
       .in("id", uncachedIds);
@@ -237,16 +243,50 @@ export function RoomProvider({
       return;
     }
 
-    (data || []).forEach((profile: any) =>
+    // Update cache
+    profiles?.forEach((profile: any) => {
       profilesCache.current.set(profile.id, {
-        id: profile.id,
-        username: profile.username ?? null,
-        display_name: profile.display_name ?? null,
-        avatar_url: null,
-        created_at: null,
-      })
-    );
+        display_name: profile.display_name || undefined,
+        username: profile.username || undefined,
+      });
+    });
   }, [supabase]);
+
+  // Enhanced typing users update with profile fetching
+  const updateTypingUsersWithProfiles = useCallback(
+    async (userIds: string[]) => {
+      if (!userIds || userIds.length === 0) {
+        updateTypingUsers([]);
+        return;
+      }
+      await fetchProfiles(userIds);
+
+      const updatedTypingUsers: TypingUser[] = userIds.map((id) => {
+        const profile = profilesCache.current.get(id);
+        return {
+          user_id: id,
+          is_typing: true,
+          display_name: profile?.display_name,
+          username: profile?.username,
+        } as TypingUser;
+      });
+
+      updateTypingUsers(updatedTypingUsers);
+    },
+    [fetchProfiles, updateTypingUsers]
+  );
+
+  // Cleanup function to clear cache periodically
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // Clear cache if it grows too large to prevent memory leaks
+      if (profilesCache.current.size > 100) {
+        profilesCache.current.clear();
+      }
+    }, 300000); // 5 minutes
+
+    return () => clearInterval(interval);
+  }, []);
 
   // Realtime typing subscription
   useEffect(() => {
@@ -274,20 +314,8 @@ export function RoomProvider({
 
           if (typingRecords.error) return;
 
-          const typingUserIds = typingRecords.data.map(record => record.user_id);
-          await fetchProfiles(typingUserIds);
-
-          const updatedTypingUsers: TypingUser[] = typingUserIds.map(id => {
-            const p = profilesCache.current.get(id);
-            return {
-              user_id: id,
-              is_typing: true,
-              display_name: (p?.display_name ?? undefined) as string | undefined,
-              username: (p?.username ?? undefined) as string | undefined,
-            } as TypingUser;
-          });
-
-          updateTypingUsers(updatedTypingUsers);
+          const typingUserIds = typingRecords.data.map((record) => record.user_id);
+          await updateTypingUsersWithProfiles(typingUserIds);
         }
       )
       .subscribe();
@@ -303,18 +331,8 @@ export function RoomProvider({
         .eq("is_typing", true);
 
       if (typingRecords.data) {
-        const typingUserIds = typingRecords.data.map(record => record.user_id);
-        await fetchProfiles(typingUserIds);
-        const updatedTypingUsers: TypingUser[] = typingUserIds.map(id => {
-          const p = profilesCache.current.get(id);
-          return {
-            user_id: id,
-            is_typing: true,
-            display_name: (p?.display_name ?? undefined) as string | undefined,
-            username: (p?.username ?? undefined) as string | undefined,
-          } as TypingUser;
-        });
-        updateTypingUsers(updatedTypingUsers);
+        const typingUserIds = typingRecords.data.map((record) => record.user_id);
+        await updateTypingUsersWithProfiles(typingUserIds);
       } else {
         updateTypingUsers([]);
       }
@@ -324,7 +342,7 @@ export function RoomProvider({
       supabase.removeChannel(channel);
       clearInterval(interval);
     };
-  }, [state.selectedRoom?.id, supabase, fetchProfiles, updateTypingUsers]);
+  }, [state.selectedRoom?.id, supabase, fetchProfiles, updateTypingUsers, updateTypingUsersWithProfiles]);
 
   // Compute typing text from users
   useEffect(() => {

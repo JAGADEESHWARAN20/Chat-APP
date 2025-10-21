@@ -8,7 +8,6 @@ export default function TypingIndicator() {
   const { state } = useRoomContext();
   const { typingDisplayText, typingUsers, selectedRoom } = state;
 
-  // Only show if we have an active room and typing users
   if (!selectedRoom?.id || typingUsers.length === 0 || !typingDisplayText) {
     return null;
   }
@@ -17,8 +16,6 @@ export default function TypingIndicator() {
     <div className="relative w-full px-4 py-2 mb-2 animate-fadeIn">
       <div 
         role="status" 
-        aria-live="polite" 
-        aria-atomic="true"
         className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg px-4 py-3 text-indigo-700 dark:text-indigo-300 italic text-sm font-medium shadow-sm"
       >
         <div className="flex items-center gap-3">
@@ -31,7 +28,7 @@ export default function TypingIndicator() {
               />
             ))}
           </div>
-          <span className="flex-1 truncate min-w-0" title={typingDisplayText}>
+          <span className="flex-1 truncate min-w-0">
             {typingDisplayText}
           </span>
         </div>
