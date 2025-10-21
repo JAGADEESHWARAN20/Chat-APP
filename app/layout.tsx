@@ -1,5 +1,4 @@
 import { Space_Grotesk } from "next/font/google";
-import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ResponsiveToaster } from "@/components/ResponsiveToaster";
 import { RoomProvider } from "@/lib/store/RoomContext";
@@ -7,6 +6,7 @@ import { SearchHighlightProvider } from "@/lib/store/SearchHighlightContext";
 import RoomInitializer from "@/lib/initialization/RoomInitializer";
 import { supabaseServer } from "@/lib/supabase/server";
 import ThemeTransitionWrapper from "@/components/ThemeTransitionWrapper";
+import "@/app/globals.css";
 
 const space_Grotesk = Space_Grotesk({ subsets: ["latin"] });
 
