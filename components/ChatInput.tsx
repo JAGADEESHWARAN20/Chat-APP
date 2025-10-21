@@ -1,95 +1,49 @@
-// components/ChatInput.tsx - UPDATED CORRECTED VERSION
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useMessage } from "@/lib/store/messages";
 import { useRoomContext } from "@/lib/store/RoomContext";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
-import { User as SupabaseUser } from "@supabase/supabase-js";
 import { Imessage } from "@/lib/store/messages";
 import { Send } from "lucide-react";
-import { useTypingStatus, useDebouncedTyping } from "@/hooks/useTypingStatus";
+import { useTypingStatus } from "@/hooks/useTypingStatus"; // ✅ removed useDebouncedTyping
 
 export default function ChatInput() {
   const [text, setText] = useState("");
   const { addMessage, addOptimisticId } = useMessage();
   const { state } = useRoomContext();
-  const { selectedRoom, selectedDirectChat, user: contextUser } = state;
+  const { selectedRoom, selectedDirectChat, user } = state;
 
-  // Get user from RoomContext instead of props
-  const user = contextUser;
+  // ✅ Fixed call: pass both roomId and userId
+  const { startTyping, stopTyping } = useTypingStatus(
+    selectedRoom?.id || "",
+    user?.id || null
+  );
 
-  // Get typing functionality - only pass roomId since useTypingStatus now gets user from RoomContext
-  const { startTyping, stopTyping } = useTypingStatus(selectedRoom?.id || "");
-  const { handleTyping } = useDebouncedTyping(selectedRoom?.id || "");
-
-  console.log("[ChatInput] Render:", {
-    hasRoom: !!selectedRoom?.id,
-    hasDirectChat: !!selectedDirectChat?.id,
-    hasUser: !!user?.id,
-    userFrom: "RoomContext",
-  });
-
-  // Handle input changes with debounced typing
   const handleInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const newText = e.target.value;
       setText(newText);
 
-      console.log("[ChatInput] Input changed:", {
-        textLength: newText.length,
-        isTrimmed: newText.trim().length > 0,
-        roomId: selectedRoom?.id,
-        userId: user?.id,
-      });
-
-      // Trigger debounced typing indicator when text is being added
       if (newText.trim().length > 0 && selectedRoom?.id && user?.id) {
-        console.log("[ChatInput] ⌨️ Triggering typing indicator");
-        try {
-          handleTyping();
-        } catch (error) {
-          console.error("[ChatInput] Error calling handleTyping:", error);
-        }
+        startTyping();
+      } else if (selectedRoom?.id && user?.id) {
+        stopTyping();
       }
     },
-    [handleTyping, selectedRoom?.id, user?.id]
+    [startTyping, stopTyping, selectedRoom?.id, user?.id]
   );
 
   const handleSend = async () => {
-    console.log("[ChatInput] Send button clicked", {
-      hasUser: !!user,
-      textLength: text.trim().length,
-      hasRoom: !!selectedRoom,
-      hasDirectChat: !!selectedDirectChat,
-    });
+    if (!user) return toast.error("You must be logged in to send messages");
+    if (!text.trim()) return toast.error("Message cannot be empty");
+    if (!selectedRoom && !selectedDirectChat)
+      return toast.error("No room or direct chat selected");
 
-    if (!user) {
-      toast.error("You must be logged in to send messages");
-      return;
-    }
-
-    if (!text.trim()) {
-      toast.error("Message cannot be empty");
-      return;
-    }
-
-    if (!selectedRoom && !selectedDirectChat) {
-      toast.error("No room or direct chat selected");
-      return;
-    }
-
-    // Stop typing indicator immediately when sending
-    if (selectedRoom?.id && user?.id) {
-      try {
-        stopTyping();
-      } catch (error) {
-        console.error("[ChatInput] Error stopping typing:", error);
-      }
-    }
+    stopTyping();
 
     const optimisticId = uuidv4();
     const optimisticMessage: Imessage = {
@@ -104,7 +58,8 @@ export default function ChatInput() {
       status: "sent",
       profiles: {
         id: user.id,
-        display_name: user.user_metadata?.display_name || user.email || "",
+        display_name:
+          user.user_metadata?.display_name || user.email || "Anonymous",
         avatar_url: user.user_metadata?.avatar_url || "",
         username: user.user_metadata?.username || "",
         created_at: user.created_at,
@@ -113,14 +68,12 @@ export default function ChatInput() {
       },
     };
 
-    console.log("[ChatInput] 📤 Sending optimistic message:", optimisticId);
-
     addOptimisticId(optimisticId);
     addMessage(optimisticMessage);
     setText("");
 
     try {
-      const response = await fetch("/api/messages/send", {
+      const res = await fetch("/api/messages/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -130,19 +83,13 @@ export default function ChatInput() {
         }),
       });
 
-      const result = await response.json();
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Failed to send message");
 
-      if (!response.ok) {
-        throw new Error(result.error || "Failed to send message");
-      }
-
-      console.log("[ChatInput] ✅ Message sent successfully");
       toast.success("Message sent");
     } catch (error) {
-      console.error("[ChatInput] ❌ Error sending message:", error);
-      toast.error(
-        error instanceof Error ? error.message : "Failed to send message"
-      );
+      console.error(error);
+      toast.error("Failed to send message");
     }
   };
 
@@ -153,30 +100,11 @@ export default function ChatInput() {
     }
   };
 
-  // Stop typing when component unmounts or room changes
   useEffect(() => {
     return () => {
-      console.log("[ChatInput] 🧹 Unmounting - stopping typing");
-      if (selectedRoom?.id && user?.id) {
-        try {
-          stopTyping();
-        } catch (error) {
-          console.error("[ChatInput] Error stopping typing on unmount:", error);
-        }
-      }
+      if (selectedRoom?.id && user?.id) stopTyping();
     };
   }, [selectedRoom?.id, user?.id, stopTyping]);
-
-  // Stop typing when text is cleared
-  useEffect(() => {
-    if (text.trim().length === 0 && selectedRoom?.id && user?.id) {
-      try {
-        stopTyping();
-      } catch (error) {
-        console.error("[ChatInput] Error stopping typing on text clear:", error);
-      }
-    }
-  }, [text, selectedRoom?.id, user?.id, stopTyping]);
 
   return (
     <div className="flex gap-2 w-full p-4 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -185,19 +113,17 @@ export default function ChatInput() {
         onChange={handleInputChange}
         onKeyDown={handleKeyDown}
         placeholder={
-          !selectedRoom && !selectedDirectChat 
-            ? "Select a room or chat to start messaging..." 
+          !selectedRoom && !selectedDirectChat
+            ? "Select a room or chat to start messaging..."
             : "Type a message..."
         }
         disabled={!selectedRoom && !selectedDirectChat}
         className="flex-1"
-        aria-label="Type your message"
       />
       <Button
         onClick={handleSend}
         disabled={(!selectedRoom && !selectedDirectChat) || !text.trim()}
         className="gap-2"
-        aria-label="Send message"
       >
         <Send className="w-[1.2em] h-[1.2em]" />
       </Button>

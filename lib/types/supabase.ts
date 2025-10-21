@@ -347,13 +347,6 @@ export type Database = {
             referencedRelation: "rooms"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "typing_status_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
         ]
       }
       users: {

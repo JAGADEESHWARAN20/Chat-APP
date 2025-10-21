@@ -16,8 +16,9 @@ export default function TypingIndicator({ roomId }: TypingIndicatorProps) {
   const [userNames, setUserNames] = useState<Record<string, string>>({});
   const [isLoadingNames, setIsLoadingNames] = useState(false);
   const { state } = useRoomContext(); // Get RoomContext
-  const { typingUsers } = useTypingStatus(roomId); // Use hook with only roomId
   const currentUserId = state.user?.id; // Get current user ID from RoomContext
+  const { typingUsers } = useTypingStatus(roomId, currentUserId);
+
 
   console.log("[TypingIndicator] Render cycle:", {
     roomId,
