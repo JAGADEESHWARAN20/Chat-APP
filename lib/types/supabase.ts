@@ -14,6 +14,67 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_chat_history: {
+        Row: {
+          ai_response: string
+          created_at: string | null
+          id: string
+          message_count: number | null
+          model_used: string | null
+          room_id: string | null
+          token_count: number | null
+          updated_at: string | null
+          user_id: string | null
+          user_query: string
+        }
+        Insert: {
+          ai_response: string
+          created_at?: string | null
+          id?: string
+          message_count?: number | null
+          model_used?: string | null
+          room_id?: string | null
+          token_count?: number | null
+          updated_at?: string | null
+          user_id?: string | null
+          user_query: string
+        }
+        Update: {
+          ai_response?: string
+          created_at?: string | null
+          id?: string
+          message_count?: number | null
+          model_used?: string | null
+          room_id?: string | null
+          token_count?: number | null
+          updated_at?: string | null
+          user_id?: string | null
+          user_query?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_chat_history_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_chat_history_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_chat_history_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_display_names"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       direct_chats: {
         Row: {
           created_at: string | null
