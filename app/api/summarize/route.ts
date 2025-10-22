@@ -10,7 +10,7 @@ const SummarizeSchema = z.object({
 
 // OpenRouter client (OpenAI SDK wrapper for simplicity)
 const openai = new OpenAI({
-  apiKey: process.env.OPEN_ROUTER,
+  apiKey: process.env.OPENROUTER_API_KEY,
   baseURL: process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1",
 });
 

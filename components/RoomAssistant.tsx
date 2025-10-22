@@ -12,14 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion"; // npm i framer-motion
 
-// Inline debounce
-function useDebounceCallback<T extends (...args: any[]) => any>(callback: T, delay: number) {
-  const timeoutRef = useRef<NodeJS.Timeout>();
-  return useCallback((...args: Parameters<T>) => {
-    clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => callback(...args), delay);
-  }, [callback, delay]);
-}
+
 
 // Chat msg type
 type ChatMessage = { id: string; role: "user" | "assistant"; content: string; timestamp: Date; model?: string };
@@ -65,11 +58,10 @@ export default function RoomAssistant({
   }, [allMessages, roomId]);
 
   // Debounce
-  const debouncedSetPrompt = useDebounceCallback(setPrompt, 300);
-
+  
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    debouncedSetPrompt(e.target.value.slice(0, maxPromptLength));
-  }, [debouncedSetPrompt, maxPromptLength]);
+    setPrompt(e.target.value.slice(0, maxPromptLength)); // Direct, no debounce
+  }, [maxPromptLength]);
 
   // Submit
   const handleSubmit = useCallback(async (e?: React.FormEvent) => {
