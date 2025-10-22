@@ -1,21 +1,42 @@
 "use client";
 
-import { useState, useRef, useTransition, useEffect, useCallback, useMemo } from "react";
-import { Button } from "@/components/ui/button";
-import { useMessage, Imessage } from "@/lib/store/messages";
+import {
+  useState,
+  useRef,
+  useTransition,
+  useEffect,
+  useCallback,
+  useMemo,
+} from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Bot,
+  Loader2,
+  Send,
+  X,
+  Copy,
+  RefreshCw,
+  Download,
+  Trash2,
+  AlertCircle,
+  MessageSquare,
+} from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, Send, X, Bot, MessageSquare, Copy, AlertCircle, RefreshCw, Download } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { motion, AnimatePresence } from "framer-motion"; // npm i framer-motion
+import { useMessage, Imessage } from "@/lib/store/messages";
+import { Badge } from "@/components/ui/badge";
 
-
-
-// Chat msg type
-type ChatMessage = { id: string; role: "user" | "assistant"; content: string; timestamp: Date; model?: string };
+// Types
+type ChatMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  timestamp: Date;
+  model?: string;
+};
 
 interface RoomAssistantProps {
   roomId: string;
@@ -40,12 +61,11 @@ export default function RoomAssistant({
   const [error, setError] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [model, setModel] = useState(initialModel);
-  const [response, setResponse] = useState(""); // Fixed: Full state + setter
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [, startTransition] = useTransition();
   const { messages: allMessages } = useMessage();
 
-  // Memoized room context
+  // --- 📡 Recent room messages for context ---
   const recentRoomMessages = useMemo(() => {
     return allMessages
       .filter((msg: Imessage) => msg.room_id === roomId)
@@ -54,94 +74,102 @@ export default function RoomAssistant({
         const sender = msg.profiles?.display_name || msg.profiles?.username || "User";
         return `${sender} (${msg.created_at}): ${msg.text}`;
       })
-      .join('\n');
+      .join("\n");
   }, [allMessages, roomId]);
 
-  // Debounce
-  
-  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setPrompt(e.target.value.slice(0, maxPromptLength)); // Direct, no debounce
-  }, [maxPromptLength]);
+  const handleInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      setPrompt(e.target.value.slice(0, maxPromptLength));
+    },
+    [maxPromptLength]
+  );
 
-  // Submit
-  const handleSubmit = useCallback(async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!prompt.trim()) {
-      toast.error("Enter a query about the room.");
-      return;
-    }
-
-    const userMsg: ChatMessage = { id: Date.now().toString(), role: "user", content: prompt, timestamp: new Date() };
-    setMessages((prev) => [...prev.slice(-maxHistory + 1), userMsg]);
-    const tempPrompt = prompt;
-    setPrompt("");
-    setLoading(true);
-    setError(null);
-    setIsStreaming(true);
-
-    startTransition(async () => {
-      try {
-        const historyStr = messages.map((m) => `${m.role}: ${m.content}`).join('\n') + `\n${userMsg.role}: ${tempPrompt}`;
-        const context = recentRoomMessages ? `Room "${roomName}" (${roomId}) recent:\n${recentRoomMessages}\n\nHistory:\n${historyStr}` : `Room "${roomName}" (${roomId}). History:\n${historyStr}`;
-        const estTokens = context.length / 4 + 200;
-
-        if (estTokens > 4000) {
-          throw new Error("Context too long—clear history or shorten query.");
-        }
-
-        const res = await fetch("/api/summarize", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt: `${context}\n\nAssistant:`, model }),
-        });
-
-        if (!res.ok) {
-          const data = await res.json();
-          throw new Error(data.error || "API failed");
-        }
-
-        // Streaming
-        const reader = res.body?.getReader();
-        const decoder = new TextDecoder();
-        let fullResponse = "";
-        const aiMsg: ChatMessage = { id: (Date.now() + 1).toString(), role: "assistant", content: "", timestamp: new Date(), model };
-        setMessages((prev) => [...prev, aiMsg]);
-
-        while (true) {
-          const { done, value } = await reader?.read() ?? { done: true, value: undefined };
-          if (done) break;
-          const chunk = decoder.decode(value);
-          fullResponse += chunk;
-          setResponse(fullResponse); // Fixed: Now callable
-          setMessages((prev) => prev.map((m) => m.id === aiMsg.id ? { ...m, content: fullResponse } : m));
-        }
-
-        toast.success("Ready! (~" + Math.round(estTokens) + " tokens)");
-      } catch (err) {
-        setMessages((prev) => prev.slice(0, -1));
-        const msg = (err as Error).message;
-        setError(msg.includes("429") ? "Rate limit—retry soon." : msg);
-        toast.error(msg, { 
-          action: { label: "Retry", onClick: () => handleSubmit() } // Fixed: No fake e/as any
-        });
-      } finally {
-        setLoading(false);
-        setIsStreaming(false);
+  const handleSubmit = useCallback(
+    async (e?: React.FormEvent) => {
+      if (e) e.preventDefault();
+      if (!prompt.trim()) {
+        toast.error("Enter a query about the room.");
+        return;
       }
-    });
-  }, [prompt, messages, recentRoomMessages, roomName, roomId, model, maxHistory]);
+
+      const userMsg: ChatMessage = {
+        id: Date.now().toString(),
+        role: "user",
+        content: prompt,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev.slice(-maxHistory + 1), userMsg]);
+      const tempPrompt = prompt;
+      setPrompt("");
+      setLoading(true);
+      setError(null);
+      setIsStreaming(true);
+
+      startTransition(async () => {
+        try {
+          const historyStr = messages
+            .map((m) => `${m.role}: ${m.content}`)
+            .join("\n") + `\n${userMsg.role}: ${tempPrompt}`;
+          const context = recentRoomMessages
+            ? `Room "${roomName}" (${roomId}) recent:\n${recentRoomMessages}\n\nHistory:\n${historyStr}`
+            : `Room "${roomName}" (${roomId}). History:\n${historyStr}`;
+          const estTokens = context.length / 4 + 200;
+
+          if (estTokens > 4000) throw new Error("Context too long—shorten query.");
+
+          const res = await fetch("/api/summarize", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt: `${context}\n\nAssistant:`, model }),
+          });
+
+          if (!res.ok) {
+            const data = await res.json();
+            throw new Error(data.error || "API failed");
+          }
+
+          const reader = res.body?.getReader();
+          const decoder = new TextDecoder();
+          let fullResponse = "";
+          const aiMsg: ChatMessage = {
+            id: (Date.now() + 1).toString(),
+            role: "assistant",
+            content: "",
+            timestamp: new Date(),
+            model,
+          };
+          setMessages((prev) => [...prev, aiMsg]);
+
+          while (true) {
+            const { done, value } = await reader?.read() ?? { done: true };
+            if (done) break;
+            const chunk = decoder.decode(value);
+            fullResponse += chunk;
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === aiMsg.id ? { ...m, content: fullResponse } : m
+              )
+            );
+          }
+
+          toast.success(`Response ready (~${Math.round(estTokens)} tokens)`);
+        } catch (err) {
+          setMessages((prev) => prev.slice(0, -1));
+          const msg = (err as Error).message;
+          setError(msg.includes("429") ? "Rate limit—retry soon." : msg);
+          toast.error(msg, { action: { label: "Retry", onClick: () => handleSubmit() } });
+        } finally {
+          setLoading(false);
+          setIsStreaming(false);
+        }
+      });
+    },
+    [prompt, messages, recentRoomMessages, roomName, roomId, model, maxHistory]
+  );
 
   const copyToClipboard = useCallback((content: string) => {
     navigator.clipboard.writeText(content);
     toast.success("Copied!");
-  }, []);
-
-  const clearAll = useCallback(() => {
-    setPrompt("");
-    setMessages([]);
-    setError(null);
-    textareaRef.current?.focus();
-    toast("Cleared!");
   }, []);
 
   const clearHistory = useCallback(() => {
@@ -155,14 +183,15 @@ export default function RoomAssistant({
     handleSubmit();
   }, [messages, handleSubmit]);
 
-  // Export
   const exportChat = useCallback(() => {
     const data = messages.map((m) => ({
       role: m.role,
       content: m.content,
       time: m.timestamp.toISOString(),
     }));
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const blob = new Blob([JSON.stringify(data, null, 2)], {
+      type: "application/json",
+    });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -172,7 +201,7 @@ export default function RoomAssistant({
     toast.success("Exported!");
   }, [messages, roomName]);
 
-  // Persist
+  // 🧠 Local persistence
   useEffect(() => {
     const key = `ai-chat-${roomId}`;
     const saved = localStorage.getItem(key);
@@ -186,145 +215,160 @@ export default function RoomAssistant({
 
   return (
     <TooltipProvider>
-      <Card className={`w-full md:w-80 lg:w-96 h-fit ${className}`}>
-        <CardHeader className="pb-2">
-          <CardTitle className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Bot className="h-5 w-5" />
-              AI Assistant
-              <Badge variant="outline" className="text-xs">
-                {model} | {messages.length} msgs
-              </Badge>
-            </div>
-            <div className="flex gap-1">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="ghost" size="sm" onClick={clearHistory} disabled={loading} title="Clear history">
-                    <X className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Clear history</TooltipContent>
-              </Tooltip>
-              {messages.length > 1 && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="ghost" size="sm" onClick={regenerate} disabled={loading} title="Regenerate">
-                      <RefreshCw className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Regenerate last</TooltipContent>
-                </Tooltip>
-              )}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="ghost" size="sm" onClick={exportChat} title="Export chat">
-                    <Download className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Export chat</TooltipContent>
-              </Tooltip>
-            </div>
-          </CardTitle>
-          <p className="text-sm text-muted-foreground">
+      <motion.div
+        className={`relative flex flex-col bg-gradient-to-b from-zinc-50/90 to-zinc-100/60 backdrop-blur-xl border rounded-2xl shadow-xl w-full md:w-[28rem] overflow-hidden ${className}`}
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
+        {/* 🔝 Header */}
+        <div className="flex justify-between items-center p-3 border-b bg-white/70 backdrop-blur-lg">
+          <div className="flex items-center gap-2 font-semibold text-lg">
+            <Bot className="h-5 w-5" />
+            AI Assistant
+            <Badge variant="outline" className="text-xs ml-1">{model}</Badge>
+          </div>
+          <div className="flex gap-1">
             <Tooltip>
-              <TooltipTrigger>Context: {recentRoomMessages ? `${recentRoomMessages.split('\n').length} recent msgs` : "No msgs yet"}</TooltipTrigger>
-              <TooltipContent>AI uses room history + your chat</TooltipContent>
-            </Tooltip>
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <form onSubmit={handleSubmit} className="space-y-2">
-            <Textarea
-              ref={textareaRef}
-              placeholder={`Query "${roomName}"... (e.g., "Summarize trends?")`}
-              value={prompt}
-              onChange={handleInputChange}
-              className="min-h-[60px] max-h-[120px]"
-              maxLength={maxPromptLength}
-              disabled={loading}
-              aria-label="AI input"
-              aria-describedby={error ? "error-msg" : undefined}
-            />
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>{prompt.length}/{maxPromptLength}</span>
-              <select value={model} onChange={(e) => setModel(e.target.value)} disabled={loading} className="text-xs bg-muted px-2 py-1 rounded border">
-                <option value="gpt-3.5-turbo">3.5 Turbo (Free)</option>
-                <option value="gpt-4o-mini">4o Mini (Paid)</option>
-              </select>
-            </div>
-            <div className="flex gap-2">
-              <Button type="submit" className="flex-1" disabled={loading || !prompt.trim()}>
-                {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{isStreaming ? "Streaming..." : "Thinking..."}</> : <><Send className="mr-2 h-4 w-4" />Send</>}
-              </Button>
-              <Button type="button" variant="outline" size="sm" onClick={clearAll} disabled={loading}>
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          </form>
-
-          {/* Error (Animated) */}
-          <AnimatePresence>
-            {error && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/30 rounded-md text-destructive-foreground text-sm"
-                id="error-msg"
-                role="alert"
-                aria-live="polite"
-              >
-                <AlertCircle className="h-4 w-4" />
-                {error}
-                <Button variant="ghost" size="sm" onClick={() => setError(null)} className="ml-auto h-6 w-6 p-0">
-                  <X className="h-3 w-3" />
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={clearHistory} disabled={loading}>
+                  <Trash2 className="h-4 w-4" />
                 </Button>
-              </motion.div>
+              </TooltipTrigger>
+              <TooltipContent>Clear History</TooltipContent>
+            </Tooltip>
+            {messages.length > 1 && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" onClick={regenerate} disabled={loading}>
+                    <RefreshCw className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Regenerate</TooltipContent>
+              </Tooltip>
             )}
-          </AnimatePresence>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={exportChat}>
+                  <Download className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Export Chat</TooltipContent>
+            </Tooltip>
+          </div>
+        </div>
 
-          {/* History (Animated Bubbles) */}
-          {messages.length > 0 ? (
-            <ScrollArea className="h-[250px] md:h-[300px] space-y-3">
-              <AnimatePresence mode="popLayout">
-                {messages.map((msg, i) => (
-                  <motion.div
-                    key={msg.id}
-                    initial={{ opacity: 0, x: msg.role === "user" ? 20 : -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ delay: i * 0.05 }}
-                    className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+        {/* 🧾 Messages */}
+        <ScrollArea className="h-[350px] px-4 py-3 space-y-3">
+          <AnimatePresence>
+            {messages.length > 0 ? (
+              messages.map((msg) => (
+                <motion.div
+                  key={msg.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                >
+                  <div
+                    className={`max-w-[80%] p-3 rounded-2xl text-sm shadow-sm ${
+                      msg.role === "user"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-white/90 border"
+                    }`}
                   >
-                    <motion.div
-                      layout
-                      className={`max-w-[80%] p-3 rounded-2xl ${msg.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted"}`}
-                      animate={{ scale: 1 }}
-                      whileHover={{ scale: 1.02 }}
-                    >
-                      <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                      <div className="flex justify-between mt-1 text-xs text-muted-foreground">
-                        <span>{msg.role === "user" ? "You" : `AI (${msg.model})`}</span>
+                    <p className="whitespace-pre-wrap">{msg.content}</p>
+                    <div className="flex justify-between items-center mt-1 text-[11px] text-muted-foreground">
+                      <span>{msg.role === "user" ? "You" : `AI (${msg.model})`}</span>
+                      <div className="flex items-center gap-1">
                         <span>{msg.timestamp.toLocaleTimeString()}</span>
                         {msg.role === "assistant" && (
-                          <Button variant="ghost" size="sm" onClick={() => copyToClipboard(msg.content)} className="h-4 w-4 p-0 ml-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => copyToClipboard(msg.content)}
+                            className="h-4 w-4 p-0"
+                          >
                             <Copy className="h-3 w-3" />
                           </Button>
                         )}
                       </div>
-                    </motion.div>
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-            </ScrollArea>
-          ) : !loading && (
-            <div className="text-center py-8 text-muted-foreground">
-              <MessageSquare className="mx-auto h-8 w-8 mb-2 opacity-50" />
-              <p className="text-sm">Start chatting about {roomName}...</p>
-            </div>
+                    </div>
+                  </div>
+                </motion.div>
+              ))
+            ) : (
+              <div className="text-center py-10 text-muted-foreground">
+                <MessageSquare className="mx-auto h-8 w-8 mb-2 opacity-50" />
+                <p className="text-sm">Ask AI anything about <b>{roomName}</b></p>
+              </div>
+            )}
+          </AnimatePresence>
+        </ScrollArea>
+
+        {/* ⚠️ Error */}
+        <AnimatePresence>
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="flex items-center gap-2 p-3 bg-red-100 text-red-800 text-sm border-t border-red-300"
+            >
+              <AlertCircle className="h-4 w-4" />
+              {error}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setError(null)}
+                className="ml-auto h-5 w-5 p-0"
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            </motion.div>
           )}
-        </CardContent>
-      </Card>
+        </AnimatePresence>
+
+        {/* 📝 Input */}
+        <form onSubmit={handleSubmit} className="border-t bg-white/70 backdrop-blur-lg p-3 flex flex-col gap-2">
+          <Textarea
+            ref={textareaRef}
+            placeholder={`Ask about "${roomName}"...`}
+            value={prompt}
+            onChange={handleInputChange}
+            className="min-h-[60px] resize-none"
+            disabled={loading}
+            maxLength={maxPromptLength}
+          />
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>{prompt.length}/{maxPromptLength}</span>
+            <select
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+              disabled={loading}
+              className="text-xs bg-muted px-2 py-1 rounded border"
+            >
+              <option value="gpt-3.5-turbo">GPT-3.5 (Free)</option>
+              <option value="gpt-4o-mini">GPT-4o Mini (Paid)</option>
+            </select>
+          </div>
+          <Button
+            type="submit"
+            disabled={loading || !prompt.trim()}
+            className="w-full"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                {isStreaming ? "Streaming..." : "Thinking..."}
+              </>
+            ) : (
+              <>
+                <Send className="mr-2 h-4 w-4" /> Send
+              </>
+            )}
+          </Button>
+        </form>
+      </motion.div>
     </TooltipProvider>
   );
 }
