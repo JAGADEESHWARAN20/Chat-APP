@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Button } from "./ui/button";
 
-import { User as SupabaseUser, RealtimePostgresChangesPayload } from "@supabase/supabase-js";
+import { User as SupabaseUser } from "@supabase/supabase-js";
 
 import ChatPresence from "./ChatPresence";
 import {
@@ -15,6 +15,7 @@ import {
   Search,
   ArrowRightLeft,
   LockIcon,
+  Bot, // Add Bot icon for AI
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
@@ -24,22 +25,22 @@ import { useRoomPresence } from "@/hooks/useRoomPresence";
 import { useMessage, Imessage } from "@/lib/store/messages";
 import { useSearchHighlight } from "@/lib/store/SearchHighlightContext";
 
+// Import RoomAssistant
+import RoomAssistant from "./RoomAssistant"; // Adjust path as needed
 
 export default function ChatHeader({ user }: { user: SupabaseUser | undefined }) {
-
   const { searchMessages } = useMessage();
   const [searchResults, setSearchResults] = useState<Imessage[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isSwitchRoomPopoverOpen, setIsSwitchRoomPopoverOpen] = useState(false);
   const [isMessageSearchOpen, setIsMessageSearchOpen] = useState(false);
+  const [isAssistantOpen, setIsAssistantOpen] = useState(false); // New state for AI popover
   const [messageSearchQuery, setMessageSearchQuery] = useState("");
   const { state, switchRoom } = useRoomContext();
-  const { selectedRoom, availableRooms, isLoading } = state;
+  const { selectedRoom, availableRooms } = state;
   const isMounted = useRef(true);
-  const [isMember, setIsMember] = useState(false);
+  const [, setIsMember] = useState(false);
   const { setHighlightedMessageId, setSearchQuery } = useSearchHighlight();
-
-
 
   // Compute all room IDs for presence tracking
   const allRoomIds = useMemo(() => {
@@ -157,6 +158,29 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
               </div>
 
             </div>
+          </PopoverContent>
+        </Popover>
+
+        {/* AI Assistant Popover */}
+        <Popover open={isAssistantOpen} onOpenChange={setIsAssistantOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="ghost" size="icon">
+              <Bot className="h-5 w-5" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent
+            side="bottom"
+            align="end"
+            sideOffset={0}
+            className="w-[350px] md:w-[400px] p-0 bg-popover text-popover-foreground backdrop-blur-lg border border-border shadow-xl rounded-xl max-h-[80vh]"
+          >
+            {selectedRoom ? (
+              <RoomAssistant roomId={selectedRoom.id} roomName={selectedRoom.name} />
+            ) : (
+              <div className="p-4 text-center text-muted-foreground">
+                Select a room to use AI Assistant
+              </div>
+            )}
           </PopoverContent>
         </Popover>
 
