@@ -32,12 +32,12 @@ import { useMessage, Imessage } from "@/lib/store/messages";
 import { Badge } from "@/components/ui/badge";
 import ReactMarkdown from "react-markdown";
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-  } from "@/components/ui/select";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 // Types
 type ChatMessage = {
@@ -57,90 +57,121 @@ interface RoomAssistantProps {
   initialModel?: string;
 }
 
-// 🧱 Enhanced Chat Message Component
-const ChatMessageDisplay = ({ msg, copyToClipboard }: { msg: ChatMessage, copyToClipboard: (content: string) => void }) => (
-  <motion.div
-    key={msg.id}
-    initial={{ opacity: 0, y: 10 }}
-    animate={{ opacity: 1, y: 0 }}
-    exit={{ opacity: 0 }}
-    className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} group`}
-  >
-    <div
-      className={`relative max-w-[85%] md:max-w-[70%] p-4 rounded-2xl shadow-lg transition-all duration-300 ${
-        msg.role === "user"
-          ? "bg-gradient-to-br from-blue-600 to-blue-700 text-white rounded-br-md"
-          : "bg-gradient-to-br from-white to-gray-50 border border-gray-100 rounded-tl-md shadow-sm"
-      }`}
-    >
-      {/* Message Content */}
-      <div className="whitespace-pre-wrap leading-relaxed">
-        <ReactMarkdown
-          components={{
-            // Enhanced table styling
-            table: ({ node, ...props }) => (
-              <div className="overflow-x-auto my-2 rounded-lg border border-gray-200">
-                <table className="min-w-full divide-y divide-gray-200" {...props} />
-              </div>
-            ),
-            th: ({ node, ...props }) => (
-              <th 
-                className="px-4 py-3 bg-gradient-to-r from-gray-50 to-gray-100 text-left text-sm font-semibold text-gray-700 uppercase tracking-wider border-b" 
-                {...props} 
-              />
-            ),
-            td: ({ node, ...props }) => (
-              <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-100" {...props} />
-            ),
-            
-            code: ({ node, className, ...props }) => {
-                const isInline = !className?.includes('language-');
-                return isInline ? (
-                <code className="px-1.5 py-0.5 bg-gray-100 rounded text-sm font-mono" {...props} />
-                ) : (
-                <code className="block p-3 bg-gray-900 text-gray-100 rounded-lg text-sm font-mono overflow-x-auto" {...props} />
-                );
-            },
-            // Enhanced lists
-            ul: ({ node, ...props }) => (
-              <ul className="space-y-1 my-2 list-disc list-inside" {...props} />
-            ),
-            ol: ({ node, ...props }) => (
-              <ol className="space-y-1 my-2 list-decimal list-inside" {...props} />
-            ),
-            li: ({ node, ...props }) => (
-              <li className="pl-1" {...props} />
-            ),
-          }}
-        >
-          {msg.content}
-        </ReactMarkdown>
-      </div>
+// 🧱 Enhanced Chat Message Component with safe timestamp handling
+const ChatMessageDisplay = ({ msg, copyToClipboard }: { msg: ChatMessage, copyToClipboard: (content: string) => void }) => {
+  // Safe timestamp conversion
+  const safeTimestamp = useMemo(() => {
+    try {
+      if (msg.timestamp instanceof Date) {
+        return msg.timestamp;
+      }
+      if (typeof msg.timestamp === 'string') {
+        return new Date(msg.timestamp);
+      }
+      if (typeof msg.timestamp === 'number') {
+        return new Date(msg.timestamp);
+      }
+      return new Date(); // Fallback to current date
+    } catch (error) {
+      console.error('Invalid timestamp:', msg.timestamp, error);
+      return new Date(); // Fallback to current date
+    }
+  }, [msg.timestamp]);
 
-      {/* Message Footer */}
-      <div className="flex justify-between items-center mt-3 pt-2 border-t border-opacity-20">
-        <span className={`text-xs font-medium ${msg.role === "user" ? "text-blue-100" : "text-gray-500"}`}>
-          {msg.role === "user" ? "You" : `AI Assistant • ${msg.model || 'Model'}`}
-        </span>
-        <div className="flex items-center gap-2">
-          <span className={`text-xs ${msg.role === "user" ? "text-blue-100" : "text-gray-400"}`}>
-            {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+  // Safe time formatting
+  const formattedTime = useMemo(() => {
+    try {
+      return safeTimestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch (error) {
+      console.error('Error formatting time:', error);
+      return '--:--';
+    }
+  }, [safeTimestamp]);
+
+  return (
+    <motion.div
+      key={msg.id}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0 }}
+      className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} group`}
+    >
+      <div
+        className={`relative max-w-[85%] md:max-w-[70%] p-4 rounded-2xl shadow-lg transition-all duration-300 ${
+          msg.role === "user"
+            ? "bg-gradient-to-br from-blue-600 to-blue-700 text-white rounded-br-md"
+            : "bg-gradient-to-br from-white to-gray-50 border border-gray-100 rounded-tl-md shadow-sm"
+        }`}
+      >
+        {/* Message Content */}
+        <div className="whitespace-pre-wrap leading-relaxed">
+          <ReactMarkdown
+            components={{
+              // Enhanced table styling
+              table: ({ node, ...props }) => (
+                <div className="overflow-x-auto my-2 rounded-lg border border-gray-200">
+                  <table className="min-w-full divide-y divide-gray-200" {...props} />
+                </div>
+              ),
+              th: ({ node, ...props }) => (
+                <th 
+                  className="px-4 py-3 bg-gradient-to-r from-gray-50 to-gray-100 text-left text-sm font-semibold text-gray-700 uppercase tracking-wider border-b" 
+                  {...props} 
+                />
+              ),
+              td: ({ node, ...props }) => (
+                <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-100" {...props} />
+              ),
+              
+              code: ({ node, className, ...props }) => {
+                  const isInline = !className?.includes('language-');
+                  return isInline ? (
+                  <code className="px-1.5 py-0.5 bg-gray-100 rounded text-sm font-mono" {...props} />
+                  ) : (
+                  <code className="block p-3 bg-gray-900 text-gray-100 rounded-lg text-sm font-mono overflow-x-auto" {...props} />
+                  );
+              },
+              // Enhanced lists
+              ul: ({ node, ...props }) => (
+                <ul className="space-y-1 my-2 list-disc list-inside" {...props} />
+              ),
+              ol: ({ node, ...props }) => (
+                <ol className="space-y-1 my-2 list-decimal list-inside" {...props} />
+              ),
+              li: ({ node, ...props }) => (
+                <li className="pl-1" {...props} />
+              ),
+            }}
+          >
+            {msg.content}
+          </ReactMarkdown>
+        </div>
+
+        {/* Message Footer */}
+        <div className="flex justify-between items-center mt-3 pt-2 border-t border-opacity-20">
+          <span className={`text-xs font-medium ${msg.role === "user" ? "text-blue-100" : "text-gray-500"}`}>
+            {msg.role === "user" ? "You" : `AI Assistant • ${msg.model || 'Model'}`}
           </span>
-          {msg.role === "assistant" && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => copyToClipboard(msg.content)}
-              className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-all duration-200 hover:scale-110"
-            >
-              <Copy className="h-3 w-3" />
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            <span className={`text-xs ${msg.role === "user" ? "text-blue-100" : "text-gray-400"}`}>
+              {formattedTime}
+            </span>
+            {msg.role === "assistant" && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => copyToClipboard(msg.content)}
+                className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-all duration-200 hover:scale-110"
+              >
+                <Copy className="h-3 w-3" />
+              </Button>
+            )}
+          </div>
         </div>
       </div>
-    </div>
-  </motion.div>
-);
+    </motion.div>
+  );
+};
 
 export default function RoomAssistant({
   roomId,
@@ -171,6 +202,39 @@ export default function RoomAssistant({
       })
       .join("\n");
   }, [allMessages, roomId]);
+
+  // Safe message loading with timestamp conversion
+  const loadMessagesFromStorage = useCallback(() => {
+    try {
+      const key = `ai-chat-${roomId}`;
+      const saved = localStorage.getItem(key);
+      if (saved && messages.length === 0) {
+        const parsedMessages = JSON.parse(saved);
+        
+        // Convert timestamp strings to Date objects
+        const messagesWithProperTimestamps = parsedMessages.map((msg: any) => ({
+          ...msg,
+          timestamp: new Date(msg.timestamp)
+        }));
+        
+        setMessages(messagesWithProperTimestamps);
+      }
+    } catch (e) {
+      console.error("Failed to load chat history:", e);
+      // Clear corrupted data
+      localStorage.removeItem(`ai-chat-${roomId}`);
+    }
+  }, [roomId, messages.length]);
+
+  // Safe message saving
+  const saveMessagesToStorage = useCallback(() => {
+    try {
+      const key = `ai-chat-${roomId}`;
+      localStorage.setItem(key, JSON.stringify(messages.slice(-maxHistory)));
+    } catch (e) {
+      console.error("Failed to save chat history:", e);
+    }
+  }, [messages, roomId, maxHistory]);
 
   // Handlers
   const handleInputChange = useCallback(
@@ -308,23 +372,14 @@ export default function RoomAssistant({
     toast.success("Chat exported successfully!");
   }, [messages, roomName]);
 
-  // Local persistence
+  // Local persistence with error handling
   useEffect(() => {
-    const key = `ai-chat-${roomId}`;
-    const saved = localStorage.getItem(key);
-    if (saved && messages.length === 0) {
-      try {
-        setMessages(JSON.parse(saved));
-      } catch (e) {
-        console.error("Failed to load chat history:", e);
-      }
-    }
-  }, [roomId]);
+    loadMessagesFromStorage();
+  }, [loadMessagesFromStorage]);
 
   useEffect(() => {
-    const key = `ai-chat-${roomId}`;
-    localStorage.setItem(key, JSON.stringify(messages.slice(-maxHistory)));
-  }, [messages, roomId, maxHistory]);
+    saveMessagesToStorage();
+  }, [saveMessagesToStorage]);
 
   // Auto-focus textarea when component mounts
   useEffect(() => {
@@ -333,7 +388,7 @@ export default function RoomAssistant({
 
   return (
     <motion.div
-      className={`flex flex-col bg-white rounded-2xl shadow-2xl border border-gray-100 w-full max-w-md mx-auto overflow-hidden ${className}`}
+      className={`flex flex-col bg-white rounded-2xl shadow-2xl border border-gray-100 w-full h-full max-w-4xl mx-auto overflow-hidden ${className}`}
       initial={{ opacity: 0, scale: 0.95, y: 10 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
       transition={{ duration: 0.3, type: "spring", stiffness: 300 }}
@@ -412,11 +467,11 @@ export default function RoomAssistant({
         </Popover>
       </div>
 
-      {/* 🧾 Enhanced Messages Area */}
-      <ScrollArea className="flex-1 px-4 py-4 min-h-[300px] max-h-[400px]">
+      {/* 🧾 Enhanced Messages Area - Full Height with Scroll */}
+      <ScrollArea className="flex-1 px-4 py-4 min-h-[200px] overflow-y-auto">
         <AnimatePresence mode="popLayout">
           {messages.length > 0 ? (
-            <div className="space-y-4">
+            <div className="space-y-4 pb-4">
               {messages.map((msg) => (
                 <ChatMessageDisplay 
                   key={msg.id} 
@@ -429,7 +484,7 @@ export default function RoomAssistant({
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="flex flex-col items-center justify-center h-64 text-center"
+              className="flex flex-col items-center justify-center h-full min-h-[300px] text-center"
             >
               <div className="relative mb-4">
                 <div className="w-16 h-16 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-2xl flex items-center justify-center">
@@ -490,15 +545,15 @@ export default function RoomAssistant({
         </div>
 
         <div className="flex items-center justify-between gap-3">
-        <Select value={model} onValueChange={setModel} disabled={loading}>
+          <Select value={model} onValueChange={setModel} disabled={loading}>
             <SelectTrigger className="flex-1 text-sm bg-white border border-gray-200 rounded-lg px-3 py-2 h-auto focus:ring-2 focus:ring-blue-100 transition-all duration-200">
-                <SelectValue placeholder="Select model" />
+              <SelectValue placeholder="Select model" />
             </SelectTrigger>
             <SelectContent className="bg-white border border-gray-200 rounded-lg shadow-lg">
-                <SelectItem value="gpt-3.5-turbo">GPT-3.5 Turbo (Fast)</SelectItem>
-                <SelectItem value="gpt-4o-mini">GPT-4o Mini (Enhanced)</SelectItem>
+              <SelectItem value="gpt-3.5-turbo">GPT-3.5 Turbo (Fast)</SelectItem>
+              <SelectItem value="gpt-4o-mini">GPT-4o Mini (Enhanced)</SelectItem>
             </SelectContent>
-            </Select>
+          </Select>
 
           <Button
             type="submit"
