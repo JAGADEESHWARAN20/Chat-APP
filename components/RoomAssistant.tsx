@@ -82,18 +82,21 @@ const sanitizeHtml = (html: string): string => {
     .replace(/class=/g, "className=");
 };
 
-// Loading Skeleton Component
+// Loading Skeleton Component with theme-aware colors
 const MessageSkeleton = () => (
-  <div className="flex space-x-3 p-4">
-    <Skeleton className="h-8 w-8 rounded-full" />
-    <div className="space-y-2 flex-1">
-      <Skeleton className="h-4 w-32" />
-      <Skeleton className="h-16 w-full" />
+  <div className="flex space-x-2 lg:space-x-3 p-3 lg:p-4">
+    <Skeleton className="h-6 w-6 lg:h-8 lg:w-8 rounded-full
+      bg-muted/50" />
+    <div className="space-y-1.5 lg:space-y-2 flex-1">
+      <Skeleton className="h-3 lg:h-4 w-24 lg:w-32
+        bg-muted/50" />
+      <Skeleton className="h-12 lg:h-16 w-full
+        bg-muted/50" />
     </div>
   </div>
 );
 
-// Enhanced ChatMessageDisplay with Safe HTML & Better UI
+// Enhanced ChatMessageDisplay with theme-aware styling
 const ChatMessageDisplay = ({
   msg,
   copyToClipboard,
@@ -114,6 +117,10 @@ const ChatMessageDisplay = ({
       return new Date();
     }
   }, [msg.timestamp]);
+  // Alternative fix - add these variables at the top of the ChatMessageDisplay component
+const isUserMessage = msg.role === "user";
+const isAssistantMessage = msg.role === "assistant";
+
 
   const formattedTime = useMemo(
     () => safeTimestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
@@ -121,7 +128,7 @@ const ChatMessageDisplay = ({
   );
 
   const isHtmlContent = useMemo(
-    () => msg.role === "assistant" && /<[^>]*div[^>]*>/i.test(msg.content),
+    () => isAssistantMessage && /<[^>]*div[^>]*>/i.test(msg.content),
     [msg.content, msg.role]
   );
 
@@ -133,22 +140,26 @@ const ChatMessageDisplay = ({
       const cleanHtml = sanitizeHtml(msg.content);
       return (
         <div
-          className={`prose prose-sm max-w-none overflow-x-auto ${
-            theme === "dark" ? "prose-invert" : ""
-          }`}
+          className={`prose prose-sm max-w-none overflow-x-auto 
+            text-[0.9em] lg:text-[1em]
+            ${theme === "dark" ? "prose-invert" : ""}
+            ai-html-response`}
           dangerouslySetInnerHTML={{ __html: cleanHtml }}
         />
       );
     } else {
       return (
         <div className="overflow-x-auto">
-          <div className={`prose ${theme === "dark" ? "prose-invert" : ""} max-w-none`}>
+          <div className={`prose max-w-none text-[0.9em] lg:text-[1em]
+            ${theme === "dark" ? "prose-invert" : ""}`}>
             {displayContent}
           </div>
           {shouldTruncate && (
             <Button
               variant="link"
-              className="p-0 h-auto text-blue-600 dark:text-blue-400 mt-2"
+              className="p-0 h-auto text-primary/80 hover:text-primary
+                mt-2 text-xs lg:text-sm
+                transition-colors duration-200"
               onClick={() => setIsExpanded(true)}
             >
               Show more
@@ -168,36 +179,46 @@ const ChatMessageDisplay = ({
       className={`flex w-full ${msg.role === "user" ? "justify-end" : "justify-start"} group`}
     >
       <Card
-        className={`relative max-w-[85%] transition-all duration-300 ${
-          msg.role === "user"
-            ? "bg-gradient-to-br from-blue-600 to-blue-700 text-white"
-            : "bg-background"
+        className={`relative max-w-[90vw] sm:max-w-[85vw] md:max-w-[80vw] lg:max-w-[75vw] xl:max-w-[70vw]
+          transition-all duration-300
+          shadow-lg hover:shadow-xl
+          backdrop-blur-sm
+          ${
+            isUserMessage
+            ? "bg-gradient-to-br from-primary to-primary/80 text-primary-foreground"
+            : "bg-background/80 border-border/50"
         }`}
       >
-        <CardContent className="p-4">
+        <CardContent className="p-3 lg:p-4">
           {/* Content */}
           <div className="whitespace-pre-wrap leading-relaxed prose-sm max-w-none">
             {renderContent()}
           </div>
 
           {/* Footer with Actions */}
-          <div className="flex justify-between items-center mt-3 pt-2 border-t border-opacity-20">
+          <div className="flex justify-between items-center mt-2 lg:mt-3 pt-2 
+            border-t border-opacity-20
+            border-current/20">
             <span
-              className={`text-xs font-medium ${
-                msg.role === "user" ? "text-blue-100" : "text-muted-foreground"
+              className={`text-[0.7rem] lg:text-xs font-medium ${
+                isUserMessage
+                  ? "text-primary-foreground/90" 
+                  : "text-muted-foreground/80"
               }`}
             >
-              {msg.role === "user" ? "You" : `AI Assistant • ${msg.model || "Model"}`}
+              {isUserMessage ? "You" : `AI Assistant • ${msg.model || "Model"}`}
             </span>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 lg:gap-2">
               <span
-                className={`text-xs ${
-                  msg.role === "user" ? "text-blue-100" : "text-muted-foreground"
+                className={`text-[0.7rem] lg:text-xs ${
+                  isUserMessage
+                    ? "text-primary-foreground/80" 
+                    : "text-muted-foreground/70"
                 }`}
               >
                 {formattedTime}
               </span>
-              {msg.role === "assistant" && (
+              {isAssistantMessage && (
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -205,12 +226,22 @@ const ChatMessageDisplay = ({
                         variant="ghost"
                         size="icon"
                         onClick={() => copyToClipboard(msg.content)}
-                        className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                        className={`h-5 w-5 lg:h-6 lg:w-6 p-0 
+                          opacity-0 group-hover:opacity-100 
+                          transition-all duration-200
+                          hover:bg-accent/50
+                          ${
+                            isUserMessage 
+                              ? "text-primary-foreground/80 hover:text-primary-foreground" 
+                              : "text-muted-foreground hover:text-foreground"
+                          }`}
                       >
-                        <Copy className="h-3 w-3" />
+                        <Copy className="h-2.5 w-2.5 lg:h-3 lg:w-3" />
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent>
+                    <TooltipContent className="text-xs
+                      bg-background/95 backdrop-blur-md
+                      border border-border/50">
                       <p>Copy message</p>
                     </TooltipContent>
                   </Tooltip>
@@ -220,12 +251,22 @@ const ChatMessageDisplay = ({
                         variant="ghost"
                         size="icon"
                         onClick={() => onReact?.(msg.id, "star")}
-                        className="h-6 w-6 p-0 opacity-50 hover:opacity-100 transition-opacity"
+                        className={`h-5 w-5 lg:h-6 lg:w-6 p-0 
+                          opacity-50 hover:opacity-100 
+                          transition-all duration-200
+                          hover:bg-accent/50
+                          ${
+                            isUserMessage 
+                              ? "text-primary-foreground/80 hover:text-primary-foreground" 
+                              : "text-muted-foreground hover:text-foreground"
+                          }`}
                       >
-                        <Star className="h-3 w-3" />
+                        <Star className="h-2.5 w-2.5 lg:h-3 lg:w-3" />
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent>
+                    <TooltipContent className="text-xs
+                      bg-background/95 backdrop-blur-md
+                      border border-border/50">
                       <p>Add reaction</p>
                     </TooltipContent>
                   </Tooltip>

@@ -18,7 +18,5 @@
     "http",
     "net"
   ],
-  "[typescript]": {
-    "editor.defaultFormatter": "denoland.vscode-deno"
-  }
+  "css.customData": [".vscode/css-data.json"]
 }
