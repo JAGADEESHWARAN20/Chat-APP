@@ -165,35 +165,26 @@ const ChatMessageDisplay = React.memo(function ChatMessageDisplay({
     if (isHtmlContent) {
       const cleanHtml = sanitizeHtml(msg.content);
       return (
-        <div
+        <div 
           className={cn(
-            isExpanded ? "max-h-none" : "max-h-[420px]",
-            "overflow-y-auto overflow-x-auto rounded-lg p-4",
+            "w-full", // Ensure full width
+            "prose prose-sm max-w-none",
+            // Enhanced table styling
+            "[&_table]:w-full [&_table]:border-collapse [&_table]:my-4",
+            "[&_th]:bg-muted [&_th]:font-semibold [&_th]:p-3 [&_th]:border [&_th]:border-border",
+            "[&_td]:bg-background [&_td]:p-3 [&_td]:border [&_td]:border-border",
+            "[&_thead_th]:border-b-2 [&_thead_th]:font-bold",
+            // Theme-specific text colors
             theme === "dark" 
-              ? "bg-gray-900 border-gray-700" 
-              : "bg-gray-50/80 border-gray-200"
+              ? "text-white [&_th]:text-white [&_td]:text-white [&_th]:bg-gray-800 [&_td]:bg-gray-900"
+              : "text-black [&_th]:text-black [&_td]:text-black [&_th]:bg-gray-100 [&_td]:bg-white"
           )}
-        >
-          <div 
-            className={cn(
-              "prose prose-sm max-w-none",
-              // Enhanced table styling
-              "[&_table]:w-full [&_table]:border-collapse [&_table]:my-4",
-              "[&_th]:bg-muted [&_th]:font-semibold [&_th]:p-3 [&_th]:border [&_th]:border-border",
-              "[&_td]:bg-background [&_td]:p-3 [&_td]:border [&_td]:border-border",
-              "[&_thead_th]:border-b-2 [&_thead_th]:font-bold",
-              // Theme-specific text colors
-              theme === "dark" 
-                ? "text-white [&_th]:text-white [&_td]:text-white [&_th]:bg-gray-800 [&_td]:bg-gray-900"
-                : "text-black [&_th]:text-black [&_td]:text-black [&_th]:bg-gray-100 [&_td]:bg-white"
-            )}
-            dangerouslySetInnerHTML={{ __html: cleanHtml }} 
-          />
-        </div>
+          dangerouslySetInnerHTML={{ __html: cleanHtml }} 
+        />
       );
     } else {
       return (
-        <div>
+        <div className="w-full"> {/* Ensure full width for text content too */}
           <div className="whitespace-pre-wrap leading-relaxed text-sm max-w-none">{displayContent}</div>
           {shouldTruncate && (
             <Button
