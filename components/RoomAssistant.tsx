@@ -22,7 +22,6 @@ import {
   AlertCircle,
   MoreVertical,
   Sparkles,
-  Star,
   Mic,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
@@ -85,27 +84,21 @@ const sanitizeHtml = (html: string): string => {
 // Loading Skeleton Component with theme-aware colors
 const MessageSkeleton = () => (
   <div className="flex space-x-2 lg:space-x-3 p-3 lg:p-4">
-    <Skeleton className="h-6 w-6 lg:h-8 lg:w-8 rounded-full
-      bg-muted/50" />
+    <Skeleton className="h-6 w-6 lg:h-8 lg:w-8 rounded-full bg-muted/50" />
     <div className="space-y-1.5 lg:space-y-2 flex-1">
-      <Skeleton className="h-3 lg:h-4 w-24 lg:w-32
-        bg-muted/50" />
-      <Skeleton className="h-12 lg:h-16 w-full
-        bg-muted/50" />
+      <Skeleton className="h-3 lg:h-4 w-24 lg:w-32 bg-muted/50" />
+      <Skeleton className="h-12 lg:h-16 w-full bg-muted/50" />
     </div>
   </div>
 );
 
-// Enhanced ChatMessageDisplay with theme-aware styling
 const ChatMessageDisplay = ({
   msg,
   copyToClipboard,
-  onReact,
   theme,
 }: {
   msg: ChatMessage;
   copyToClipboard: (content: string) => void;
-  onReact?: (id: string, reaction: string) => void;
   theme: "light" | "dark";
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -117,19 +110,18 @@ const ChatMessageDisplay = ({
       return new Date();
     }
   }, [msg.timestamp]);
-  // Alternative fix - add these variables at the top of the ChatMessageDisplay component
-const isUserMessage = msg.role === "user";
-const isAssistantMessage = msg.role === "assistant";
-
 
   const formattedTime = useMemo(
     () => safeTimestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     [safeTimestamp]
   );
 
+  const isUserMessage = msg.role === "user";
+  const isAssistantMessage = msg.role === "assistant";
+
   const isHtmlContent = useMemo(
     () => isAssistantMessage && /<[^>]*div[^>]*>/i.test(msg.content),
-    [msg.content, msg.role]
+    [msg.content, isAssistantMessage]
   );
 
   const shouldTruncate = msg.content.length > 500 && !isExpanded;
@@ -141,7 +133,7 @@ const isAssistantMessage = msg.role === "assistant";
       return (
         <div
           className={`prose prose-sm max-w-none overflow-x-auto 
-            text-[0.9em] lg:text-[1em]
+            text-sm
             ${theme === "dark" ? "prose-invert" : ""}
             ai-html-response`}
           dangerouslySetInnerHTML={{ __html: cleanHtml }}
@@ -150,16 +142,13 @@ const isAssistantMessage = msg.role === "assistant";
     } else {
       return (
         <div className="overflow-x-auto">
-          <div className={`prose max-w-none text-[0.9em] lg:text-[1em]
-            ${theme === "dark" ? "prose-invert" : ""}`}>
+          <div className={`prose max-w-none text-sm ${theme === "dark" ? "prose-invert" : ""}`}>
             {displayContent}
           </div>
           {shouldTruncate && (
             <Button
               variant="link"
-              className="p-0 h-auto text-primary/80 hover:text-primary
-                mt-2 text-xs lg:text-sm
-                transition-colors duration-200"
+              className="p-0 h-auto text-primary/80 hover:text-primary mt-2 text-xs"
               onClick={() => setIsExpanded(true)}
             >
               Show more
@@ -176,41 +165,35 @@ const isAssistantMessage = msg.role === "assistant";
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
-      className={`flex w-full ${msg.role === "user" ? "justify-end" : "justify-start"} group`}
+      className={`flex w-full ${isUserMessage ? "justify-end" : "justify-start"} group`}
     >
       <Card
-        className={`relative max-w-[90vw] sm:max-w-[85vw] md:max-w-[80vw] lg:max-w-[75vw] xl:max-w-[70vw]
-          transition-all duration-300
-          shadow-lg hover:shadow-xl
-          backdrop-blur-sm
-          ${
-            isUserMessage
+        className={`relative max-w-[85%] sm:max-w-[75%] transition-all duration-300 ${
+          isUserMessage
             ? "bg-gradient-to-br from-primary to-primary/80 text-primary-foreground"
             : "bg-background/80 border-border/50"
         }`}
       >
-        <CardContent className="p-3 lg:p-4">
+        <CardContent className="p-3 sm:p-4">
           {/* Content */}
-          <div className="whitespace-pre-wrap leading-relaxed prose-sm max-w-none">
+          <div className="whitespace-pre-wrap leading-relaxed max-w-none">
             {renderContent()}
           </div>
 
           {/* Footer with Actions */}
-          <div className="flex justify-between items-center mt-2 lg:mt-3 pt-2 
-            border-t border-opacity-20
-            border-current/20">
+          <div className="flex justify-between items-center mt-2 pt-2 border-t border-current/20">
             <span
-              className={`text-[0.7rem] lg:text-xs font-medium ${
+              className={`text-xs font-medium ${
                 isUserMessage
                   ? "text-primary-foreground/90" 
                   : "text-muted-foreground/80"
               }`}
             >
-              {isUserMessage ? "You" : `AI Assistant • ${msg.model || "Model"}`}
+              {isUserMessage ? "You" : `AI • ${msg.model || "Model"}`}
             </span>
-            <div className="flex items-center gap-1.5 lg:gap-2">
+            <div className="flex items-center gap-2">
               <span
-                className={`text-[0.7rem] lg:text-xs ${
+                className={`text-xs ${
                   isUserMessage
                     ? "text-primary-foreground/80" 
                     : "text-muted-foreground/70"
@@ -226,48 +209,17 @@ const isAssistantMessage = msg.role === "assistant";
                         variant="ghost"
                         size="icon"
                         onClick={() => copyToClipboard(msg.content)}
-                        className={`h-5 w-5 lg:h-6 lg:w-6 p-0 
-                          opacity-0 group-hover:opacity-100 
-                          transition-all duration-200
-                          hover:bg-accent/50
-                          ${
-                            isUserMessage 
-                              ? "text-primary-foreground/80 hover:text-primary-foreground" 
-                              : "text-muted-foreground hover:text-foreground"
-                          }`}
+                        className={`h-5 w-5 p-0 opacity-0 group-hover:opacity-100 transition-all duration-200 hover:bg-accent/50 ${
+                          isUserMessage 
+                            ? "text-primary-foreground/80 hover:text-primary-foreground" 
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
                       >
-                        <Copy className="h-2.5 w-2.5 lg:h-3 lg:w-3" />
+                        <Copy className="h-3 w-3" />
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent className="text-xs
-                      bg-background/95 backdrop-blur-md
-                      border border-border/50">
+                    <TooltipContent className="text-xs">
                       <p>Copy message</p>
-                    </TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => onReact?.(msg.id, "star")}
-                        className={`h-5 w-5 lg:h-6 lg:w-6 p-0 
-                          opacity-50 hover:opacity-100 
-                          transition-all duration-200
-                          hover:bg-accent/50
-                          ${
-                            isUserMessage 
-                              ? "text-primary-foreground/80 hover:text-primary-foreground" 
-                              : "text-muted-foreground hover:text-foreground"
-                          }`}
-                      >
-                        <Star className="h-2.5 w-2.5 lg:h-3 lg:w-3" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent className="text-xs
-                      bg-background/95 backdrop-blur-md
-                      border border-border/50">
-                      <p>Add reaction</p>
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
@@ -301,7 +253,7 @@ export default function RoomAssistant({
   const [model, setModel] = useState(initialModel);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [, startTransition] = useTransition();
+  const [isPending, startTransition] = useTransition();
   const { messages: allMessages } = useMessage();
   const { addMessage, state: roomState } = useRoomContext();
   const { theme: systemTheme, setTheme: setSystemTheme } = useTheme();
@@ -324,7 +276,6 @@ export default function RoomAssistant({
     if (!roomState.user?.id) return;
 
     try {
-      // Use the API route to load AI chat history
       const response = await fetch(`/api/ai-chat/history?roomId=${roomId}&userId=${roomState.user.id}`);
       if (response.ok) {
         const history = await response.json();
@@ -344,7 +295,6 @@ export default function RoomAssistant({
       }
     } catch (error) {
       console.error("Failed to load AI chat history:", error);
-      // Fallback to localStorage
       loadFromLocalStorage();
     }
   }, [roomId, roomState.user]);
@@ -464,7 +414,6 @@ export default function RoomAssistant({
       setError(null);
       setIsStreaming(true);
 
-      // Declare responseId at the function scope so it's accessible in catch block
       let responseId = generateId();
       let fullResponse = "";
 
@@ -571,7 +520,6 @@ export default function RoomAssistant({
         toast.success("Response generated!");
       } catch (err) {
         console.error("API Error:", err);
-        // Now responseId is accessible here because it's declared at function scope
         setMessages((prev) => prev.filter((m) => m.id !== responseId));
         const errorMsg = err instanceof Error ? err.message : "Request failed";
         setError(errorMsg);
@@ -600,10 +548,6 @@ export default function RoomAssistant({
     navigator.clipboard.writeText(content)
       .then(() => toast.success("Copied to clipboard!"))
       .catch(() => toast.error("Failed to copy"));
-  }, []);
-
-  const handleReact = useCallback((id: string, reaction: string) => {
-    toast.info(`Added ${reaction} reaction`);
   }, []);
 
   const clearHistory = useCallback(async () => {
@@ -716,9 +660,66 @@ export default function RoomAssistant({
     textareaRef.current?.focus();
   }, []);
 
+  // Use the isPending variable from useTransition
+  useEffect(() => {
+    if (isPending) {
+      // You can add loading states or other effects when transition is pending
+      console.log('Transition is pending...');
+    }
+  }, [isPending]);
+
+  // Use the addMessage function from useRoomContext
+  const handleAddMessage = useCallback(async () => {
+    if (roomState.user && prompt.trim()) {
+      try {
+        // Save the user's query to ai_chat_history table
+        const response = await fetch('/api/ai-chat/history', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            room_id: roomId,
+            user_id: roomState.user.id,
+            user_query: prompt,
+            ai_response: "", // Empty for now, will be filled when AI responds
+            model_used: model,
+            token_count: Math.floor(prompt.length / 4), // Estimate tokens
+            message_count: messages.length + 1,
+          }),
+        });
+  
+        if (!response.ok) {
+          throw new Error('Failed to save message to AI chat history');
+        }
+  
+        const savedMessage = await response.json();
+        
+        toast.success("Message saved to AI chat history!");
+        setPrompt(""); // Clear the prompt after sending
+        
+        // Optionally, you can add it to the local state if needed
+        const userMsg: ChatMessage = {
+          id: savedMessage.id || generateId(),
+          role: "user" as const,
+          content: prompt,
+          timestamp: new Date(),
+          model: model,
+          isPersisted: true,
+        };
+        
+        setMessages(prev => [...prev, userMsg]);
+        
+      } catch (error) {
+        console.error("Failed to save AI chat message:", error);
+        toast.error("Failed to save message to AI chat history");
+      }
+    }
+  }, [prompt, roomId, roomState.user, model, messages.length]);
+
   return (
     <Card className={`flex flex-col h-full overflow-hidden ${className}`}>
-      <CardHeader className="pb-4">
+      <CardHeader className="pb-4 flex-shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <div className="flex items-center justify-center w-10 h-10 bg-primary rounded-lg">
@@ -734,7 +735,7 @@ export default function RoomAssistant({
               </div>
             </div>
           </div>
-
+  
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="ghost" size="icon">
@@ -795,16 +796,26 @@ export default function RoomAssistant({
                   <Mic className="h-4 w-4 mr-2" />
                   Voice Input
                 </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleAddMessage}
+                  disabled={!prompt.trim() || !roomState.user}
+                  className="w-full justify-start"
+                >
+                  <Send className="h-4 w-4 mr-2" />
+                  Add to Room
+                </Button>
               </div>
             </PopoverContent>
           </Popover>
         </div>
       </CardHeader>
-
-      <CardContent className="flex-1 p-0 flex flex-col">
-        {/* Messages Area */}
-        <ScrollArea className="flex-1 px-4">
-          <div className="space-y-4 py-4">
+  
+      {/* Fixed Messages Area with proper scrolling */}
+      <CardContent className="flex-1 p-0 flex flex-col min-h-0">
+        <ScrollArea className="flex-1">
+          <div className="space-y-4 p-4">
             <AnimatePresence mode="popLayout">
               {messages.length > 0 ? (
                 messages.map((msg) => (
@@ -812,7 +823,6 @@ export default function RoomAssistant({
                     key={msg.id}
                     msg={msg}
                     copyToClipboard={copyToClipboard}
-                    onReact={handleReact}
                     theme={theme}
                   />
                 ))
@@ -841,7 +851,7 @@ export default function RoomAssistant({
             <div ref={scrollRef} />
           </div>
         </ScrollArea>
-
+  
         {/* Error Display */}
         <AnimatePresence>
           {error && (
@@ -866,9 +876,11 @@ export default function RoomAssistant({
             </motion.div>
           )}
         </AnimatePresence>
-
-        {/* Input Area */}
-        <form onSubmit={handleSubmit} className="p-4 space-y-3 border-t">
+      </CardContent>
+  
+      {/* Fixed Input Area */}
+      <div className="border-t p-4 flex-shrink-0">
+        <form onSubmit={handleSubmit} className="space-y-3">
           <div className="relative">
             <Textarea
               ref={textareaRef}
@@ -897,7 +909,7 @@ export default function RoomAssistant({
               </span>
             </div>
           </div>
-
+  
           <div className="flex items-center space-x-3">
             <Select value={model} onValueChange={setModel} disabled={loading}>
               <SelectTrigger className="flex-1">
@@ -908,7 +920,7 @@ export default function RoomAssistant({
                 <SelectItem value="gpt-4o-mini">GPT-4o Mini</SelectItem>
               </SelectContent>
             </Select>
-
+  
             <Button
               type="submit"
               disabled={loading || !prompt.trim()}
@@ -928,7 +940,7 @@ export default function RoomAssistant({
             </Button>
           </div>
         </form>
-      </CardContent>
+      </div>
     </Card>
   );
 }
