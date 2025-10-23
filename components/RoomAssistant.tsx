@@ -839,7 +839,7 @@ export default function RoomAssistant({
   
       {/* Fixed Messages Area with proper scrolling */}
       <div className="flex-1 relative h-[80vh] min-h-0 overflow-hidden">
-      <ScrollArea className="h-[70vh] overflow-y-scroll">
+      <ScrollArea className="h-[70vh] ">
           <div className="p-4 space-y-4">
             <AnimatePresence mode="popLayout">
               {messages.length > 0 ? (
