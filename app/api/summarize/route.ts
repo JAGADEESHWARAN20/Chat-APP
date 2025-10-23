@@ -134,16 +134,52 @@ ${originalContext}
 USER REQUEST: ${refinedInstruction}
 
 CRITICAL RESPONSE REQUIREMENTS (MANDATORY - VIOLATION = INVALID OUTPUT):
-1. RESPOND WITH **ONLY** the EXACT HTML structure for ${templateType} - NO additional text, wrappers, or modifications to className/structure.
-2. Populate ALL placeholders with REAL, SPECIFIC data from the context (names, counts, times, quotes).
-3. Ensure RESPONSIVE DESIGN: Use Tailwind classes like w-full, overflow-x-auto, grid-cols-1 md:grid-cols-2, px-3 sm:px-6 for mobile/tablet.
-4. Semantic HTML: Proper <h1-6>, <table>/<thead>/<tbody>, <ul>/<li>, <div> for grids.
-5. Visual Appeal: Emojis in headers, color-coded cards (e.g., bg-blue-50 for sections), rounded-lg/shadow-sm.
-6. Tables: Always wrap in <div className="overflow-x-auto">; min-w-[500px] for wide content; responsive padding.
-7. Actionable & Concise: Bullet insights, numbered steps; limit to 800-1200 words.
-8. NO Markdown, JSON, or explanations outside HTML.
 
-RESPONSE FORMAT: Pure, valid HTML matching the ${templateType} structure exactly. Begin with <div className="..."> and end with </div>.`;
+1. **COMMAND STRUCTURE**: Respond with AUTHORITY and DIRECTION. Use imperative language like "Analyze this", "Identify key", "Generate actionable", "Provide strategic". Frame responses as actionable insights, not passive observations.
+
+2. **THEME ADAPTATION**: You MUST use dual-theme CSS classes for ALL elements:
+   - Backgrounds: Use both light/dark variants (bg-blue-50 dark:bg-blue-900/20, bg-white dark:bg-gray-800)
+   - Text: Always specify both (text-gray-800 dark:text-gray-200, text-gray-600 dark:text-gray-400)
+   - Borders: Include both themes (border-gray-200 dark:border-gray-700)
+   - NEVER use single-theme classes like bg-blue-50 alone
+
+3. **RESPONSE FORMAT**: Generate **ONLY** the EXACT HTML structure for ${templateType} - NO additional text, wrappers, or explanations.
+
+4. **DATA POPULATION**: Extract REAL, SPECIFIC data from context (names, counts, times, quotes) - NO placeholders or fabricated data.
+
+5. **RESPONSIVE DESIGN**: Implement mobile-first responsive layouts:
+   - Use: w-full, overflow-x-auto, grid-cols-1 md:grid-cols-2 lg:grid-cols-3
+   - Table wrappers: <div class="overflow-x-auto">
+   - Responsive padding: px-4 sm:px-6, py-3 sm:py-4
+
+6. **VISUAL HIERARCHY**: Create commanding, professional interfaces:
+   - Use gradients: bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20
+   - Cards with shadows: rounded-lg shadow-sm border border-gray-200 dark:border-gray-700
+   - Color-coded sections with proper contrast
+   - Emojis in headers for visual scanning
+
+7. **ACTIONABLE INSIGHTS**: Structure as:
+   - Clear executive summaries
+   - Bulleted key findings
+   - Numbered action items
+   - Data tables with specific metrics
+   - Strategic recommendations
+
+8. **SEMANTIC STRUCTURE**: Use proper HTML5:
+   - <table> with <thead>/<tbody>/<th scope="col">
+   - <ul>/<ol> for lists
+   - <div> grids with responsive breakpoints
+   - <h1>-<h6> for proper heading hierarchy
+
+RESPONSE FORMAT: Pure, valid HTML with dual-theme classes. Begin with <div class="..."> and end with </div>.
+
+EXAMPLE THEME-ADAPTED STRUCTURE:
+<div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-6">
+  <h2 class="text-xl font-bold text-gray-800 dark:text-gray-200 mb-4">Strategic Analysis</h2>
+  <div class="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
+    <p class="text-gray-700 dark:text-gray-300">Actionable insights here...</p>
+  </div>
+</div>`;
   }
 }
 
