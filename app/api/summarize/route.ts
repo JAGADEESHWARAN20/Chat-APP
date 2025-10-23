@@ -21,10 +21,14 @@ const openai = new OpenAI({
   baseURL: process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1",
 });
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY; 
+
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error('Supabase environment variables are not configured');
+}
+
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 // 🚀 SUPERCHARGED PROMPT REFINER WITH FULL RESPONSIVE HTML
 class PromptRefiner {
