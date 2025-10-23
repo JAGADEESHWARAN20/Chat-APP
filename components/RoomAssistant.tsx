@@ -849,11 +849,11 @@ export default function RoomAssistant({
       </CardHeader>
 
       {/* Messages area */}
-      <div className="flex-1 relative h-[80vh] min-h-0 overflow-hidden">
+      <div className="flex-1 relative h-[50vh] min-h-0 overflow-hidden">
         <div
           ref={scrollContainerRef}
           onScroll={onUserScroll}
-          className="h-[70vh] room-assistant-scroll p-4"
+          className="h-[40vh] room-assistant-scroll p-4"
           // ensure keyboard / screen readers have good focus order
           role="log"
           aria-live="polite"
