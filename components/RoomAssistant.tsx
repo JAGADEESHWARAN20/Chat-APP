@@ -193,7 +193,7 @@ const ChatMessageDisplay = ({
       className={`flex w-full ${isUserMessage ? "justify-end" : "justify-start"} group`}
     >
       <Card
-        className={`relative max-w-[85%] sm:max-w-[75%] transition-all duration-300 ${
+        className={`relative w-full transition-all duration-300 ${
           isUserMessage
             ? "bg-gradient-to-br from-primary to-primary/80 text-primary-foreground"
             : "bg-background/80 border-border/50"
@@ -838,8 +838,8 @@ export default function RoomAssistant({
       </CardHeader>
   
       {/* Fixed Messages Area with proper scrolling */}
-      <div className="flex-1 relative min-h-0 overflow-hidden">
-      <ScrollArea className="h-full">
+      <div className="flex-1 relative h-[80vh] min-h-0 overflow-hidden">
+      <ScrollArea className="h-[70vh] overflow-y-scroll">
           <div className="p-4 space-y-4">
             <AnimatePresence mode="popLayout">
               {messages.length > 0 ? (
