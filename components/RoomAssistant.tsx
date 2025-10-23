@@ -840,12 +840,12 @@ export default function RoomAssistant({
         <div
           ref={scrollContainerRef}
           onScroll={onUserScroll}
-          className="h-[70vh] overflow-auto p-4"
+          className="h-[70vh] room-assistant-scroll p-4"
           // ensure keyboard / screen readers have good focus order
           role="log"
           aria-live="polite"
         >
-          <div className="space-y-4">
+          <div className="space-y-4 room-assistant-ai-content">
             <AnimatePresence mode="popLayout">
               {messages.length > 0 ? (
                 messages.map((msg) => (
