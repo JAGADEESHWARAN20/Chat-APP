@@ -165,26 +165,24 @@ const ChatMessageDisplay = React.memo(function ChatMessageDisplay({
     if (isHtmlContent) {
       const cleanHtml = sanitizeHtml(msg.content);
       return (
-        <div 
-          className={cn(
-            "w-full", // Ensure full width
-            "prose prose-sm max-w-none",
-            // Enhanced table styling
-            "[&_table]:w-full [&_table]:border-collapse [&_table]:my-4",
-            "[&_th]:bg-muted [&_th]:font-semibold [&_th]:p-3 [&_th]:border [&_th]:border-border",
-            "[&_td]:bg-background [&_td]:p-3 [&_td]:border [&_td]:border-border",
-            "[&_thead_th]:border-b-2 [&_thead_th]:font-bold",
-            // Theme-specific text colors
-            theme === "dark" 
-              ? "text-white [&_th]:text-white [&_td]:text-white [&_th]:bg-gray-800 [&_td]:bg-gray-900"
-              : "text-black [&_th]:text-black [&_td]:text-black [&_th]:bg-gray-100 [&_td]:bg-white"
-          )}
-          dangerouslySetInnerHTML={{ __html: cleanHtml }} 
-        />
+        <div className="w-full">
+          <div 
+            className={cn(
+              "w-full max-w-none", // Force full width
+              "prose prose-sm max-w-none",
+              "whitespace-pre-wrap leading-relaxed text-sm",
+              // Remove restrictive container classes
+              theme === "dark" 
+                ? "text-white [&_th]:text-white [&_td]:text-white"
+                : "text-black [&_th]:text-black [&_td]:text-black"
+            )}
+            dangerouslySetInnerHTML={{ __html: cleanHtml }} 
+          />
+        </div>
       );
     } else {
       return (
-        <div className="w-full"> {/* Ensure full width for text content too */}
+        <div className="w-full">
           <div className="whitespace-pre-wrap leading-relaxed text-sm max-w-none">{displayContent}</div>
           {shouldTruncate && (
             <Button
@@ -198,8 +196,7 @@ const ChatMessageDisplay = React.memo(function ChatMessageDisplay({
         </div>
       );
     }
-  }, [isHtmlContent, isExpanded, msg.content, displayContent, shouldTruncate, theme, handleExpandToggle]);
-
+  }, [isHtmlContent, msg.content, displayContent, shouldTruncate, theme, handleExpandToggle]);
   return (
     <motion.div
       key={msg.id}
@@ -209,13 +206,13 @@ const ChatMessageDisplay = React.memo(function ChatMessageDisplay({
       className={cn("flex w-full group", isUserMessage ? "justify-end" : "justify-start")}
     >
       <Card
-        className={cn(
-          "relative w-full transition-all duration-200",
-          isUserMessage
-            ? "bg-gradient-to-br from-primary to-primary/80 text-primary-foreground"
-            : "bg-background/80 border-border/50"
-        )}
-      >
+          className={cn(
+            "relative w-full transition-all duration-200 max-w-none", // Add max-w-none
+            isUserMessage
+              ? "bg-gradient-to-br from-primary to-primary/80 text-primary-foreground"
+              : "bg-background/80 border-border/50"
+          )}
+        >
         <CardContent className="p-3 sm:p-4 ">
           <div className="whitespace-pre-wrap leading-relaxed h-auto max-w-none">{renderContent}</div>
 
