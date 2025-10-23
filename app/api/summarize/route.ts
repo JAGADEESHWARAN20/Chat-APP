@@ -135,49 +135,108 @@ USER REQUEST: ${refinedInstruction}
 
 CRITICAL RESPONSE REQUIREMENTS (MANDATORY - VIOLATION = INVALID OUTPUT):
 
-1. **COMMAND STRUCTURE**: Respond with AUTHORITY and DIRECTION. Use imperative language like "Analyze this", "Identify key", "Generate actionable", "Provide strategic". Frame responses as actionable insights, not passive observations.
+1. **LAYOUT STRUCTURE**: Use PROPER grid and flex systems:
+   - Grid: grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6
+   - Flex: flex flex-col sm:flex-row gap-3 sm:gap-4
+   - NO floating elements, use proper layout containers
 
-2. **THEME ADAPTATION**: You MUST use dual-theme CSS classes for ALL elements:
-   - Backgrounds: Use both light/dark variants (bg-blue-50 dark:bg-blue-900/20, bg-white dark:bg-gray-800)
-   - Text: Always specify both (text-gray-800 dark:text-gray-200, text-gray-600 dark:text-gray-400)
-   - Borders: Include both themes (border-gray-200 dark:border-gray-700)
-   - NEVER use single-theme classes like bg-blue-50 alone
+2. **SPACING CONSISTENCY**: Apply consistent spacing scale:
+   - Padding: p-4 sm:p-6 (outer), p-3 sm:p-4 (inner)
+   - Margin: mb-4 (between sections), mb-3 (between elements)
+   - Gap: gap-3 (small), gap-4 (medium), gap-6 (large)
 
-3. **RESPONSE FORMAT**: Generate **ONLY** the EXACT HTML structure for ${templateType} - NO additional text, wrappers, or explanations.
+3. **RESPONSIVE TABLES**: Implement proper table layouts:
+   - ALWAYS wrap tables: <div class="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-lg">
+   - Table: <table class="w-full min-w-[600px] sm:min-w-full">
+   - Cell padding: px-4 py-3 (standard), px-3 py-2 (compact)
 
-4. **DATA POPULATION**: Extract REAL, SPECIFIC data from context (names, counts, times, quotes) - NO placeholders or fabricated data.
+4. **THEME ADAPTATION**: Dual-theme classes for ALL elements:
+   - Backgrounds: bg-white dark:bg-gray-800, bg-gray-50 dark:bg-gray-900/50
+   - Text: text-gray-800 dark:text-gray-200 (primary), text-gray-600 dark:text-gray-400 (secondary)
+   - Borders: border-gray-200 dark:border-gray-700
 
-5. **RESPONSIVE DESIGN**: Implement mobile-first responsive layouts:
-   - Use: w-full, overflow-x-auto, grid-cols-1 md:grid-cols-2 lg:grid-cols-3
-   - Table wrappers: <div class="overflow-x-auto">
-   - Responsive padding: px-4 sm:px-6, py-3 sm:py-4
+5. **COMMAND STRUCTURE**: Use authoritative, actionable language.
 
-6. **VISUAL HIERARCHY**: Create commanding, professional interfaces:
-   - Use gradients: bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20
-   - Cards with shadows: rounded-lg shadow-sm border border-gray-200 dark:border-gray-700
-   - Color-coded sections with proper contrast
-   - Emojis in headers for visual scanning
+6. **RESPONSE FORMAT**: Generate **ONLY** the EXACT HTML structure for ${templateType}.
 
-7. **ACTIONABLE INSIGHTS**: Structure as:
-   - Clear executive summaries
-   - Bulleted key findings
-   - Numbered action items
-   - Data tables with specific metrics
-   - Strategic recommendations
+MANDATORY LAYOUT TEMPLATES:
 
-8. **SEMANTIC STRUCTURE**: Use proper HTML5:
-   - <table> with <thead>/<tbody>/<th scope="col">
-   - <ul>/<ol> for lists
-   - <div> grids with responsive breakpoints
-   - <h1>-<h6> for proper heading hierarchy
+GRID LAYOUT:
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+  <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-4 sm:p-6">
+    <!-- Content -->
+  </div>
+</div>
 
-RESPONSE FORMAT: Pure, valid HTML with dual-theme classes. Begin with <div class="..."> and end with </div>.
+FLEX LAYOUT:
+<div class="flex flex-col sm:flex-row gap-4 sm:gap-6">
+  <div class="flex-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-4 sm:p-6">
+    <!-- Content -->
+  </div>
+</div>
 
-EXAMPLE THEME-ADAPTED STRUCTURE:
+TABLE STRUCTURE:
+<div class="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-lg">
+  <table class="w-full min-w-[600px] sm:min-w-full">
+    <thead class="bg-gray-50 dark:bg-gray-900/50">
+      <tr>
+        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-800 dark:text-gray-200 border-b border-gray-200 dark:border-gray-700" scope="col">Header</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+      <tr>
+        <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">Data</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+CARD STRUCTURE:
+<div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-4 sm:p-6">
+  <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3">Title</h3>
+  <div class="space-y-3">
+    <!-- Content with consistent spacing -->
+  </div>
+</div>
+
+LIST STRUCTURE:
+<ul class="space-y-2">
+  <li class="flex items-start">
+    <span class="flex-shrink-0 w-2 h-2 mt-2 bg-blue-500 rounded-full mr-3"></span>
+    <span class="text-gray-700 dark:text-gray-300">List item</span>
+  </li>
+</ul>
+
+RESPONSE FORMAT: Pure, valid HTML with proper layout structure. Begin with <div class="..."> and end with </div>.
+
+EXAMPLE CORRECTED OUTPUT:
 <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-6">
   <h2 class="text-xl font-bold text-gray-800 dark:text-gray-200 mb-4">Strategic Analysis</h2>
-  <div class="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
-    <p class="text-gray-700 dark:text-gray-300">Actionable insights here...</p>
+  
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 mb-6">
+    <div class="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
+      <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3">Key Metrics</h3>
+      <div class="space-y-2">
+        <p class="text-gray-700 dark:text-gray-300">Metric details...</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-lg">
+    <table class="w-full min-w-[600px] sm:min-w-full">
+      <thead class="bg-gray-50 dark:bg-gray-900/50">
+        <tr>
+          <th class="px-4 py-3 text-left text-sm font-semibold text-gray-800 dark:text-gray-200 border-b border-gray-200 dark:border-gray-700" scope="col">User</th>
+          <th class="px-4 py-3 text-left text-sm font-semibold text-gray-800 dark:text-gray-200 border-b border-gray-200 dark:border-gray-700" scope="col">Messages</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+        <tr>
+          <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">User1</td>
+          <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">15</td>
+        </tr>
+      </tbody>
+    </table>
   </div>
 </div>`;
   }
