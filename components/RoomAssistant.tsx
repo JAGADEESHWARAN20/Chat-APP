@@ -170,7 +170,7 @@ const ChatMessageDisplay = React.memo(function ChatMessageDisplay({
             isExpanded ? "max-h-none" : "max-h-[420px]",
             "overflow-y-auto overflow-x-auto rounded-lg p-4",
             theme === "dark" 
-              ? "bg-gray-900/50 border-gray-700" 
+              ? "bg-gray-900 border-gray-700" 
               : "bg-gray-50/80 border-gray-200"
           )}
         >
