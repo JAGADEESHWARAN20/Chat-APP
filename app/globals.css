@@ -684,3 +684,76 @@
 .room-assistant-ai-content *::selection {
   background-color: hsl(var(--primary) / 0.3);
 }
+
+/* Enhanced table styling for AI responses */
+.ai-response-container table,
+.room-assistant-ai-content table,
+.prose table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+  font-size: 0.875rem;
+}
+
+.ai-response-container th,
+.room-assistant-ai-content th,
+.prose th {
+  background-color: hsl(var(--muted));
+  font-weight: 600;
+  text-align: left;
+  padding: 0.75rem;
+  border: 1px solid hsl(var(--border));
+}
+
+.ai-response-container td,
+.room-assistant-ai-content td,
+.prose td {
+  background-color: hsl(var(--background));
+  padding: 0.75rem;
+  border: 1px solid hsl(var(--border));
+}
+
+/* Light mode specific table styles */
+.light .ai-response-container th,
+.light .room-assistant-ai-content th,
+.light .prose th {
+  background-color: hsl(210 40% 98%);
+  color: hsl(222.2 84% 4.9%);
+}
+
+.light .ai-response-container td,
+.light .room-assistant-ai-content td,
+.light .prose td {
+  background-color: hsl(0 0% 100%);
+  color: hsl(222.2 84% 4.9%);
+}
+
+/* Dark mode specific table styles */
+.dark .ai-response-container th,
+.dark .room-assistant-ai-content th,
+.dark .prose th {
+  background-color: hsl(217.2 32.6% 17.5%);
+  color: hsl(210 40% 98%);
+}
+
+.dark .ai-response-container td,
+.dark .room-assistant-ai-content td,
+.dark .prose td {
+  background-color: hsl(222.2 84% 4.9%);
+  color: hsl(210 40% 98%);
+}
+
+/* Ensure proper contrast for table headers */
+.ai-response-container thead th,
+.room-assistant-ai-content thead th,
+.prose thead th {
+  font-weight: 700;
+  border-bottom-width: 2px;
+}
+
+/* Zebra striping for better readability */
+.ai-response-container tbody tr:nth-child(even),
+.room-assistant-ai-content tbody tr:nth-child(even),
+.prose tbody tr:nth-child(even) {
+  background-color: hsl(var(--muted) / 0.3);
+}

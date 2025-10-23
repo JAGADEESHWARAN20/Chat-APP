@@ -164,18 +164,31 @@ const ChatMessageDisplay = React.memo(function ChatMessageDisplay({
   const renderContent = useMemo(() => {
     if (isHtmlContent) {
       const cleanHtml = sanitizeHtml(msg.content);
-      // Keep HTML rendering in a stable container to avoid re-creating DOM nodes frequently
       return (
         <div
           className={cn(
             isExpanded ? "max-h-none" : "max-h-[420px]",
-            "overflow-y-auto",
-            "overflow-x-auto",
-            "rounded-lg p-4",
-            theme === "dark" ? "bg-gray-900/50 border-gray-700" : "bg-gray-50/50 border-gray-200"
+            "overflow-y-auto overflow-x-auto rounded-lg p-4",
+            theme === "dark" 
+              ? "bg-gray-900/50 border-gray-700" 
+              : "bg-gray-50/80 border-gray-200"
           )}
         >
-          <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: cleanHtml }} />
+          <div 
+            className={cn(
+              "prose prose-sm max-w-none",
+              // Enhanced table styling
+              "[&_table]:w-full [&_table]:border-collapse [&_table]:my-4",
+              "[&_th]:bg-muted [&_th]:font-semibold [&_th]:p-3 [&_th]:border [&_th]:border-border",
+              "[&_td]:bg-background [&_td]:p-3 [&_td]:border [&_td]:border-border",
+              "[&_thead_th]:border-b-2 [&_thead_th]:font-bold",
+              // Theme-specific text colors
+              theme === "dark" 
+                ? "text-white [&_th]:text-white [&_td]:text-white [&_th]:bg-gray-800 [&_td]:bg-gray-900"
+                : "text-black [&_th]:text-black [&_td]:text-black [&_th]:bg-gray-100 [&_td]:bg-white"
+            )}
+            dangerouslySetInnerHTML={{ __html: cleanHtml }} 
+          />
         </div>
       );
     } else {
