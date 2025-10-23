@@ -287,73 +287,106 @@
 }
 
 
-/* globals.css */
-.ai-html-response {
-  @apply space-y-4;
+/* app/globals.css or your styles file */
+
+/* Enhanced scrollbar styling */
+.ai-response-container {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(155, 155, 155, 0.5) transparent;
 }
 
-.ai-html-response h2 {
-  @apply text-xl font-bold text-gray-900 mb-2;
+.ai-response-container::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
 }
 
-.ai-html-response h3 {
-  @apply text-lg font-semibold text-gray-800 mb-3;
+.ai-response-container::-webkit-scrollbar-track {
+  background: transparent;
 }
 
-.ai-html-response h4 {
-  @apply text-base font-medium text-gray-700 mb-2;
+.ai-response-container::-webkit-scrollbar-thumb {
+  background-color: rgba(155, 155, 155, 0.5);
+  border-radius: 3px;
 }
 
-.ai-html-response table {
-  @apply min-w-full divide-y divide-gray-200 border border-gray-200 rounded-lg overflow-hidden;
+.ai-response-container::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(155, 155, 155, 0.7);
 }
 
-.ai-html-response th {
-  @apply px-4 py-3 bg-gradient-to-r from-gray-50 to-gray-100 text-left text-sm font-semibold text-gray-700 uppercase tracking-wider border-b;
+/* Ensure tables in AI responses are responsive */
+.ai-response-container table {
+  display: block;
+  overflow-x: auto;
+  white-space: nowrap;
 }
 
-.ai-html-response td {
-  @apply px-4 py-3 text-sm text-gray-900 border-b border-gray-100;
+.ai-response-container table th,
+.ai-response-container table td {
+  padding: 0.5rem;
+  text-align: left;
 }
 
-.ai-html-response ul {
-  @apply space-y-2 list-disc list-inside;
+/* Responsive grid adjustments */
+@media (max-width: 640px) {
+  .ai-response-container .grid {
+    grid-template-columns: 1fr !important;
+  }
+  
+  .ai-response-container table {
+    font-size: 0.75rem;
+  }
 }
 
-.ai-html-response .analysis-container,
-.ai-html-response .summary-container,
-.ai-html-response .sentiment-container,
-.ai-html-response .topics-container,
-.ai-html-response .actions-container,
-.ai-html-response .temporal-container,
-.ai-html-response .help-container,
-.ai-html-response .general-analysis {
-  @apply space-y-4;
+/* Dark mode adjustments */
+.dark .ai-response-container {
+  background-color: rgba(17, 24, 39, 0.5);
+  border-color: rgba(55, 65, 81, 0.5);
 }
 
-.ai-html-response .highlight-card,
-.ai-html-response .topic-card,
-.ai-html-response .decision-card,
-.ai-html-response .pattern-card,
-.ai-html-response .capability-card {
-  @apply p-4 border border-gray-200 rounded-lg bg-white shadow-sm;
+.dark .ai-response-container table {
+  color: #e5e7eb;
 }
 
-.ai-html-response .stats-grid,
-.ai-html-response .insights-grid,
-.ai-html-response .patterns-grid,
-.ai-html-response .capabilities-grid {
-  @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4;
+/* Smooth animations */
+.ai-response-container * {
+  transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
-.ai-html-response .stat-item {
-  @apply text-center p-3 border border-gray-200 rounded-lg bg-gray-50;
+/* For better table scrolling in AI responses */
+.prose table {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+  white-space: nowrap;
 }
 
-.ai-html-response .stat-value {
-  @apply text-2xl font-bold text-blue-600;
+.prose th,
+.prose td {
+  padding: 0.5rem;
+  text-align: left;
+  border: 1px solid #e5e7eb;
 }
 
-.ai-html-response .stat-label {
-  @apply text-sm text-gray-600 mt-1;
+.dark .prose th,
+.dark .prose td {
+  border-color: #374151;
+}
+
+/* Custom scrollbar */
+.ai-response-container::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.ai-response-container::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+
+.ai-response-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dark .ai-response-container::-webkit-scrollbar-thumb {
+  background: #4b5563;
 }

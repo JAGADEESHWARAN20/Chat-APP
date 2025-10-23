@@ -46,7 +46,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import DOMPurify from "dompurify";
 import { supabaseBrowser } from "@/lib/supabase/browser";
-
+import {cn} from"@/lib/utils"
 // Types
 interface ChatMessage {
   id: string;
@@ -73,13 +73,16 @@ interface RoomAssistantProps {
 // Safe HTML sanitization
 const sanitizeHtml = (html: string): string => {
   if (typeof window !== 'undefined') {
-    return DOMPurify.sanitize(html.replace(/class=/g, "className="));
+    // DON'T replace class with className for dangerouslySetInnerHTML
+    return DOMPurify.sanitize(html, {
+      ALLOWED_TAGS: ['div', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 
+                     'ul', 'ol', 'li', 'table', 'thead', 'tbody', 'tr', 'td', 'th',
+                     'strong', 'em', 'b', 'i', 'a', 'br', 'hr', 'code', 'pre'],
+      ALLOWED_ATTR: ['class', 'style', 'href', 'target', 'rel', 'scope'],
+      KEEP_CONTENT: true,
+    });
   }
-  // Basic sanitization as fallback
-  return html
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-    .replace(/on\w+="[^"]*"/g, '')
-    .replace(/class=/g, "className=");
+  return html;
 };
 
 // Loading Skeleton Component with theme-aware colors
@@ -97,13 +100,22 @@ const ChatMessageDisplay = ({
   msg,
   copyToClipboard,
   theme,
+  onExpand, // Add this parameter
 }: {
   msg: ChatMessage;
   copyToClipboard: (content: string) => void;
   theme: "light" | "dark";
+  onExpand?: (msgId: string) => void; // Add this type definition
 }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
+  
 
+  const [isExpanded, setIsExpanded] = useState(false);
+  const handleExpand = () => {
+    setIsExpanded(!isExpanded);
+    if (onExpand) {
+      onExpand(msg.id);
+    }
+  };
   const safeTimestamp = useMemo(() => {
     try {
       return new Date(msg.timestamp);
@@ -132,13 +144,25 @@ const ChatMessageDisplay = ({
     if (isHtmlContent) {
       const cleanHtml = sanitizeHtml(msg.content);
       return (
-        <div
-          className={`prose prose-sm max-w-none overflow-x-auto 
-            text-sm
-            ${theme === "dark" ? "prose-invert text-white" : "text-black"}
-            ai-html-response`}
-          dangerouslySetInnerHTML={{ __html: cleanHtml }}
-        />
+        <div className="relative">
+          <div
+            className={cn(
+              isExpanded ? "max-h-none" : "max-h-[400px]", 
+              "overflow-y-auto", // Make it scrollable
+              "overflow-x-auto", // Horizontal scroll for tables
+              "rounded-lg p-4",
+              "border",
+              theme === "dark" 
+                ? "bg-gray-900/50 border-gray-700" 
+                : "bg-gray-50/50 border-gray-200"
+            )}
+          >
+            <div
+              className="prose prose-sm max-w-none"
+              dangerouslySetInnerHTML={{ __html: cleanHtml }}
+            />
+          </div>
+        </div>
       );
     } else {
       return (
@@ -175,7 +199,7 @@ const ChatMessageDisplay = ({
             : "bg-background/80 border-border/50"
         }`}
       >
-        <CardContent className="p-3 sm:p-4 overflow-scroll h-[100%]">
+        <CardContent className="p-3 sm:p-4 ">
           {/* Content */}
           <div className="whitespace-pre-wrap leading-relaxed  h-auto max-w-none">
             {renderContent()}
@@ -252,13 +276,27 @@ export default function RoomAssistant({
   const [error, setError] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [model, setModel] = useState(initialModel);
+  const [expandedMessage, setExpandedMessage] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  // const scrollRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isPending, startTransition] = useTransition();
   const { messages: allMessages } = useMessage();
   const { addMessage, state: roomState } = useRoomContext();
   const { theme: systemTheme, setTheme: setSystemTheme } = useTheme();
   const theme = systemTheme === "dark" ? "dark" : "light";
+
+ 
+  const scrollToBottom = useCallback(() => {
+    messagesEndRef.current?.scrollIntoView({ 
+      behavior: 'smooth',
+      block: 'end'
+    });
+  }, []);
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, scrollToBottom]);
 
   // Memoized recent room messages with proper typing
   const recentRoomMessages = useMemo(() => {
@@ -368,19 +406,7 @@ export default function RoomAssistant({
     }
   }, [roomId, maxHistory]);
 
-  // Auto-scroll with intersection observer for better performance
-  const scrollToBottom = useCallback(() => {
-    requestAnimationFrame(() => {
-      scrollRef.current?.scrollIntoView({ 
-        behavior: 'smooth', 
-        block: 'end' 
-      });
-    });
-  }, []);
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages, scrollToBottom]);
+ 
 
   // Optimized input handler
   const handleInputChange = useCallback(
@@ -479,16 +505,18 @@ export default function RoomAssistant({
                   case "start":
                     responseId = data.id || responseId;
                     break;
-                  case "delta":
-                    if (data.content) {
-                      fullResponse += data.content;
-                      setMessages((prev) =>
-                        prev.map((m) =>
-                          m.id === responseId ? { ...m, content: fullResponse } : m
-                        )
-                      );
-                    }
-                    break;
+                    case "delta":
+                      if (data.content) {
+                        fullResponse += data.content;
+                        startTransition(() => {
+                          setMessages((prev) =>
+                            prev.map((m) =>
+                              m.id === responseId ? { ...m, content: fullResponse } : m
+                            )
+                          );
+                        });
+                      }
+                      break;
                   case "end":
                     // Save to AI chat history
                     const savedToDB = await saveToAIChatHistory(userQuery, fullResponse, {
@@ -546,7 +574,8 @@ export default function RoomAssistant({
 
   // Memoized utility functions
   const copyToClipboard = useCallback((content: string) => {
-    navigator.clipboard.writeText(content)
+    const textContent = content.replace(/<[^>]*>/g, ''); // Strip HTML if present
+    navigator.clipboard.writeText(textContent)
       .then(() => toast.success("Copied to clipboard!"))
       .catch(() => toast.error("Failed to copy"));
   }, []);
@@ -702,31 +731,43 @@ export default function RoomAssistant({
   }, [isPending]);
 
   return (
-    <Card className={`flex flex-col h-full overflow-hidden ${className}`}>
-      <CardHeader className="pb-4 flex-shrink-0">
+    <Card className={cn(
+      "flex flex-col h-full overflow-hidden",
+      "bg-gradient-to-br from-background to-muted/20",
+      className
+    )}>
+      <CardHeader className="pb-3 flex-shrink-0 border-b bg-card/50 backdrop-blur-sm">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="flex items-center justify-center w-10 h-10 bg-primary rounded-lg">
+            <motion.div 
+              className="flex items-center justify-center w-10 h-10 bg-gradient-to-br from-primary to-primary/80 rounded-xl shadow-lg"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
               <Bot className="h-5 w-5 text-primary-foreground" />
-            </div>
+            </motion.div>
             <div>
-              <CardTitle className="text-lg">Room Assistant</CardTitle>
-              <div className="flex items-center space-x-2 mt-1">
-                <Badge variant="secondary" className="text-xs">
+              <CardTitle className="text-base sm:text-lg font-bold">
+                AI Assistant
+              </CardTitle>
+              <div className="flex items-center gap-2 mt-0.5">
+                <Badge variant="secondary" className="text-xs px-2 py-0">
                   {model}
                 </Badge>
-                <span className="text-xs text-muted-foreground">#{roomName}</span>
+                <span className="text-xs text-muted-foreground">
+                  #{roomName}
+                </span>
               </div>
             </div>
           </div>
   
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="ghost" size="icon">
+              <Button variant="ghost" size="icon" className="h-8 w-8">
                 <MoreVertical className="h-4 w-4" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-48" align="end">
+            <PopoverContent className="w-56" align="end">
               <div className="space-y-2">
                 <div className="flex items-center justify-between px-2 py-1.5">
                   <span className="text-sm">Dark Mode</span>
@@ -791,25 +832,28 @@ export default function RoomAssistant({
                   Add to Room
                 </Button>
               </div>
-            </PopoverContent>
+              </PopoverContent>
           </Popover>
         </div>
       </CardHeader>
   
       {/* Fixed Messages Area with proper scrolling */}
-      <CardContent className="flex-1 p-0 flex flex-col overflow-scroll min-h-0">
-        <ScrollArea className="flex-1">
-          <div className="space-y-4 p-4">
+      <div className="flex-1 relative min-h-0 overflow-hidden">
+      <ScrollArea className="h-full">
+          <div className="p-4 space-y-4">
             <AnimatePresence mode="popLayout">
               {messages.length > 0 ? (
-                messages.map((msg) => (
-                  <ChatMessageDisplay
-                    key={msg.id}
-                    msg={msg}
-                    copyToClipboard={copyToClipboard}
-                    theme={theme}
-                  />
-                ))
+                <>
+                  {messages.map((msg) => (
+                    <ChatMessageDisplay
+                      key={msg.id}
+                      msg={msg}
+                      copyToClipboard={copyToClipboard}
+                      theme={theme}
+                      onExpand={setExpandedMessage}
+                    />
+                  ))}
+                </>
               ) : loading ? (
                 <>
                   {[1, 2, 3].map((i) => (
@@ -818,52 +862,96 @@ export default function RoomAssistant({
                 </>
               ) : (
                 <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="flex flex-col items-center justify-center py-12 text-center"
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="flex flex-col items-center justify-center py-12 px-4"
                 >
-                  <div className="w-16 h-16 bg-muted rounded-2xl flex items-center justify-center mb-4">
-                    <Sparkles className="h-8 w-8 text-muted-foreground" />
-                  </div>
-                  <h3 className="font-semibold mb-2">Room AI Assistant</h3>
-                  <p className="text-sm text-muted-foreground max-w-xs">
-                    Ask me about <strong>#{roomName}</strong>. I can analyze recent messages and provide insights.
+                  <motion.div 
+                    className="w-20 h-20 bg-gradient-to-br from-primary/20 to-primary/10 rounded-3xl flex items-center justify-center mb-4"
+                    animate={{ 
+                      rotate: [0, 10, -10, 0],
+                      scale: [1, 1.05, 1],
+                    }}
+                    transition={{ 
+                      duration: 4,
+                      repeat: Infinity,
+                      repeatType: "reverse"
+                    }}
+                  >
+                    <Sparkles className="h-10 w-10 text-primary" />
+                  </motion.div>
+                  <h3 className="font-bold text-lg mb-2">
+                    Room AI Assistant
+                  </h3>
+                  <p className="text-sm text-muted-foreground text-center max-w-xs">
+                    Ask me anything about <strong>#{roomName}</strong>. 
+                    I can analyze conversations, extract insights, and help with summaries.
                   </p>
                 </motion.div>
               )}
             </AnimatePresence>
-            <div ref={scrollRef} />
+            <div ref={messagesEndRef} />
           </div>
         </ScrollArea>
-  
-        {/* Error Display */}
-        <AnimatePresence>
-          {error && (
+        {/* Add this after ScrollArea, before the streaming indicator */}
+        {error && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
-              className="px-4 py-3 bg-destructive/10 border-t"
+              className="mx-4 mb-2 p-3 bg-destructive/10 rounded-lg flex items-center gap-2"
             >
-              <div className="flex items-center space-x-3">
-                <AlertCircle className="h-4 w-4 text-destructive flex-shrink-0" />
-                <p className="text-sm text-destructive flex-1">{error}</p>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setError(null)}
-                  className="h-6 w-6 p-0 text-destructive"
-                >
-                  <X className="h-3 w-3" />
-                </Button>
+              <AlertCircle className="h-4 w-4 text-destructive" />
+              <span className="text-sm">{error}</span> {/* This line needs the error variable */}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setError(null)}
+                className="ml-auto h-6 w-6"
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            </motion.div>
+          )}
+  
+        {/* Error Display */}
+        <AnimatePresence>
+          {isStreaming && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 10 }}
+              className="absolute bottom-2 left-4 right-4"
+            >
+              <div className="bg-primary/10 backdrop-blur-sm rounded-lg px-3 py-2 flex items-center gap-2">
+                <div className="flex gap-1">
+                  <motion.div
+                    className="w-2 h-2 bg-primary rounded-full"
+                    animate={{ scale: [1, 1.5, 1] }}
+                    transition={{ duration: 0.6, repeat: Infinity, delay: 0 }}
+                  />
+                  <motion.div
+                    className="w-2 h-2 bg-primary rounded-full"
+                    animate={{ scale: [1, 1.5, 1] }}
+                    transition={{ duration: 0.6, repeat: Infinity, delay: 0.2 }}
+                  />
+                  <motion.div
+                    className="w-2 h-2 bg-primary rounded-full"
+                    animate={{ scale: [1, 1.5, 1] }}
+                    transition={{ duration: 0.6, repeat: Infinity, delay: 0.4 }}
+                  />
+                </div>
+                <span className="text-xs text-muted-foreground">
+                  AI is thinking...
+                </span>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
-      </CardContent>
+      </div>
   
       {/* Fixed Input Area */}
-      <div className="border-t p-4 flex-shrink-0">
+      <div className="border-t bg-card/50 backdrop-blur-sm p-4 flex-shrink-0">
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="relative">
             <Textarea
@@ -925,6 +1013,7 @@ export default function RoomAssistant({
           </div>
         </form>
       </div>
+      
     </Card>
   );
 }
