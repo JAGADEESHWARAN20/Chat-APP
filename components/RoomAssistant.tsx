@@ -57,7 +57,7 @@ interface RoomAssistantProps {
   initialModel?: string;
 }
 
-// 🧱 Enhanced Chat Message Component with safe timestamp handling
+// 🧱 Enhanced Chat Message Component with HTML support
 const ChatMessageDisplay = ({ msg, copyToClipboard }: { msg: ChatMessage, copyToClipboard: (content: string) => void }) => {
   // Safe timestamp conversion
   const safeTimestamp = useMemo(() => {
@@ -71,10 +71,10 @@ const ChatMessageDisplay = ({ msg, copyToClipboard }: { msg: ChatMessage, copyTo
       if (typeof msg.timestamp === 'number') {
         return new Date(msg.timestamp);
       }
-      return new Date(); // Fallback to current date
+      return new Date();
     } catch (error) {
       console.error('Invalid timestamp:', msg.timestamp, error);
-      return new Date(); // Fallback to current date
+      return new Date();
     }
   }, [msg.timestamp]);
 
@@ -87,6 +87,65 @@ const ChatMessageDisplay = ({ msg, copyToClipboard }: { msg: ChatMessage, copyTo
       return '--:--';
     }
   }, [safeTimestamp]);
+
+  // Check if content is HTML
+  const isHtmlContent = useMemo(() => {
+    return msg.role === "assistant" && msg.content.includes('<div') && msg.content.includes('</div>');
+  }, [msg.content, msg.role]);
+
+  // Function to safely render HTML content
+  const renderContent = () => {
+    if (isHtmlContent) {
+      // Convert class to className for React compatibility
+      const reactCompatibleHtml = msg.content.replace(/class=/g, 'className=');
+      return (
+        <div 
+          className="prose prose-sm max-w-none ai-html-response"
+          dangerouslySetInnerHTML={{ __html: reactCompatibleHtml }} 
+        />
+      );
+    } else {
+      return (
+        <ReactMarkdown
+          components={{
+            table: ({ node, ...props }) => (
+              <div className="overflow-x-auto my-2 rounded-lg border border-gray-200">
+                <table className="min-w-full divide-y divide-gray-200" {...props} />
+              </div>
+            ),
+            th: ({ node, ...props }) => (
+              <th 
+                className="px-4 py-3 bg-gradient-to-r from-gray-50 to-gray-100 text-left text-sm font-semibold text-gray-700 uppercase tracking-wider border-b" 
+                {...props} 
+              />
+            ),
+            td: ({ node, ...props }) => (
+              <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-100" {...props} />
+            ),
+            code: ({ node, className, ...props }) => {
+              const isInline = !className?.includes('language-');
+              return isInline ? (
+                <code className="px-1.5 py-0.5 bg-gray-100 rounded text-sm font-mono" {...props} />
+              ) : (
+                <code className="block p-3 bg-gray-900 text-gray-100 rounded-lg text-sm font-mono overflow-x-auto" {...props} />
+              );
+            },
+            ul: ({ node, ...props }) => (
+              <ul className="space-y-1 my-2 list-disc list-inside" {...props} />
+            ),
+            ol: ({ node, ...props }) => (
+              <ol className="space-y-1 my-2 list-decimal list-inside" {...props} />
+            ),
+            li: ({ node, ...props }) => (
+              <li className="pl-1" {...props} />
+            ),
+          }}
+        >
+          {msg.content}
+        </ReactMarkdown>
+      );
+    }
+  };
 
   return (
     <motion.div
@@ -105,46 +164,7 @@ const ChatMessageDisplay = ({ msg, copyToClipboard }: { msg: ChatMessage, copyTo
       >
         {/* Message Content */}
         <div className="whitespace-pre-wrap leading-relaxed">
-          <ReactMarkdown
-            components={{
-              // Enhanced table styling
-              table: ({ node, ...props }) => (
-                <div className="overflow-x-auto my-2 rounded-lg border border-gray-200">
-                  <table className="min-w-full divide-y divide-gray-200" {...props} />
-                </div>
-              ),
-              th: ({ node, ...props }) => (
-                <th 
-                  className="px-4 py-3 bg-gradient-to-r from-gray-50 to-gray-100 text-left text-sm font-semibold text-gray-700 uppercase tracking-wider border-b" 
-                  {...props} 
-                />
-              ),
-              td: ({ node, ...props }) => (
-                <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-100" {...props} />
-              ),
-              
-              code: ({ node, className, ...props }) => {
-                  const isInline = !className?.includes('language-');
-                  return isInline ? (
-                  <code className="px-1.5 py-0.5 bg-gray-100 rounded text-sm font-mono" {...props} />
-                  ) : (
-                  <code className="block p-3 bg-gray-900 text-gray-100 rounded-lg text-sm font-mono overflow-x-auto" {...props} />
-                  );
-              },
-              // Enhanced lists
-              ul: ({ node, ...props }) => (
-                <ul className="space-y-1 my-2 list-disc list-inside" {...props} />
-              ),
-              ol: ({ node, ...props }) => (
-                <ol className="space-y-1 my-2 list-decimal list-inside" {...props} />
-              ),
-              li: ({ node, ...props }) => (
-                <li className="pl-1" {...props} />
-              ),
-            }}
-          >
-            {msg.content}
-          </ReactMarkdown>
+          {renderContent()}
         </div>
 
         {/* Message Footer */}
@@ -208,29 +228,34 @@ export default function RoomAssistant({
     try {
       const key = `ai-chat-${roomId}`;
       const saved = localStorage.getItem(key);
-      if (saved && messages.length === 0) {
+      if (saved) {
         const parsedMessages = JSON.parse(saved);
         
-        // Convert timestamp strings to Date objects
+        // Convert timestamp strings to Date objects and ensure messages array
         const messagesWithProperTimestamps = parsedMessages.map((msg: any) => ({
           ...msg,
-          timestamp: new Date(msg.timestamp)
+          timestamp: new Date(msg.timestamp),
+          // Ensure content is a string
+          content: typeof msg.content === 'string' ? msg.content : String(msg.content || '')
         }));
         
-        setMessages(messagesWithProperTimestamps);
+        // Only set messages if we're not already loaded
+        setMessages(prev => prev.length === 0 ? messagesWithProperTimestamps : prev);
       }
     } catch (e) {
       console.error("Failed to load chat history:", e);
-      // Clear corrupted data
+      // Clear corrupted data but don't crash
       localStorage.removeItem(`ai-chat-${roomId}`);
     }
-  }, [roomId, messages.length]);
+  }, [roomId]);
 
   // Safe message saving
   const saveMessagesToStorage = useCallback(() => {
     try {
       const key = `ai-chat-${roomId}`;
-      localStorage.setItem(key, JSON.stringify(messages.slice(-maxHistory)));
+      if (messages.length > 0) {
+        localStorage.setItem(key, JSON.stringify(messages.slice(-maxHistory)));
+      }
     } catch (e) {
       console.error("Failed to save chat history:", e);
     }
@@ -258,6 +283,7 @@ export default function RoomAssistant({
         content: prompt,
         timestamp: new Date(),
       };
+      
       setMessages((prev) => [...prev.slice(-maxHistory + 1), userMsg]);
       const tempPrompt = prompt;
       setPrompt("");
@@ -265,69 +291,64 @@ export default function RoomAssistant({
       setError(null);
       setIsStreaming(true);
 
-      startTransition(async () => {
-        try {
-          const historyStr = messages
-            .map((m) => `${m.role}: ${m.content}`)
-            .join("\n") + `\n${userMsg.role}: ${tempPrompt}`;
-          const context = recentRoomMessages
-            ? `Room "${roomName}" (${roomId}) recent:\n${recentRoomMessages}\n\nHistory:\n${historyStr}`
-            : `Room "${roomName}" (${roomId}). History:\n${historyStr}`;
-          const estTokens = context.length / 4 + 200;
+      try {
+        const historyStr = messages
+          .map((m) => `${m.role}: ${m.content}`)
+          .join("\n") + `\n${userMsg.role}: ${tempPrompt}`;
+        const context = recentRoomMessages
+          ? `Room "${roomName}" (${roomId}) recent:\n${recentRoomMessages}\n\nHistory:\n${historyStr}`
+          : `Room "${roomName}" (${roomId}). History:\n${historyStr}`;
+        const estTokens = context.length / 4 + 200;
 
-          if (estTokens > 4000) throw new Error("Context too long—please shorten your query.");
+        if (estTokens > 4000) throw new Error("Context too long—please shorten your query.");
 
-          const res = await fetch("/api/summarize", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ prompt: `${context}\n\nAssistant:`, model }),
-          });
+        const res = await fetch("/api/summarize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt: `${context}\n\nAssistant:`, model }),
+        });
 
-          if (!res.ok) {
-            const data = await res.json();
-            throw new Error(data.error || "API request failed");
-          }
-
-          const reader = res.body?.getReader();
-          const decoder = new TextDecoder();
-          let fullResponse = "";
-          const aiMsg: ChatMessage = {
-            id: (Date.now() + 1).toString(),
-            role: "assistant",
-            content: "",
-            timestamp: new Date(),
-            model,
-          };
-          setMessages((prev) => [...prev, aiMsg]);
-
-          while (true) {
-            const { done, value } = await reader?.read() ?? { done: true };
-            if (done) break;
-            const chunk = decoder.decode(value);
-            fullResponse += chunk;
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === aiMsg.id ? { ...m, content: fullResponse } : m
-              )
-            );
-          }
-
-          toast.success(`Response generated successfully!`);
-        } catch (err) {
-          setMessages((prev) => prev.slice(0, -1));
-          const msg = (err as Error).message;
-          setError(msg.includes("429") ? "Rate limit exceeded. Please try again soon." : msg);
-          toast.error(msg, { 
-            action: { 
-              label: "Retry", 
-              onClick: () => handleSubmit() 
-            } 
-          });
-        } finally {
-          setLoading(false);
-          setIsStreaming(false);
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || "API request failed");
         }
-      });
+
+        const reader = res.body?.getReader();
+        const decoder = new TextDecoder();
+        let fullResponse = "";
+        const aiMsg: ChatMessage = {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: "",
+          timestamp: new Date(),
+          model,
+        };
+        
+        setMessages((prev) => [...prev, aiMsg]);
+
+        while (true) {
+          const { done, value } = await reader?.read() ?? { done: true };
+          if (done) break;
+          const chunk = decoder.decode(value);
+          fullResponse += chunk;
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === aiMsg.id ? { ...m, content: fullResponse } : m
+            )
+          );
+        }
+
+        toast.success(`Response generated successfully!`);
+      } catch (err) {
+        // Remove the temporary AI message on error
+        setMessages((prev) => prev.filter(msg => msg.role !== 'assistant' || msg.content.length > 0));
+        const msg = (err as Error).message;
+        setError(msg.includes("429") ? "Rate limit exceeded. Please try again soon." : msg);
+        toast.error(msg);
+      } finally {
+        setLoading(false);
+        setIsStreaming(false);
+      }
     },
     [prompt, messages, recentRoomMessages, roomName, roomId, model, maxHistory]
   );
@@ -343,11 +364,13 @@ export default function RoomAssistant({
   }, []);
 
   const regenerate = useCallback(() => {
-    const lastUser = messages.slice().reverse().find(m => m.role === 'user')?.content || "";
-    if (lastUser) {
-      setMessages((prev) => prev.slice(0, prev.findIndex(m => m.role === 'assistant')));
-      setPrompt(lastUser);
-      handleSubmit();
+    const lastUserIndex = messages.findLastIndex(m => m.role === 'user');
+    if (lastUserIndex !== -1) {
+      const lastUserMessage = messages[lastUserIndex];
+      setMessages((prev) => prev.slice(0, lastUserIndex + 1));
+      setPrompt(lastUserMessage.content);
+      // Use setTimeout to avoid state update during render
+      setTimeout(() => handleSubmit(), 0);
     } else {
       toast.error("No previous message to regenerate.");
     }
