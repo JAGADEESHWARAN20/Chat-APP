@@ -797,7 +797,7 @@ export default function RoomAssistant({
                 <MoreVertical className="h-4 w-4" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-56" align="end">
+            <PopoverContent className="w-56 max-h-64 overflow-y-auto scrollbar-thin" align="end">
               <div className="space-y-2">
                 <div className="flex items-center justify-between px-2 py-1.5">
                   <span className="text-sm">Dark Mode</span>
