@@ -45,6 +45,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import DOMPurify from "dompurify";
+import { supabaseBrowser } from "@/lib/supabase/browser";
 
 // Types
 interface ChatMessage {
@@ -271,7 +272,26 @@ export default function RoomAssistant({
       .join("\n");
   }, [allMessages, roomId]);
 
-  // Load AI chat history from database
+  // Load from localStorage as fallback
+  const loadFromLocalStorage = useCallback(() => {
+    try {
+      const key = `ai-chat-${roomId}`;
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        const parsed = JSON.parse(saved).map((m: any) => ({
+          ...m,
+          timestamp: new Date(m.timestamp),
+          content: String(m.content || ""),
+          isPersisted: false,
+        }));
+        setMessages(parsed.slice(-maxHistory));
+      }
+    } catch (error) {
+      console.error("Failed to load from localStorage:", error);
+    }
+  }, [roomId, maxHistory]);
+
+  // Load AI chat history from database - FIXED: added loadFromLocalStorage dependency
   const loadAIChatHistory = useCallback(async () => {
     if (!roomState.user?.id) return;
 
@@ -297,26 +317,7 @@ export default function RoomAssistant({
       console.error("Failed to load AI chat history:", error);
       loadFromLocalStorage();
     }
-  }, [roomId, roomState.user]);
-
-  // Load from localStorage as fallback
-  const loadFromLocalStorage = useCallback(() => {
-    try {
-      const key = `ai-chat-${roomId}`;
-      const saved = localStorage.getItem(key);
-      if (saved) {
-        const parsed = JSON.parse(saved).map((m: any) => ({
-          ...m,
-          timestamp: new Date(m.timestamp),
-          content: String(m.content || ""),
-          isPersisted: false,
-        }));
-        setMessages(parsed.slice(-maxHistory));
-      }
-    } catch (error) {
-      console.error("Failed to load from localStorage:", error);
-    }
-  }, [roomId, maxHistory]);
+  }, [roomId, roomState.user, loadFromLocalStorage]); // ✅ Fixed: Added missing dependency
 
   // Save AI chat to database
   const saveToAIChatHistory = useCallback(async (
@@ -643,6 +644,38 @@ export default function RoomAssistant({
     recognition.start();
   }, []);
 
+  // Add AI conversation to regular chat
+  const handleAddMessage = useCallback(async () => {
+    if (roomState.user && prompt.trim()) {
+      try {
+        const supabase = supabaseBrowser();
+        
+        // Insert the message into the regular messages table
+        const { data, error } = await supabase
+          .from('messages')
+          .insert({
+            text: `AI Assistant Query: ${prompt}`,
+            room_id: roomId,
+            sender_id: roomState.user.id,
+            is_edited: false,
+            status: 'sent'
+          })
+          .select()
+          .single();
+
+        if (error) {
+          throw error;
+        }
+
+        toast.success("Message added to room chat!");
+        setPrompt(""); // Clear the prompt after sending
+      } catch (error) {
+        console.error("Failed to add message:", error);
+        toast.error("Failed to add message to room chat");
+      }
+    }
+  }, [prompt, roomId, roomState.user]);
+
   // Effects
   useEffect(() => {
     if (roomState.user?.id) {
@@ -667,55 +700,6 @@ export default function RoomAssistant({
       console.log('Transition is pending...');
     }
   }, [isPending]);
-
-  // Use the addMessage function from useRoomContext
-  const handleAddMessage = useCallback(async () => {
-    if (roomState.user && prompt.trim()) {
-      try {
-        // Save the user's query to ai_chat_history table
-        const response = await fetch('/api/ai-chat/history', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            room_id: roomId,
-            user_id: roomState.user.id,
-            user_query: prompt,
-            ai_response: "", // Empty for now, will be filled when AI responds
-            model_used: model,
-            token_count: Math.floor(prompt.length / 4), // Estimate tokens
-            message_count: messages.length + 1,
-          }),
-        });
-  
-        if (!response.ok) {
-          throw new Error('Failed to save message to AI chat history');
-        }
-  
-        const savedMessage = await response.json();
-        
-        toast.success("Message saved to AI chat history!");
-        setPrompt(""); // Clear the prompt after sending
-        
-        // Optionally, you can add it to the local state if needed
-        const userMsg: ChatMessage = {
-          id: savedMessage.id || generateId(),
-          role: "user" as const,
-          content: prompt,
-          timestamp: new Date(),
-          model: model,
-          isPersisted: true,
-        };
-        
-        setMessages(prev => [...prev, userMsg]);
-        
-      } catch (error) {
-        console.error("Failed to save AI chat message:", error);
-        toast.error("Failed to save message to AI chat history");
-      }
-    }
-  }, [prompt, roomId, roomState.user, model, messages.length]);
 
   return (
     <Card className={`flex flex-col h-full overflow-hidden ${className}`}>
