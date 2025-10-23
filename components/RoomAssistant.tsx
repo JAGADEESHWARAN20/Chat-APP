@@ -135,7 +135,7 @@ const ChatMessageDisplay = ({
         <div
           className={`prose prose-sm max-w-none overflow-x-auto 
             text-sm
-            ${theme === "dark" ? "prose-invert" : ""}
+            ${theme === "dark" ? "prose-invert text-white" : "text-black"}
             ai-html-response`}
           dangerouslySetInnerHTML={{ __html: cleanHtml }}
         />
@@ -175,9 +175,9 @@ const ChatMessageDisplay = ({
             : "bg-background/80 border-border/50"
         }`}
       >
-        <CardContent className="p-3 sm:p-4">
+        <CardContent className="p-3 sm:p-4 overflow-scroll h-[100%]">
           {/* Content */}
-          <div className="whitespace-pre-wrap leading-relaxed max-w-none">
+          <div className="whitespace-pre-wrap leading-relaxed  h-auto max-w-none">
             {renderContent()}
           </div>
 
@@ -797,7 +797,7 @@ export default function RoomAssistant({
       </CardHeader>
   
       {/* Fixed Messages Area with proper scrolling */}
-      <CardContent className="flex-1 p-0 flex flex-col min-h-0">
+      <CardContent className="flex-1 p-0 flex flex-col overflow-scroll min-h-0">
         <ScrollArea className="flex-1">
           <div className="space-y-4 p-4">
             <AnimatePresence mode="popLayout">
