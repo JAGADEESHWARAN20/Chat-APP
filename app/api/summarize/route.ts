@@ -135,108 +135,165 @@ USER REQUEST: ${refinedInstruction}
 
 CRITICAL RESPONSE REQUIREMENTS (MANDATORY - VIOLATION = INVALID OUTPUT):
 
-1. **LAYOUT STRUCTURE**: Use PROPER grid and flex systems:
-   - Grid: grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6
-   - Flex: flex flex-col sm:flex-row gap-3 sm:gap-4
-   - NO floating elements, use proper layout containers
+1. **RESPONSIVE TABLE PATTERNS**: Implement mobile-first responsive tables:
+   - ALWAYS use: <div class="overflow-x-auto">
+   - Table structure: <table class="w-full">
+   - Mobile cards: Use data-heading attributes for mobile view
+   - Desktop: Standard table layout
 
-2. **SPACING CONSISTENCY**: Apply consistent spacing scale:
-   - Padding: p-4 sm:p-6 (outer), p-3 sm:p-4 (inner)
-   - Margin: mb-4 (between sections), mb-3 (between elements)
-   - Gap: gap-3 (small), gap-4 (medium), gap-6 (large)
+2. **COMPACT LAYOUT**: Eliminate excessive whitespace:
+   - Padding: p-3 sm:p-4 (compact), p-2 sm:p-3 (dense)
+   - Margin: mb-2 sm:mb-3 (small), mb-3 sm:mb-4 (medium)
+   - Gap: gap-2 sm:gap-3 (tight), gap-3 sm:gap-4 (standard)
 
-3. **RESPONSIVE TABLES**: Implement proper table layouts:
-   - ALWAYS wrap tables: <div class="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-lg">
-   - Table: <table class="w-full min-w-[600px] sm:min-w-full">
-   - Cell padding: px-4 py-3 (standard), px-3 py-2 (compact)
-
-4. **THEME ADAPTATION**: Dual-theme classes for ALL elements:
+3. **THEME ADAPTATION**: Dual-theme for ALL elements:
    - Backgrounds: bg-white dark:bg-gray-800, bg-gray-50 dark:bg-gray-900/50
-   - Text: text-gray-800 dark:text-gray-200 (primary), text-gray-600 dark:text-gray-400 (secondary)
+   - Text: text-gray-800 dark:text-gray-200, text-gray-600 dark:text-gray-400
    - Borders: border-gray-200 dark:border-gray-700
 
-5. **COMMAND STRUCTURE**: Use authoritative, actionable language.
+4. **RESPONSE FORMAT**: Generate **ONLY** the EXACT HTML structure for ${templateType}.
 
-6. **RESPONSE FORMAT**: Generate **ONLY** the EXACT HTML structure for ${templateType}.
+MANDATORY RESPONSIVE TABLE TEMPLATES:
 
-MANDATORY LAYOUT TEMPLATES:
-
-GRID LAYOUT:
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-  <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-4 sm:p-6">
-    <!-- Content -->
-  </div>
-</div>
-
-FLEX LAYOUT:
-<div class="flex flex-col sm:flex-row gap-4 sm:gap-6">
-  <div class="flex-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-4 sm:p-6">
-    <!-- Content -->
-  </div>
-</div>
-
-TABLE STRUCTURE:
+STANDARD TABLE (Desktop):
 <div class="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-lg">
-  <table class="w-full min-w-[600px] sm:min-w-full">
+  <table class="w-full">
     <thead class="bg-gray-50 dark:bg-gray-900/50">
       <tr>
-        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-800 dark:text-gray-200 border-b border-gray-200 dark:border-gray-700" scope="col">Header</th>
+        <th class="px-3 py-2 text-left text-sm font-semibold text-gray-800 dark:text-gray-200 border-b border-gray-200 dark:border-gray-700" scope="col">Name</th>
+        <th class="px-3 py-2 text-left text-sm font-semibold text-gray-800 dark:text-gray-200 border-b border-gray-200 dark:border-gray-700" scope="col">Messages</th>
+        <th class="px-3 py-2 text-left text-sm font-semibold text-gray-800 dark:text-gray-200 border-b border-gray-200 dark:border-gray-700" scope="col">Engagement</th>
       </tr>
     </thead>
     <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-      <tr>
-        <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">Data</td>
+      <tr class="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+        <td class="px-3 py-2 text-sm text-gray-700 dark:text-gray-300" data-heading="Name">User1</td>
+        <td class="px-3 py-2 text-sm text-gray-700 dark:text-gray-300" data-heading="Messages">15</td>
+        <td class="px-3 py-2 text-sm" data-heading="Engagement">
+          <span class="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded text-xs">High</span>
+        </td>
       </tr>
     </tbody>
   </table>
 </div>
 
-CARD STRUCTURE:
-<div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-4 sm:p-6">
-  <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3">Title</h3>
-  <div class="space-y-3">
-    <!-- Content with consistent spacing -->
+COMPACT CARD LAYOUT:
+<div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-3">
+  <div class="flex items-center justify-between mb-2">
+    <h3 class="text-base font-semibold text-gray-800 dark:text-gray-200">Quick Stats</h3>
+    <span class="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded text-xs">Live</span>
+  </div>
+  <div class="grid grid-cols-2 gap-2 text-sm">
+    <div class="text-center p-2 bg-gray-50 dark:bg-gray-900/50 rounded">
+      <div class="font-bold text-gray-800 dark:text-gray-200">15</div>
+      <div class="text-xs text-gray-600 dark:text-gray-400">Messages</div>
+    </div>
+    <div class="text-center p-2 bg-gray-50 dark:bg-gray-900/50 rounded">
+      <div class="font-bold text-gray-800 dark:text-gray-200">5</div>
+      <div class="text-xs text-gray-600 dark:text-gray-400">Users</div>
+    </div>
   </div>
 </div>
 
-LIST STRUCTURE:
-<ul class="space-y-2">
-  <li class="flex items-start">
-    <span class="flex-shrink-0 w-2 h-2 mt-2 bg-blue-500 rounded-full mr-3"></span>
-    <span class="text-gray-700 dark:text-gray-300">List item</span>
-  </li>
-</ul>
-
-RESPONSE FORMAT: Pure, valid HTML with proper layout structure. Begin with <div class="..."> and end with </div>.
-
-EXAMPLE CORRECTED OUTPUT:
-<div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-6">
-  <h2 class="text-xl font-bold text-gray-800 dark:text-gray-200 mb-4">Strategic Analysis</h2>
-  
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 mb-6">
-    <div class="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
-      <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3">Key Metrics</h3>
-      <div class="space-y-2">
-        <p class="text-gray-700 dark:text-gray-300">Metric details...</p>
+GRID LAYOUT (Compact):
+<div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+  <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/30 rounded-lg p-3">
+    <h4 class="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2">Top Contributors</h4>
+    <div class="space-y-1 text-xs text-gray-700 dark:text-gray-300">
+      <div class="flex justify-between">
+        <span>wearlook205</span>
+        <span class="font-medium">15 msgs</span>
+      </div>
+      <div class="flex justify-between">
+        <span>JAGADEESHWARAN</span>
+        <span class="font-medium">8 msgs</span>
       </div>
     </div>
   </div>
+</div>
 
-  <div class="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-lg">
-    <table class="w-full min-w-[600px] sm:min-w-full">
+ACTION ITEMS (Dense):
+<div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800/30 rounded-lg p-3">
+  <h4 class="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2">Action Items</h4>
+  <ul class="space-y-1 text-xs text-gray-700 dark:text-gray-300">
+    <li class="flex items-start gap-1.5">
+      <span class="w-1.5 h-1.5 bg-green-500 rounded-full mt-1 flex-shrink-0"></span>
+      <span>Leverage high-engagement users for leadership</span>
+    </li>
+    <li class="flex items-start gap-1.5">
+      <span class="w-1.5 h-1.5 bg-blue-500 rounded-full mt-1 flex-shrink-0"></span>
+      <span>Optimize response timing patterns</span>
+    </li>
+  </ul>
+</div>
+
+RESPONSE FORMAT: Pure, valid HTML with responsive tables and compact layout. Begin with <div class="..."> and end with </div>.
+
+EXAMPLE OPTIMIZED OUTPUT:
+<div class="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-3 sm:p-4">
+  <div class="flex items-center justify-between mb-3">
+    <h2 class="text-lg font-bold text-gray-800 dark:text-gray-200">User Engagement Analysis</h2>
+    <div class="flex items-center gap-2 px-2 py-1 bg-blue-100 dark:bg-blue-900/30 rounded text-xs font-medium text-blue-700 dark:text-blue-300">
+      <span class="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></span>
+      Real-time
+    </div>
+  </div>
+
+  <!-- Compact Stats -->
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
+    <div class="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-2 text-center">
+      <div class="text-sm font-bold text-gray-800 dark:text-gray-200">15</div>
+      <div class="text-xs text-gray-600 dark:text-gray-400">Total Msgs</div>
+    </div>
+    <div class="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-2 text-center">
+      <div class="text-sm font-bold text-gray-800 dark:text-gray-200">5</div>
+      <div class="text-xs text-gray-600 dark:text-gray-400">Active Users</div>
+    </div>
+    <div class="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-2 text-center">
+      <div class="text-sm font-bold text-gray-800 dark:text-gray-200">45m</div>
+      <div class="text-xs text-gray-600 dark:text-gray-400">Duration</div>
+    </div>
+    <div class="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-2 text-center">
+      <div class="text-sm font-bold text-gray-800 dark:text-gray-200">2.3s</div>
+      <div class="text-xs text-gray-600 dark:text-gray-400">Avg Response</div>
+    </div>
+  </div>
+
+  <!-- Responsive Table -->
+  <div class="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-lg mb-3">
+    <table class="w-full">
       <thead class="bg-gray-50 dark:bg-gray-900/50">
         <tr>
-          <th class="px-4 py-3 text-left text-sm font-semibold text-gray-800 dark:text-gray-200 border-b border-gray-200 dark:border-gray-700" scope="col">User</th>
-          <th class="px-4 py-3 text-left text-sm font-semibold text-gray-800 dark:text-gray-200 border-b border-gray-200 dark:border-gray-700" scope="col">Messages</th>
+          <th class="px-3 py-2 text-left text-xs font-semibold text-gray-800 dark:text-gray-200 border-b border-gray-200 dark:border-gray-700" scope="col">User</th>
+          <th class="px-3 py-2 text-left text-xs font-semibold text-gray-800 dark:text-gray-200 border-b border-gray-200 dark:border-gray-700" scope="col">Messages</th>
+          <th class="px-3 py-2 text-left text-xs font-semibold text-gray-800 dark:text-gray-200 border-b border-gray-200 dark:border-gray-700" scope="col">Engagement</th>
         </tr>
       </thead>
       <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-        <tr>
-          <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">User1</td>
-          <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">15</td>
+        <tr class="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+          <td class="px-3 py-2 text-xs text-gray-700 dark:text-gray-300" data-heading="User">wearlook205</td>
+          <td class="px-3 py-2 text-xs text-gray-700 dark:text-gray-300" data-heading="Messages">15</td>
+          <td class="px-3 py-2 text-xs" data-heading="Engagement">
+            <span class="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded">High</span>
+          </td>
         </tr>
       </tbody>
     </table>
+  </div>
+
+  <!-- Action Items -->
+  <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800/30 rounded-lg p-3">
+    <h4 class="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2">Recommendations</h4>
+    <ul class="space-y-1 text-xs text-gray-700 dark:text-gray-300">
+      <li class="flex items-start gap-1.5">
+        <span class="w-1.5 h-1.5 bg-green-500 rounded-full mt-1 flex-shrink-0"></span>
+        <span>Assign leadership roles to high-engagement users</span>
+      </li>
+      <li class="flex items-start gap-1.5">
+        <span class="w-1.5 h-1.5 bg-blue-500 rounded-full mt-1 flex-shrink-0"></span>
+        <span>Implement structured response windows</span>
+      </li>
+    </ul>
   </div>
 </div>`;
   }
