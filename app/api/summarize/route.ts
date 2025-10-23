@@ -4,7 +4,7 @@ import { z } from "zod";
 import { OpenAI } from "openai";
 import { createClient } from "@supabase/supabase-js";
 import { v4 as uuidv4 } from "uuid";
-import { encode } from "gpt-tokenizer"; // Correct import for gpt-tokenizer v3+
+import { estimateTokens } from '@/lib/token-utils';
 
 // Enhanced Schema with roomId for DB sync
 const SummarizeSchema = z.object({
@@ -188,14 +188,8 @@ async function callWithRetry<T>(
   throw lastError!;
 }
 
-// TOKEN COUNT UTILITY
 function countTokens(text: string): number {
-  try {
-    return encode(text).length;
-  } catch (error) {
-    // Fallback: rough estimate ~4 chars per token
-    return Math.ceil(text.length / 4);
-  }
+  return estimateTokens(text);
 }
 
 export async function POST(req: NextRequest) {
