@@ -1,4 +1,5 @@
-import { createClient } from './client';
+// lib/supabase/ai-chat-service.ts
+import { createClient } from './client'; // Fixed import path
 import { Database } from '@/lib/types/supabase';
 
 type AIChatHistory = Database['public']['Tables']['ai_chat_history']['Row'];
@@ -6,7 +7,7 @@ type CreateAIChatHistory = Database['public']['Tables']['ai_chat_history']['Inse
 
 export class AIChatService {
   private static getClient() {
-    return createClient();
+    return createClient(); // This now correctly imports from './client'
   }
 
   // Create new AI chat entry

@@ -28,7 +28,9 @@
     "@supabase/supabase-js": "^2.39.2",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
+    "dompurify": "^3.3.0",
     "framer-motion": "^12.23.24",
+    "gpt-tokenizer": "^3.2.0",
     "lodash": "^4.17.21",
     "lodash.debounce": "^4.0.8",
     "lucide-react": "^0.303.0",
@@ -47,6 +49,7 @@
     "zustand": "^4.4.7"
   },
   "devDependencies": {
+    "@types/dompurify": "^3.0.5",
     "@types/lodash": "^4.17.17",
     "@types/lodash.debounce": "^4.0.9",
     "@types/node": "^20",
