@@ -33,8 +33,8 @@ export function RoomAssistantDialog({
         {triggerButton || defaultTrigger}
       </DialogTrigger>
       <DialogContent className={cn(
-        "h-[90vh] p-0 overflow-hidden transition-all duration-300 [&>button]:hidden",
-        isExpanded ? "max-w-[95vw] w-[95vw]" : "max-w-6xl w-full"
+        "h-[70vh] p-0 overflow-hidden transition-all duration-300 [&>button]:hidden",
+        isExpanded ? "max-w-[90vw] w-[90vw]" : "max-w-[50vw] w-[50vw]"
       )}>
         <div className="h-full">
           <RoomAssistantComponent

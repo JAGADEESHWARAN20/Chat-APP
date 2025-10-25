@@ -400,7 +400,7 @@ function RoomAssistantComponent({
   const setIsExpanded = dialogMode ? 
     (expanded: boolean) => { if (onToggleExpand && expanded !== isExpanded) onToggleExpand(); } : 
     setInternalIsExpanded;
-    
+
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -962,15 +962,15 @@ const callSummarizeApi = useCallback(
 
   // ----------------- Render -----------------
   return (
-    <Card className={cn(
-      "flex flex-col shadow-xl border-border/20 transition-all duration-300",
-      dialogMode 
-        ? "h-full w-full" 
-        : isExpanded 
-          ? "fixed w-[80vw] h-[60vh] inset-4 z-50 bg-background/95 backdrop-blur-md" 
-          : "h-full w-[30vw] md:h-[40vh] lg:h-[60vh]",
-      className
-    )}>
+   <Card className={cn(
+  "flex flex-col shadow-xl border-border/20 transition-all duration-300",
+  dialogMode 
+    ? "h-full w-full" 
+    : isExpanded 
+      ? "fixed w-[80vw] h-[60vh] inset-4 z-50 bg-background/95 backdrop-blur-md" 
+      : "h-full w-[30vw] md:h-[40vh] lg:h-[60vh]",
+  className
+)}>
       <CardHeader className="flex-shrink-0 border-b bg-gradient-to-r from-background via-muted to-background/80 p-4 backdrop-blur-sm">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -1017,14 +1017,14 @@ const callSummarizeApi = useCallback(
       </Button>
     </TooltipTrigger>
     <TooltipContent>
-      {dialogMode ? (
-        isExpanded ? "Minimize Width" : "Expand Width"
-      ) : isExpanded ? (
-        "Minimize"
-      ) : (
-        "Expand"
-      )}
-    </TooltipContent>
+        {dialogMode ? (
+          isExpanded ? "Minimize Width" : "Expand Width"
+        ) : isExpanded ? (
+          "Minimize"
+        ) : (
+          "Expand"
+        )}
+      </TooltipContent>
   </Tooltip>
 </TooltipProvider>
   <div className="flex items-center gap-2 text-xs text-muted-foreground">
