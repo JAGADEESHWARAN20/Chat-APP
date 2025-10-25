@@ -26,7 +26,7 @@ import { useMessage, Imessage } from "@/lib/store/messages";
 import { useSearchHighlight } from "@/lib/store/SearchHighlightContext";
 
 // Import RoomAssistant
-import RoomAssistant from "./RoomAssistant"; // Adjust path as needed
+import {RoomAssistantDialog} from "./AIchatDialog"; // Adjust path as needed
 
 export default function ChatHeader({ user }: { user: SupabaseUser | undefined }) {
   const { searchMessages } = useMessage();
@@ -175,7 +175,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
             className="w-[350px] md:w-[400px] p-0 bg-popover text-popover-foreground backdrop-blur-lg border border-border shadow-xl rounded-xl max-h-[80vh]"
           >
             {selectedRoom ? (
-              <RoomAssistant roomId={selectedRoom.id} roomName={selectedRoom.name} />
+              <RoomAssistantDialog roomId={selectedRoom.id} roomName={selectedRoom.name} />
             ) : (
               <div className="p-4 text-center text-muted-foreground">
                 Select a room to use AI Assistant

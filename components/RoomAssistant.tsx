@@ -32,6 +32,14 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
 import { useMessage, type Imessage } from "@/lib/store/messages";
@@ -389,7 +397,7 @@ function RoomAssistantComponent({
   const [error, setError] = useState<string | null>(null);
   const [model, setModel] = useState(initialModel);
   const [, startTransition] = useTransition();
-
+  
   // Refs
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
