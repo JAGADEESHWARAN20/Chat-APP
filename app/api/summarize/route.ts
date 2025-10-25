@@ -5,11 +5,11 @@ import { createClient } from "@supabase/supabase-js";
 import { v4 as uuidv4 } from "uuid";
 import { estimateTokens } from '@/lib/token-utils';
 
-// Enhanced Schema with expanded model enum - ADDED userId FIELD
+// Enhanced Schema
 const SummarizeSchema = z.object({
   prompt: z.string().min(1, "Prompt cannot be empty").max(15000, "Prompt too long"),
   roomId: z.string().min(1, "Room ID required for persistence"),
-  userId: z.string().min(1, "User ID required for persistence"), // ADDED THIS
+  userId: z.string().min(1, "User ID required for persistence"),
   model: z.enum([
     "gpt-3.5-turbo",
     "gpt-4o-mini",
@@ -28,55 +28,21 @@ const SummarizeSchema = z.object({
   temperature: z.number().min(0).max(1).optional().default(0.2),
 });
 
-// Initialize clients
+// Initialize clients with SERVICE ROLE KEY
 const openai = new OpenAI({
   apiKey: process.env.OPENROUTER_API_KEY,
   baseURL: process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1",
 });
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY; 
+// USE SERVICE ROLE KEY FOR SERVER-SIDE OPERATIONS
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !supabaseKey) {
   throw new Error('Supabase environment variables are not configured');
 }
 
 const supabase = createClient(supabaseUrl, supabaseKey);
-
-// AUTO-MODEL SELECTION ALGORITHM
-function autoSelectModel(promptTokens: number, analysisType: string): string {
-  const lightweightModels = [
-    "gpt-4o-mini",
-    "nvidia/nemotron-nano-9b-v2",
-    "minimax/minimax-m2",
-    "andromeda/alpha"
-  ];
-  const balancedModels = [
-    "openai/gpt-oss-20b",
-    "z-ai/glm-4-5-air",
-    "meituan/longcat-flash-chat"
-  ];
-  const heavyModels = [
-    "deepseek/deepseek-v3-1",
-    "tongyi/deepresearch-30b-a3b",
-    "qwen/qwen3-coder-480b-a35b",
-    "moonshot/kimi-k2-0711"
-  ];
-
-  if (promptTokens < 1000 && ['CONVERSATION_SUMMARY', 'GUIDANCE'].includes(analysisType)) {
-    return lightweightModels[0];
-  }
-  
-  if (promptTokens < 3000 || analysisType === 'COMPREHENSIVE_ANALYSIS') {
-    return balancedModels[Math.floor(Math.random() * balancedModels.length)];
-  }
-  
-  if (promptTokens >= 3000 || ['USER_ANALYSIS', 'SENTIMENT_ANALYSIS', 'TOPIC_ANALYSIS', 'ACTION_ITEMS'].includes(analysisType)) {
-    return heavyModels[Math.floor(Math.random() * heavyModels.length)];
-  }
-  
-  return "gpt-4o-mini";
-}
 
 // Model context window limits
 const modelLimits = {
@@ -94,7 +60,7 @@ const modelLimits = {
   "moonshot/kimi-k2-0711": 33000,
 };
 
-// STRUCTURED RESPONSE TEMPLATES
+// Structured Response Builder
 class StructuredResponseBuilder {
   static createAnalysisPrompt(rawPrompt: string, roomContext: string): string {
     const userQuery = this.extractUserQuery(rawPrompt);
@@ -108,22 +74,21 @@ USER QUERY: "${userQuery}"
 ANALYSIS TYPE: ${analysisType}
 
 RESPONSE REQUIREMENTS:
-
-1. **STRUCTURED FORMAT**: Return a JSON object with this exact structure:
+1. Return ONLY valid JSON with this exact structure:
 {
   "type": "${analysisType}",
   "title": "Brief descriptive title",
-  "summary": "2-3 sentence overview of key findings",
+  "summary": "2-3 sentence overview",
   "sections": [
     {
-      "title": "Section 1 Title",
-      "content": "Detailed analysis content",
-      "metrics": ["metric1: value", "metric2: value"],
-      "highlights": ["key point 1", "key point 2"]
+      "title": "Section Title",
+      "content": "Detailed analysis",
+      "metrics": ["metric1: value"],
+      "highlights": ["key point"]
     }
   ],
-  "keyFindings": ["finding1", "finding2", "finding3"],
-  "recommendations": ["recommendation1", "recommendation2"],
+  "keyFindings": ["finding1"],
+  "recommendations": ["recommendation1"],
   "metadata": {
     "participantCount": number,
     "messageCount": number,
@@ -132,17 +97,9 @@ RESPONSE REQUIREMENTS:
   }
 }
 
-2. **CONTENT GUIDELINES**:
-   - Use ONLY data from the provided conversation context
-   - Be specific and actionable
-   - Include quantitative metrics when available
-   - Focus on practical insights
-   - Maintain professional tone
-
-3. **ANALYSIS FOCUS FOR ${analysisType}**:
-${this.getAnalysisFocus(analysisType)}
-
-IMPORTANT: Return ONLY valid JSON. No additional text or explanations.`;
+2. Use ONLY data from provided context
+3. Be specific and actionable
+4. Return ONLY valid JSON. No additional text.`;
   }
 
   static extractUserQuery(fullPrompt: string): string {
@@ -155,221 +112,102 @@ IMPORTANT: Return ONLY valid JSON. No additional text or explanations.`;
 
   static determineAnalysisType(query: string): string {
     const lowerQuery = query.toLowerCase();
-    
     if (/(summary|overview|recap|tl;dr)/i.test(lowerQuery)) return "CONVERSATION_SUMMARY";
     if (/(user|participant|who|people|engagement)/i.test(lowerQuery)) return "USER_ANALYSIS";
     if (/(sentiment|mood|emotion|tone|feel)/i.test(lowerQuery)) return "SENTIMENT_ANALYSIS";
     if (/(topic|theme|discuss|subject|main)/i.test(lowerQuery)) return "TOPIC_ANALYSIS";
     if (/(action|task|todo|decision|next)/i.test(lowerQuery)) return "ACTION_ITEMS";
     if (/(help|how|what can|capability)/i.test(lowerQuery)) return "GUIDANCE";
-    
     return "COMPREHENSIVE_ANALYSIS";
-  }
-
-  private static getAnalysisFocus(analysisType: string): string {
-    const focusMap = {
-      "CONVERSATION_SUMMARY": `- Extract main discussion points and conclusions
-- Identify key decisions and outcomes
-- Highlight important information exchanges
-- Provide chronological overview`,
-
-      "USER_ANALYSIS": `- Analyze participant engagement levels
-- Identify most active contributors
-- Note participation patterns and roles
-- Highlight expertise areas`,
-
-      "SENTIMENT_ANALYSIS": `- Assess overall emotional tone
-- Identify sentiment shifts
-- Note agreement/disagreement patterns
-- Highlight emotional highlights`,
-
-      "TOPIC_ANALYSIS": `- Map main discussion topics
-- Identify topic transitions
-- Note unanswered questions
-- Highlight emerging themes`,
-
-      "ACTION_ITEMS": `- Extract specific tasks
-- Identify decisions requiring follow-up
-- Note deadlines or time-sensitive items
-- Highlight ownership areas`,
-
-      "GUIDANCE": `- Provide clear, step-by-step assistance
-- Offer practical advice
-- Suggest best practices
-- Connect to available features`,
-
-      "COMPREHENSIVE_ANALYSIS": `- Combine key insights from all areas
-- Provide holistic conversation view
-- Connect patterns across dimensions
-- Offer strategic recommendations`
-    };
-
-    return focusMap[analysisType as keyof typeof focusMap] || focusMap.COMPREHENSIVE_ANALYSIS;
   }
 }
 
-// SYSTEM PROMPT FOR STRUCTURED RESPONSES
-const STRUCTURED_SYSTEM_PROMPT = `You are an expert conversation analyst. Your role is to provide structured, actionable analysis of conversation data.
-
-CRITICAL INSTRUCTIONS:
-1. Return ONLY valid JSON with the exact structure specified in the user prompt
-2. Use ONLY information present in the provided context
-3. Be specific, quantitative, and actionable
-4. Focus on practical insights users can implement
-
-RESPONSE FORMAT:
-You must return a JSON object with this structure:
+// System Prompt
+const STRUCTURED_SYSTEM_PROMPT = `You are an expert conversation analyst. Return ONLY valid JSON with this structure:
 {
   "type": "analysis_type",
   "title": "string",
   "summary": "string", 
-  "sections": [
-    {
-      "title": "string",
-      "content": "string",
-      "metrics": ["string array"],
-      "highlights": ["string array"]
-    }
-  ],
-  "keyFindings": ["string array"],
-  "recommendations": ["string array"],
-  "metadata": {
-    "participantCount": number,
-    "messageCount": number,
-    "timeRange": "string",
-    "sentiment": "string"
-  }
-}
+  "sections": [{"title": "string", "content": "string", "metrics": ["string"], "highlights": ["string"]}],
+  "keyFindings": ["string"],
+  "recommendations": ["string"],
+  "metadata": {"participantCount": number, "messageCount": number, "timeRange": "string", "sentiment": "string"}
+}`;
 
-Do not include any other text or explanations.`;
-
-// Response interfaces
-interface AnalysisSection {
-  title: string;
-  content: string;
-  metrics: string[];
-  highlights: string[];
-}
-
-interface AnalysisMetadata {
-  participantCount: number;
-  messageCount: number;
-  timeRange: string;
-  sentiment: string;
-}
-
+// Interfaces
 interface StructuredAnalysis {
   type: string;
   title: string;
   summary: string;
-  sections: AnalysisSection[];
+  sections: Array<{
+    title: string;
+    content: string;
+    metrics: string[];
+    highlights: string[];
+  }>;
   keyFindings: string[];
   recommendations: string[];
-  metadata: AnalysisMetadata;
+  metadata: {
+    participantCount: number;
+    messageCount: number;
+    timeRange: string;
+    sentiment: string;
+  };
 }
 
-// RETRY UTILITY
-async function callWithRetry<T>(
-  fn: () => Promise<T>,
-  maxRetries = 3,
-  baseDelay = 1000
-): Promise<T> {
-  let lastError: Error | null = null;
+// Helper functions
+async function callWithRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       return await fn();
     } catch (error) {
-      lastError = error as Error;
-      if (attempt === maxRetries - 1) throw lastError;
-      const delay = baseDelay * Math.pow(2, attempt) * (Math.random() * 0.5 + 0.5);
-      await new Promise((resolve) => setTimeout(resolve, delay));
+      if (attempt === maxRetries - 1) throw error;
+      await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt)));
     }
   }
-  throw lastError!;
+  throw new Error("Max retries exceeded");
 }
 
-function countTokens(text: string): number {
-  return estimateTokens(text);
-}
-
-// Helper to convert structured data to readable format
 function renderStructuredResponse(data: StructuredAnalysis): string {
-  let response = `# ${data.title}\n\n`;
-  response += `${data.summary}\n\n`;
-  
+  let response = `# ${data.title}\n\n${data.summary}\n\n`;
   data.sections.forEach(section => {
-    response += `## ${section.title}\n`;
-    response += `${section.content}\n\n`;
-    
-    if (section.metrics.length > 0) {
-      response += `**Metrics:**\n`;
-      section.metrics.forEach(metric => response += `• ${metric}\n`);
-      response += `\n`;
-    }
-    
-    if (section.highlights.length > 0) {
-      response += `**Highlights:**\n`;
-      section.highlights.forEach(highlight => response += `• ${highlight}\n`);
-      response += `\n`;
-    }
+    response += `## ${section.title}\n${section.content}\n\n`;
+    if (section.metrics.length > 0) response += `**Metrics:**\n${section.metrics.map(m => `• ${m}\n`).join('')}\n`;
+    if (section.highlights.length > 0) response += `**Highlights:**\n${section.highlights.map(h => `• ${h}\n`).join('')}\n`;
   });
-  
-  if (data.keyFindings.length > 0) {
-    response += `## Key Findings\n`;
-    data.keyFindings.forEach(finding => response += `• ${finding}\n`);
-    response += `\n`;
-  }
-  
-  if (data.recommendations.length > 0) {
-    response += `## Recommendations\n`;
-    data.recommendations.forEach(rec => response += `• ${rec}\n`);
-  }
-  
+  if (data.keyFindings.length > 0) response += `## Key Findings\n${data.keyFindings.map(f => `• ${f}\n`).join('')}\n`;
+  if (data.recommendations.length > 0) response += `## Recommendations\n${data.recommendations.map(r => `• ${r}\n`).join('')}`;
   return response;
 }
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    
-    // Parse with userId included
     let { prompt, roomId, userId, model = "gpt-4o-mini", maxTokens = 1500, temperature = 0.2 } = SummarizeSchema.parse(body);
 
     if (!process.env.OPENROUTER_API_KEY) {
       return NextResponse.json({ error: "API configuration missing" }, { status: 500 });
     }
 
-    console.log("[API] Processing request:", {
-      roomId,
-      userId,
-      model,
-      promptLength: prompt.length
-    });
+    console.log("[API] Processing request:", { roomId, userId, model, promptLength: prompt.length });
 
     // Token optimization
     let finalPrompt = prompt;
-    const promptTokens = countTokens(prompt);
+    const promptTokens = estimateTokens(prompt);
     const maxInputTokens = modelLimits[model as keyof typeof modelLimits] - maxTokens - 200;
     
     if (promptTokens > maxInputTokens) {
       const lines = prompt.split("\n");
       const recentLines = lines.slice(-Math.floor(lines.length * 0.6));
-      const importantMarkers = lines.filter(line => 
-        line.includes("user:") || line.includes("assistant:") || line.includes("Room \"")
-      );
-      
-      finalPrompt = [
-        ...importantMarkers.slice(-10),
-        ...recentLines
-      ].join("\n") + "\n[Context optimized for recent content]";
+      const importantMarkers = lines.filter(line => line.includes("user:") || line.includes("assistant:") || line.includes("Room \""));
+      finalPrompt = [...importantMarkers.slice(-10), ...recentLines].join("\n") + "\n[Context optimized]";
     }
 
-    // AUTO-MODEL SELECTION
+    // Auto-model selection
     const userQuery = StructuredResponseBuilder.extractUserQuery(finalPrompt);
     const analysisType = StructuredResponseBuilder.determineAnalysisType(userQuery);
     if (!body.model) {
-      model = autoSelectModel(promptTokens, analysisType) as any;
-      console.log(`[API] Auto-selected model: ${model} for ${analysisType} (tokens: ${promptTokens})`);
+      model = "gpt-4o-mini"; // Simplified auto-selection
     }
 
     // Create enhanced prompt
@@ -378,24 +216,10 @@ export async function POST(req: NextRequest) {
       : finalPrompt;
 
     const enhancedPrompt = StructuredResponseBuilder.createAnalysisPrompt(finalPrompt, roomContext);
-    const refinedTokens = countTokens(enhancedPrompt);
-    const dynamicMaxTokens = Math.min(
-      maxTokens, 
-      modelLimits[model as keyof typeof modelLimits] - refinedTokens - 100
-    );
+    const refinedTokens = estimateTokens(enhancedPrompt);
+    const dynamicMaxTokens = Math.min(maxTokens, modelLimits[model as keyof typeof modelLimits] - refinedTokens - 100);
 
-    // Logging with selected model
-    console.log(JSON.stringify({
-      level: "info",
-      event: "structured_analysis_request",
-      roomId,
-      userId,
-      model,
-      analysisType,
-      timestamp: new Date().toISOString()
-    }));
-
-    // API call with retry
+    // API call
     const completion = await callWithRetry(() =>
       openai.chat.completions.create({
         model,
@@ -411,116 +235,58 @@ export async function POST(req: NextRequest) {
 
     const responseId = uuidv4();
     const timestamp = new Date().toISOString();
-
-    // Parse and validate the structured response
     const content = completion.choices[0]?.message?.content?.trim() || '';
     
+    // Parse structured response
     let structuredData: StructuredAnalysis;
     try {
       structuredData = JSON.parse(content);
-      
-      // Validate basic structure
       if (!structuredData.type || !structuredData.title || !structuredData.sections) {
         throw new Error("Invalid response structure");
       }
     } catch (parseError) {
       console.error("Failed to parse structured response:", parseError);
-      // Fallback structured response
       structuredData = {
         type: analysisType,
         title: "Conversation Analysis",
-        summary: "Analysis of the conversation based on your query.",
+        summary: "Analysis based on your query.",
         sections: [{
           title: "Key Insights",
-          content: content || "Unable to generate structured analysis. Please try again.",
+          content: content || "Unable to generate analysis.",
           metrics: [],
           highlights: []
         }],
         keyFindings: ["Analysis completed"],
-        recommendations: ["Review the conversation for more insights"],
-        metadata: {
-          participantCount: 0,
-          messageCount: 0,
-          timeRange: "Unknown",
-          sentiment: "Neutral"
-        }
+        recommendations: ["Review conversation for insights"],
+        metadata: { participantCount: 0, messageCount: 0, timeRange: "Unknown", sentiment: "Neutral" }
       };
     }
 
-    // Store in database - FIXED VERSION
-    const estimatedOutputTokens = countTokens(content);
+    // Store in database - USING SERVICE ROLE KEY TO BYPASS RLS
+    const estimatedOutputTokens = estimateTokens(content);
 
-    try {
-      console.log("[API] Attempting to save to ai_chat_history:", {
-        room_id: roomId,
-        user_id: userId, // Now properly defined
-        user_query_length: userQuery.length,
-        ai_response_length: content.length,
-        model_used: model
-      });
+    console.log("[API] Saving to ai_chat_history:", { room_id: roomId, user_id: userId });
 
-      const { data, error } = await supabase
-        .from("ai_chat_history")
-        .insert({
-          id: responseId,
-          room_id: roomId,
-          user_id: userId, // Now properly defined
-          user_query: userQuery,
-          ai_response: content,
-          model_used: model,
-          token_count: estimatedOutputTokens,
-          message_count: countTokens(finalPrompt),
-          created_at: timestamp,
-          analysis_type: analysisType,
-          structured_data: structuredData
-        })
-        .select()
-        .single();
-
-      if (error) {
-        console.error("[API] DB Insert Error Details:", {
-          code: error.code,
-          message: error.message,
-          details: error.details,
-          hint: error.hint
-        });
-        
-        // Return with persisted: false but still return the response
-        return NextResponse.json({
-          id: responseId,
-          timestamp,
-          model,
-          analysisType,
-          fullContent: renderStructuredResponse(structuredData),
-          structuredData,
-          persisted: false,
-          dbError: error.message,
-          metrics: {
-            inputTokens: refinedTokens,
-            outputTokens: estimatedOutputTokens,
-          }
-        });
-      }
-
-      console.log("[API] Successfully saved to ai_chat_history with ID:", data.id);
-      
-      // Successfully saved to database
-      return NextResponse.json({
+    const { data: dbData, error } = await supabase
+      .from("ai_chat_history")
+      .insert({
         id: responseId,
-        timestamp,
-        model,
-        analysisType,
-        fullContent: renderStructuredResponse(structuredData),
-        structuredData,
-        persisted: true,
-        metrics: {
-          inputTokens: refinedTokens,
-          outputTokens: estimatedOutputTokens,
-        }
-      });
+        room_id: roomId,
+        user_id: userId,
+        user_query: userQuery,
+        ai_response: content,
+        model_used: model,
+        token_count: estimatedOutputTokens,
+        message_count: estimateTokens(finalPrompt),
+        created_at: timestamp,
+        analysis_type: analysisType,
+        structured_data: structuredData
+      })
+      .select()
+      .single();
 
-    } catch (dbError) {
-      console.error("[API] Database Exception:", dbError);
+    if (error) {
+      console.error("[API] DB Insert Error:", error);
       return NextResponse.json({
         id: responseId,
         timestamp,
@@ -529,40 +295,27 @@ export async function POST(req: NextRequest) {
         fullContent: renderStructuredResponse(structuredData),
         structuredData,
         persisted: false,
-        metrics: {
-          inputTokens: refinedTokens,
-          outputTokens: estimatedOutputTokens,
-        }
+        metrics: { inputTokens: refinedTokens, outputTokens: estimatedOutputTokens }
       });
     }
 
-  } catch (error) {
-    console.error("[API] Unhandled Error:", {
-      error: (error as Error).message,
-      stack: (error as Error).stack,
-      timestamp: new Date().toISOString(),
+    console.log("[API] Successfully saved with ID:", dbData.id);
+    return NextResponse.json({
+      id: responseId,
+      timestamp,
+      model,
+      analysisType,
+      fullContent: renderStructuredResponse(structuredData),
+      structuredData,
+      persisted: true,
+      metrics: { inputTokens: refinedTokens, outputTokens: estimatedOutputTokens }
     });
 
+  } catch (error) {
+    console.error("[API] Unhandled Error:", error);
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { 
-          error: "Invalid input", 
-          details: error.issues.map(issue => ({
-            field: issue.path.join('.'),
-            message: issue.message
-          }))
-        },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Invalid input", details: error.issues }, { status: 400 });
     }
-
-    return NextResponse.json(
-      { 
-        error: "Analysis service temporarily unavailable",
-        code: "SERVICE_UNAVAILABLE",
-        suggestion: "Please try again in a few moments"
-      },
-      { status: 503 }
-    );
+    return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
   }
 }

@@ -590,53 +590,46 @@ function RoomAssistantComponent({
     [roomId, roomState.user, model]
   );
 
-  const callSummarizeApi = useCallback(
-    async (contextPrompt: string) => {
-      // Cancel previous request if exists
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
+// In your RoomAssistant component, update the callSummarizeApi function:
+const callSummarizeApi = useCallback(
+  async (contextPrompt: string) => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    
+    abortControllerRef.current = new AbortController();
+    const body = { 
+      prompt: contextPrompt, 
+      roomId, 
+      model, 
+      disable_stream: true,
+      userId: roomState.user?.id // CRITICAL: Include userId
+    };
+    
+    try {
+      const res = await fetch("/api/summarize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: abortControllerRef.current.signal,
+      });
       
-      abortControllerRef.current = new AbortController();
-      const body = { 
-        prompt: contextPrompt, 
-        roomId, 
-        model, 
-        disable_stream: true,
-        userId: roomState.user?.id // ADD THIS LINE
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      
+      const data = await res.json();
+      return {
+        content: data.fullContent || data.ai_response || "",
+        structuredData: data.structuredData,
+        persisted: !!data.persisted,
+        metrics: data.metrics || {},
       };
-      
-      try {
-        const res = await fetch("/api/summarize", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-          signal: abortControllerRef.current.signal,
-        });
-        
-        if (!res.ok) {
-          const errorData = await res.json().catch(() => ({}));
-          throw new Error(errorData.error || `HTTP ${res.status}`);
-        }
-        
-        const data = await res.json();
-        const fullContent = data.fullContent || data.ai_response || "";
-        
-        return {
-          content: fullContent,
-          structuredData: data.structuredData,
-          persisted: !!data.persisted,
-          metrics: data.metrics || {},
-        };
-      } catch (err: any) {
-        if (err.name === 'AbortError') {
-          throw new Error("Request cancelled");
-        }
-        throw new Error(err.message || "API failed");
-      }
-    },
-    [roomId, model, roomState.user] // ADD roomState.user to dependencies
-  );
+    } catch (err: any) {
+      if (err.name === 'AbortError') throw new Error("Request cancelled");
+      throw new Error(err.message || "API failed");
+    }
+  },
+  [roomId, model, roomState.user]
+);
 
   // ----------------- Optimized Event Handlers -----------------
   const handleSubmit = useCallback(
