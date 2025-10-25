@@ -162,27 +162,14 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
         </Popover>
 
         {/* AI Assistant Popover */}
-        <Popover open={isAssistantOpen} onOpenChange={setIsAssistantOpen}>
-          <PopoverTrigger asChild>
-            <Button variant="ghost" size="icon">
-              <Bot className="h-5 w-5" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent
-            side="bottom"
-            align="end"
-            sideOffset={0}
-            className="w-[350px] md:w-[400px] p-0 bg-popover text-popover-foreground backdrop-blur-lg border border-border shadow-xl rounded-xl max-h-[80vh]"
-          >
-            {selectedRoom ? (
-              <RoomAssistantDialog roomId={selectedRoom.id} roomName={selectedRoom.name} />
-            ) : (
-              <div className="p-4 text-center text-muted-foreground">
-                Select a room to use AI Assistant
-              </div>
-            )}
-          </PopoverContent>
-        </Popover>
+        {selectedRoom && (
+            <RoomAssistantDialog 
+              roomId={selectedRoom.id} 
+              roomName={selectedRoom.name}
+              open={isAssistantOpen}
+              onOpenChange={setIsAssistantOpen}
+            />
+          )}
 
         {/* Switch Room */}
         <Popover open={isSwitchRoomPopoverOpen} onOpenChange={setIsSwitchRoomPopoverOpen}>

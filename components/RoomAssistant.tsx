@@ -32,14 +32,6 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
 import { useMessage, type Imessage } from "@/lib/store/messages";
@@ -108,6 +100,8 @@ interface RoomAssistantProps {
   maxPromptLength?: number;
   maxHistory?: number;
   initialModel?: string;
+  dialogMode?: boolean; // Add this
+  onCloseDialog?: () => void; // Add this
 }
 
 // ----------------------------- Constants & Helpers --------------------------------
@@ -388,6 +382,8 @@ function RoomAssistantComponent({
   maxPromptLength = 2000,
   maxHistory = 30,
   initialModel = "gpt-4o-mini",
+  dialogMode,
+  onCloseDialog
 }: RoomAssistantProps) {
   // State
   const [prompt, setPrompt] = useState("");
@@ -852,17 +848,20 @@ const callSummarizeApi = useCallback(
     setTimeout(() => (userScrollingRef.current = false), 800);
   }, []);
 
-  // Keyboard shortcuts
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isExpanded) {
-        setIsExpanded(false);
+      if (e.key === 'Escape') {
+        if (isExpanded && !dialogMode) {
+          setIsExpanded(false);
+        } else if (dialogMode && onCloseDialog) {
+          onCloseDialog();
+        }
       }
     };
-
+  
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
-  }, [isExpanded]);
+  }, [isExpanded, dialogMode, onCloseDialog]);
 
   useEffect(() => {
     textareaRef.current?.focus();
@@ -952,9 +951,11 @@ const callSummarizeApi = useCallback(
   return (
     <Card className={cn(
       "flex flex-col shadow-xl border-border/20 transition-all duration-300",
-      isExpanded 
-        ? "fixed w-[80vw] h-[60vh] inset-4 z-50 bg-background/95 backdrop-blur-md" 
-        : "h-full w-[30vw] md:h-[40vh] lg:h-[60vh]",
+      dialogMode 
+        ? "h-full w-full" 
+        : isExpanded 
+          ? "fixed w-[80vw] h-[60vh] inset-4 z-50 bg-background/95 backdrop-blur-md" 
+          : "h-full w-[30vw] md:h-[40vh] lg:h-[60vh]",
       className
     )}>
       <CardHeader className="flex-shrink-0 border-b bg-gradient-to-r from-background via-muted to-background/80 p-4 backdrop-blur-sm">
@@ -968,34 +969,42 @@ const callSummarizeApi = useCallback(
               <Bot className="h-6 w-6 text-primary-foreground drop-shadow-sm" />
             </motion.div>
             <div className="flex items-center gap-2">
-              <CardTitle className="text-xl font-bold leading-tight">AI Assistant</CardTitle>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setIsExpanded(!isExpanded)}
-                      className="h-9 w-9 rounded-full hover:bg-accent/80 transition-all"
-                    >
-                      {isExpanded ? (
-                        <Minimize2 className="h-4 w-4" />
-                      ) : (
-                        <Maximize2 className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    {isExpanded ? "Minimize" : "Expand"}
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Badge variant="secondary" className="px-2 py-0.5">{model}</Badge>
-                <span className="bg-muted/50 px-2 py-0.5 rounded-full">#{roomName}</span>
-              </div>
-            </div>
-          </div>
+  <CardTitle className="text-xl font-bold leading-tight">AI Assistant</CardTitle>
+  <TooltipProvider>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => {
+            if (dialogMode && onCloseDialog) {
+              onCloseDialog();
+            } else {
+              setIsExpanded(!isExpanded);
+            }
+          }}
+          className="h-9 w-9 rounded-full hover:bg-accent/80 transition-all"
+        >
+          {dialogMode ? (
+            <Minimize2 className="h-4 w-4" />
+          ) : isExpanded ? (
+            <Minimize2 className="h-4 w-4" />
+          ) : (
+            <Maximize2 className="h-4 w-4" />
+          )}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>
+        {dialogMode ? "Close" : isExpanded ? "Minimize" : "Expand"}
+      </TooltipContent>
+    </Tooltip>
+  </TooltipProvider>
+  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+    <Badge variant="secondary" className="px-2 py-0.5">{model}</Badge>
+    <span className="bg-muted/50 px-2 py-0.5 rounded-full">#{roomName}</span>
+  </div>
+</div>
+</div>
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full hover:bg-accent/80 transition-all">
@@ -1012,9 +1021,9 @@ const callSummarizeApi = useCallback(
           onScroll={onUserScroll} 
           className="flex-1 relative room-assistant-scroll scrollbar-custom"
         >
-          <div className={cn(
-            "p-4 space-y-6 mx-auto ",
-            isExpanded ? "max-w-6xl" : "max-w-4xl"
+        <div className={cn(
+            "p-4 space-y-6 mx-auto",
+            (isExpanded || dialogMode) ? "max-w-6xl" : "max-w-4xl"
           )}>
             <AnimatePresence mode="popLayout">
               {messagePairs.length > 0 ? (
