@@ -392,15 +392,19 @@ function RoomAssistantComponent({
   // State
   const [prompt, setPrompt] = useState("");
 
-  const [internalIsExpanded, setInternalIsExpanded] = useState(false);
+  const [internalIsExpanded, setInternalIsExpanded] = useState(externalIsExpanded ?? false);
   
   // Use external control in dialog mode, internal state in inline mode
   const isExpanded = dialogMode ? externalIsExpanded : internalIsExpanded;
   
-  const setIsExpanded = dialogMode ? 
-    (expanded: boolean) => { if (onToggleExpand && expanded !== isExpanded) onToggleExpand(); } : 
-    setInternalIsExpanded;
-
+// FIXED (always toggle via callback; removes redundancy):
+const setIsExpanded = useCallback(() => {
+  if (dialogMode && onToggleExpand) {
+    onToggleExpand();
+  } else {
+    setInternalIsExpanded(prev => !prev);
+  }
+}, [dialogMode, onToggleExpand]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -865,7 +869,7 @@ const callSummarizeApi = useCallback(
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         if (isExpanded && !dialogMode) {
-          setIsExpanded(false);
+          setIsExpanded(); // Toggles to false (since expanded)
         } else if (dialogMode && onCloseDialog) {
           onCloseDialog();
         }
@@ -874,8 +878,8 @@ const callSummarizeApi = useCallback(
   
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
-  }, [isExpanded, dialogMode, onCloseDialog]);
-
+  }, [isExpanded, dialogMode, onCloseDialog, setIsExpanded]);
+  
   useEffect(() => {
     textareaRef.current?.focus();
   }, []);
@@ -962,13 +966,13 @@ const callSummarizeApi = useCallback(
 
   // ----------------- Render -----------------
   return (
-   <Card className={cn(
-  "flex flex-col shadow-xl border-border/20 transition-all duration-300",
+<Card className={cn(
+  "flex flex-col shadow-xl border-border/20 transition-all duration-300 relative", // Add 'relative' base
   dialogMode 
     ? "h-full w-full" 
     : isExpanded 
-      ? "fixed w-[80vw] h-[60vh] inset-4 z-50 bg-background/95 backdrop-blur-md" 
-      : "h-full w-[30vw] md:h-[40vh] lg:h-[60vh]",
+      ? "w-[80vw] h-full z-10 bg-background/95 backdrop-blur-sm shadow-2xl"  // Relative, no 'fixed/inset'; z-10 for mild elevation
+      : "h-full w-[30vw] md:h-[40vh] lg:h-[60vh]", // Unchanged non-expanded
   className
 )}>
       <CardHeader className="flex-shrink-0 border-b bg-gradient-to-r from-background via-muted to-background/80 p-4 backdrop-blur-sm">
@@ -989,15 +993,8 @@ const callSummarizeApi = useCallback(
       <Button
         variant="ghost"
         size="icon"
-        onClick={() => {
-          if (dialogMode && onToggleExpand) {
-            // Toggle dialog expansion
-            onToggleExpand();
-          } else {
-            // Toggle inline expansion
-            setIsExpanded(!isExpanded);
-          }
-        }}
+       // FIXED (unified call; leverages the simplified setIsExpanded):
+onClick={setIsExpanded}
         className="h-9 w-9 rounded-full hover:bg-accent/80 transition-all"
       >
         {dialogMode ? (
@@ -1017,14 +1014,8 @@ const callSummarizeApi = useCallback(
       </Button>
     </TooltipTrigger>
     <TooltipContent>
-        {dialogMode ? (
-          isExpanded ? "Minimize Width" : "Expand Width"
-        ) : isExpanded ? (
-          "Minimize"
-        ) : (
-          "Expand"
-        )}
-      </TooltipContent>
+  {isExpanded ? "Minimize Width" : "Expand Width"}
+</TooltipContent>
   </Tooltip>
 </TooltipProvider>
   <div className="flex items-center gap-2 text-xs text-muted-foreground">
