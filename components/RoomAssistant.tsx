@@ -567,6 +567,7 @@ function RoomAssistantComponent({
             user_query: userQuery,
             ai_response: aiResponse,
             structured_data: structuredData,
+            analysis_type: structuredData?.type, // ADD THIS LINE
             model_used: model,
             token_count: metadata?.tokenCount,
             message_count: metadata?.messageCount,
@@ -580,7 +581,7 @@ function RoomAssistantComponent({
         }
         
         const result = await res.json();
-        return !!result; // Return true if we got a valid response
+        return !!result;
       } catch (err) {
         console.error("Failed to save AI chat history:", err);
         return false;
