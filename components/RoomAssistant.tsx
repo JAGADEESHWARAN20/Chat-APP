@@ -945,8 +945,8 @@ const callSummarizeApi = useCallback(
     <Card className={cn(
       "flex flex-col shadow-xl border-border/20 transition-all duration-300",
       isExpanded 
-        ? "fixed inset-4 z-50 bg-background/95 backdrop-blur-md" 
-        : "h-full",
+        ? "fixed w-[80vw] h-[60vh] inset-4 z-50 bg-background/95 backdrop-blur-md" 
+        : "h-full w-[30vw] md:h-[40vh] lg:h-[60vh]",
       className
     )}>
       <CardHeader className="flex-shrink-0 border-b bg-gradient-to-r from-background via-muted to-background/80 p-4 backdrop-blur-sm">
@@ -1002,11 +1002,11 @@ const callSummarizeApi = useCallback(
       <ScrollArea 
           ref={scrollContainerRef} 
           onScroll={onUserScroll} 
-          className="flex-1 relative h-[50vh] room-assistant-scroll scrollbar-custom"
+          className="flex-1 relative room-assistant-scroll scrollbar-custom"
         >
           <div className={cn(
             "p-4 space-y-6 mx-auto ",
-            isExpanded ? "w-[80vw]" : "w-[40vw]"
+            isExpanded ? "max-w-6xl" : "max-w-4xl"
           )}>
             <AnimatePresence mode="popLayout">
               {messagePairs.length > 0 ? (
