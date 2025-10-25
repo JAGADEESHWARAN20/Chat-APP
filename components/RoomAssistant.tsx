@@ -100,8 +100,10 @@ interface RoomAssistantProps {
   maxPromptLength?: number;
   maxHistory?: number;
   initialModel?: string;
-  dialogMode?: boolean; // Add this
-  onCloseDialog?: () => void; // Add this
+  dialogMode?: boolean;
+  onCloseDialog?: () => void;
+  isExpanded?: boolean; // Add this
+  onToggleExpand?: () => void; // Add this
 }
 
 // ----------------------------- Constants & Helpers --------------------------------
@@ -383,11 +385,22 @@ function RoomAssistantComponent({
   maxHistory = 30,
   initialModel = "gpt-4o-mini",
   dialogMode,
-  onCloseDialog
+  onCloseDialog,
+  isExpanded: externalIsExpanded, // External control for dialog mode
+  onToggleExpand // External toggle for dialog mode
 }: RoomAssistantProps) {
   // State
   const [prompt, setPrompt] = useState("");
-  const [isExpanded, setIsExpanded] = useState(false);
+
+  const [internalIsExpanded, setInternalIsExpanded] = useState(false);
+  
+  // Use external control in dialog mode, internal state in inline mode
+  const isExpanded = dialogMode ? externalIsExpanded : internalIsExpanded;
+  
+  const setIsExpanded = dialogMode ? 
+    (expanded: boolean) => { if (onToggleExpand && expanded !== isExpanded) onToggleExpand(); } : 
+    setInternalIsExpanded;
+    
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -971,35 +984,49 @@ const callSummarizeApi = useCallback(
             <div className="flex items-center gap-2">
   <CardTitle className="text-xl font-bold leading-tight">AI Assistant</CardTitle>
   <TooltipProvider>
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => {
-            if (dialogMode) {
-              // Add expand functionality for dialog mode too
-              setIsExpanded(!isExpanded);
-            } else {
-              setIsExpanded(!isExpanded);
-            }
-          }}
-          className="h-9 w-9 rounded-full hover:bg-accent/80 transition-all"
-        >
-          {dialogMode ? (
-  <Minimize2 className="h-4 w-4" />
-) : isExpanded ? (
-  <Minimize2 className="h-4 w-4" />
-) : (
-  <Maximize2 className="h-4 w-4" />
-)}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>
-        {dialogMode ? "Close" : isExpanded ? "Minimize" : "Expand"}
-      </TooltipContent>
-    </Tooltip>
-  </TooltipProvider>
+  <Tooltip>
+    <TooltipTrigger asChild>
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => {
+          if (dialogMode && onToggleExpand) {
+            // Toggle dialog expansion
+            onToggleExpand();
+          } else {
+            // Toggle inline expansion
+            setIsExpanded(!isExpanded);
+          }
+        }}
+        className="h-9 w-9 rounded-full hover:bg-accent/80 transition-all"
+      >
+        {dialogMode ? (
+          // In dialog mode - show expand/minimize based on isExpanded prop
+          isExpanded ? (
+            <Minimize2 className="h-4 w-4" />
+          ) : (
+            <Maximize2 className="h-4 w-4" />
+          )
+        ) : isExpanded ? (
+          // In inline mode, expanded - show minimize icon
+          <Minimize2 className="h-4 w-4" />
+        ) : (
+          // In inline mode, not expanded - show expand icon
+          <Maximize2 className="h-4 w-4" />
+        )}
+      </Button>
+    </TooltipTrigger>
+    <TooltipContent>
+      {dialogMode ? (
+        isExpanded ? "Minimize Width" : "Expand Width"
+      ) : isExpanded ? (
+        "Minimize"
+      ) : (
+        "Expand"
+      )}
+    </TooltipContent>
+  </Tooltip>
+</TooltipProvider>
   <div className="flex items-center gap-2 text-xs text-muted-foreground">
     <span className="bg-muted/50 px-2 py-0.5 rounded-full">#{roomName}</span>
     <Popover>
