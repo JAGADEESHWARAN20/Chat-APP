@@ -1,4 +1,3 @@
-// RoomAssistant.tsx - Optimized version with proper context usage and memoization
 "use client";
 
 import React, {
@@ -112,20 +111,6 @@ const MODELS = [
 ] as const;
 
 const generateId = (): string => `msg_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-
-const sanitizeHtml = (html: string) => {
-  if (typeof window === "undefined") return html;
-  return DOMPurify.sanitize(html, {
-    ALLOWED_TAGS: [
-      "div", "span", "p", "h1", "h2", "h3", "h4", "h5", "h6",
-      "ul", "ol", "li", "table", "thead", "tbody", "tr", "td", "th",
-      "strong", "em", "b", "i", "a", "br", "hr", "code", "pre",
-      "blockquote", "img",
-    ],
-    ALLOWED_ATTR: ["class", "style", "href", "target", "rel", "alt", "src", "scope"],
-    KEEP_CONTENT: true,
-  });
-};
 
 const countTokens = (text: string) => estimateTokens(text);
 
@@ -485,8 +470,8 @@ function RoomAssistantComponent({
           structuredData: m.structuredData 
         }));
       localStorage.setItem(key, JSON.stringify(toSave));
-    } catch (error) {
-      console.error("Failed to save to local storage:", error);
+    } catch (err) {
+      console.error("Failed to save to local storage:", err);
     }
   }, [roomId, maxHistory]);
 
@@ -504,8 +489,8 @@ function RoomAssistantComponent({
         }));
         setMessages(parsed.slice(-maxHistory));
       }
-    } catch (error) {
-      console.error("Failed to load from localStorage:", error);
+    } catch (err) {
+      console.error("Failed to load from localStorage:", err);
     }
   }, [roomId, maxHistory]);
 
@@ -516,44 +501,58 @@ function RoomAssistantComponent({
       const res = await fetch(`/api/ai-chat/history?roomId=${roomId}&userId=${roomState.user.id}`);
       if (res.ok) {
         const history = await res.json();
-        const pairedMessages: ChatMessage[] = [];
         
-        history.forEach((item: any) => {
-          // User query message
-          const userMsg: ChatMessage = {
-            id: `user-${item.id}`,
-            role: "user",
-            content: item.user_query || "Previous query",
-            timestamp: new Date(item.created_at),
-            isPersisted: true,
-          };
+        // Check if we actually got data
+        if (Array.isArray(history) && history.length > 0) {
+          const pairedMessages: ChatMessage[] = [];
           
-          // AI response message
-          const aiMsg: ChatMessage = {
-            id: item.id,
-            role: "assistant",
-            content: item.ai_response,
-            structuredData: item.structured_data,
-            timestamp: new Date(item.created_at),
-            model: item.model_used,
-            isPersisted: true,
-            metadata: {
-              tokenCount: item.token_count,
-              messageCount: item.message_count,
-            },
-          };
+          history.forEach((item: any) => {
+            // Only process if we have valid data
+            if (item.id && item.user_query && item.ai_response) {
+              // User query message
+              const userMsg: ChatMessage = {
+                id: `user-${item.id}`,
+                role: "user",
+                content: item.user_query,
+                timestamp: new Date(item.created_at),
+                isPersisted: true,
+              };
+              
+              // AI response message
+              const aiMsg: ChatMessage = {
+                id: item.id,
+                role: "assistant",
+                content: item.ai_response,
+                structuredData: item.structured_data || undefined,
+                timestamp: new Date(item.created_at),
+                model: item.model_used || model,
+                isPersisted: true,
+                metadata: {
+                  tokenCount: item.token_count,
+                  messageCount: item.message_count,
+                },
+              };
+              
+              pairedMessages.push(userMsg, aiMsg);
+            }
+          });
           
-          pairedMessages.push(userMsg, aiMsg);
-        });
+          if (pairedMessages.length > 0) {
+            setMessages(pairedMessages.slice(-maxHistory * 2));
+            return;
+          }
+        }
         
-        setMessages(pairedMessages.slice(-maxHistory * 2));
+        // If no valid history from API, fall back to localStorage
+        console.log("No valid history from API, falling back to localStorage");
+        loadFromLocalStorage();
         return;
       }
-    } catch (error) {
-      console.error("Failed to load AI chat history:", error);
+    } catch (err) {
+      console.error("Failed to load AI chat history:", err);
     }
     loadFromLocalStorage();
-  }, [roomId, roomState.user, loadFromLocalStorage, maxHistory]);
+  }, [roomId, roomState.user, loadFromLocalStorage, maxHistory, model]);
 
   const saveToAIChatHistory = useCallback(
     async (userQuery: string, aiResponse: string, structuredData?: StructuredAnalysis, metadata?: { tokenCount?: number; messageCount?: number }) => {
@@ -573,9 +572,17 @@ function RoomAssistantComponent({
             message_count: metadata?.messageCount,
           }),
         });
-        return res.ok;
-      } catch (error) {
-        console.error("Failed to save AI chat history:", error);
+        
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          console.error("Failed to save AI chat history:", errorData);
+          return false;
+        }
+        
+        const result = await res.json();
+        return !!result; // Return true if we got a valid response
+      } catch (err) {
+        console.error("Failed to save AI chat history:", err);
         return false;
       }
     },
@@ -666,6 +673,14 @@ function RoomAssistantComponent({
       try {
         const { content: fullResponse, structuredData, persisted, metrics } = await callSummarizeApi(contextPrompt);
 
+        // Debug logging
+        console.log("API Response:", {
+          fullResponse: fullResponse?.substring(0, 100) + "...",
+          structuredData: !!structuredData,
+          persisted: persisted,
+          metrics: metrics
+        });
+
         const aiMsg: ChatMessage = {
           id: generateId(),
           role: "assistant",
@@ -688,15 +703,28 @@ function RoomAssistantComponent({
           });
         });
 
+        // Always try to save to database, but don't block on failure
         if (!aiMsg.isPersisted) {
-          const saved = await saveToAIChatHistory(prompt, fullResponse, structuredData, aiMsg.metadata);
-          if (saved) {
-            startTransition(() => setMessages((prev) => 
-              prev.map((m) => m.id === aiMsg.id ? { ...m, isPersisted: true } : m)
-            ));
-            toast.success("Response saved to history!");
-          } else {
-            toast.warning("Saved locally - database sync failed.");
+          console.log("Saving to database:", {
+            userQuery: prompt,
+            aiResponseLength: fullResponse?.length,
+            hasStructuredData: !!structuredData
+          });
+
+          try {
+            const saved = await saveToAIChatHistory(prompt, fullResponse, structuredData, aiMsg.metadata);
+            if (saved) {
+              startTransition(() => setMessages((prev) => 
+                prev.map((m) => m.id === aiMsg.id ? { ...m, isPersisted: true } : m)
+              ));
+              toast.success("Response saved to history!");
+            } else {
+              // If DB save fails, mark as not persisted but still show success
+              console.warn("Database save failed, keeping locally");
+            }
+          } catch (saveError) {
+            console.error("Failed to save to database:", saveError);
+            // Don't show error toast to user, just log it
           }
         }
       } catch (err: any) {
@@ -717,8 +745,8 @@ function RoomAssistantComponent({
       try {
         await fetch(`/api/ai-chat/history?roomId=${roomId}&userId=${roomState.user.id}`, { method: "DELETE" });
         toast.success("Chat history cleared from database!");
-      } catch (error) {
-        console.error("Failed to clear database history:", error);
+      } catch (err) {
+        console.error("Failed to clear database history:", err);
         toast.warning("Cleared locally only");
       }
     }
@@ -793,8 +821,8 @@ function RoomAssistantComponent({
         });
       toast.success("Message added to room chat!");
       setPrompt("");
-    } catch (error) {
-      console.error("Failed to add message:", error);
+    } catch (err) {
+      console.error("Failed to add message:", err);
       toast.error("Failed to add message to room chat");
     }
   }, [prompt, roomState.user, roomId]);
@@ -854,9 +882,9 @@ function RoomAssistantComponent({
 
   // ----------------- Memoized UI Components -----------------
   const modelOptions = useMemo(() => 
-    MODELS.map(model => (
-      <SelectItem key={model} value={model} className="rounded-lg">
-        {model}
+    MODELS.map(modelOption => (
+      <SelectItem key={modelOption} value={modelOption} className="rounded-lg">
+        {modelOption}
       </SelectItem>
     )), 
   []);
@@ -984,12 +1012,12 @@ function RoomAssistantComponent({
 
       <ScrollArea ref={scrollContainerRef} onScroll={onUserScroll} className="flex-1 relative">
         <div className={cn(
-          "p-4 space-y-6 mx-auto overflow-y-scroll",
+          "p-4 space-y-6 mx-auto",
           isExpanded ? "max-w-6xl" : "max-w-4xl"
         )}>
           <AnimatePresence mode="popLayout">
             {messagePairs.length > 0 ? (
-              messagePairs.map((pair, idx) => (
+              messagePairs.map((pair) => (
                 <PairedMessageRenderer 
                   key={pair.user.id + (pair.assistant?.id || '')} 
                   pair={pair} 
