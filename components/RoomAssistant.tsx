@@ -51,7 +51,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Separator } from "@/components/ui/separator";
 import ReactMarkdown from "react-markdown";
-import DOMPurify from "dompurify";
+// import DOMPurify from "dompurify";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { cn } from "@/lib/utils";
 import { estimateTokens } from "@/lib/token-utils";
@@ -601,7 +601,8 @@ function RoomAssistantComponent({
         prompt: contextPrompt, 
         roomId, 
         model, 
-        disable_stream: true 
+        disable_stream: true,
+        userId: roomState.user?.id // ADD THIS LINE
       };
       
       try {
@@ -633,7 +634,7 @@ function RoomAssistantComponent({
         throw new Error(err.message || "API failed");
       }
     },
-    [roomId, model]
+    [roomId, model, roomState.user] // ADD roomState.user to dependencies
   );
 
   // ----------------- Optimized Event Handlers -----------------
@@ -644,14 +645,14 @@ function RoomAssistantComponent({
         toast.error("Please log in and enter a query.");
         return;
       }
-
+  
       const userMsg: ChatMessage = {
         id: generateId(),
         role: "user",
         content: prompt,
         timestamp: new Date(),
       };
-
+  
       startTransition(() => {
         setMessages((prev) => [...prev, userMsg]);
         setPrompt("");
@@ -670,75 +671,69 @@ function RoomAssistantComponent({
         ? `Room "${roomName}" recent messages:\n${recentRoomMessages}\n\nChat History:\n${truncatedHistory}\n\nuser: ${prompt}`
         : `Room "${roomName}"\nChat History:\n${truncatedHistory}\n\nuser: ${prompt}`;
 
-      try {
-        const { content: fullResponse, structuredData, persisted, metrics } = await callSummarizeApi(contextPrompt);
-
-        // Debug logging
-        console.log("API Response:", {
-          fullResponse: fullResponse?.substring(0, 100) + "...",
-          structuredData: !!structuredData,
-          persisted: persisted,
-          metrics: metrics
-        });
-
-        const aiMsg: ChatMessage = {
-          id: generateId(),
-          role: "assistant",
-          content: fullResponse || "No analysis available.",
-          structuredData,
-          timestamp: new Date(),
-          model,
-          isPersisted: Boolean(persisted),
-          metadata: {
-            tokenCount: metrics.outputTokens || countTokens(fullResponse),
-            messageCount: messages.length + 1,
-          },
-        };
-
-        startTransition(() => {
-          setMessages((prev) => {
-            const updated = [...prev, aiMsg].slice(-maxHistory);
-            if (!aiMsg.isPersisted) saveToLocal(updated);
-            return updated;
+        try {
+          const { content: fullResponse, structuredData, persisted, metrics } = await callSummarizeApi(contextPrompt);
+    
+          console.log("API Response persisted status:", persisted);
+    
+          const aiMsg: ChatMessage = {
+            id: generateId(),
+            role: "assistant",
+            content: fullResponse || "No analysis available.",
+            structuredData,
+            timestamp: new Date(),
+            model,
+            isPersisted: Boolean(persisted), // This should be true if API saved successfully
+            metadata: {
+              tokenCount: metrics.outputTokens || countTokens(fullResponse),
+              messageCount: messages.length + 1,
+            },
+          };
+    
+          startTransition(() => {
+            setMessages((prev) => {
+              const updated = [...prev, aiMsg].slice(-maxHistory);
+              // Only save to local storage if not persisted in database
+              if (!aiMsg.isPersisted) {
+                saveToLocal(updated);
+              }
+              return updated;
+            });
           });
-        });
-
-        // Always try to save to database, but don't block on failure
-        if (!aiMsg.isPersisted) {
-          console.log("Saving to database:", {
-            userQuery: prompt,
-            aiResponseLength: fullResponse?.length,
-            hasStructuredData: !!structuredData
-          });
-
-          try {
-            const saved = await saveToAIChatHistory(prompt, fullResponse, structuredData, aiMsg.metadata);
-            if (saved) {
-              startTransition(() => setMessages((prev) => 
-                prev.map((m) => m.id === aiMsg.id ? { ...m, isPersisted: true } : m)
-              ));
-              toast.success("Response saved to history!");
-            } else {
-              // If DB save fails, mark as not persisted but still show success
-              console.warn("Database save failed, keeping locally");
+    
+          // If API didn't persist, try to save via the history API
+          if (!aiMsg.isPersisted) {
+            console.log("API didn't persist, trying history API...");
+            try {
+              const saved = await saveToAIChatHistory(prompt, fullResponse, structuredData, aiMsg.metadata);
+              if (saved) {
+                startTransition(() => setMessages((prev) => 
+                  prev.map((m) => m.id === aiMsg.id ? { ...m, isPersisted: true } : m)
+                ));
+                toast.success("Response saved to history!");
+              } else {
+                console.warn("Failed to save via history API, keeping locally");
+                toast.warning("Saved locally - database sync failed.");
+              }
+            } catch (saveError) {
+              console.error("Failed to save to database:", saveError);
+              toast.warning("Saved locally - database sync failed.");
             }
-          } catch (saveError) {
-            console.error("Failed to save to database:", saveError);
-            // Don't show error toast to user, just log it
+          } else {
+            toast.success("Response saved to history!");
           }
+        } catch (err: any) {
+          if (err.message !== "Request cancelled") {
+            setError(err.message);
+            toast.error(err.message);
+          }
+        } finally {
+          setLoading(false);
+          abortControllerRef.current = null;
         }
-      } catch (err: any) {
-        if (err.message !== "Request cancelled") {
-          setError(err.message);
-          toast.error(err.message);
-        }
-      } finally {
-        setLoading(false);
-        abortControllerRef.current = null;
-      }
-    },
-    [prompt, messages, recentRoomMessages, roomName, model, callSummarizeApi, maxHistory, saveToAIChatHistory, saveToLocal, roomState.user]
-  );
+      },
+      [prompt, messages, recentRoomMessages, roomName, model, callSummarizeApi, maxHistory, saveToAIChatHistory, saveToLocal, roomState.user]
+    );
 
   const clearHistory = useCallback(async () => {
     if (roomState.user?.id) {

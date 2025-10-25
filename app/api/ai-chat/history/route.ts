@@ -1,20 +1,5 @@
-// app/api/ai-chat/history/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase/server';
-
-// Extended interface to include user queries
-interface ChatHistoryItem {
-  id: string;
-  room_id: string;
-  user_id: string;
-  user_query: string;
-  ai_response: string;
-  model_used?: string;
-  token_count?: number;
-  message_count?: number;
-  structured_data?: any;
-  created_at: string;
-}
 
 export async function GET(request: NextRequest) {
   try {
@@ -36,7 +21,7 @@ export async function GET(request: NextRequest) {
       .select('*')
       .eq('room_id', roomId)
       .eq('user_id', userId)
-      .order('created_at', { ascending: true }) // Changed to ascending to maintain conversation order
+      .order('created_at', { ascending: true })
       .limit(50);
 
     if (error) {
@@ -80,6 +65,14 @@ export async function POST(request: NextRequest) {
 
     const supabase = await supabaseServer();
 
+    console.log('[AI Chat History] Saving to database:', {
+      room_id,
+      user_id,
+      user_query_length: user_query.length,
+      ai_response_length: ai_response.length,
+      model_used
+    });
+
     const { data, error } = await supabase
       .from('ai_chat_history')
       .insert([
@@ -98,13 +91,18 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) {
-      console.error('Error saving AI chat history:', error);
+      console.error('Error saving AI chat history:', {
+        code: error.code,
+        message: error.message,
+        details: error.details
+      });
       return NextResponse.json(
         { error: 'Failed to save chat history' },
         { status: 500 }
       );
     }
 
+    console.log('[AI Chat History] Successfully saved with ID:', data.id);
     return NextResponse.json(data);
   } catch (error) {
     console.error('Error in AI chat history API:', error);

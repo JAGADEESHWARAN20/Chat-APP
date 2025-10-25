@@ -5,10 +5,11 @@ import { createClient } from "@supabase/supabase-js";
 import { v4 as uuidv4 } from "uuid";
 import { estimateTokens } from '@/lib/token-utils';
 
-// Enhanced Schema with expanded model enum
+// Enhanced Schema with expanded model enum - ADDED userId FIELD
 const SummarizeSchema = z.object({
   prompt: z.string().min(1, "Prompt cannot be empty").max(15000, "Prompt too long"),
   roomId: z.string().min(1, "Room ID required for persistence"),
+  userId: z.string().min(1, "User ID required for persistence"), // ADDED THIS
   model: z.enum([
     "gpt-3.5-turbo",
     "gpt-4o-mini",
@@ -144,7 +145,7 @@ ${this.getAnalysisFocus(analysisType)}
 IMPORTANT: Return ONLY valid JSON. No additional text or explanations.`;
   }
 
-   static extractUserQuery(fullPrompt: string): string {
+  static extractUserQuery(fullPrompt: string): string {
     const lines = fullPrompt.split("\n");
     const userLines = lines.filter((line) => line.startsWith("user:"));
     return userLines.length > 0
@@ -152,7 +153,7 @@ IMPORTANT: Return ONLY valid JSON. No additional text or explanations.`;
       : fullPrompt.trim();
   }
 
-   static determineAnalysisType(query: string): string {
+  static determineAnalysisType(query: string): string {
     const lowerQuery = query.toLowerCase();
     
     if (/(summary|overview|recap|tl;dr)/i.test(lowerQuery)) return "CONVERSATION_SUMMARY";
@@ -330,11 +331,20 @@ function renderStructuredResponse(data: StructuredAnalysis): string {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    let { prompt, roomId, model = "gpt-4o-mini", maxTokens = 1500, temperature = 0.2 } = SummarizeSchema.parse(body);
+    
+    // Parse with userId included
+    let { prompt, roomId, userId, model = "gpt-4o-mini", maxTokens = 1500, temperature = 0.2 } = SummarizeSchema.parse(body);
 
     if (!process.env.OPENROUTER_API_KEY) {
       return NextResponse.json({ error: "API configuration missing" }, { status: 500 });
     }
+
+    console.log("[API] Processing request:", {
+      roomId,
+      userId,
+      model,
+      promptLength: prompt.length
+    });
 
     // Token optimization
     let finalPrompt = prompt;
@@ -379,6 +389,7 @@ export async function POST(req: NextRequest) {
       level: "info",
       event: "structured_analysis_request",
       roomId,
+      userId,
       model,
       analysisType,
       timestamp: new Date().toISOString()
@@ -440,11 +451,20 @@ export async function POST(req: NextRequest) {
     const estimatedOutputTokens = countTokens(content);
 
     try {
+      console.log("[API] Attempting to save to ai_chat_history:", {
+        room_id: roomId,
+        user_id: userId, // Now properly defined
+        user_query_length: userQuery.length,
+        ai_response_length: content.length,
+        model_used: model
+      });
+
       const { data, error } = await supabase
         .from("ai_chat_history")
         .insert({
           id: responseId,
           room_id: roomId,
+          user_id: userId, // Now properly defined
           user_query: userQuery,
           ai_response: content,
           model_used: model,
@@ -458,7 +478,13 @@ export async function POST(req: NextRequest) {
         .single();
 
       if (error) {
-        console.error("[API] DB Insert Error:", error);
+        console.error("[API] DB Insert Error Details:", {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint
+        });
+        
         // Return with persisted: false but still return the response
         return NextResponse.json({
           id: responseId,
@@ -468,6 +494,7 @@ export async function POST(req: NextRequest) {
           fullContent: renderStructuredResponse(structuredData),
           structuredData,
           persisted: false,
+          dbError: error.message,
           metrics: {
             inputTokens: refinedTokens,
             outputTokens: estimatedOutputTokens,
@@ -475,6 +502,8 @@ export async function POST(req: NextRequest) {
         });
       }
 
+      console.log("[API] Successfully saved to ai_chat_history with ID:", data.id);
+      
       // Successfully saved to database
       return NextResponse.json({
         id: responseId,
@@ -491,8 +520,7 @@ export async function POST(req: NextRequest) {
       });
 
     } catch (dbError) {
-      console.error("[API] Database Error:", dbError);
-      // Return response even if DB fails
+      console.error("[API] Database Exception:", dbError);
       return NextResponse.json({
         id: responseId,
         timestamp,
