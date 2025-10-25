@@ -981,8 +981,8 @@ const callSummarizeApi = useCallback(
   dialogMode 
     ? "h-full w-full"  // Keep for dialog (fills fixed DialogContent)
     : isExpanded 
-      ? "w-[90vw] h-[70vh] md:h-[80vh] lg:h-[85vh] z-10 bg-background/95 backdrop-blur-sm shadow-2xl"  // Fixed vh, taller on LG
-      : "w-[70vw] h-[50vh] md:h-[40vh] lg:h-[60vh]",  // Fixed vh base, no h-full; compact on small
+      ? "w-[90vw] h-[30vh] md:h-[30vh] lg:h-[25vh] z-10 bg-background/95 backdrop-blur-sm shadow-2xl"  // Fixed vh, taller on LG
+      : "w-[70vw] h-[50vh] md:h-[30vh] lg:h-[30vh]",  // Fixed vh base, no h-full; compact on small
   className
 )}>
       <CardHeader className="flex-shrink-0 border-b bg-gradient-to-r from-background via-muted to-background/80 p-4 backdrop-blur-sm">
