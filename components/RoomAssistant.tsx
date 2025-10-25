@@ -1001,8 +1001,8 @@ const callSummarizeApi = useCallback(
 
       <ScrollArea ref={scrollContainerRef} onScroll={onUserScroll} className="flex-1 relative">
         <div className={cn(
-          "p-4 space-y-6 mx-auto",
-          isExpanded ? "max-w-6xl" : "max-w-4xl"
+          "p-4 space-y-6 mx-auto overflow-y-scroll h-[40vh]",
+          isExpanded ? "h-[70vh] w-[80vw] lg:h-[70vh] lg:w-[70vw] md:h-[60vh] md:w-[70vw] " : "max-w-4xl"
         )}>
           <AnimatePresence mode="popLayout">
             {messagePairs.length > 0 ? (
