@@ -879,7 +879,7 @@ const callSummarizeApi = useCallback(
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
   }, [isExpanded, dialogMode, onCloseDialog, setIsExpanded]);
-  
+
   useEffect(() => {
     textareaRef.current?.focus();
   }, []);
@@ -971,8 +971,8 @@ const callSummarizeApi = useCallback(
   dialogMode 
     ? "h-full w-full" 
     : isExpanded 
-      ? "w-[80vw] h-full z-10 bg-background/95 backdrop-blur-sm shadow-2xl"  // Relative, no 'fixed/inset'; z-10 for mild elevation
-      : "h-full w-[30vw] md:h-[40vh] lg:h-[60vh]", // Unchanged non-expanded
+      ? "w-[90vw] h-full md:h-[80vh] z-10 bg-background/95 backdrop-blur-sm shadow-2xl"  // Relative, no 'fixed/inset'; z-10 for mild elevation
+      : "h-full w-[60vw] md:h-[40vh] lg:h-[60vh]", // Unchanged non-expanded
   className
 )}>
       <CardHeader className="flex-shrink-0 border-b bg-gradient-to-r from-background via-muted to-background/80 p-4 backdrop-blur-sm">
