@@ -340,10 +340,10 @@ const PairedMessageRenderer = memo(({
                 </div>
               </div>
               
-              {/* Scrollable content area */}
-              <div className="flex-1 overflow-y-auto min-h-0">
-                {assistantContent}
-              </div>
+              
+            <div className="flex-1 overflow-y-auto min-h-0 ai-response-container scrollbar-thin">
+              {assistantContent}
+            </div>
               
               {/* Copy button */}
               <div className="flex justify-end mt-3 pt-2 border-t border-border/30 flex-shrink-0">
@@ -999,61 +999,65 @@ const callSummarizeApi = useCallback(
         </div>
       </CardHeader>
 
-      <ScrollArea ref={scrollContainerRef} onScroll={onUserScroll} className="flex-1 relative">
-        <div className={cn(
-          "p-4 space-y-6 mx-auto overflow-y-scroll h-[40vh]",
-          isExpanded ? "h-[70vh] w-[80vw] lg:h-[70vh] lg:w-[70vw] md:h-[60vh] md:w-[70vw] " : "max-w-4xl"
-        )}>
-          <AnimatePresence mode="popLayout">
-            {messagePairs.length > 0 ? (
-              messagePairs.map((pair) => (
-                <PairedMessageRenderer 
-                  key={pair.user.id + (pair.assistant?.id || '')} 
-                  pair={pair} 
-                  theme={theme}
-                  copyToClipboard={copyToClipboard}
-                />
-              ))
-            ) : loading ? (
-              Array.from({ length: 3 }, (_, i) => <MessageSkeleton key={i} />)
-            ) : (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="flex flex-col items-center justify-center py-20 text-center"
-              >
+      <ScrollArea 
+          ref={scrollContainerRef} 
+          onScroll={onUserScroll} 
+          className="flex-1 relative room-assistant-scroll scrollbar-custom"
+        >
+          <div className={cn(
+            "p-4 space-y-6 mx-auto ",
+            isExpanded ? "max-w-6xl" : "max-w-4xl"
+          )}>
+            <AnimatePresence mode="popLayout">
+              {messagePairs.length > 0 ? (
+                messagePairs.map((pair) => (
+                  <PairedMessageRenderer 
+                    key={pair.user.id + (pair.assistant?.id || '')} 
+                    pair={pair} 
+                    theme={theme}
+                    copyToClipboard={copyToClipboard}
+                  />
+                ))
+              ) : loading ? (
+                Array.from({ length: 3 }, (_, i) => <MessageSkeleton key={i} />)
+              ) : (
                 <motion.div
-                  className="w-20 h-20 bg-gradient-to-br from-primary/20 to-secondary/20 rounded-2xl flex items-center justify-center mb-6 shadow-lg"
-                  animate={{ rotate: [0, 360] }}
-                  transition={{ duration: 6, repeat: Infinity, ease: "linear" }}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="flex flex-col items-center justify-center py-20 text-center"
                 >
-                  <Sparkles className="h-10 w-10 text-primary drop-shadow" />
+                  <motion.div
+                    className="w-20 h-20 bg-gradient-to-br from-primary/20 to-secondary/20 rounded-2xl flex items-center justify-center mb-6 shadow-lg"
+                    animate={{ rotate: [0, 360] }}
+                    transition={{ duration: 6, repeat: Infinity, ease: "linear" }}
+                  >
+                    <Sparkles className="h-10 w-10 text-primary drop-shadow" />
+                  </motion.div>
+                  <h3 className="text-2xl font-bold mb-3 bg-gradient-to-r from-foreground to-muted-foreground bg-clip-text text-transparent">
+                    AI Assistant Ready
+                  </h3>
+                  <p className="text-sm text-muted-foreground max-w-md leading-relaxed">
+                    Dive into #{roomName} – get structured insights, paired queries, and actionable analysis.
+                  </p>
                 </motion.div>
-                <h3 className="text-2xl font-bold mb-3 bg-gradient-to-r from-foreground to-muted-foreground bg-clip-text text-transparent">
-                  AI Assistant Ready
-                </h3>
-                <p className="text-sm text-muted-foreground max-w-md leading-relaxed">
-                  Dive into #{roomName} – get structured insights, paired queries, and actionable analysis.
-                </p>
+              )}
+            </AnimatePresence>
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mx-4 p-4 bg-destructive/10 rounded-xl border border-destructive/20 flex items-center gap-3 text-sm text-destructive backdrop-blur-sm"
+              >
+                <AlertCircle className="h-5 w-5 flex-shrink-0" />
+                {error}
+                <Button variant="ghost" size="icon" onClick={() => setError(null)} className="ml-auto h-7 w-7 p-0 hover:bg-destructive/20">
+                  <X className="h-3 w-3" />
+                </Button>
               </motion.div>
             )}
-          </AnimatePresence>
-          {error && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mx-4 p-4 bg-destructive/10 rounded-xl border border-destructive/20 flex items-center gap-3 text-sm text-destructive backdrop-blur-sm"
-            >
-              <AlertCircle className="h-5 w-5 flex-shrink-0" />
-              {error}
-              <Button variant="ghost" size="icon" onClick={() => setError(null)} className="ml-auto h-7 w-7 p-0 hover:bg-destructive/20">
-                <X className="h-3 w-3" />
-              </Button>
-            </motion.div>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
-      </ScrollArea>
+            <div ref={messagesEndRef} />
+          </div>
+        </ScrollArea>
 
       <CardContent className="p-4 border-t bg-gradient-to-r from-muted/30 to-background/50 backdrop-blur-sm">
         <form onSubmit={handleSubmit} className="space-y-3">
