@@ -977,12 +977,12 @@ const callSummarizeApi = useCallback(
   // ----------------- Render -----------------
   return (
 <Card className={cn(
-  "flex flex-col shadow-xl border-border/20 transition-all duration-300 relative min-h-0", // Add min-h-0
+  "flex flex-col shadow-xl border-border/20 transition-all duration-300 ease-in-out relative min-h-[20rem] lg:min-h-[24rem]",  // Floor height: 20rem (~80px) base, 24rem (~384px) on LG for header+input+some scroll
   dialogMode 
-    ? "h-full w-full"  // Keep for dialog (fills fixed DialogContent)
+    ? "h-full w-full" 
     : isExpanded 
-      ? "w-[90vw] h-[30vh] md:h-[30vh] lg:h-[25vh] z-10 bg-background/95 backdrop-blur-sm shadow-2xl"  // Fixed vh, taller on LG
-      : "w-[70vw] h-[50vh] md:h-[30vh] lg:h-[30vh]",  // Fixed vh base, no h-full; compact on small
+      ? "w-[90vw] h-[70vh] md:h-[75vh] lg:h-[85vh] xl:h-[90vh] z-10 bg-background/95 backdrop-blur-sm shadow-2xl"
+      : "w-[70vw] h-[50vh] md:h-[55vh] lg:h-[60vh] xl:h-[70vh]",
   className
 )}>
       <CardHeader className="flex-shrink-0 border-b bg-gradient-to-r from-background via-muted to-background/80 p-4 backdrop-blur-sm">
@@ -1046,14 +1046,14 @@ onClick={setIsExpanded}
       </CardHeader>
 
       <ScrollArea 
-          ref={scrollContainerRef} 
-          onScroll={onUserScroll} 
-          className="flex-1 relative room-assistant-scroll scrollbar-custom"
-        >
-        <div className={cn(
-            "p-4 space-y-6 mx-auto",
-            (isExpanded || dialogMode) ? "max-w-6xl h-[40vh]" : "max-w-4xl h-[30vh]"
-          )}>
+    ref={scrollContainerRef} 
+    onScroll={onUserScroll} 
+    className="flex-1 relative room-assistant-scroll scrollbar-custom min-h-0 overflow-hidden"  // min-h-0: shrinkable; overflow-hidden: no outer spill
+  >
+   <div className={cn(
+    "p-4 space-y-6 mx-auto h-full min-h-0",  // h-full: viewport height; min-h-0: flex-safe
+    (isExpanded || dialogMode) ? "max-w-7xl" : "max-w-4xl"
+  )}>
             <AnimatePresence mode="popLayout">
               {messagePairs.length > 0 ? (
                 messagePairs.map((pair) => (
@@ -1105,7 +1105,7 @@ onClick={setIsExpanded}
           </div>
         </ScrollArea>
 
-      <CardContent className="p-4 border-t bg-gradient-to-r from-muted/30 to-background/50 backdrop-blur-sm">
+        <CardContent className="flex-shrink-0 p-4 border-t bg-gradient-to-r from-muted/30 to-background/50 backdrop-blur-sm">
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="relative">
             <Textarea
