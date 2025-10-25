@@ -166,8 +166,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
             <RoomAssistantDialog 
               roomId={selectedRoom.id} 
               roomName={selectedRoom.name}
-              open={isAssistantOpen}
-              onOpenChange={setIsAssistantOpen}
             />
           )}
 
