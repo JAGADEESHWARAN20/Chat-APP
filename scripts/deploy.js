@@ -9,36 +9,36 @@ const rl = readline.createInterface({
 });
 
 // =========================
-// Spinner Class (High-quality XL Circle)
+// Premium Progress Bar Class
 // =========================
-class CircleSpinner {
-  constructor(text, options = {}) {
-    this.text = text;
-    this.frames = options.frames || [
-      "          ● ● ●          ",
-      "      ●           ●      ",
-      "    ●               ●    ",
-      "   ●                 ●   ",
-      "   ●                 ●   ",
-      "    ●               ●    ",
-      "      ●           ●      ",
-      "          ● ● ●          "
-    ];
-    this.frames = this.frames.map(f => `\x1b[1m${f}\x1b[0m`); // bold
-    this.intervalTime = options.interval || 100;
-    this.i = 0;
+class ProgressBar {
+  constructor(totalSteps, options = {}) {
+    this.totalSteps = totalSteps;
+    this.currentStep = 0;
+    this.barLength = options.length || 40; // width of the progress bar
+    this.completeChar = options.completeChar || "█";
+    this.incompleteChar = options.incompleteChar || "─";
   }
 
-  start() {
-    process.stdout.write("\n");
-    this.interval = setInterval(() => {
-      process.stdout.write(`\r${this.frames[this.i = ++this.i % this.frames.length]} ${this.text}`);
-    }, this.intervalTime);
+  increment(stepText = "") {
+    this.currentStep++;
+    const progress = this.currentStep / this.totalSteps;
+    const completeLength = Math.round(this.barLength * progress);
+    const incompleteLength = this.barLength - completeLength;
+
+    const bar =
+      this.completeChar.repeat(completeLength) +
+      this.incompleteChar.repeat(incompleteLength);
+
+    const percent = Math.round(progress * 100);
+
+    process.stdout.write(`\r[${bar}] ${percent}% ${stepText}`);
   }
 
-  stop(finalText) {
-    clearInterval(this.interval);
-    process.stdout.write(`\r✅ ${finalText}\n`);
+  complete(finalText = "") {
+    this.currentStep = this.totalSteps;
+    const bar = this.completeChar.repeat(this.barLength);
+    process.stdout.write(`\r[${bar}] 100% ${finalText}\n`);
   }
 }
 
@@ -70,25 +70,22 @@ async function deploy() {
       process.exit(1);
     }
 
-    console.log("\n🚀 Starting deployment process...");
+    console.log("\n🚀 Starting deployment process...\n");
 
-    // Step 1: Git Add
-    const spinner1 = new CircleSpinner("Adding changes to git...");
-    spinner1.start();
-    await runCommand("git add .");
-    spinner1.stop("Changes added!");
+    const stages = [
+      { command: "git add .", label: "Adding changes to git..." },
+      { command: `git commit -m "${commitMessage}"`, label: "Committing changes..." },
+      { command: "git push origin main", label: "Pushing to Vercel..." }
+    ];
 
-    // Step 2: Git Commit
-    const spinner2 = new CircleSpinner("Committing changes...");
-    spinner2.start();
-    await runCommand(`git commit -m "${commitMessage}"`);
-    spinner2.stop("Changes committed!");
+    const progressBar = new ProgressBar(stages.length, { length: 50, completeChar: "█", incompleteChar: "─" });
 
-    // Step 3: Git Push
-    const spinner3 = new CircleSpinner("Pushing to Vercel...");
-    spinner3.start();
-    await runCommand("git push origin main");
-    spinner3.stop("Changes pushed & deployment triggered!");
+    for (const stage of stages) {
+      progressBar.increment(stage.label);
+      await runCommand(stage.command);
+    }
+
+    progressBar.complete("Deployment finished successfully! 🎉\n");
 
     console.log("\n🎉 Deployment completed! Vercel is now building your app.\n");
 
