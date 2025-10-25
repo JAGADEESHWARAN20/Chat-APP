@@ -323,7 +323,7 @@ const PairedMessageRenderer = memo(({
         <>
           <Separator className="my-2" />
           {/* AI Response */}
-          <Card className="border-border/30 hover:border-primary/30 transition-colors shadow-sm max-h-[500px] overflow-hidden flex flex-col">
+          <Card className="border-border/30 hover:border-primary/30 transition-colors shadow-sm max-h-[60vh] sm:max-h-[500px] overflow-hidden flex flex-col min-h-0">
             <CardContent className="p-4 pt-3 flex-1 flex flex-col min-h-0">
               <div className="flex items-start gap-2 mb-2 flex-shrink-0">
                 <div className="w-6 h-6 bg-gradient-to-br from-primary to-primary/70 rounded-full flex items-center justify-center mt-0.5 flex-shrink-0">
@@ -745,6 +745,10 @@ const callSummarizeApi = useCallback(
         } finally {
           setLoading(false);
           abortControllerRef.current = null;
+          // Focus input after response for next query
+          setTimeout(() => {
+            textareaRef.current?.focus();
+          }, 100);  // Brief delay for DOM update
         }
       },
       [prompt, messages, recentRoomMessages, roomName, model, callSummarizeApi, maxHistory, saveToAIChatHistory, saveToLocal, roomState.user]
@@ -846,19 +850,25 @@ const callSummarizeApi = useCallback(
     if (!loading) saveToLocal(messages);
   }, [messages, loading, saveToLocal]);
 
-  // Auto-scroll optimization
   useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container || userScrollingRef.current) return;
+    if (loading || userScrollingRef.current) return;  // Skip during load
     
-    const scrollToBottom = () => {
+    // Scroll inner ScrollArea
+    const container = scrollContainerRef.current;
+    if (container) {
       requestAnimationFrame(() => {
         container.scrollTop = container.scrollHeight;
       });
-    };
+    }
     
-    scrollToBottom();
-  }, [messages]);
+    // Scroll outer container (card or dialog) to bottom for input visibility
+    const outerContainer = container?.closest('.card') || document.querySelector('[data-radix-popper-content-wrapper]');  // Fallback to dialog wrapper
+    if (outerContainer) {
+      requestAnimationFrame(() => {
+        outerContainer.scrollTop = outerContainer.scrollHeight;
+      });
+    }
+  }, [messages, loading]);
 
   const onUserScroll = useCallback(() => {
     userScrollingRef.current = true;
@@ -878,8 +888,8 @@ const callSummarizeApi = useCallback(
   
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
-  }, [isExpanded, dialogMode, onCloseDialog, setIsExpanded]);
-
+  }, [dialogMode, onCloseDialog, setIsExpanded]); 
+  
   useEffect(() => {
     textareaRef.current?.focus();
   }, []);
@@ -967,12 +977,12 @@ const callSummarizeApi = useCallback(
   // ----------------- Render -----------------
   return (
 <Card className={cn(
-  "flex flex-col shadow-xl border-border/20 transition-all duration-300 relative", // Add 'relative' base
+  "flex flex-col shadow-xl border-border/20 transition-all duration-300 relative min-h-0", // Add min-h-0
   dialogMode 
-    ? "h-full w-full" 
+    ? "h-full w-full"  // Keep for dialog (fills fixed DialogContent)
     : isExpanded 
-      ? "w-[90vw] h-full md:h-[80vh] z-10 bg-background/95 backdrop-blur-sm shadow-2xl"  // Relative, no 'fixed/inset'; z-10 for mild elevation
-      : "h-full w-[60vw] md:h-[40vh] lg:h-[60vh]", // Unchanged non-expanded
+      ? "w-[90vw] h-[70vh] md:h-[80vh] lg:h-[85vh] z-10 bg-background/95 backdrop-blur-sm shadow-2xl"  // Fixed vh, taller on LG
+      : "w-[70vw] h-[50vh] md:h-[40vh] lg:h-[60vh]",  // Fixed vh base, no h-full; compact on small
   className
 )}>
       <CardHeader className="flex-shrink-0 border-b bg-gradient-to-r from-background via-muted to-background/80 p-4 backdrop-blur-sm">
