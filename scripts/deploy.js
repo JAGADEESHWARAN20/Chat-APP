@@ -9,50 +9,56 @@ const rl = readline.createInterface({
 });
 
 // =========================
-// Premium Progress Bar Class
+// Cinematic Silent Progress Bar
 // =========================
-class ProgressBar {
+class SilentProgressBar {
   constructor(totalSteps, options = {}) {
     this.totalSteps = totalSteps;
     this.currentStep = 0;
-    this.barLength = options.length || 40; // width of the progress bar
+    this.barLength = options.length || 50; // width of the bar
     this.completeChar = options.completeChar || "█";
     this.incompleteChar = options.incompleteChar || "─";
+    this.intervalTime = options.interval || 100;
+    this.i = 0;
+    this.animationInterval = null;
   }
 
-  increment(stepText = "") {
-    this.currentStep++;
-    const progress = this.currentStep / this.totalSteps;
-    const completeLength = Math.round(this.barLength * progress);
-    const incompleteLength = this.barLength - completeLength;
+  start() {
+    // Start automatic progress animation
+    this.animationInterval = setInterval(() => {
+      const progress = this.currentStep / this.totalSteps;
+      const completeLength = Math.round(this.barLength * progress);
+      const incompleteLength = this.barLength - completeLength;
+      const bar =
+        this.completeChar.repeat(completeLength) +
+        this.incompleteChar.repeat(incompleteLength);
 
-    const bar =
-      this.completeChar.repeat(completeLength) +
-      this.incompleteChar.repeat(incompleteLength);
-
-    const percent = Math.round(progress * 100);
-
-    process.stdout.write(`\r[${bar}] ${percent}% ${stepText}`);
+      const percent = Math.round(progress * 100);
+      process.stdout.write(`\r[${bar}] ${percent}%`);
+    }, this.intervalTime);
   }
 
-  complete(finalText = "") {
+  increment() {
+    if (this.currentStep < this.totalSteps) this.currentStep++;
+  }
+
+  complete() {
     this.currentStep = this.totalSteps;
     const bar = this.completeChar.repeat(this.barLength);
-    process.stdout.write(`\r[${bar}] 100% ${finalText}\n`);
+    process.stdout.write(`\r[${bar}] 100%\n`);
+    clearInterval(this.animationInterval);
   }
 }
 
 // =========================
-// Run Command Async
+// Run Command Async (Suppress Output)
 // =========================
-function runCommand(command) {
+function runCommandSilent(command) {
   return new Promise((resolve, reject) => {
-    const child = exec(command, (error, stdout, stderr) => {
+    const child = exec(command, { stdio: "ignore" }, (error) => {
       if (error) return reject(error);
-      resolve(stdout || stderr);
+      resolve();
     });
-    child.stdout?.pipe(process.stdout);
-    child.stderr?.pipe(process.stderr);
   });
 }
 
@@ -65,32 +71,25 @@ async function deploy() {
       rl.question("📝 Enter commit message: ", answer => resolve(answer.trim()));
     });
 
-    if (!commitMessage) {
-      console.error("❌ Commit message cannot be empty!");
-      process.exit(1);
-    }
-
-    console.log("\n🚀 Starting deployment process...\n");
+    if (!commitMessage) process.exit(1);
 
     const stages = [
-      { command: "git add .", label: "Adding changes to git..." },
-      { command: `git commit -m "${commitMessage}"`, label: "Committing changes..." },
-      { command: "git push origin main", label: "Pushing to Vercel..." }
+      "git add .",
+      `git commit -m "${commitMessage}"`,
+      "git push origin main"
     ];
 
-    const progressBar = new ProgressBar(stages.length, { length: 50, completeChar: "█", incompleteChar: "─" });
+    const progressBar = new SilentProgressBar(stages.length, { length: 50, interval: 80 });
+    progressBar.start();
 
     for (const stage of stages) {
-      progressBar.increment(stage.label);
-      await runCommand(stage.command);
+      await runCommandSilent(stage);
+      progressBar.increment();
     }
 
-    progressBar.complete("Deployment finished successfully! 🎉\n");
+    progressBar.complete();
 
-    console.log("\n🎉 Deployment completed! Vercel is now building your app.\n");
-
-  } catch (error) {
-    console.error("\n❌ Deployment failed:", error.message);
+  } catch {
     process.exit(1);
   } finally {
     rl.close();
