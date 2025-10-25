@@ -984,7 +984,7 @@ function RoomAssistantComponent({
 
       <ScrollArea ref={scrollContainerRef} onScroll={onUserScroll} className="flex-1 relative">
         <div className={cn(
-          "p-4 space-y-6 mx-auto",
+          "p-4 space-y-6 mx-auto overflow-y-scroll",
           isExpanded ? "max-w-6xl" : "max-w-4xl"
         )}>
           <AnimatePresence mode="popLayout">
