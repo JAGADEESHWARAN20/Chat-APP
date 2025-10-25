@@ -977,8 +977,9 @@ const callSummarizeApi = useCallback(
           variant="ghost"
           size="icon"
           onClick={() => {
-            if (dialogMode && onCloseDialog) {
-              onCloseDialog();
+            if (dialogMode) {
+              // Add expand functionality for dialog mode too
+              setIsExpanded(!isExpanded);
             } else {
               setIsExpanded(!isExpanded);
             }
@@ -986,12 +987,12 @@ const callSummarizeApi = useCallback(
           className="h-9 w-9 rounded-full hover:bg-accent/80 transition-all"
         >
           {dialogMode ? (
-            <Minimize2 className="h-4 w-4" />
-          ) : isExpanded ? (
-            <Minimize2 className="h-4 w-4" />
-          ) : (
-            <Maximize2 className="h-4 w-4" />
-          )}
+  <Minimize2 className="h-4 w-4" />
+) : isExpanded ? (
+  <Minimize2 className="h-4 w-4" />
+) : (
+  <Maximize2 className="h-4 w-4" />
+)}
         </Button>
       </TooltipTrigger>
       <TooltipContent>
