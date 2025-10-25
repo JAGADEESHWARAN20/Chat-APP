@@ -166,6 +166,12 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
             <RoomAssistantDialog 
               roomId={selectedRoom.id} 
               roomName={selectedRoom.name}
+              triggerButton={
+                <Button variant="outline" size="sm" className="gap-2">
+                  <Bot className="h-4 w-4" />
+                  AI Assistant
+                </Button>
+              }
             />
           )}
 
