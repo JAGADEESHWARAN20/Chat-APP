@@ -236,10 +236,19 @@ const StructuredRenderer = React.memo(({ data }: { data: StructuredAnalysis }) =
     </div>
   );
 });
+StructuredRenderer.displayName = 'StructuredRenderer';
 
 // ------------------------- PairedMessageRenderer --------------------------
 // New: Groups user + AI response in a single card for cohesive pairing
-const PairedMessageRenderer = React.memo(({ pair }: { pair: MessagePair }) => (
+const PairedMessageRenderer = React.memo(({ 
+  pair, 
+  theme,
+  copyToClipboard 
+}: { 
+  pair: MessagePair; 
+  theme: "light" | "dark";
+  copyToClipboard: (content: string) => void;
+}) => (
   <motion.div
     initial={{ opacity: 0, y: 10 }}
     animate={{ opacity: 1, y: 0 }}
@@ -255,7 +264,9 @@ const PairedMessageRenderer = React.memo(({ pair }: { pair: MessagePair }) => (
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-blue-800 dark:text-blue-200 break-words">{pair.user.content}</p>
-            <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">{pair.user.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
+            <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+              {pair.user.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            </p>
           </div>
         </div>
       </CardContent>
@@ -283,19 +294,58 @@ const PairedMessageRenderer = React.memo(({ pair }: { pair: MessagePair }) => (
                 </div>
               </div>
             </div>
+            
             {/* Render AI content */}
-            <ChatMessageDisplay
-              msg={pair.assistant}
-              copyToClipboard={() => {}} // Placeholder - handled in parent
-              theme={useTheme().theme === "dark" ? "dark" : "light"}
-              onExpand={() => {}} // Optional
-            />
+            {pair.assistant.structuredData ? (
+              <StructuredRenderer data={pair.assistant.structuredData} />
+            ) : (
+              <div className="prose prose-sm max-w-none dark:prose-invert leading-relaxed">
+                <ReactMarkdown
+                  components={{
+                    h1: ({ children }) => <h1 className="text-lg font-bold my-3 border-b border-border pb-1">{children}</h1>,
+                    h2: ({ children }) => <h2 className="text-base font-semibold my-2">{children}</h2>,
+                    p: ({ children }) => <p className="my-2">{children}</p>,
+                    ul: ({ children }) => <ul className="list-disc pl-6 my-2 space-y-1">{children}</ul>,
+                    table: ({ children }) => (
+                      <div className="overflow-x-auto my-3 rounded border border-border">
+                        <table className="w-full border-collapse">{children}</table>
+                      </div>
+                    ),
+                    th: ({ children }) => <th className="px-3 py-2 text-left font-semibold bg-muted text-muted-foreground border-b border-border">{children}</th>,
+                    td: ({ children }) => <td className="px-3 py-2 border-b border-border">{children}</td>,
+                    code: ({ children }) => <code className="bg-muted px-1 rounded text-xs">{children}</code>,
+                  }}
+                >
+                  {pair.assistant.content}
+                </ReactMarkdown>
+              </div>
+            )}
+            
+            {/* Copy button for AI response */}
+            <div className="flex justify-end mt-3 pt-2 border-t border-border/30">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => copyToClipboard(pair.assistant!.content)}
+                      className="h-6 w-6 p-0 opacity-60 hover:opacity-100 transition-opacity hover:bg-accent/50"
+                    >
+                      <Copy className="h-3 w-3" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Copy response</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
           </CardContent>
         </Card>
       </>
     )}
   </motion.div>
 ));
+PairedMessageRenderer.displayName = 'PairedMessageRenderer';
 
 // ------------------------- ChatMessageDisplay --------------------------
 // Fallback for unpaired messages (legacy support)
@@ -469,9 +519,15 @@ export default function RoomAssistant({
       const toSave = newMessages
         .filter((m) => !m.isPersisted)
         .slice(-maxHistory)
-        .map((m) => ({ ...m, timestamp: m.timestamp.toISOString(), structuredData: m.structuredData }));
+        .map((m) => ({ 
+          ...m, 
+          timestamp: m.timestamp.toISOString(), 
+          structuredData: m.structuredData 
+        }));
       localStorage.setItem(key, JSON.stringify(toSave));
-    } catch {}
+    } catch (error) {
+      console.error("Failed to save to local storage:", error);
+    }
   }, [roomId, maxHistory]);
 
   const loadFromLocalStorage = useCallback(() => {
@@ -488,7 +544,9 @@ export default function RoomAssistant({
         }));
         setMessages(parsed.slice(-maxHistory));
       }
-    } catch {}
+    } catch (error) {
+      console.error("Failed to load from localStorage:", error);
+    }
   }, [roomId, maxHistory]);
 
   const loadAIChatHistory = useCallback(async () => {
@@ -505,27 +563,48 @@ export default function RoomAssistant({
           timestamp: new Date(item.created_at),
           model: item.model_used,
           isPersisted: true,
-          metadata: { tokenCount: item.token_count, messageCount: item.message_count },
+          metadata: { 
+            tokenCount: item.token_count, 
+            messageCount: item.message_count 
+          },
         }));
-        // Reconstruct pairs: Alternate user queries with AI responses from history
+        
+        // Reconstruct pairs from history
         const pairedMessages: ChatMessage[] = [];
-        for (let i = 0; i < history.length; i += 2) {
-          if (history[i]) {
-            const userQuery = history[i].user_query; // Assume history saves user_query
-            const userMsg: ChatMessage = {
-              id: `user-${history[i].id}`,
-              role: "user",
-              content: userQuery,
-              timestamp: new Date(history[i].created_at),
-            };
-            const aiMsg = chatMessages[i] || { ...chatMessages[0], id: `ai-${history[i].id}` }; // Fallback
-            pairedMessages.push(userMsg, aiMsg);
-          }
-        }
-        setMessages(pairedMessages.slice(-maxHistory));
+        history.forEach((item: any) => {
+          // Add user query message
+          const userMsg: ChatMessage = {
+            id: `user-${item.id}`,
+            role: "user",
+            content: item.user_query || "Previous query",
+            timestamp: new Date(item.created_at),
+            isPersisted: true,
+          };
+          
+          // Add AI response message
+          const aiMsg: ChatMessage = {
+            id: item.id,
+            role: "assistant",
+            content: item.ai_response,
+            structuredData: item.structured_data,
+            timestamp: new Date(item.created_at),
+            model: item.model_used,
+            isPersisted: true,
+            metadata: {
+              tokenCount: item.token_count,
+              messageCount: item.message_count,
+            },
+          };
+          
+          pairedMessages.push(userMsg, aiMsg);
+        });
+        
+        setMessages(pairedMessages.slice(-maxHistory * 2));
         return;
       }
-    } catch {}
+    } catch (error) {
+      console.error("Failed to load AI chat history:", error);
+    }
     loadFromLocalStorage();
   }, [roomId, roomState.user, loadFromLocalStorage, maxHistory]);
 
@@ -539,7 +618,7 @@ export default function RoomAssistant({
           body: JSON.stringify({
             room_id: roomId,
             user_id: roomState.user.id,
-            userQuery, // Save user query for pairing
+            user_query: userQuery,
             ai_response: aiResponse,
             structured_data: structuredData,
             model_used: model,
@@ -548,7 +627,8 @@ export default function RoomAssistant({
           }),
         });
         return res.ok;
-      } catch {
+      } catch (error) {
+        console.error("Failed to save AI chat history:", error);
         return false;
       }
     },
@@ -559,7 +639,9 @@ export default function RoomAssistant({
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container || userScrollingRef.current) return;
-    requestAnimationFrame(() => container.scrollTop = container.scrollHeight);
+    requestAnimationFrame(() => {
+      container.scrollTop = container.scrollHeight;
+    });
   }, [messages]);
 
   const onUserScroll = useCallback(() => {
@@ -614,7 +696,7 @@ export default function RoomAssistant({
     async (e?: React.FormEvent) => {
       e?.preventDefault();
       if (!prompt.trim() || !roomState.user?.id) {
-        toast.error("Login and enter a query.");
+        toast.error("Please log in and enter a query.");
         return;
       }
 
@@ -626,7 +708,7 @@ export default function RoomAssistant({
       };
 
       startTransition(() => {
-        setMessages((prev) => [...prev, userMsg]); // Add user immediately
+        setMessages((prev) => [...prev, userMsg]);
         setPrompt("");
         setLoading(true);
         setError(null);
@@ -669,8 +751,12 @@ export default function RoomAssistant({
         if (!aiMsg.isPersisted) {
           const saved = await saveToAIChatHistory(prompt, fullResponse, structuredData, aiMsg.metadata);
           if (saved) {
-            startTransition(() => setMessages((prev) => prev.map((m) => m.id === aiMsg.id ? { ...m, isPersisted: true } : m)));
-            toast.success("Saved!");
+            startTransition(() => setMessages((prev) => 
+              prev.map((m) => m.id === aiMsg.id ? { ...m, isPersisted: true } : m)
+            ));
+            toast.success("Response saved to history!");
+          } else {
+            toast.warning("Saved locally - database sync failed.");
           }
         }
       } catch (err: any) {
@@ -686,27 +772,48 @@ export default function RoomAssistant({
   // Pair messages for rendering
   const messagePairs = useMemo<MessagePair[]>(() => {
     const pairs: MessagePair[] = [];
-    for (let i = 0; i < messages.length; i++) {
-      const userMsg = messages[i];
-      if (userMsg.role === "user") {
-        const nextAssistant = messages[i + 1];
-        pairs.push({ user: userMsg, assistant: nextAssistant?.role === "assistant" ? nextAssistant : undefined });
-        i++; // Skip assistant if paired
+    let i = 0;
+    
+    while (i < messages.length) {
+      const currentMessage = messages[i];
+      
+      if (currentMessage.role === "user") {
+        // Look for the next assistant message
+        const nextMessage = messages[i + 1];
+        if (nextMessage && nextMessage.role === "assistant") {
+          pairs.push({ user: currentMessage, assistant: nextMessage });
+          i += 2; // Skip both user and assistant
+        } else {
+          pairs.push({ user: currentMessage }); // User without assistant response
+          i += 1;
+        }
       } else {
-        pairs.push({ user: { id: generateId(), role: "user" as const, content: "Unpaired AI response", timestamp: new Date() }, assistant: userMsg });
+        // Handle orphaned assistant messages
+        pairs.push({ 
+          user: { 
+            id: generateId(), 
+            role: "user" as const, 
+            content: "Previous query", 
+            timestamp: new Date(currentMessage.timestamp.getTime() - 1000) 
+          }, 
+          assistant: currentMessage 
+        });
+        i += 1;
       }
     }
+    
     return pairs;
   }, [messages]);
 
-  // Actions (unchanged, optimized)
+  // Actions
   const clearHistory = useCallback(async () => {
     if (roomState.user?.id) {
       try {
         await fetch(`/api/ai-chat/history?roomId=${roomId}&userId=${roomState.user.id}`, { method: "DELETE" });
-        toast.success("Cleared!");
-      } catch {
-        toast.warning("Local clear only.");
+        toast.success("Chat history cleared from database!");
+      } catch (error) {
+        console.error("Failed to clear database history:", error);
+        toast.warning("Cleared locally only");
       }
     }
     startTransition(() => {
@@ -717,7 +824,10 @@ export default function RoomAssistant({
 
   const regenerate = useCallback(() => {
     const lastUser = messages.slice().reverse().find((m) => m.role === "user");
-    if (!lastUser) return toast.error("No query to regenerate.");
+    if (!lastUser) {
+      toast.error("No user message to regenerate from");
+      return;
+    }
     startTransition(() => {
       setMessages((prev) => prev.slice(0, prev.indexOf(lastUser) + 1));
       setPrompt(lastUser.content);
@@ -730,16 +840,25 @@ export default function RoomAssistant({
       roomId,
       roomName,
       exportedAt: new Date().toISOString(),
-      messages,
+      messages: messages.map((m) => ({
+        role: m.role,
+        content: m.content,
+        structuredData: m.structuredData,
+        timestamp: m.timestamp.toISOString(),
+        model: m.model,
+        metadata: m.metadata,
+      })),
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = `chat-${roomName.replace(/[^a-z0-9]/gi, '-')}-${Date.now()}.json`;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    toast.success("Exported!");
+    toast.success("Chat exported successfully!");
   }, [messages, roomName, roomId]);
 
   const startVoiceInput = useCallback(() => {
@@ -747,10 +866,10 @@ export default function RoomAssistant({
       const recognition = new (window as any).webkitSpeechRecognition();
       recognition.lang = "en-US";
       recognition.onresult = (e: any) => setPrompt((prev) => prev + e.results[0][0].transcript);
-      recognition.onerror = () => toast.error("Voice failed.");
+      recognition.onerror = () => toast.error("Voice input failed");
       recognition.start();
     } else {
-      toast.error("Voice unsupported.");
+      toast.error("Speech recognition not supported in your browser");
     }
   }, []);
 
@@ -760,25 +879,23 @@ export default function RoomAssistant({
       await supabaseBrowser()
         .from("messages")
         .insert({
-          text: `AI Query: ${prompt}`,
+          text: `AI Assistant Query: ${prompt}`,
           room_id: roomId,
           sender_id: roomState.user.id,
           is_edited: false,
           status: "sent",
         });
-      toast.success("Added to room!");
+      toast.success("Message added to room chat!");
       setPrompt("");
-    } catch {
-      toast.error("Add failed.");
+    } catch (error) {
+      console.error("Failed to add message:", error);
+      toast.error("Failed to add message to room chat");
     }
   }, [prompt, roomState.user, roomId]);
 
   // Effects
   useEffect(() => {
-    // Wrap in async IIFE to handle Promise correctly
-    (async () => {
-      await loadAIChatHistory();
-    })();
+    loadAIChatHistory();
   }, [loadAIChatHistory]);
 
   useEffect(() => {
@@ -820,22 +937,48 @@ export default function RoomAssistant({
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between py-1.5 px-2 text-xs rounded-md hover:bg-accent/50 cursor-pointer">
                   <span>Dark Mode</span>
-                  <Switch checked={theme === "dark"} onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")} />
+                  <Switch 
+                    checked={theme === "dark"} 
+                    onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")} 
+                  />
                 </div>
-                <Button variant="ghost" size="sm" onClick={clearHistory} disabled={loading || !messages.length} className="justify-start h-9 w-full rounded-md hover:bg-destructive/10">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={clearHistory} 
+                  disabled={loading || !messages.length} 
+                  className="justify-start h-9 w-full rounded-md hover:bg-destructive/10"
+                >
                   <Trash2 className="h-3.5 w-3.5 mr-2" /> Clear History
                 </Button>
                 {messages.length > 1 && (
-                  <Button variant="ghost" size="sm" onClick={regenerate} disabled={loading} className="justify-start h-9 w-full rounded-md hover:bg-accent/50">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={regenerate} 
+                    disabled={loading} 
+                    className="justify-start h-9 w-full rounded-md hover:bg-accent/50"
+                  >
                     <RefreshCw className="h-3.5 w-3.5 mr-2" /> Regenerate
                   </Button>
                 )}
-                {messages.length && (
-                  <Button variant="ghost" size="sm" onClick={exportChat} className="justify-start h-9 w-full rounded-md hover:bg-accent/50">
+                {messages.length > 0 && (
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={exportChat} 
+                    className="justify-start h-9 w-full rounded-md hover:bg-accent/50"
+                  >
                     <Download className="h-3.5 w-3.5 mr-2" /> Export Chat
                   </Button>
                 )}
-                <Button variant="ghost" size="sm" onClick={startVoiceInput} disabled={loading} className="justify-start h-9 w-full rounded-md hover:bg-accent/50">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={startVoiceInput} 
+                  disabled={loading} 
+                  className="justify-start h-9 w-full rounded-md hover:bg-accent/50"
+                >
                   <Mic className="h-3.5 w-3.5 mr-2" /> Voice Input
                 </Button>
                 <Button
@@ -856,9 +999,14 @@ export default function RoomAssistant({
       <ScrollArea ref={scrollContainerRef} onScroll={onUserScroll} className="flex-1 relative">
         <div className="p-4 space-y-6 max-w-4xl mx-auto">
           <AnimatePresence mode="popLayout">
-            {messagePairs.length ? (
+            {messagePairs.length > 0 ? (
               messagePairs.map((pair, idx) => (
-                <PairedMessageRenderer key={pair.user.id} pair={pair} />
+                <PairedMessageRenderer 
+                  key={pair.user.id + (pair.assistant?.id || '')} 
+                  pair={pair} 
+                  theme={theme}
+                  copyToClipboard={copyToClipboard}
+                />
               ))
             ) : loading ? (
               Array.from({ length: 3 }, (_, i) => <MessageSkeleton key={i} />)
@@ -909,7 +1057,12 @@ export default function RoomAssistant({
               placeholder={`Ask about #${roomName}... (Ctrl+Enter to send)`}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value.slice(0, maxPromptLength))}
-              onKeyDown={(e) => e.key === "Enter" && e.ctrlKey && handleSubmit()}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && e.ctrlKey) {
+                  e.preventDefault();
+                  handleSubmit();
+                }
+              }}
               className="min-h-[70px] pr-16 resize-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-xl"
               disabled={loading}
               maxLength={maxPromptLength}
@@ -938,7 +1091,11 @@ export default function RoomAssistant({
                 <SelectItem value="moonshot/kimi-k2-0711" className="rounded-lg">Kimi K2</SelectItem>
               </SelectContent>
             </Select>
-            <Button type="submit" disabled={loading || !prompt.trim()} className="flex-shrink-0 rounded-xl px-6 hover:shadow-md transition-shadow">
+            <Button 
+              type="submit" 
+              disabled={loading || !prompt.trim()} 
+              className="flex-shrink-0 rounded-xl px-6 hover:shadow-md transition-shadow"
+            >
               {loading ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
