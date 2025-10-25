@@ -889,7 +889,7 @@ const callSummarizeApi = useCallback(
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
   }, [dialogMode, onCloseDialog, setIsExpanded]); 
-  
+
   useEffect(() => {
     textareaRef.current?.focus();
   }, []);
@@ -1052,7 +1052,7 @@ onClick={setIsExpanded}
         >
         <div className={cn(
             "p-4 space-y-6 mx-auto",
-            (isExpanded || dialogMode) ? "max-w-6xl" : "max-w-4xl"
+            (isExpanded || dialogMode) ? "max-w-6xl h-[40vh]" : "max-w-4xl h-[30vh]"
           )}>
             <AnimatePresence mode="popLayout">
               {messagePairs.length > 0 ? (
