@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { Bot } from "lucide-react";
-import RoomAssistantComponent from "./RoomAssistant"; // adjust import path
+import RoomAssistantComponent from "./RoomAssistant";
 
 interface RoomAssistantDialogProps {
   roomId: string;
@@ -30,7 +30,7 @@ export function RoomAssistantDialog({
       <DialogTrigger asChild>
         {triggerButton || defaultTrigger}
       </DialogTrigger>
-      <DialogContent className="max-w-6xl h-[90vh] p-0 overflow-hidden">
+      <DialogContent className="max-w-6xl h-[90vh] p-0 overflow-hidden [&>button]:right-6 [&>button]:top-6 [&>button]:bg-background/80 [&>button]:backdrop-blur-sm [&>button]:border [&>button]:border-border [&>button]:hover:bg-accent [&>button]:h-8 [&>button]:w-8 [&>button]:rounded-lg">
         <div className="h-full">
           <RoomAssistantComponent
             roomId={roomId}

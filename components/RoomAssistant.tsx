@@ -1000,7 +1000,6 @@ const callSummarizeApi = useCallback(
     </Tooltip>
   </TooltipProvider>
   <div className="flex items-center gap-2 text-xs text-muted-foreground">
-    <Badge variant="secondary" className="px-2 py-0.5">{model}</Badge>
     <span className="bg-muted/50 px-2 py-0.5 rounded-full">#{roomName}</span>
   </div>
 </div>
