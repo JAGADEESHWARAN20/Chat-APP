@@ -9,38 +9,41 @@ const rl = readline.createInterface({
 });
 
 // =========================
-// XL Smooth Premium Dotted Circle Spinner (Minimal & Elegant)
+// Spinner Class (High-quality XL Circle)
 // =========================
-function createCircleSpinner(text) {
-  const frames = [
-    "          ● ● ●          ",
-    "      ●           ●      ",
-    "    ●               ●    ",
-    "   ●                 ●   ",
-    "   ●                 ●   ",
-    "    ●               ●    ",
-    "      ●           ●      ",
-    "          ● ● ●          "
-  ].map(f => `\x1b[1m${f}\x1b[0m`); // bold dots
+class CircleSpinner {
+  constructor(text, options = {}) {
+    this.text = text;
+    this.frames = options.frames || [
+      "          ● ● ●          ",
+      "      ●           ●      ",
+      "    ●               ●    ",
+      "   ●                 ●   ",
+      "   ●                 ●   ",
+      "    ●               ●    ",
+      "      ●           ●      ",
+      "          ● ● ●          "
+    ];
+    this.frames = this.frames.map(f => `\x1b[1m${f}\x1b[0m`); // bold
+    this.intervalTime = options.interval || 100;
+    this.i = 0;
+  }
 
-  let i = 0;
+  start() {
+    process.stdout.write("\n");
+    this.interval = setInterval(() => {
+      process.stdout.write(`\r${this.frames[this.i = ++this.i % this.frames.length]} ${this.text}`);
+    }, this.intervalTime);
+  }
 
-  process.stdout.write("\n");
-
-  const interval = setInterval(() => {
-    process.stdout.write(`\r${frames[i = ++i % frames.length]} ${text}`);
-  }, 150); // 150ms per frame
-
-  return {
-    stop(finalText) {
-      clearInterval(interval);
-      process.stdout.write(`\r✅ ${finalText}\n`);
-    }
-  };
+  stop(finalText) {
+    clearInterval(this.interval);
+    process.stdout.write(`\r✅ ${finalText}\n`);
+  }
 }
 
 // =========================
-// Helper function to run commands async
+// Run Command Async
 // =========================
 function runCommand(command) {
   return new Promise((resolve, reject) => {
@@ -48,8 +51,6 @@ function runCommand(command) {
       if (error) return reject(error);
       resolve(stdout || stderr);
     });
-
-    // Pipe stdout/stderr to terminal
     child.stdout?.pipe(process.stdout);
     child.stderr?.pipe(process.stderr);
   });
@@ -72,17 +73,20 @@ async function deploy() {
     console.log("\n🚀 Starting deployment process...");
 
     // Step 1: Git Add
-    const spinner1 = createCircleSpinner("Adding changes to git...");
+    const spinner1 = new CircleSpinner("Adding changes to git...");
+    spinner1.start();
     await runCommand("git add .");
     spinner1.stop("Changes added!");
 
     // Step 2: Git Commit
-    const spinner2 = createCircleSpinner("Committing changes...");
+    const spinner2 = new CircleSpinner("Committing changes...");
+    spinner2.start();
     await runCommand(`git commit -m "${commitMessage}"`);
     spinner2.stop("Changes committed!");
 
     // Step 3: Git Push
-    const spinner3 = createCircleSpinner("Pushing to Vercel...");
+    const spinner3 = new CircleSpinner("Pushing to Vercel...");
+    spinner3.start();
     await runCommand("git push origin main");
     spinner3.stop("Changes pushed & deployment triggered!");
 
