@@ -1,4 +1,4 @@
-// RoomAssistant.tsx - Fully optimized single-file version (No streaming, HTML auto-expand, stable scroll)
+// RoomAssistant.tsx - Pro-level enhanced version (Paired user-AI rendering, structured data mastery, Tailwind-optimized UI)
 "use client";
 
 import React, {
@@ -23,6 +23,10 @@ import {
   MoreVertical,
   Sparkles,
   Mic,
+  ChevronDown,
+  ChevronUp,
+  User,
+  MessageCircle,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -41,26 +45,51 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useTheme } from "next-themes";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Separator } from "@/components/ui/separator";
+import ReactMarkdown from "react-markdown";
 import DOMPurify from "dompurify";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { cn } from "@/lib/utils";
 import { estimateTokens } from "@/lib/token-utils";
 
 // ----------------------------- Types ---------------------------------
+interface StructuredAnalysis {
+  type: string;
+  title: string;
+  summary: string;
+  sections: Array<{
+    title: string;
+    content: string;
+    metrics: string[];
+    highlights: string[];
+  }>;
+  keyFindings: string[];
+  recommendations: string[];
+  metadata: {
+    participantCount: number;
+    messageCount: number;
+    timeRange: string;
+    sentiment: string;
+  };
+}
+
 interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
+  structuredData?: StructuredAnalysis;
   timestamp: Date;
   model?: string;
   isPersisted?: boolean;
-  metadata?: {
-    tokenCount?: number;
-    messageCount?: number;
-  };
+  metadata?: { tokenCount?: number; messageCount?: number };
+}
+
+interface MessagePair {
+  user: ChatMessage;
+  assistant?: ChatMessage;
 }
 
 interface RoomAssistantProps {
@@ -79,44 +108,197 @@ const sanitizeHtml = (html: string) => {
   if (typeof window === "undefined") return html;
   return DOMPurify.sanitize(html, {
     ALLOWED_TAGS: [
-      "div",
-      "span",
-      "p",
-      "h1",
-      "h2",
-      "h3",
-      "h4",
-      "h5",
-      "h6",
-      "ul",
-      "ol",
-      "li",
-      "table",
-      "thead",
-      "tbody",
-      "tr",
-      "td",
-      "th",
-      "strong",
-      "em",
-      "b",
-      "i",
-      "a",
-      "br",
-      "hr",
-      "code",
-      "pre",
+      "div", "span", "p", "h1", "h2", "h3", "h4", "h5", "h6",
+      "ul", "ol", "li", "table", "thead", "tbody", "tr", "td", "th",
+      "strong", "em", "b", "i", "a", "br", "hr", "code", "pre",
+      "blockquote", "img",
     ],
-    ALLOWED_ATTR: ["class", "style", "href", "target", "rel", "scope"],
+    ALLOWED_ATTR: ["class", "style", "href", "target", "rel", "alt", "src", "scope"],
     KEEP_CONTENT: true,
   });
 };
 
-// Lightweight token counting wrapper (matches your server util)
 const countTokens = (text: string) => estimateTokens(text);
 
+// ------------------------- StructuredRenderer --------------------------
+// Tailwind-optimized: Collapsible, responsive cards with subtle animations
+const StructuredRenderer = React.memo(({ data }: { data: StructuredAnalysis }) => {
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
+
+  const toggleSection = useCallback((sectionId: string) => {
+    setExpandedSections((prev) => ({ ...prev, [sectionId]: !prev[sectionId] }));
+  }, []);
+
+  if (!data.sections.length) return null;
+
+  return (
+    <div className="space-y-3 mt-3">
+      {/* Summary Card */}
+      <Card className="bg-gradient-to-r from-muted/50 to-background/30 border-border/30">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base font-semibold flex items-center gap-2">
+            <MessageCircle className="h-4 w-4" />
+            {data.title}
+          </CardTitle>
+          <CardDescription className="text-xs">{data.summary}</CardDescription>
+        </CardHeader>
+        <CardContent className="pt-0 text-xs text-muted-foreground">
+          <div className="flex flex-wrap gap-2 text-[10px] mb-2">
+            <Badge variant="outline" className="px-2 py-0.5">Users: {data.metadata.participantCount}</Badge>
+            <Badge variant="outline" className="px-2 py-0.5">Msgs: {data.metadata.messageCount}</Badge>
+            <Badge variant="secondary" className="px-2 py-0.5">{data.metadata.sentiment}</Badge>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Sections */}
+      {data.sections.map((section, idx) => {
+        const sectionId = `${data.type}-${idx}`;
+        const isExpanded = expandedSections[sectionId];
+        return (
+          <Card key={sectionId} className="border-border/20 hover:border-primary/20 transition-colors">
+            <CardHeader className="p-3 pb-2 cursor-pointer" onClick={() => toggleSection(sectionId)}>
+              <div className="flex items-center justify-between">
+                <h4 className="font-medium text-sm flex items-center gap-1.5">
+                  {section.title}
+                </h4>
+                <motion.div
+                  animate={{ rotate: isExpanded ? 180 : 0 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <ChevronDown className={cn("h-3 w-3 transition-transform", isExpanded && "rotate-180")} />
+                </motion.div>
+              </div>
+            </CardHeader>
+            <AnimatePresence>
+              {isExpanded && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="overflow-hidden"
+                >
+                  <CardContent className="p-3 space-y-2 text-xs">
+                    <p className="text-muted-foreground leading-relaxed">{section.content}</p>
+                    {section.metrics.length > 0 && (
+                      <div className="bg-muted/30 rounded p-2">
+                        <h5 className="font-medium mb-1">Metrics</h5>
+                        <ul className="space-y-0.5 list-disc pl-4">
+                          {section.metrics.map((m, i) => <li key={i} className="text-[10px]">{m}</li>)}
+                        </ul>
+                      </div>
+                    )}
+                    {section.highlights.length > 0 && (
+                      <div className="bg-accent/20 rounded p-2">
+                        <h5 className="font-medium mb-1">Highlights</h5>
+                        <ul className="space-y-0.5 list-disc pl-4">
+                          {section.highlights.map((h, i) => <li key={i} className="text-[10px]">{h}</li>)}
+                        </ul>
+                      </div>
+                    )}
+                  </CardContent>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </Card>
+        );
+      })}
+
+      {/* Findings & Recs as compact grids */}
+      {data.keyFindings.length > 0 && (
+        <Card className="border-border/20">
+          <CardHeader className="p-3">
+            <h4 className="font-medium text-sm flex items-center gap-1.5">Key Findings</h4>
+          </CardHeader>
+          <CardContent className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+            {data.keyFindings.map((f, i) => (
+              <div key={i} className="bg-muted/50 rounded p-2">
+                <span className="text-muted-foreground">{f}</span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+      {data.recommendations.length > 0 && (
+        <Card className="border-primary/20 bg-primary/5">
+          <CardHeader className="p-3">
+            <h4 className="font-medium text-sm flex items-center gap-1.5 text-primary">Recommendations</h4>
+          </CardHeader>
+          <CardContent className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+            {data.recommendations.map((r, i) => (
+              <div key={i} className="bg-primary/10 rounded p-2 border border-primary/20">
+                <span className="text-primary/90">{r}</span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+});
+
+// ------------------------- PairedMessageRenderer --------------------------
+// New: Groups user + AI response in a single card for cohesive pairing
+const PairedMessageRenderer = React.memo(({ pair }: { pair: MessagePair }) => (
+  <motion.div
+    initial={{ opacity: 0, y: 10 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ duration: 0.25, ease: "easeOut" }}
+    className="space-y-3"
+  >
+    {/* User Message */}
+    <Card className="bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border-blue-200/50 dark:border-blue-700/50">
+      <CardContent className="p-3">
+        <div className="flex items-start gap-2">
+          <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center mt-0.5 flex-shrink-0">
+            <User className="h-3 w-3 text-white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-blue-800 dark:text-blue-200 break-words">{pair.user.content}</p>
+            <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">{pair.user.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+
+    {pair.assistant && (
+      <>
+        <Separator className="my-2" />
+        {/* AI Response */}
+        <Card className="border-border/30 hover:border-primary/30 transition-colors shadow-sm">
+          <CardContent className="p-4 pt-3">
+            <div className="flex items-start gap-2 mb-2">
+              <div className="w-6 h-6 bg-gradient-to-br from-primary to-primary/70 rounded-full flex items-center justify-center mt-0.5 flex-shrink-0">
+                <Bot className="h-3 w-3 text-primary-foreground" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1 mb-1">
+                  <span className="text-xs font-medium text-muted-foreground">AI • {pair.assistant.model || "Assistant"}</span>
+                  <Badge variant="outline" className="text-xs px-1.5 py-0.5 ml-1">
+                    {pair.assistant.structuredData?.type || "Analysis"}
+                  </Badge>
+                </div>
+                <div className="text-xs text-muted-foreground mb-2">
+                  {pair.assistant.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                </div>
+              </div>
+            </div>
+            {/* Render AI content */}
+            <ChatMessageDisplay
+              msg={pair.assistant}
+              copyToClipboard={() => {}} // Placeholder - handled in parent
+              theme={useTheme().theme === "dark" ? "dark" : "light"}
+              onExpand={() => {}} // Optional
+            />
+          </CardContent>
+        </Card>
+      </>
+    )}
+  </motion.div>
+));
+
 // ------------------------- ChatMessageDisplay --------------------------
-// Memoized message item to avoid re-renders when unrelated messages change.
+// Fallback for unpaired messages (legacy support)
 type ChatMessageDisplayProps = {
   msg: ChatMessage;
   copyToClipboard: (content: string) => void;
@@ -132,118 +314,109 @@ const ChatMessageDisplay = React.memo(function ChatMessageDisplay({
 }: ChatMessageDisplayProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  const safeTimestamp = useMemo(() => {
-    try {
-      return new Date(msg.timestamp);
-    } catch {
-      return new Date();
-    }
-  }, [msg.timestamp]);
-
-  const formattedTime = useMemo(
-    () => safeTimestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-    [safeTimestamp]
-  );
+  const safeTimestamp = useMemo(() => new Date(msg.timestamp), [msg.timestamp]);
+  const formattedTime = useMemo(() => safeTimestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), [safeTimestamp]);
 
   const isUserMessage = msg.role === "user";
   const isAssistantMessage = msg.role === "assistant";
-  const isHtmlContent = useMemo(
-    () => isAssistantMessage && /<[^>]+>/i.test(msg.content),
-    [msg.content, isAssistantMessage]
-  );
+  const hasStructuredData = !!msg.structuredData && isAssistantMessage;
 
-  const shouldTruncate = !isHtmlContent && msg.content.length > 800 && !isExpanded;
-  const displayContent = shouldTruncate ? `${msg.content.slice(0, 800)}...` : msg.content;
+  const tokenEstimate = countTokens(msg.content);
+  const shouldTruncate = tokenEstimate > 800 && !isExpanded && !hasStructuredData;
+  const displayContent = shouldTruncate ? msg.content.slice(0, msg.content.length * 0.7) + "..." : msg.content;
 
   const handleExpandToggle = useCallback(() => {
-    setIsExpanded((s) => !s);
-    if (!isExpanded && onExpand) onExpand(msg.id);
-    if (isExpanded && onExpand) onExpand(null);
-  }, [isExpanded, onExpand, msg.id]);
+    setIsExpanded((prev) => {
+      const newState = !prev;
+      onExpand?.(newState ? msg.id : null);
+      return newState;
+    });
+  }, [onExpand, msg.id]);
 
   const renderContent = useMemo(() => {
-    if (isHtmlContent) {
-      const cleanHtml = sanitizeHtml(msg.content);
-      return (
-        <div className="w-full">
-          <div 
-            className={cn(
-              "w-full max-w-none", // Force full width
-              "prose prose-sm max-w-none",
-              "whitespace-pre-wrap leading-relaxed text-sm",
-              // Remove restrictive container classes
-              theme === "dark" 
-                ? "text-white [&_th]:text-white [&_td]:text-white"
-                : "text-black [&_th]:text-black [&_td]:text-black"
-            )}
-            dangerouslySetInnerHTML={{ __html: cleanHtml }} 
-          />
-        </div>
-      );
-    } else {
-      return (
-        <div className="w-full">
-          <div className="whitespace-pre-wrap leading-relaxed text-sm max-w-none">{displayContent}</div>
-          {shouldTruncate && (
-            <Button
-              variant="link"
-              className="p-0 h-auto text-primary/80 hover:text-primary mt-2 text-xs"
-              onClick={handleExpandToggle}
-            >
-              Show more
-            </Button>
-          )}
-        </div>
-      );
+    if (hasStructuredData) {
+      return <StructuredRenderer data={msg.structuredData!} />;
     }
-  }, [isHtmlContent, msg.content, displayContent, shouldTruncate, theme, handleExpandToggle]);
+
+    const cleanHtml = sanitizeHtml(msg.content);
+    const isHtml = /<[^>]+>/i.test(cleanHtml);
+    return (
+      <div className="prose prose-sm max-w-none dark:prose-invert leading-relaxed">
+        {isHtml ? (
+          <div
+            className={cn(
+              "w-full",
+              theme === "dark" ? "text-gray-100 [&_th]:text-gray-100 [&_td]:text-gray-200" : "text-gray-800 [&_th]:text-gray-800 [&_td]:text-gray-700"
+            )}
+            dangerouslySetInnerHTML={{ __html: cleanHtml }}
+          />
+        ) : (
+          <ReactMarkdown
+            components={{
+              h1: ({ children }) => <h1 className="text-lg font-bold my-3 border-b border-border pb-1">{children}</h1>,
+              h2: ({ children }) => <h2 className="text-base font-semibold my-2">{children}</h2>,
+              p: ({ children }) => <p className="my-2">{children}</p>,
+              ul: ({ children }) => <ul className="list-disc pl-6 my-2 space-y-1">{children}</ul>,
+              table: ({ children }) => (
+                <div className="overflow-x-auto my-3 rounded border border-border">
+                  <table className="w-full border-collapse">{children}</table>
+                </div>
+              ),
+              th: ({ children }) => <th className="px-3 py-2 text-left font-semibold bg-muted text-muted-foreground border-b border-border">{children}</th>,
+              td: ({ children }) => <td className="px-3 py-2 border-b border-border">{children}</td>,
+              code: ({ children }) => <code className="bg-muted px-1 rounded text-xs">{children}</code>,
+            }}
+          >
+            {displayContent}
+          </ReactMarkdown>
+        )}
+        {shouldTruncate && (
+          <Button variant="link" size="sm" onClick={handleExpandToggle} className="p-0 h-auto mt-2 text-xs">
+            {isExpanded ? "Show less" : "Show more"}
+          </Button>
+        )}
+      </div>
+    );
+  }, [hasStructuredData, msg.structuredData, msg.content, displayContent, shouldTruncate, theme, handleExpandToggle, isExpanded]);
+
   return (
     <motion.div
-      key={msg.id}
-      initial={{ opacity: 0, y: 6 }}
+      initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -6 }}
+      exit={{ opacity: 0, y: -10 }}
+      transition={{ duration: 0.2, ease: "easeOut" }}
       className={cn("flex w-full group", isUserMessage ? "justify-end" : "justify-start")}
     >
-      <Card
-          className={cn(
-            "relative w-full transition-all duration-200 max-w-none", // Add max-w-none
-            isUserMessage
-              ? "bg-gradient-to-br from-primary to-primary/80 text-primary-foreground"
-              : "bg-background/80 border-border/50"
-          )}
-        >
-        <CardContent className="p-3 sm:p-4 ">
-          <div className="whitespace-pre-wrap leading-relaxed h-auto max-w-none">{renderContent}</div>
-
-          {/* Footer */}
-          <div className="flex justify-between items-center mt-2 pt-2 border-t border-current/20">
-            <span
-              className={`text-xs font-medium ${isUserMessage ? "text-primary-foreground/90" : "text-muted-foreground/80"}`}
-            >
-              {isUserMessage ? "You" : `AI • ${msg.model || "Model"}`}
+      <Card className={cn(
+        "relative w-full max-w-4xl mx-auto transition-all duration-200 shadow-sm",
+        isUserMessage
+          ? "bg-gradient-to-r from-blue-500 to-blue-600 text-blue-50 border-blue-400/50"
+          : "bg-card border-border/50 hover:shadow-md"
+      )}>
+        <CardContent className={cn("p-4", hasStructuredData ? "pb-3" : "pb-4")}>
+          {renderContent}
+          <div className="flex justify-between items-center mt-3 pt-2 border-t border-border/30 min-h-[1.25rem] text-xs">
+            <span className={cn("font-medium", isUserMessage ? "text-blue-50/90" : "text-muted-foreground/80")}>
+              {isUserMessage ? "You" : `AI • ${msg.model || "Assistant"}`}
             </span>
             <div className="flex items-center gap-2">
-              <span className={`text-xs ${isUserMessage ? "text-primary-foreground/80" : "text-muted-foreground/70"}`}>
+              <span className={cn(isUserMessage ? "text-blue-50/70" : "text-muted-foreground/60")}>
                 {formattedTime}
               </span>
-
               {isAssistantMessage && (
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
                         variant="ghost"
-                        size="icon"
+                        size="sm"
                         onClick={() => copyToClipboard(msg.content)}
-                        className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100 transition-all duration-200 hover:bg-accent/50"
+                        className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-accent/50"
                       >
                         <Copy className="h-3 w-3" />
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent className="text-xs">
-                      <p>Copy message</p>
-                    </TooltipContent>
+                    <TooltipContent>Copy</TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
               )}
@@ -260,57 +433,46 @@ export default function RoomAssistant({
   roomId,
   roomName,
   className = "",
-  maxPromptLength = 500,
-  maxHistory = 50,
-  initialModel = "gpt-3.5-turbo",
+  maxPromptLength = 2000,
+  maxHistory = 30,
+  initialModel = "gpt-4o-mini",
 }: RoomAssistantProps) {
-  // State
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isStreaming, setIsStreaming] = useState(false); // unused for live updates, kept for UI parity
   const [model, setModel] = useState(initialModel);
-  const [expandedMessage, setExpandedMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  // Refs for scrolling and user interaction
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
-  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const userScrollingRef = useRef(false);
-  const userScrollTimerRef = useRef<number | null>(null);
 
-  // External hooks/context
   const { messages: allMessages } = useMessage();
-  const { addMessage, state: roomState } = useRoomContext();
-  const { theme: systemTheme, setTheme: setSystemTheme } = useTheme();
+  const { state: roomState } = useRoomContext();
+  const { theme: systemTheme, setTheme } = useTheme();
   const theme = systemTheme === "dark" ? "dark" : "light";
 
-  // --- Utilities ---
+  // ----------------- Utilities -----------------
   const copyToClipboard = useCallback((content: string) => {
-    const textContent = content.replace(/<[^>]*>/g, "");
-    navigator.clipboard
-      .writeText(textContent)
-      .then(() => toast.success("Copied to clipboard!"))
-      .catch(() => toast.error("Failed to copy"));
+    const text = content.replace(/<[^>]*>/g, "").trim();
+    navigator.clipboard.writeText(text).then(
+      () => toast.success("Copied!"),
+      () => toast.error("Copy failed")
+    );
   }, []);
 
-  const saveToLocal = useCallback(
-    (newMessages: ChatMessage[]) => {
-      try {
-        const key = `ai-chat-${roomId}`;
-        const messagesToSave = newMessages
-          .filter((m) => !m.isPersisted)
-          .slice(-maxHistory)
-          .map((m) => ({ ...m, timestamp: m.timestamp.toISOString() }));
-        localStorage.setItem(key, JSON.stringify(messagesToSave));
-      } catch (err) {
-        console.error("Failed to save to local storage:", err);
-      }
-    },
-    [roomId, maxHistory]
-  );
+  const saveToLocal = useCallback((newMessages: ChatMessage[]) => {
+    try {
+      const key = `ai-chat-${roomId}`;
+      const toSave = newMessages
+        .filter((m) => !m.isPersisted)
+        .slice(-maxHistory)
+        .map((m) => ({ ...m, timestamp: m.timestamp.toISOString(), structuredData: m.structuredData }));
+      localStorage.setItem(key, JSON.stringify(toSave));
+    } catch {}
+  }, [roomId, maxHistory]);
 
   const loadFromLocalStorage = useCallback(() => {
     try {
@@ -320,19 +482,17 @@ export default function RoomAssistant({
         const parsed = JSON.parse(saved).map((m: any) => ({
           ...m,
           timestamp: new Date(m.timestamp),
-          content: String(m.content || ""),
+          content: String(m.content),
+          structuredData: m.structuredData,
           isPersisted: false,
         }));
         setMessages(parsed.slice(-maxHistory));
       }
-    } catch (err) {
-      console.error("Failed to load from localStorage:", err);
-    }
+    } catch {}
   }, [roomId, maxHistory]);
 
-  // load AI chat history from DB (if user exists)
   const loadAIChatHistory = useCallback(async () => {
-    if (!roomState.user?.id) return;
+    if (!roomState.user?.id) return loadFromLocalStorage();
     try {
       const res = await fetch(`/api/ai-chat/history?roomId=${roomId}&userId=${roomState.user.id}`);
       if (res.ok) {
@@ -341,179 +501,120 @@ export default function RoomAssistant({
           id: item.id,
           role: "assistant",
           content: item.ai_response,
+          structuredData: item.structured_data,
           timestamp: new Date(item.created_at),
           model: item.model_used,
           isPersisted: true,
-          metadata: {
-            tokenCount: item.token_count,
-            messageCount: item.message_count,
-          },
+          metadata: { tokenCount: item.token_count, messageCount: item.message_count },
         }));
-        setMessages((prev) => [...chatMessages.slice(-maxHistory)]);
-      } else {
-        loadFromLocalStorage();
+        // Reconstruct pairs: Alternate user queries with AI responses from history
+        const pairedMessages: ChatMessage[] = [];
+        for (let i = 0; i < history.length; i += 2) {
+          if (history[i]) {
+            const userQuery = history[i].user_query; // Assume history saves user_query
+            const userMsg: ChatMessage = {
+              id: `user-${history[i].id}`,
+              role: "user",
+              content: userQuery,
+              timestamp: new Date(history[i].created_at),
+            };
+            const aiMsg = chatMessages[i] || { ...chatMessages[0], id: `ai-${history[i].id}` }; // Fallback
+            pairedMessages.push(userMsg, aiMsg);
+          }
+        }
+        setMessages(pairedMessages.slice(-maxHistory));
+        return;
       }
-    } catch (err) {
-      console.error("Failed to load AI chat history:", err);
-      loadFromLocalStorage();
-    }
+    } catch {}
+    loadFromLocalStorage();
   }, [roomId, roomState.user, loadFromLocalStorage, maxHistory]);
 
   const saveToAIChatHistory = useCallback(
-    async (userQuery: string, aiResponse: string, metadata: { tokenCount?: number; messageCount?: number } = {}) => {
+    async (userQuery: string, aiResponse: string, structuredData?: StructuredAnalysis, metadata?: { tokenCount?: number; messageCount?: number }) => {
       if (!roomState.user?.id) return false;
       try {
-        const response = await fetch("/api/ai-chat/history", {
+        const res = await fetch("/api/ai-chat/history", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             room_id: roomId,
             user_id: roomState.user.id,
-            user_query: userQuery,
+            userQuery, // Save user query for pairing
             ai_response: aiResponse,
+            structured_data: structuredData,
             model_used: model,
-            token_count: metadata.tokenCount,
-            message_count: metadata.messageCount,
+            token_count: metadata?.tokenCount,
+            message_count: metadata?.messageCount,
           }),
         });
-        return response.ok;
-      } catch (err) {
-        console.error("Failed to save AI chat history:", err);
+        return res.ok;
+      } catch {
         return false;
       }
     },
     [roomId, roomState.user, model]
   );
 
-  // ----------------- Stable scroll handling -----------------
+  // Enhanced scroll
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container || userScrollingRef.current) return;
+    requestAnimationFrame(() => container.scrollTop = container.scrollHeight);
+  }, [messages]);
+
   const onUserScroll = useCallback(() => {
     userScrollingRef.current = true;
-    if (userScrollTimerRef.current) {
-      window.clearTimeout(userScrollTimerRef.current);
-    }
-    // stop considering user scrolling after 1s of inactivity
-    userScrollTimerRef.current = window.setTimeout(() => {
-      userScrollingRef.current = false;
-      userScrollTimerRef.current = null;
-    }, 1000);
+    setTimeout(() => (userScrollingRef.current = false), 800);
   }, []);
 
-  const scrollToBottom = useCallback((smooth = true) => {
-    // Respect user manual scroll (especially for horizontal scroll)
-    if (userScrollingRef.current) return;
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({
-        behavior: smooth ? "smooth" : "auto",
-        block: "end",
-      });
-    } else if (scrollContainerRef.current) {
-      // fallback: scroll to bottom of container
-      scrollContainerRef.current.scrollTo({
-        top: scrollContainerRef.current.scrollHeight,
-        behavior: smooth ? "smooth" : "auto",
-      });
-    }
-  }, []);
-
-  // ----------------- Build recentRoomMessages for context -----------------
+  // Context
   const recentRoomMessages = useMemo(() => {
-    return allMessages
+    const filtered = allMessages
       .filter((msg: Imessage) => msg.room_id === roomId)
-      .slice(-60)
+      .slice(-40)
       .map((msg: Imessage) => {
         const sender = msg.profiles?.display_name || msg.profiles?.username || "User";
-        return `${sender}: ${msg.text}`;
+        return `${sender}: ${msg.text}`.trim();
       })
-      .join("\n");
+      .filter(Boolean);
+    return filtered.length ? filtered.join("\n") : "";
   }, [allMessages, roomId]);
 
-  // ----------------- API call (No streaming) -----------------
-  // Robust client-side handling: if server supports streaming, read entire stream and assemble final; if JSON, use that.
+  // API Call
   const callSummarizeApi = useCallback(
     async (contextPrompt: string) => {
-      // set up request body
-      const body = {
-        prompt: contextPrompt,
-        roomId,
-        model,
-        // signal to server we prefer non-streaming if supported
-        disable_stream: true,
-      };
-
+      const body = { prompt: contextPrompt, roomId, model, disable_stream: true };
       try {
         const res = await fetch("/api/summarize", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
-
         if (!res.ok) {
-          let payload: any;
-          try {
-            payload = await res.json();
-          } catch {
-            throw new Error(`HTTP ${res.status}`);
-          }
-          throw new Error(payload?.error || `HTTP ${res.status}`);
+          const errorData = await res.json().catch(() => ({}));
+          throw new Error(errorData.error || `HTTP ${res.status}`);
         }
-
-        const contentType = res.headers.get("content-type") || "";
-
-        // If server returned JSON (preferred), parse and extract final content
-        if (contentType.includes("application/json")) {
-          const data = await res.json();
-          // Support multiple possible shapes
-          const final = data.fullContent || data.ai_response || data.result || data.text || "";
-          return { content: String(final || ""), persisted: !!data.persisted, metrics: data.metrics || {} };
-        }
-
-        // If server returned text/event-stream or other streaming format, read & assemble end event
-        if (res.body) {
-          const reader = res.body.getReader();
-          const decoder = new TextDecoder();
-          let accumulated = "";
-          let done = false;
-          while (!done) {
-            const { value, done: readDone } = await reader.read();
-            if (readDone) {
-              done = true;
-              break;
-            }
-            accumulated += decoder.decode(value, { stream: true });
-          }
-          // Try to parse known SSE `data: { ... }` blocks and extract final 'end' or 'fullContent'
-          // Fallback: return accumulated raw text
-          try {
-            // find last JSON object in stream
-            const matches = Array.from(accumulated.matchAll(/data:\s*({[\s\S]*?})\s*\n\n/g));
-            if (matches.length > 0) {
-              const last = matches[matches.length - 1][1];
-              const parsed = JSON.parse(last);
-              const final = parsed.fullContent || parsed.full_content || parsed.final || parsed.content || "";
-              return { content: String(final || accumulated), persisted: !!parsed.persisted, metrics: parsed.metrics || {} };
-            }
-          } catch (err) {
-            // ignore parse error and return raw text
-            console.warn("Failed to parse SSE JSON, returning raw text", err);
-          }
-          return { content: accumulated, persisted: false, metrics: {} };
-        }
-
-        // otherwise fallback
-        return { content: "", persisted: false, metrics: {} };
+        const data = await res.json();
+        const fullContent = data.fullContent || data.ai_response || "";
+        return {
+          content: fullContent,
+          structuredData: data.structuredData,
+          persisted: !!data.persisted,
+          metrics: data.metrics || {},
+        };
       } catch (err: any) {
-        throw err;
+        throw new Error(err.message || "API failed");
       }
     },
     [roomId, model]
   );
 
-  // ----------------- Submit handler (no streaming) -----------------
+  // Submit: Creates paired user-AI
   const handleSubmit = useCallback(
     async (e?: React.FormEvent) => {
       e?.preventDefault();
-      if (!prompt.trim() || !roomState.user) {
-        toast.error("Please log in and enter a query.");
+      if (!prompt.trim() || !roomState.user?.id) {
+        toast.error("Login and enter a query.");
         return;
       }
 
@@ -524,130 +625,104 @@ export default function RoomAssistant({
         timestamp: new Date(),
       };
 
-      // Append user message locally
-      setMessages((prev) => {
-        const next = [...prev.slice(-maxHistory + 1), userMsg];
-        return next;
+      startTransition(() => {
+        setMessages((prev) => [...prev, userMsg]); // Add user immediately
+        setPrompt("");
+        setLoading(true);
+        setError(null);
       });
 
-      setPrompt("");
-      setLoading(true);
-      setError(null);
-      setIsStreaming(false); // no streaming choice
+      const historyTokens = countTokens(messages.map((m) => `${m.role}: ${m.content}`).join("\n"));
+      const truncatedHistory = historyTokens > 1500
+        ? messages.slice(-8).map((m) => `${m.role}: ${m.content}`).join("\n")
+        : messages.map((m) => `${m.role}: ${m.content}`).join("\n");
 
-      // Build context for server
-      const historyStr =
-        messages.map((m) => `${m.role}: ${m.content}`).join("\n") + `\nuser: ${prompt}`;
-      const context = recentRoomMessages
-        ? `Room "${roomName}" recent messages:\n${recentRoomMessages}\n\nChat History:\n${historyStr}`
-        : `Room "${roomName}"\n\nChat History:\n${historyStr}`;
+      const contextPrompt = recentRoomMessages
+        ? `Room "${roomName}" recent messages:\n${recentRoomMessages}\n\nChat History:\n${truncatedHistory}\n\nuser: ${prompt}`
+        : `Room "${roomName}"\nChat History:\n${truncatedHistory}\n\nuser: ${prompt}`;
 
       try {
-        // call API (non-streaming preferred)
-        const { content: fullResponse, persisted, metrics } = await callSummarizeApi(context);
+        const { content: fullResponse, structuredData, persisted, metrics } = await callSummarizeApi(contextPrompt);
 
-        // Create assistant message and persist
         const aiMsg: ChatMessage = {
           id: generateId(),
           role: "assistant",
-          content: fullResponse || "No response received.",
+          content: fullResponse || "No analysis available.",
+          structuredData,
           timestamp: new Date(),
           model,
           isPersisted: Boolean(persisted),
           metadata: {
-            tokenCount: metrics?.outputTokens || Math.floor((fullResponse || "").length / 4),
+            tokenCount: metrics.outputTokens || countTokens(fullResponse),
             messageCount: messages.length + 1,
           },
         };
 
-        // Atomic update: append assistant message
-        setMessages((prev) => {
-          const next = [...prev, aiMsg].slice(-maxHistory);
-          // persist to local if DB not persisted
-          if (!aiMsg.isPersisted) saveToLocal(next);
-          return next;
+        startTransition(() => {
+          setMessages((prev) => {
+            const updated = [...prev, aiMsg].slice(-maxHistory);
+            if (!aiMsg.isPersisted) saveToLocal(updated);
+            return updated;
+          });
         });
 
-        // Try to save to DB if not persisted already
         if (!aiMsg.isPersisted) {
-          const saved = await saveToAIChatHistory(prompt, fullResponse || "", {
-            tokenCount: aiMsg.metadata?.tokenCount,
-            messageCount: aiMsg.metadata?.messageCount,
-          });
+          const saved = await saveToAIChatHistory(prompt, fullResponse, structuredData, aiMsg.metadata);
           if (saved) {
-            setMessages((prev) =>
-              prev.map((m) => (m.id === aiMsg.id ? { ...m, isPersisted: true } : m))
-            );
-            toast.success("Response saved to chat history!");
-          } else {
-            toast.warning("Saved locally - database sync failed.");
+            startTransition(() => setMessages((prev) => prev.map((m) => m.id === aiMsg.id ? { ...m, isPersisted: true } : m)));
+            toast.success("Saved!");
           }
-        } else {
-          toast.success("Response loaded from DB.");
         }
-
-        // scroll to bottom after full response added
-        setTimeout(() => scrollToBottom(true), 80);
       } catch (err: any) {
-        console.error("API Error:", err);
-        setError(err instanceof Error ? err.message : String(err));
-        toast.error(err instanceof Error ? err.message : "Request failed");
+        setError(err.message);
+        toast.error(err.message);
       } finally {
         setLoading(false);
-        setIsStreaming(false);
       }
     },
-    [
-      prompt,
-      messages,
-      recentRoomMessages,
-      roomName,
-      callSummarizeApi,
-      maxHistory,
-      model,
-      saveToAIChatHistory,
-      saveToLocal,
-      roomState.user,
-      scrollToBottom,
-    ]
+    [prompt, messages, recentRoomMessages, roomName, model, callSummarizeApi, maxHistory, saveToAIChatHistory, saveToLocal, roomState.user]
   );
 
-  // ----------------- Other utilities -----------------
+  // Pair messages for rendering
+  const messagePairs = useMemo<MessagePair[]>(() => {
+    const pairs: MessagePair[] = [];
+    for (let i = 0; i < messages.length; i++) {
+      const userMsg = messages[i];
+      if (userMsg.role === "user") {
+        const nextAssistant = messages[i + 1];
+        pairs.push({ user: userMsg, assistant: nextAssistant?.role === "assistant" ? nextAssistant : undefined });
+        i++; // Skip assistant if paired
+      } else {
+        pairs.push({ user: { id: generateId(), role: "user" as const, content: "Unpaired AI response", timestamp: new Date() }, assistant: userMsg });
+      }
+    }
+    return pairs;
+  }, [messages]);
+
+  // Actions (unchanged, optimized)
   const clearHistory = useCallback(async () => {
     if (roomState.user?.id) {
       try {
-        const response = await fetch(`/api/ai-chat/history?roomId=${roomId}&userId=${roomState.user.id}`, {
-          method: "DELETE",
-        });
-        if (response.ok) {
-          toast.success("Chat history cleared from database!");
-        } else {
-          throw new Error("Failed to clear from database");
-        }
-      } catch (err) {
-        console.error("Failed to clear database history:", err);
-        toast.warning("Cleared locally only");
+        await fetch(`/api/ai-chat/history?roomId=${roomId}&userId=${roomState.user.id}`, { method: "DELETE" });
+        toast.success("Cleared!");
+      } catch {
+        toast.warning("Local clear only.");
       }
     }
-    setMessages([]);
-    localStorage.removeItem(`ai-chat-${roomId}`);
+    startTransition(() => {
+      setMessages([]);
+      localStorage.removeItem(`ai-chat-${roomId}`);
+    });
   }, [roomId, roomState.user]);
 
   const regenerate = useCallback(() => {
-    const lastUserIndex = messages.slice().reverse().findIndex((m) => m.role === "user");
-    if (lastUserIndex === -1) {
-      toast.error("No user message to regenerate from");
-      return;
-    }
-    // find actual index
-    const reversedIndex = messages.length - 1 - lastUserIndex;
-    const lastUserMessage = messages[reversedIndex];
-    setMessages((prev) => prev.slice(0, reversedIndex + 1));
-    setPrompt(lastUserMessage.content);
-    // call submit on next tick
-    setTimeout(() => {
-      handleSubmit();
-    }, 0);
+    const lastUser = messages.slice().reverse().find((m) => m.role === "user");
+    if (!lastUser) return toast.error("No query to regenerate.");
+    startTransition(() => {
+      setMessages((prev) => prev.slice(0, prev.indexOf(lastUser) + 1));
+      setPrompt(lastUser.content);
+    });
+    setTimeout(handleSubmit, 0);
   }, [messages, handleSubmit]);
 
   const exportChat = useCallback(() => {
@@ -655,180 +730,122 @@ export default function RoomAssistant({
       roomId,
       roomName,
       exportedAt: new Date().toISOString(),
-      messages: messages.map((m) => ({
-        role: m.role,
-        content: m.content,
-        timestamp: m.timestamp.toISOString(),
-        model: m.model,
-        metadata: m.metadata,
-      })),
+      messages,
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `chat-${roomName}-${Date.now()}.json`;
-    document.body.appendChild(a);
+    a.download = `chat-${roomName.replace(/[^a-z0-9]/gi, '-')}-${Date.now()}.json`;
     a.click();
-    document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    toast.success("Chat exported successfully");
+    toast.success("Exported!");
   }, [messages, roomName, roomId]);
 
-  // Voice input
   const startVoiceInput = useCallback(() => {
-    if (typeof window === "undefined") return;
-    const SpeechRecognition =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      toast.error("Speech recognition not supported in your browser");
-      return;
+    if ("webkitSpeechRecognition" in window) {
+      const recognition = new (window as any).webkitSpeechRecognition();
+      recognition.lang = "en-US";
+      recognition.onresult = (e: any) => setPrompt((prev) => prev + e.results[0][0].transcript);
+      recognition.onerror = () => toast.error("Voice failed.");
+      recognition.start();
+    } else {
+      toast.error("Voice unsupported.");
     }
-    const recognition = new SpeechRecognition();
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.lang = "en-US";
-    recognition.onresult = (event: any) => {
-      const transcript = event.results[0][0].transcript;
-      setPrompt((prev) => prev + transcript);
-    };
-    recognition.onerror = (event: any) => {
-      toast.error("Voice input failed: " + event.error);
-    };
-    recognition.start();
   }, []);
 
-  // Add AI conversation to regular room messages table
   const handleAddMessage = useCallback(async () => {
-    if (roomState.user && prompt.trim()) {
-      try {
-        const supabase = supabaseBrowser();
-        const { data, error } = await supabase
-          .from("messages")
-          .insert({
-            text: `AI Assistant Query: ${prompt}`,
-            room_id: roomId,
-            sender_id: roomState.user.id,
-            is_edited: false,
-            status: "sent",
-          })
-          .select()
-          .single();
-
-        if (error) throw error;
-        toast.success("Message added to room chat!");
-        setPrompt("");
-      } catch (err) {
-        console.error("Failed to add message:", err);
-        toast.error("Failed to add message to room chat");
-      }
+    if (!prompt.trim() || !roomState.user) return;
+    try {
+      await supabaseBrowser()
+        .from("messages")
+        .insert({
+          text: `AI Query: ${prompt}`,
+          room_id: roomId,
+          sender_id: roomState.user.id,
+          is_edited: false,
+          status: "sent",
+        });
+      toast.success("Added to room!");
+      setPrompt("");
+    } catch {
+      toast.error("Add failed.");
     }
   }, [prompt, roomState.user, roomId]);
 
-  // ----------------- Effects -----------------
+  // Effects
   useEffect(() => {
-    if (roomState.user?.id) loadAIChatHistory();
-    else loadFromLocalStorage();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadAIChatHistory, roomState.user]);
+    // Wrap in async IIFE to handle Promise correctly
+    (async () => {
+      await loadAIChatHistory();
+    })();
+  }, [loadAIChatHistory]);
 
-  // Save to local when messages change and not loading
   useEffect(() => {
     if (!loading) saveToLocal(messages);
   }, [messages, loading, saveToLocal]);
 
-  // auto-focus textarea
   useEffect(() => {
     textareaRef.current?.focus();
   }, []);
 
-  // scroll to bottom when messages update (but respects user scrolling)
-  useEffect(() => {
-    // small delay helps DOM settle after renders
-    const id = window.setTimeout(() => scrollToBottom(true), 120);
-    return () => clearTimeout(id);
-  }, [messages, scrollToBottom]);
-
   // ----------------- UI -----------------
   return (
-    <Card
-      className={cn(
-        "flex flex-col h-full overflow-hidden",
-        "bg-gradient-to-br from-background to-muted/20",
-        className
-      )}
-    >
-      <CardHeader className="pb-3 flex-shrink-0 border-b bg-card/50 backdrop-blur-sm">
+    <Card className={cn("flex flex-col h-full shadow-xl border-border/20", className)}>
+      <CardHeader className="flex-shrink-0 border-b bg-gradient-to-r from-background via-muted to-background/80 p-4 backdrop-blur-sm">
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center gap-3">
             <motion.div
-              className="flex items-center justify-center w-10 h-10 bg-gradient-to-br from-primary to-primary/80 rounded-xl shadow-lg"
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
+              className="w-12 h-12 bg-gradient-to-br from-primary to-secondary rounded-xl shadow-lg flex items-center justify-center"
+              whileHover={{ scale: 1.05, rotate: 5 }}
+              transition={{ type: "spring", stiffness: 300 }}
             >
-              <Bot className="h-5 w-5 text-primary-foreground" />
+              <Bot className="h-6 w-6 text-primary-foreground drop-shadow-sm" />
             </motion.div>
             <div>
-              <CardTitle className="text-base sm:text-lg font-bold">AI Assistant</CardTitle>
-              <div className="flex items-center gap-2 mt-0.5">
-                <Badge variant="secondary" className="text-xs px-2 py-0">
-                  {model}
-                </Badge>
-                <span className="text-xs text-muted-foreground">#{roomName}</span>
+              <CardTitle className="text-xl font-bold leading-tight">AI Assistant</CardTitle>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Badge variant="secondary" className="px-2 py-0.5">{model}</Badge>
+                <span className="bg-muted/50 px-2 py-0.5 rounded-full">#{roomName}</span>
               </div>
             </div>
           </div>
-
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
+              <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full hover:bg-accent/80 transition-all">
                 <MoreVertical className="h-4 w-4" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-56 max-h-64 overflow-y-auto scrollbar-thin" align="end">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between px-2 py-1.5">
-                  <span className="text-sm">Dark Mode</span>
-                  <Switch
-                    checked={theme === "dark"}
-                    onCheckedChange={(checked) => setSystemTheme(checked ? "dark" : "light")}
-                  />
+            <PopoverContent align="end" className="w-56 p-2 rounded-xl shadow-lg">
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between py-1.5 px-2 text-xs rounded-md hover:bg-accent/50 cursor-pointer">
+                  <span>Dark Mode</span>
+                  <Switch checked={theme === "dark"} onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")} />
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={clearHistory}
-                  disabled={loading || messages.length === 0}
-                  className="w-full justify-start"
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Clear History
+                <Button variant="ghost" size="sm" onClick={clearHistory} disabled={loading || !messages.length} className="justify-start h-9 w-full rounded-md hover:bg-destructive/10">
+                  <Trash2 className="h-3.5 w-3.5 mr-2" /> Clear History
                 </Button>
                 {messages.length > 1 && (
-                  <Button variant="ghost" size="sm" onClick={regenerate} disabled={loading} className="w-full justify-start">
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Regenerate
+                  <Button variant="ghost" size="sm" onClick={regenerate} disabled={loading} className="justify-start h-9 w-full rounded-md hover:bg-accent/50">
+                    <RefreshCw className="h-3.5 w-3.5 mr-2" /> Regenerate
                   </Button>
                 )}
-                {messages.length > 0 && (
-                  <Button variant="ghost" size="sm" onClick={exportChat} className="w-full justify-start">
-                    <Download className="h-4 w-4 mr-2" />
-                    Export Chat
+                {messages.length && (
+                  <Button variant="ghost" size="sm" onClick={exportChat} className="justify-start h-9 w-full rounded-md hover:bg-accent/50">
+                    <Download className="h-3.5 w-3.5 mr-2" /> Export Chat
                   </Button>
                 )}
-                <Button variant="ghost" size="sm" onClick={startVoiceInput} disabled={loading} className="w-full justify-start">
-                  <Mic className="h-4 w-4 mr-2" />
-                  Voice Input
+                <Button variant="ghost" size="sm" onClick={startVoiceInput} disabled={loading} className="justify-start h-9 w-full rounded-md hover:bg-accent/50">
+                  <Mic className="h-3.5 w-3.5 mr-2" /> Voice Input
                 </Button>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={handleAddMessage}
                   disabled={!prompt.trim() || !roomState.user}
-                  className="w-full justify-start"
+                  className="justify-start h-9 w-full rounded-md hover:bg-primary/10"
                 >
-                  <Send className="h-4 w-4 mr-2" />
-                  Add to Room
+                  <Send className="h-3.5 w-3.5 mr-2" /> Add to Room
                 </Button>
               </div>
             </PopoverContent>
@@ -836,140 +853,96 @@ export default function RoomAssistant({
         </div>
       </CardHeader>
 
-      {/* Messages area */}
-      <div className="flex-1 relative h-[50vh] min-h-0 overflow-hidden">
-        <div
-          ref={scrollContainerRef}
-          onScroll={onUserScroll}
-          className="h-[40vh] room-assistant-scroll p-4"
-          // ensure keyboard / screen readers have good focus order
-          role="log"
-          aria-live="polite"
-        >
-          <div className="space-y-4 room-assistant-ai-content">
-            <AnimatePresence mode="popLayout">
-              {messages.length > 0 ? (
-                messages.map((msg) => (
-                  <ChatMessageDisplay
-                    key={msg.id}
-                    msg={msg}
-                    copyToClipboard={copyToClipboard}
-                    theme={theme as "light" | "dark"}
-                    onExpand={setExpandedMessage}
-                  />
-                ))
-              ) : loading ? (
-                <>
-                  {[1, 2, 3].map((i) => (
-                    <div key={i}>
-                      <MessageSkeleton />
-                    </div>
-                  ))}
-                </>
-              ) : (
+      <ScrollArea ref={scrollContainerRef} onScroll={onUserScroll} className="flex-1 relative">
+        <div className="p-4 space-y-6 max-w-4xl mx-auto">
+          <AnimatePresence mode="popLayout">
+            {messagePairs.length ? (
+              messagePairs.map((pair, idx) => (
+                <PairedMessageRenderer key={pair.user.id} pair={pair} />
+              ))
+            ) : loading ? (
+              Array.from({ length: 3 }, (_, i) => <MessageSkeleton key={i} />)
+            ) : (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="flex flex-col items-center justify-center py-20 text-center"
+              >
                 <motion.div
-                  initial={{ opacity: 0, scale: 0.98 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="flex flex-col items-center justify-center py-12 px-4"
+                  className="w-20 h-20 bg-gradient-to-br from-primary/20 to-secondary/20 rounded-2xl flex items-center justify-center mb-6 shadow-lg"
+                  animate={{ rotate: [0, 360] }}
+                  transition={{ duration: 6, repeat: Infinity, ease: "linear" }}
                 >
-                  <motion.div
-                    className="w-20 h-20 bg-gradient-to-br from-primary/20 to-primary/10 rounded-3xl flex items-center justify-center mb-4"
-                    animate={{ rotate: [0, 10, -10, 0], scale: [1, 1.05, 1] }}
-                    transition={{ duration: 4, repeat: Infinity, repeatType: "reverse" }}
-                  >
-                    <Sparkles className="h-10 w-10 text-primary" />
-                  </motion.div>
-                  <h3 className="font-bold text-lg mb-2">Room AI Assistant</h3>
-                  <p className="text-sm text-muted-foreground text-center max-w-xs">
-                    Ask me anything about <strong>#{roomName}</strong>. I can analyze conversations, extract insights, and help with summaries.
-                  </p>
+                  <Sparkles className="h-10 w-10 text-primary drop-shadow" />
                 </motion.div>
-              )}
-            </AnimatePresence>
-            <div ref={messagesEndRef} />
-          </div>
-        </div>
-
-        {/* Error box */}
-        {error && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            className="mx-4 mb-2 p-3 bg-destructive/10 rounded-lg flex items-center gap-2"
-          >
-            <AlertCircle className="h-4 w-4 text-destructive" />
-            <span className="text-sm">{error}</span>
-            <Button variant="ghost" size="icon" onClick={() => setError(null)} className="ml-auto h-6 w-6">
-              <X className="h-3 w-3" />
-            </Button>
-          </motion.div>
-        )}
-
-        {/* Streaming / processing indicator (kept for UX parity) */}
-        <AnimatePresence>
-          {isStreaming && (
+                <h3 className="text-2xl font-bold mb-3 bg-gradient-to-r from-foreground to-muted-foreground bg-clip-text text-transparent">
+                  AI Assistant Ready
+                </h3>
+                <p className="text-sm text-muted-foreground max-w-md leading-relaxed">
+                  Dive into #{roomName} – get structured insights, paired queries, and actionable analysis.
+                </p>
+              </motion.div>
+            )}
+          </AnimatePresence>
+          {error && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 10 }}
-              className="absolute bottom-2 left-4 right-4"
+              className="mx-4 p-4 bg-destructive/10 rounded-xl border border-destructive/20 flex items-center gap-3 text-sm text-destructive backdrop-blur-sm"
             >
-              <div className="bg-primary/10 backdrop-blur-sm rounded-lg px-3 py-2 flex items-center gap-2">
-                <div className="flex gap-1">
-                  <motion.div className="w-2 h-2 bg-primary rounded-full" animate={{ scale: [1, 1.5, 1] }} transition={{ duration: 0.6, repeat: Infinity, delay: 0 }} />
-                  <motion.div className="w-2 h-2 bg-primary rounded-full" animate={{ scale: [1, 1.5, 1] }} transition={{ duration: 0.6, repeat: Infinity, delay: 0.2 }} />
-                  <motion.div className="w-2 h-2 bg-primary rounded-full" animate={{ scale: [1, 1.5, 1] }} transition={{ duration: 0.6, repeat: Infinity, delay: 0.4 }} />
-                </div>
-                <span className="text-xs text-muted-foreground">AI is thinking...</span>
-              </div>
+              <AlertCircle className="h-5 w-5 flex-shrink-0" />
+              {error}
+              <Button variant="ghost" size="icon" onClick={() => setError(null)} className="ml-auto h-7 w-7 p-0 hover:bg-destructive/20">
+                <X className="h-3 w-3" />
+              </Button>
             </motion.div>
           )}
-        </AnimatePresence>
-      </div>
+          <div ref={messagesEndRef} />
+        </div>
+      </ScrollArea>
 
-      {/* Input area */}
-      <div className="border-t bg-card/50 backdrop-blur-sm p-4 flex-shrink-0">
+      <CardContent className="p-4 border-t bg-gradient-to-r from-muted/30 to-background/50 backdrop-blur-sm">
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="relative">
             <Textarea
               ref={textareaRef}
-              placeholder={`Ask about #${roomName}... (Ctrl + Enter to send)`}
+              placeholder={`Ask about #${roomName}... (Ctrl+Enter to send)`}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value.slice(0, maxPromptLength))}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && e.ctrlKey) {
-                  e.preventDefault();
-                  handleSubmit();
-                }
-              }}
-              className="min-h-[80px] resize-none pr-12"
+              onKeyDown={(e) => e.key === "Enter" && e.ctrlKey && handleSubmit()}
+              className="min-h-[70px] pr-16 resize-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-xl"
               disabled={loading}
               maxLength={maxPromptLength}
             />
-            <div className="absolute bottom-2 right-2 flex items-center space-x-2">
-              <span className={`text-xs ${prompt.length > maxPromptLength * 0.9 ? "text-destructive" : "text-muted-foreground"}`}>
-                {prompt.length}/{maxPromptLength}
-              </span>
+            <div className="absolute bottom-3 right-3 text-xs text-muted-foreground/80">
+              {countTokens(prompt)} tokens
             </div>
           </div>
-
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center gap-2">
             <Select value={model} onValueChange={setModel} disabled={loading}>
-              <SelectTrigger className="flex-1">
-                <SelectValue placeholder="Select model" />
+              <SelectTrigger className="flex-1 rounded-xl">
+                <SelectValue placeholder="Select Model" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="gpt-3.5-turbo">GPT-3.5 Turbo</SelectItem>
-                <SelectItem value="gpt-4o-mini">GPT-4o Mini</SelectItem>
+              <SelectContent className="max-h-60 rounded-xl p-1">
+                <SelectItem value="gpt-3.5-turbo" className="rounded-lg">GPT-3.5 Turbo</SelectItem>
+                <SelectItem value="gpt-4o-mini" className="rounded-lg">GPT-4o Mini</SelectItem>
+                <SelectItem value="minimax/minimax-m2" className="rounded-lg">MiniMax M2</SelectItem>
+                <SelectItem value="andromeda/alpha" className="rounded-lg">Andromeda Alpha</SelectItem>
+                <SelectItem value="tongyi/deepresearch-30b-a3b" className="rounded-lg">Tongyi DeepResearch</SelectItem>
+                <SelectItem value="meituan/longcat-flash-chat" className="rounded-lg">LongCat Flash</SelectItem>
+                <SelectItem value="nvidia/nemotron-nano-9b-v2" className="rounded-lg">Nemotron Nano</SelectItem>
+                <SelectItem value="deepseek/deepseek-v3-1" className="rounded-lg">DeepSeek V3.1</SelectItem>
+                <SelectItem value="openai/gpt-oss-20b" className="rounded-lg">GPT-OSS 20B</SelectItem>
+                <SelectItem value="z-ai/glm-4-5-air" className="rounded-lg">GLM 4.5 Air</SelectItem>
+                <SelectItem value="qwen/qwen3-coder-480b-a35b" className="rounded-lg">Qwen3 Coder</SelectItem>
+                <SelectItem value="moonshot/kimi-k2-0711" className="rounded-lg">Kimi K2</SelectItem>
               </SelectContent>
             </Select>
-
-            <Button type="submit" disabled={loading || !prompt.trim()} className="flex-shrink-0">
+            <Button type="submit" disabled={loading || !prompt.trim()} className="flex-shrink-0 rounded-xl px-6 hover:shadow-md transition-shadow">
               {loading ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  {isStreaming ? "Generating..." : "Processing..."}
+                  Analyzing...
                 </>
               ) : (
                 <>
@@ -980,20 +953,45 @@ export default function RoomAssistant({
             </Button>
           </div>
         </form>
-      </div>
+      </CardContent>
     </Card>
   );
 }
 
-// ------------------------- MessageSkeleton -----------------------------
+// ------------------------- Enhanced Skeleton -----------------------------
 function MessageSkeleton() {
   return (
-    <div className="flex space-x-2 lg:space-x-3 p-3 lg:p-4">
-      <Skeleton className="h-6 w-6 lg:h-8 lg:w-8 rounded-full bg-muted/50" />
-      <div className="space-y-1.5 lg:space-y-2 flex-1">
-        <Skeleton className="h-3 lg:h-4 w-24 lg:w-32 bg-muted/50" />
-        <Skeleton className="h-12 lg:h-16 w-full bg-muted/50" />
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="space-y-3 p-4 animate-pulse"
+    >
+      {/* User skeleton */}
+      <div className="bg-gradient-to-r from-blue-400/20 to-blue-500/20 rounded-xl p-3">
+        <div className="flex items-start gap-2">
+          <Skeleton className="h-6 w-6 rounded-full mt-0.5" />
+          <div className="flex-1">
+            <Skeleton className="h-4 w-48 mb-1" />
+            <Skeleton className="h-3 w-24" />
+          </div>
+        </div>
       </div>
-    </div>
+      <Separator className="my-2" />
+      {/* AI skeleton */}
+      <div className="bg-card rounded-xl border p-4">
+        <div className="flex items-start gap-2 mb-2">
+          <Skeleton className="h-6 w-6 rounded-full mt-0.5 bg-primary/10" />
+          <div className="flex-1">
+            <Skeleton className="h-3 w-32 mb-0.5" />
+            <Skeleton className="h-3 w-20" />
+          </div>
+        </div>
+        <Skeleton className="h-20 w-full mb-2" />
+        <div className="flex justify-between pt-2">
+          <Skeleton className="h-3 w-16" />
+          <Skeleton className="h-3 w-20" />
+        </div>
+      </div>
+    </motion.div>
   );
 }

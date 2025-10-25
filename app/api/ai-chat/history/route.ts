@@ -2,6 +2,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase/server';
 
+// Extended interface to include user queries
+interface ChatHistoryItem {
+  id: string;
+  room_id: string;
+  user_id: string;
+  user_query: string;
+  ai_response: string;
+  model_used?: string;
+  token_count?: number;
+  message_count?: number;
+  structured_data?: any;
+  created_at: string;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -22,7 +36,7 @@ export async function GET(request: NextRequest) {
       .select('*')
       .eq('room_id', roomId)
       .eq('user_id', userId)
-      .order('created_at', { ascending: false })
+      .order('created_at', { ascending: true }) // Changed to ascending to maintain conversation order
       .limit(50);
 
     if (error) {
@@ -54,6 +68,7 @@ export async function POST(request: NextRequest) {
       model_used,
       token_count,
       message_count,
+      structured_data,
     } = body;
 
     if (!room_id || !user_id || !user_query || !ai_response) {
@@ -63,7 +78,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = await supabaseServer(); // Fixed: use supabaseServer instead of createClient
+    const supabase = await supabaseServer();
 
     const { data, error } = await supabase
       .from('ai_chat_history')
@@ -76,6 +91,7 @@ export async function POST(request: NextRequest) {
           model_used,
           token_count,
           message_count,
+          structured_data,
         },
       ])
       .select()
@@ -112,7 +128,7 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const supabase = await supabaseServer(); // Fixed: use supabaseServer instead of createClient
+    const supabase = await supabaseServer();
 
     const { error } = await supabase
       .from('ai_chat_history')
