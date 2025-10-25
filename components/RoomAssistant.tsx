@@ -1001,10 +1001,7 @@ const callSummarizeApi = useCallback(
   </TooltipProvider>
   <div className="flex items-center gap-2 text-xs text-muted-foreground">
     <span className="bg-muted/50 px-2 py-0.5 rounded-full">#{roomName}</span>
-  </div>
-</div>
-</div>
-          <Popover>
+    <Popover>
             <PopoverTrigger asChild>
               <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full hover:bg-accent/80 transition-all">
                 <MoreVertical className="h-4 w-4" />
@@ -1012,6 +1009,10 @@ const callSummarizeApi = useCallback(
             </PopoverTrigger>
             {popoverContent}
           </Popover>
+  </div>
+</div>
+</div>
+          
         </div>
       </CardHeader>
 
