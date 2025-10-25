@@ -1,48 +1,64 @@
 #!/usr/bin/env node
 
-const { execSync } = require('child_process');
-const readline = require('readline');
+const { execSync } = require("child_process");
+const readline = require("readline");
 
 const rl = readline.createInterface({
   input: process.stdin,
   output: process.stdout
 });
 
+// Rotating Bold Spinner Animation
+function createSpinner(text) {
+  const frames = ["◴", "◷", "◶", "◵"].map(f => `\x1b[1m${f}\x1b[0m`); // Bold
+  let i = 0;
+
+  process.stdout.write("\n"); 
+
+  const interval = setInterval(() => {
+    process.stdout.write(`\r${frames[i = ++i % frames.length]} ${text}`);
+  }, 100);
+
+  return {
+    stop(finalText) {
+      clearInterval(interval);
+      process.stdout.write(`\r✅ ${finalText}\n`);
+    }
+  };
+}
+
 async function deploy() {
   try {
-    // Get commit message from user
-    const commitMessage = await new Promise((resolve) => {
-      rl.question('Enter commit message: ', (answer) => {
-        resolve(answer.trim());
-      });
+    const commitMessage = await new Promise(resolve => {
+      rl.question("📝 Enter commit message: ", answer => resolve(answer.trim()));
     });
 
     if (!commitMessage) {
-      console.error('❌ Commit message cannot be empty!');
+      console.error("❌ Commit message cannot be empty!");
       process.exit(1);
     }
 
-    console.log('🚀 Starting deployment process...\n');
+    console.log("\n🚀 Starting deployment process...");
 
-    // Step 1: Add all changes
-    console.log('📦 Adding changes to git...');
-    execSync('git add .', { stdio: 'inherit' });
-    console.log('✅ Changes added\n');
+    // Step 1: Git Add
+    const spinner1 = createSpinner("Adding changes to git...");
+    execSync("git add .");
+    spinner1.stop("Changes added!");
 
-    // Step 2: Commit with the provided message
-    console.log('💾 Committing changes...');
-    execSync(`git commit -m "${commitMessage}"`, { stdio: 'inherit' });
-    console.log('✅ Changes committed\n');
+    // Step 2: Git Commit
+    const spinner2 = createSpinner("Committing changes...");
+    execSync(`git commit -m "${commitMessage}"`);
+    spinner2.stop("Changes committed!");
 
-    // Step 3: Push to deploy on Vercel
-    console.log('🚀 Pushing to deploy on Vercel...');
-    execSync('git push origin main', { stdio: 'inherit' });
-    console.log('✅ Changes pushed and deployment triggered!\n');
+    // Step 3: Git Push
+    const spinner3 = createSpinner("Pushing to Vercel...");
+    execSync("git push origin main");
+    spinner3.stop("Changes pushed & deployment triggered!");
 
-    console.log('🎉 Deployment process completed! Vercel will now deploy your changes.');
+    console.log("\n🎉 Deployment completed! Vercel is now building your app.\n");
 
   } catch (error) {
-    console.error('❌ Deployment failed:', error);
+    console.error("\n❌ Deployment failed:", error.message);
     process.exit(1);
   } finally {
     rl.close();
