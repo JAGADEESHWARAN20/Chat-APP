@@ -1,4 +1,5 @@
-// /app/api/notifications/[notificationId]/accept/route.ts
+// Update the accept API route (/app/api/notifications/[notificationId]/accept/route.ts) 
+// to ensure memberCount reflects the updated count after acceptance:
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
@@ -39,18 +40,28 @@ export async function POST(
       return NextResponse.json({ error: "Missing sender_id or room_id" }, { status: 400 });
     }
 
+    // Call the RPC with retries for race conditions
     let retries = 2;
+    let funcError = null;
     while (retries >= 0) {
-      const { error: funcError } = await supabase.rpc("accept_notification", {
+     // Update the RPC call in /app/api/notifications/[notificationId]/accept/route.ts around line 49:
+      const { error } = await supabase.rpc("accept_notification", {
         p_notification_id: notificationId,
-        p_target_user_id: currentUserId,
+        p_target_user_id: currentUserId,  // Changed from p_user_id to p_target_user_id to match the function signature
       });
+      funcError = error;
       if (!funcError) break;
-      if (retries === 0) return NextResponse.json({ error: funcError.message }, { status: 500 });
+      if (retries === 0) break;
       await new Promise((resolve) => setTimeout(resolve, 1000));
       retries--;
     }
 
+    if (funcError) {
+      console.error("RPC Error:", funcError);
+      return NextResponse.json({ error: funcError.message || "Failed to accept join request" }, { status: 500 });
+    }
+
+    // Fetch the room details
     const { data: room, error: roomError } = await supabase
       .from("rooms")
       .select("id, name, is_private, created_by, created_at")
@@ -60,25 +71,25 @@ export async function POST(
       return NextResponse.json({ error: "Room not found after acceptance" }, { status: 404 });
     }
 
-    const { count: memberCount } = await supabase
+    // Get updated member count (only from room_members as per your earlier fix)
+    const { count: memberCount, error: countError } = await supabase
       .from("room_members")
-      .select("*", { count: "exact", head: true })
+      .select("user_id", { count: "exact", head: true })
       .eq("room_id", notif.room_id)
       .eq("status", "accepted");
-    const { count: participantCount } = await supabase
-      .from("room_participants")
-      .select("*", { count: "exact", head: true })
-      .eq("room_id", notif.room_id)
-      .eq("status", "accepted");
-    const totalMemberCount = (memberCount ?? 0) + (participantCount ?? 0);
+
+    if (countError) {
+      console.error("Count error after acceptance:", countError);
+    }
 
     return NextResponse.json({
       success: true,
       message: "Join request accepted successfully",
       room,
-      memberCount: totalMemberCount,
+      memberCount: memberCount ?? 1,  // At least 1 (the new member)
     });
   } catch (err: any) {
+    console.error("Accept API error:", err);
     return NextResponse.json(
       { error: "Internal server error", details: err.message },
       { status: 500 }

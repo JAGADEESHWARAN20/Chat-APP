@@ -114,29 +114,37 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
     return () => unsubscribeFromNotifications();
   }, [user?.id, fetchNotifications, subscribeToNotifications, unsubscribeFromNotifications]);
 
+  // Add this useEffect to refetch notifications when the sheet opens (improves visibility/realtime sync):
+useEffect(() => {
+  if (isOpen && user?.id) {
+    fetchNotifications(user.id);
+  }
+}, [isOpen, user?.id, fetchNotifications]);
+
   const handleAccept = async (id: string, roomId: string | null, type: string) => {
     if (!user || !roomId) {
       return toast.error("Missing data for action.");
     }
     if (loadingIds.has(id)) return;
-
+  
     setLoadingIds((prev) => new Set([...prev, id]));
-
+  
     try {
       removeNotification(id); // Optimistic
-
+  
       const res = await fetch(`/api/notifications/${id}/accept`, { method: "POST" });
       const data = await res.json();
-
+  
       if (!res.ok) {
         throw new Error(data.error || "Failed to accept notification");
       }
-
+  
       await markAsRead(id);
-      await fetchAvailableRooms();
-
-      await fetchNotifications(user.id); // Refresh list
-
+      await fetchAvailableRooms();  // Refresh rooms to update membership and counts
+  
+      // Refetch notifications to ensure acceptance notification (if sent to self) is visible
+      await fetchNotifications(user.id);
+  
       if (["room_invite", "join_request"].includes(type)) {
         let retries = 3;
         let room: Room | null = null;
@@ -146,7 +154,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
             .select("*")
             .eq("id", roomId)
             .single();
-
+  
           if (error) {
             console.error("Room fetch error:", error);
             if (retries === 1) throw error;
@@ -154,11 +162,11 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
             retries--;
             continue;
           }
-
+  
           room = fetchedRoom;
           break;
         }
-
+  
         if (room) {
           const enrichedRoom = await transformRoom(room, user.id, supabase);
           setSelectedRoom(enrichedRoom);
@@ -172,7 +180,8 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
         toast.success("Notification accepted.");
       }
     } catch (err: any) {
-      await fetchNotifications(user.id); // Rollback
+      // Rollback optimistic update
+      await fetchNotifications(user.id);
       toast.error(err.message || "Error accepting notification.");
     } finally {
       setLoadingIds((prev) => {
