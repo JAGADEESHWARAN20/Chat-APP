@@ -102,8 +102,8 @@ interface RoomAssistantProps {
   initialModel?: string;
   dialogMode?: boolean;
   onCloseDialog?: () => void;
-  isExpanded?: boolean; // Add this
-  onToggleExpand?: () => void; // Add this
+  isExpanded?: boolean;
+  onToggleExpand?: () => void;
 }
 
 // ----------------------------- Constants & Helpers --------------------------------
@@ -386,25 +386,12 @@ function RoomAssistantComponent({
   initialModel = "gpt-4o-mini",
   dialogMode,
   onCloseDialog,
-  isExpanded: externalIsExpanded, // External control for dialog mode
-  onToggleExpand // External toggle for dialog mode
+  isExpanded: externalIsExpanded,
+  onToggleExpand
 }: RoomAssistantProps) {
   // State
   const [prompt, setPrompt] = useState("");
-
-  const [internalIsExpanded, setInternalIsExpanded] = useState(externalIsExpanded ?? false);
-  
-  // Use external control in dialog mode, internal state in inline mode
-  const isExpanded = dialogMode ? externalIsExpanded : internalIsExpanded;
-  
-// FIXED (always toggle via callback; removes redundancy):
-const setIsExpanded = useCallback(() => {
-  if (dialogMode && onToggleExpand) {
-    onToggleExpand();
-  } else {
-    setInternalIsExpanded(prev => !prev);
-  }
-}, [dialogMode, onToggleExpand]);
+  const [internalIsExpanded, setInternalIsExpanded] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -423,6 +410,17 @@ const setIsExpanded = useCallback(() => {
   const { state: roomState } = useRoomContext();
   const { theme: systemTheme, setTheme } = useTheme();
   const theme = systemTheme === "dark" ? "dark" : "light";
+
+  // FIXED: Proper expansion state management
+  const isExpanded = dialogMode ? (externalIsExpanded ?? false) : internalIsExpanded;
+
+  const handleToggleExpand = useCallback(() => {
+    if (dialogMode && onToggleExpand) {
+      onToggleExpand();
+    } else {
+      setInternalIsExpanded(prev => !prev);
+    }
+  }, [dialogMode, onToggleExpand]);
 
   // ----------------- Memoized Values -----------------
   const recentRoomMessages = useMemo(() => {
@@ -879,7 +877,7 @@ const callSummarizeApi = useCallback(
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         if (isExpanded && !dialogMode) {
-          setIsExpanded(); // Toggles to false (since expanded)
+          handleToggleExpand(); // Use the unified toggle function
         } else if (dialogMode && onCloseDialog) {
           onCloseDialog();
         }
@@ -888,7 +886,7 @@ const callSummarizeApi = useCallback(
   
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
-  }, [dialogMode, onCloseDialog, setIsExpanded]); 
+  }, [dialogMode, onCloseDialog, isExpanded, handleToggleExpand]); 
 
   useEffect(() => {
     textareaRef.current?.focus();
@@ -977,82 +975,71 @@ const callSummarizeApi = useCallback(
   // ----------------- Render -----------------
   return (
 <Card className={cn(
-  "flex flex-col shadow-xl border-border/20 transition-all duration-300 ease-in-out relative min-h-[20rem] lg:min-h-[24rem]",  // Floor height: 20rem (~80px) base, 24rem (~384px) on LG for header+input+some scroll
+  "flex flex-col shadow-xl border-border/20 transition-all duration-300 ease-in-out relative min-h-[20rem] lg:min-h-[24rem]",
   dialogMode 
-    ? "h-full h-[60vh] w-[70vw] w-full" 
+    ? "h-full w-full" 
     : isExpanded 
       ? "w-[90vw] h-[70vh] md:h-[75vh] lg:h-[85vh] xl:h-[90vh] z-10 bg-background/95 backdrop-blur-sm shadow-2xl"
       : "w-[70vw] h-[50vh] md:h-[55vh] lg:h-[60vh] xl:h-[70vh]",
   className
 )}>
-      <CardHeader className="flex-shrink-0 border-b bg-gradient-to-r from-background via-muted to-background/80 p-4 backdrop-blur-sm">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <motion.div
-              className="w-12 h-12 bg-gradient-to-br from-primary to-secondary rounded-xl shadow-lg flex items-center justify-center"
-              whileHover={{ scale: 1.05, rotate: 5 }}
-              transition={{ type: "spring", stiffness: 300 }}
-            >
-              <Bot className="h-6 w-6 text-primary-foreground drop-shadow-sm" />
-            </motion.div>
-            <div className="flex items-center gap-2">
-  <CardTitle className="text-xl font-bold leading-tight">AI Assistant</CardTitle>
-  <TooltipProvider>
-  <Tooltip>
-    <TooltipTrigger asChild>
-      <Button
-        variant="ghost"
-        size="icon"
-       // FIXED (unified call; leverages the simplified setIsExpanded):
-onClick={setIsExpanded}
-        className="h-9 w-9 rounded-full hover:bg-accent/80 transition-all"
-      >
-        {dialogMode ? (
-          // In dialog mode - show expand/minimize based on isExpanded prop
-          isExpanded ? (
-            <Minimize2 className="h-4 w-4" />
-          ) : (
-            <Maximize2 className="h-4 w-4" />
-          )
-        ) : isExpanded ? (
-          // In inline mode, expanded - show minimize icon
-          <Minimize2 className="h-4 w-4" />
-        ) : (
-          // In inline mode, not expanded - show expand icon
-          <Maximize2 className="h-4 w-4" />
-        )}
-      </Button>
-    </TooltipTrigger>
-    <TooltipContent>
-  {isExpanded ? "Minimize Width" : "Expand Width"}
-</TooltipContent>
-  </Tooltip>
-</TooltipProvider>
-  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-    <span className="bg-muted/50 px-2 py-0.5 rounded-full">#{roomName}</span>
-    <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full hover:bg-accent/80 transition-all">
-                <MoreVertical className="h-4 w-4" />
-              </Button>
-            </PopoverTrigger>
-            {popoverContent}
-          </Popover>
-  </div>
-</div>
-</div>
-          
+  <CardHeader className="flex-shrink-0 border-b bg-gradient-to-r from-background via-muted to-background/80 p-4 backdrop-blur-sm">
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-3">
+        <motion.div
+          className="w-12 h-12 bg-gradient-to-br from-primary to-secondary rounded-xl shadow-lg flex items-center justify-center"
+          whileHover={{ scale: 1.05, rotate: 5 }}
+          transition={{ type: "spring", stiffness: 300 }}
+        >
+          <Bot className="h-6 w-6 text-primary-foreground drop-shadow-sm" />
+        </motion.div>
+        <div className="flex items-center gap-2">
+          <CardTitle className="text-xl font-bold leading-tight">AI Assistant</CardTitle>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleToggleExpand}
+                  className="h-9 w-9 rounded-full hover:bg-accent/80 transition-all"
+                >
+                  {isExpanded ? (
+                    <Minimize2 className="h-4 w-4" />
+                  ) : (
+                    <Maximize2 className="h-4 w-4" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {isExpanded ? "Minimize Width" : "Expand Width"}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="bg-muted/50 px-2 py-0.5 rounded-full">#{roomName}</span>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full hover:bg-accent/80 transition-all">
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </PopoverTrigger>
+              {popoverContent}
+            </Popover>
+          </div>
         </div>
-      </CardHeader>
+      </div>
+    </div>
+  </CardHeader>
 
       <ScrollArea 
     ref={scrollContainerRef} 
     onScroll={onUserScroll} 
-    className="flex-1 relative room-assistant-scroll scrollbar-custom min-h-0 overflow-hidden"  // min-h-0: shrinkable; overflow-hidden: no outer spill
+    className="flex-1 relative room-assistant-scroll scrollbar-custom min-h-0 overflow-hidden"
   >
    <div className={cn(
-    "p-4 space-y-6 mx-auto  h-[40vh]",  // h-full: viewport height; min-h-0: flex-safe
-    (isExpanded || dialogMode) ? "max-w-7xl h-[80vh]" : "max-w-4xl h-[40vh]"
+    "p-4 space-y-6 mx-auto h-full",
+    (isExpanded || dialogMode) ? "max-w-7xl" : "max-w-4xl"
   )}>
             <AnimatePresence mode="popLayout">
               {messagePairs.length > 0 ? (

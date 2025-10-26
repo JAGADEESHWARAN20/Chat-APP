@@ -34,7 +34,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const [isSearching, setIsSearching] = useState(false);
   const [isSwitchRoomPopoverOpen, setIsSwitchRoomPopoverOpen] = useState(false);
   const [isMessageSearchOpen, setIsMessageSearchOpen] = useState(false);
-  const [isAssistantOpen, setIsAssistantOpen] = useState(false); // New state for AI popover
+  // const [isAssistantOpen, setIsAssistantOpen] = useState(false); // New state for AI popover
   const [messageSearchQuery, setMessageSearchQuery] = useState("");
   const { state, switchRoom } = useRoomContext();
   const { selectedRoom, availableRooms } = state;
