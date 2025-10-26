@@ -1051,7 +1051,7 @@ onClick={setIsExpanded}
     className="flex-1 relative room-assistant-scroll scrollbar-custom min-h-0 overflow-hidden"  // min-h-0: shrinkable; overflow-hidden: no outer spill
   >
    <div className={cn(
-    "p-4 space-y-6 mx-auto h-full min-h-0",  // h-full: viewport height; min-h-0: flex-safe
+    "p-4 space-y-6 mx-auto  h-[30vh]",  // h-full: viewport height; min-h-0: flex-safe
     (isExpanded || dialogMode) ? "max-w-7xl" : "max-w-4xl"
   )}>
             <AnimatePresence mode="popLayout">
