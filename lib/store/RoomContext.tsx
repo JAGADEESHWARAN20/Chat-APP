@@ -447,9 +447,9 @@ export function RoomProvider({
 
   const getRoomMemberCount = useCallback(async (roomId: string): Promise<number> => {
     try {
-      const { data, error } = await supabase
+      const { count, error } = await supabase
         .from('room_members')
-        .select('user_id')
+        .select('user_id', { count: 'exact', head: true })
         .eq('room_id', roomId)
         .eq('status', 'accepted');
   
@@ -458,7 +458,7 @@ export function RoomProvider({
         return 0;
       }
   
-      return data?.length || 0;
+      return count || 0;
     } catch (error) {
       console.error(`Error counting members for room ${roomId}:`, error);
       return 0;
