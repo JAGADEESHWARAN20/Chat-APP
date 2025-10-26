@@ -1045,7 +1045,7 @@ const callSummarizeApi = useCallback(
 >
   <div className={cn(
     "p-4 space-y-6",
-    (isExpanded || dialogMode) ? "max-w-7xl mx-auto h-[60vh]" : "max-w-4xl mx-auto h-[30vh]"
+    (isExpanded || dialogMode) ? "max-w-7xl mx-auto h-[70vh]" : "max-w-4xl mx-auto h-[30vh]"
   )}>
     <AnimatePresence mode="popLayout">
       {messagePairs.length > 0 ? (
