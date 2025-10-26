@@ -7,14 +7,6 @@ import { Loader2, ChevronRight, MessageSquare, Users } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "./ui/button";
 
-// Add this interface for room with latest message and user data
-interface RoomWithLatestMessage extends RoomWithMembershipCount {
-  latestMessage?: string;
-  unreadCount?: number;
-  onlineUsers?: number;
-  totalUsers?: number;
-}
-
 const LeftSidebar = memo(function LeftSidebar({
   user,
   isOpen,
@@ -27,7 +19,6 @@ const LeftSidebar = memo(function LeftSidebar({
   const { state, fetchAvailableRooms, setSelectedRoom } = useRoomContext();
   const [searchTerm, setSearchTerm] = useState("");
   const [directChats] = useState<RoomWithMembershipCount[]>([]);
-  const [roomsWithMessages, setRoomsWithMessages] = useState<RoomWithLatestMessage[]>([]);
 
   useEffect(() => {
     if (user?.id) {
@@ -35,99 +26,10 @@ const LeftSidebar = memo(function LeftSidebar({
     }
   }, [user, fetchAvailableRooms]);
 
-  // Fetch latest messages, unread counts, and user data for rooms
-  useEffect(() => {
-    const fetchRoomData = async () => {
-      if (state.availableRooms.length === 0) return;
-
-      const supabase = (await import("@/lib/supabase/browser")).supabaseBrowser();
-      
-      const roomsWithData = await Promise.all(
-        state.availableRooms.map(async (room) => {
-          try {
-            // Get latest message
-            const { data: latestMessage } = await supabase
-              .from("messages")
-              .select("text, created_at")
-              .eq("room_id", room.id)
-              .order("created_at", { ascending: false })
-              .limit(1)
-              .single();
-
-            // Get unread count (messages from last 24 hours)
-            const { count: unreadCount } = await supabase
-              .from("messages")
-              .select("*", { count: "exact", head: true })
-              .eq("room_id", room.id)
-              .gt("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
-
-            // Get all users in this room from both tables
-            const [membersResult, participantsResult] = await Promise.all([
-              supabase
-                .from("room_members")
-                .select("user_id, profiles!inner(username, display_name, avatar_url)")
-                .eq("room_id", room.id)
-                .eq("status", "accepted"),
-              
-              supabase
-                .from("room_participants")
-                .select("user_id, profiles!inner(username, display_name, avatar_url)")
-                .eq("room_id", room.id)
-                .eq("status", "accepted")
-            ]);
-
-            // Combine users from both tables and remove duplicates
-            const memberUsers = membersResult.data || [];
-            const participantUsers = participantsResult.data || [];
-            
-            // Create a Set of unique user IDs
-            const uniqueUserIds = new Set([
-              ...memberUsers.map(m => m.user_id),
-              ...participantUsers.map(p => p.user_id)
-            ]);
-
-            // Get all unique user profiles
-            const allUsers = [...memberUsers, ...participantUsers];
-            const uniqueUsers = allUsers.filter((user, index, self) => 
-              index === self.findIndex(u => u.user_id === user.user_id)
-            );
-
-            // For online users, you might want to implement a presence system
-            // For now, we'll show total users and you can add online logic later
-            const totalUsers = uniqueUserIds.size;
-            const onlineUsers = 0; // Placeholder - implement presence system here
-
-            return {
-              ...room,
-              latestMessage: latestMessage?.text || "No messages yet",
-              unreadCount: unreadCount || 0,
-              totalUsers,
-              onlineUsers,
-              users: uniqueUsers // Store user data if you want to display user avatars later
-            };
-          } catch (error) {
-            console.error(`Error fetching data for room ${room.id}:`, error);
-            return {
-              ...room,
-              latestMessage: "No messages yet",
-              unreadCount: 0,
-              totalUsers: room.memberCount || 0,
-              onlineUsers: 0
-            };
-          }
-        })
-      );
-
-      setRoomsWithMessages(roomsWithData);
-    };
-
-    fetchRoomData();
-  }, [state.availableRooms]);
-
   const filteredRooms = useMemo(() => 
-    roomsWithMessages.filter((item) =>
+    state.availableRooms.filter((item) =>
       item.name.toLowerCase().includes(searchTerm.toLowerCase())
-    ), [roomsWithMessages, searchTerm]
+    ), [state.availableRooms, searchTerm]
   );
 
   const filteredChats = useMemo(() => 
@@ -141,7 +43,7 @@ const LeftSidebar = memo(function LeftSidebar({
     [filteredRooms, filteredChats]
   );
 
-  const renderItem = (item: RoomWithLatestMessage) => (
+  const renderItem = (item: RoomWithMembershipCount) => (
     <div
       key={item.id}
       className={`flex items-start p-3 rounded-lg cursor-pointer transition-colors duration-200 ${
