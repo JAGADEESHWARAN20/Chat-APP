@@ -16,6 +16,7 @@ import {
 import { toast } from "sonner";
 import { Database } from "@/lib/types/supabase";
 import {useMessage, Imessage } from "./messages";
+import {checkUserRoomMembership, getRoomMemberCount} from "@/lib/utils/roomMembership"
 
 // ---- Types ----
 type Room = Database["public"]["Tables"]["rooms"]["Row"];
@@ -447,7 +448,10 @@ const handleCountUpdate = useCallback((room_id: string | undefined) => {
 
 
 // In fetchAvailableRooms function - fix the member counting:
-const fetchAvailableRooms = useCallback(async () => {
+// Add this to your RoomContext.tsx
+
+// New function to fetch rooms with proper membership data using JOINs
+const fetchRoomsWithMembership = useCallback(async () => {
   if (!state.user) {
     dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
     dispatch({ type: "SET_LOADING", payload: false });
@@ -455,72 +459,107 @@ const fetchAvailableRooms = useCallback(async () => {
   }
 
   dispatch({ type: "SET_LOADING", payload: true });
+  
   try {
-    const { data: allRooms } = await supabase
+    const supabase = supabaseBrowser();
+    
+    // Get all rooms with member counts and user membership status
+    const { data: roomsData, error } = await supabase
       .from("rooms")
-      .select("id, name, is_private, created_by, created_at");
+      .select(`
+        *,
+        room_members!left(
+          status,
+          user_id
+        ),
+        room_participants!left(
+          status,
+          user_id
+        )
+      `);
 
-    if (!allRooms || allRooms.length === 0) {
+    if (error) {
+      throw error;
+    }
+
+    if (!roomsData || roomsData.length === 0) {
       dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
-      dispatch({ type: "SET_LOADING", payload: false });
       return;
     }
 
-    const roomIds = allRooms.map((r) => r.id);
-
-    // Get user's memberships and participations
-    const { data: memberships } = await supabase
-      .from("room_members")
-      .select("room_id, status")
-      .in("room_id", roomIds)
-      .eq("user_id", state.user.id);
-
-    const { data: participations } = await supabase
-      .from("room_participants")
-      .select("room_id, status")
-      .in("room_id", roomIds)
-      .eq("user_id", state.user.id);
-
-    const membershipMap = new Map<string, string | null>();
-    (memberships || []).forEach((m) => membershipMap.set(m.room_id, m.status));
-    (participations || []).forEach((p) => {
-      if (!membershipMap.has(p.room_id)) membershipMap.set(p.room_id, p.status);
-    });
-
-    // FIXED: Count only accepted members from room_members table
-    const { data: memberCounts, error: countError } = await supabase
-      .from("room_members")
-      .select("room_id")
-      .in("room_id", roomIds)
-      .eq("status", "accepted");
-
-    if (countError) {
-      console.error("Error counting members:", countError);
-    }
-
-    // Count members per room
-    const countsMap = new Map<string, number>();
-    memberCounts?.forEach((member) => {
-      const currentCount = countsMap.get(member.room_id) || 0;
-      countsMap.set(member.room_id, currentCount + 1);
-    });
-
-    const roomsWithMembership: RoomWithMembershipCount[] = allRooms.map((room) => ({
-      ...room,
-      memberCount: countsMap.get(room.id) || 0, // This shows actual member count
-      isMember: (membershipMap.get(room.id) ?? null) === "accepted",
-      participationStatus: membershipMap.get(room.id) ?? null,
-    }));
+    // Process each room to determine membership status and count
+    const roomsWithMembership: RoomWithMembershipCount[] = await Promise.all(
+      roomsData.map(async (room) => {
+        // Get member count for this room
+        const memberCount = await getRoomMemberCount(room.id);
+        
+        // Check current user's membership status
+        const userMembership = await checkUserRoomMembership(state.user!.id, room.id);
+        
+        return {
+          ...room,
+          memberCount,
+          isMember: userMembership.isMember,
+          participationStatus: userMembership.participationStatus,
+        };
+      })
+    );
 
     dispatch({ type: "SET_AVAILABLE_ROOMS", payload: roomsWithMembership });
   } catch (error) {
-    console.error("[RoomContext] Error fetching rooms:", error);
+    console.error("[RoomContext] Error fetching rooms with membership:", error);
+    toast.error("Failed to load rooms");
     dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
-    toast.error("An error occurred while fetching rooms");
   } finally {
     dispatch({ type: "SET_LOADING", payload: false });
   }
-}, [state.user, supabase]);
+}, [state.user]);
+
+// Alternative: Single query approach using database functions
+const fetchRoomsUsingDatabaseFunction = useCallback(async () => {
+  if (!state.user) {
+    dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
+    dispatch({ type: "SET_LOADING", payload: false });
+    return;
+  }
+
+  dispatch({ type: "SET_LOADING", payload: true });
+  
+  try {
+    const supabase = supabaseBrowser();
+    
+    // Use the existing database function if available
+    const { data, error } = await supabase
+      .rpc('get_rooms_with_counts', { 
+        user_id: state.user.id 
+      });
+
+    if (error) {
+      throw error;
+    }
+
+    if (data) {
+      const roomsWithMembership: RoomWithMembershipCount[] = data.map((room: any) => ({
+        id: room.id,
+        name: room.name,
+        is_private: room.is_private,
+        created_by: room.created_by,
+        created_at: room.created_at,
+        memberCount: room.member_count,
+        isMember: room.is_member,
+        participationStatus: room.participation_status,
+      }));
+
+      dispatch({ type: "SET_AVAILABLE_ROOMS", payload: roomsWithMembership });
+    }
+  } catch (error) {
+    console.error("[RoomContext] Error fetching rooms via function:", error);
+    // Fallback to the manual method
+    await fetchRoomsWithMembership();
+  } finally {
+    dispatch({ type: "SET_LOADING", payload: false });
+  }
+}, [state.user, fetchRoomsWithMembership]);
 
   const fetchAllUsers = useCallback(async () => {
     if (!state.user) return [];
@@ -689,8 +728,8 @@ const fetchAvailableRooms = useCallback(async () => {
 
   // Auto-fetch rooms when user changes
   useEffect(() => {
-    if (state.user?.id) fetchAvailableRooms();
-  }, [state.user, fetchAvailableRooms]);
+    if (state.user?.id) fetchRoomsWithMembership();
+  }, [state.user, fetchRoomsWithMembership]);
 
   // subscribe to changes on room_members and room_participants
   // call handleCountUpdate with the room_id touched so we recompute counts centrally
@@ -735,7 +774,7 @@ const fetchAvailableRooms = useCallback(async () => {
 
   const value: RoomContextType = {
     state,
-    fetchAvailableRooms,
+    fetchAvailableRooms: fetchRoomsWithMembership, // Use the new function
     setSelectedRoom,
     setSelectedDirectChat,
     joinRoom,
