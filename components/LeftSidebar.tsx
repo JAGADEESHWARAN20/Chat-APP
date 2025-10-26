@@ -3,14 +3,16 @@
 import React, { useState, useEffect, useMemo, memo } from "react";
 import { RoomWithMembershipCount, useRoomContext } from "@/lib/store/RoomContext";
 import { Avatar, AvatarImage } from "@/components/ui/avatar";
-import { Loader2, ChevronRight, MessageSquare } from "lucide-react";
+import { Loader2, ChevronRight, MessageSquare, Users } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "./ui/button";
 
-// Add this interface for room with latest message
+// Add this interface for room with latest message and user data
 interface RoomWithLatestMessage extends RoomWithMembershipCount {
   latestMessage?: string;
   unreadCount?: number;
+  onlineUsers?: number;
+  totalUsers?: number;
 }
 
 const LeftSidebar = memo(function LeftSidebar({
@@ -33,9 +35,9 @@ const LeftSidebar = memo(function LeftSidebar({
     }
   }, [user, fetchAvailableRooms]);
 
-  // Fetch latest messages and unread counts for rooms
+  // Fetch latest messages, unread counts, and user data for rooms
   useEffect(() => {
-    const fetchRoomMessages = async () => {
+    const fetchRoomData = async () => {
       if (state.availableRooms.length === 0) return;
 
       const supabase = (await import("@/lib/supabase/browser")).supabaseBrowser();
@@ -43,7 +45,7 @@ const LeftSidebar = memo(function LeftSidebar({
       const roomsWithData = await Promise.all(
         state.availableRooms.map(async (room) => {
           try {
-            // Get latest message - using 'text' field instead of 'content'
+            // Get latest message
             const { data: latestMessage } = await supabase
               .from("messages")
               .select("text, created_at")
@@ -59,17 +61,58 @@ const LeftSidebar = memo(function LeftSidebar({
               .eq("room_id", room.id)
               .gt("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
 
+            // Get all users in this room from both tables
+            const [membersResult, participantsResult] = await Promise.all([
+              supabase
+                .from("room_members")
+                .select("user_id, profiles!inner(username, display_name, avatar_url)")
+                .eq("room_id", room.id)
+                .eq("status", "accepted"),
+              
+              supabase
+                .from("room_participants")
+                .select("user_id, profiles!inner(username, display_name, avatar_url)")
+                .eq("room_id", room.id)
+                .eq("status", "accepted")
+            ]);
+
+            // Combine users from both tables and remove duplicates
+            const memberUsers = membersResult.data || [];
+            const participantUsers = participantsResult.data || [];
+            
+            // Create a Set of unique user IDs
+            const uniqueUserIds = new Set([
+              ...memberUsers.map(m => m.user_id),
+              ...participantUsers.map(p => p.user_id)
+            ]);
+
+            // Get all unique user profiles
+            const allUsers = [...memberUsers, ...participantUsers];
+            const uniqueUsers = allUsers.filter((user, index, self) => 
+              index === self.findIndex(u => u.user_id === user.user_id)
+            );
+
+            // For online users, you might want to implement a presence system
+            // For now, we'll show total users and you can add online logic later
+            const totalUsers = uniqueUserIds.size;
+            const onlineUsers = 0; // Placeholder - implement presence system here
+
             return {
               ...room,
               latestMessage: latestMessage?.text || "No messages yet",
               unreadCount: unreadCount || 0,
+              totalUsers,
+              onlineUsers,
+              users: uniqueUsers // Store user data if you want to display user avatars later
             };
           } catch (error) {
-            console.error(`Error fetching messages for room ${room.id}:`, error);
+            console.error(`Error fetching data for room ${room.id}:`, error);
             return {
               ...room,
               latestMessage: "No messages yet",
               unreadCount: 0,
+              totalUsers: room.memberCount || 0,
+              onlineUsers: 0
             };
           }
         })
@@ -78,7 +121,7 @@ const LeftSidebar = memo(function LeftSidebar({
       setRoomsWithMessages(roomsWithData);
     };
 
-    fetchRoomMessages();
+    fetchRoomData();
   }, [state.availableRooms]);
 
   const filteredRooms = useMemo(() => 
@@ -109,7 +152,6 @@ const LeftSidebar = memo(function LeftSidebar({
       onClick={() => setSelectedRoom(item)}
     >
       <Avatar className="h-12 w-12 flex-shrink-0">
-        {/* Use default avatar since rooms don't have avatar_url */}
         <AvatarImage 
           src={`/avatars/${item.id}.png`} 
           alt={item.name} 
@@ -132,14 +174,36 @@ const LeftSidebar = memo(function LeftSidebar({
           )}
         </div>
 
-        {/* Member count and latest message */}
-        <div className="flex items-center justify-between text-sm">
-          <div className="text-muted-foreground truncate flex-1 mr-2">
-            {item.latestMessage || "No messages yet"}
+        {/* Latest message */}
+        <div className="text-sm text-muted-foreground truncate mb-2">
+          {item.latestMessage || "No messages yet"}
+        </div>
+
+        {/* User count and status */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Users className="h-3 w-3" />
+            <span>
+              {item.totalUsers || 0} {item.totalUsers === 1 ? 'user' : 'users'}
+              {item.onlineUsers && item.onlineUsers > 0 && (
+                <span className="text-green-600 ml-1">
+                  ({item.onlineUsers} online)
+                </span>
+              )}
+            </span>
           </div>
-          <div className="text-xs text-muted-foreground bg-muted/50 rounded-full px-2 py-1 flex-shrink-0">
-            {item.memberCount} {item.memberCount === 1 ? 'member' : 'members'}
-          </div>
+          
+          {/* Membership status badge */}
+          {item.isMember && (
+            <div className="text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300 rounded-full px-2 py-1">
+              Joined
+            </div>
+          )}
+          {item.participationStatus === 'pending' && (
+            <div className="text-xs bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300 rounded-full px-2 py-1">
+              Pending
+            </div>
+          )}
         </div>
 
         {/* Creation date */}
@@ -175,7 +239,7 @@ const LeftSidebar = memo(function LeftSidebar({
         </div>
         <input
           type="text"
-          placeholder="Search..."
+          placeholder="Search rooms..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="w-full p-3 mb-1 border border-input rounded-lg focus:ring-2 focus:ring-primary outline-none bg-background text-foreground placeholder-muted-foreground"
