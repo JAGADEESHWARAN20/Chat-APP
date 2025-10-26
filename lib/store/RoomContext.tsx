@@ -468,20 +468,17 @@ export function RoomProvider({
   const getAllRoomMemberCounts = useCallback(async (): Promise<Map<string, number>> => {
     try {
       const { data, error } = await supabase
-        .from('room_members')
-        .select('room_id, user_id')
-        .eq('status', 'accepted');
+        .rpc('get_room_user_counts');
   
       if (error) {
         console.error('Error fetching all room member counts:', error);
         return new Map();
       }
   
-      // Group by room_id and count users
+      // Convert array to Map
       const countsMap = new Map<string, number>();
-      data?.forEach(member => {
-        const currentCount = countsMap.get(member.room_id) || 0;
-        countsMap.set(member.room_id, currentCount + 1);
+      data?.forEach((row: { room_id: string; user_count: number }) => {
+        countsMap.set(row.room_id, row.user_count);
       });
   
       return countsMap;
@@ -490,7 +487,6 @@ export function RoomProvider({
       return new Map();
     }
   }, [supabase]);
-
   // Function to fetch room messages
   const fetchRoomMessages = useCallback(async (roomId: string) => {
     try {
@@ -523,27 +519,28 @@ export function RoomProvider({
     }
   }, [supabase]);
 
-  // Function to fetch room users
- // Update fetchRoomUsers to only use room_members table:
-const fetchRoomUsers = useCallback(async (roomId: string) => {
-  try {
-    const { data: membersResult } = await supabase
-      .from("room_members")
-      .select("user_id")
-      .eq("room_id", roomId)
-      .eq("status", "accepted");
-
-    const memberUsers = membersResult || [];
-    
-    const totalUsers = memberUsers.length;
-    const onlineUsers = 0; // Placeholder - implement presence system here
-
-    return { totalUsers, onlineUsers };
-  } catch (error) {
-    console.error(`Error fetching users for room ${roomId}:`, error);
-    return { totalUsers: 0, onlineUsers: 0 };
-  }
-}, [supabase]);
+  const fetchRoomUsers = useCallback(async (roomId: string) => {
+    try {
+      const { count, error } = await supabase
+        .from("room_members")
+        .select("user_id", { count: 'exact', head: true })
+        .eq("room_id", roomId)
+        .eq("status", "accepted");
+  
+      if (error) {
+        console.error(`Error fetching users for room ${roomId}:`, error);
+        return { totalUsers: 0, onlineUsers: 0 };
+      }
+  
+      const totalUsers = count || 0;
+      const onlineUsers = 0; // Placeholder
+  
+      return { totalUsers, onlineUsers };
+    } catch (error) {
+      console.error(`Error fetching users for room ${roomId}:`, error);
+      return { totalUsers: 0, onlineUsers: 0 };
+    }
+  }, [supabase]);
 
   // Function to refresh individual room data
   const refreshRoomData = useCallback(async (roomId: string) => {

@@ -479,6 +479,13 @@ export type Database = {
           id: string
         }[]
       }
+      get_room_user_counts: {
+        Args: never
+        Returns: {
+          room_id: string
+          user_count: number
+        }[]
+      }
       get_rooms_with_counts: {
         Args: { user_id: string }
         Returns: {
