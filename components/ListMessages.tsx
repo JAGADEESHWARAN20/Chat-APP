@@ -301,7 +301,7 @@ return (
     {/* Typing Indicator */}
     <motion.div // <-- UPDATED: motion.div
       layout // <-- ADDED: enables smooth layout animation on size change
-      className="h-[0em] overflow-hidden" // <-- UPDATED: Removed 'animate' class
+      className="h-[3em] bg-transparent overflow-hidden" // <-- UPDATED: Removed 'animate' class
     >
       <TypingIndicator />
     </motion.div>
