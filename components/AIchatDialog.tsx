@@ -39,7 +39,7 @@ export function RoomAssistantDialog({
           ? "w-[95vw] h-[60vh] max-w-[98vw] max-h-[95vh]" 
           : "w-[85vw] h-[60vh] max-w-[90vw] max-h-[85vh]"
       )}>
-        <div className="h-full">
+      
           <RoomAssistantComponent
             roomId={roomId}
             roomName={roomName}
@@ -49,7 +49,7 @@ export function RoomAssistantDialog({
             isExpanded={isExpanded}
             onToggleExpand={() => setIsExpanded(!isExpanded)}
           />
-        </div>
+      
       </DialogContent>
     </Dialog>
   );

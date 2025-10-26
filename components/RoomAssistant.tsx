@@ -55,7 +55,7 @@ import ReactMarkdown from "react-markdown";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { cn } from "@/lib/utils";
 import { estimateTokens } from "@/lib/token-utils";
-import { RoomAssistantDialog } from "./AIchatDialog";
+// import { RoomAssistantDialog } from "./AIchatDialog";
 
 // ----------------------------- Types ---------------------------------
 interface StructuredAnalysis {
@@ -978,24 +978,7 @@ const callSummarizeApi = useCallback(
 // In your RoomAssistantComponent, update the Card structure:
 
 <div className={cn("relative", !dialogMode && "inline-block")}>
-{/* Dialog Trigger Button - Only show when NOT in dialog mode */}
-{!dialogMode && (
-  <div className="absolute -top-2 -right-2 z-30">
-    <RoomAssistantDialog 
-      roomId={roomId}
-      roomName={roomName}
-      triggerButton={
-        <Button 
-          variant="secondary" 
-          size="icon"
-          className="h-8 w-8 rounded-full shadow-lg border bg-background hover:bg-accent transition-all hover:scale-110"
-        >
-          <Bot className="h-4 w-4" />
-        </Button>
-      }
-    />
-  </div>
-)}
+
 
 <Card className={cn(
   "flex flex-col shadow-xl border-border/20 transition-all duration-300 ease-in-out",
