@@ -446,85 +446,81 @@ const handleCountUpdate = useCallback((room_id: string | undefined) => {
 }, [supabase]);
 
 
-  const fetchAvailableRooms = useCallback(async () => {
-    if (!state.user) {
+// In fetchAvailableRooms function - fix the member counting:
+const fetchAvailableRooms = useCallback(async () => {
+  if (!state.user) {
+    dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
+    dispatch({ type: "SET_LOADING", payload: false });
+    return;
+  }
+
+  dispatch({ type: "SET_LOADING", payload: true });
+  try {
+    const { data: allRooms } = await supabase
+      .from("rooms")
+      .select("id, name, is_private, created_by, created_at");
+
+    if (!allRooms || allRooms.length === 0) {
       dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
       dispatch({ type: "SET_LOADING", payload: false });
       return;
     }
 
-    dispatch({ type: "SET_LOADING", payload: true });
-    try {
-      const { data: allRooms } = await supabase
-        .from("rooms")
-        .select("id, name, is_private, created_by, created_at");
+    const roomIds = allRooms.map((r) => r.id);
 
-      if (!allRooms || allRooms.length === 0) {
-        dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
-        dispatch({ type: "SET_LOADING", payload: false });
-        return;
-      }
+    // Get user's memberships and participations
+    const { data: memberships } = await supabase
+      .from("room_members")
+      .select("room_id, status")
+      .in("room_id", roomIds)
+      .eq("user_id", state.user.id);
 
-      const roomIds = allRooms.map((r) => r.id);
+    const { data: participations } = await supabase
+      .from("room_participants")
+      .select("room_id, status")
+      .in("room_id", roomIds)
+      .eq("user_id", state.user.id);
 
-      const { data: memberships } = await supabase
-        .from("room_members")
-        .select("room_id, status")
-        .in("room_id", roomIds)
-        .eq("user_id", state.user.id);
+    const membershipMap = new Map<string, string | null>();
+    (memberships || []).forEach((m) => membershipMap.set(m.room_id, m.status));
+    (participations || []).forEach((p) => {
+      if (!membershipMap.has(p.room_id)) membershipMap.set(p.room_id, p.status);
+    });
 
-      const { data: participations } = await supabase
-        .from("room_participants")
-        .select("room_id, status")
-        .in("room_id", roomIds)
-        .eq("user_id", state.user.id);
+    // FIXED: Count only accepted members from room_members table
+    const { data: memberCounts, error: countError } = await supabase
+      .from("room_members")
+      .select("room_id")
+      .in("room_id", roomIds)
+      .eq("status", "accepted");
 
-      const membershipMap = new Map<string, string | null>();
-      (memberships || []).forEach((m) => membershipMap.set(m.room_id, m.status));
-      (participations || []).forEach((p) => {
-        if (!membershipMap.has(p.room_id)) membershipMap.set(p.room_id, p.status);
-      });
-
-      const { data: membersData } = await supabase
-        .from("room_members")
-        .select("room_id, user_id")
-        .in("room_id", roomIds)
-        .eq("status", "accepted");
-
-      const { data: participantsData } = await supabase
-        .from("room_participants")
-        .select("room_id, user_id")
-        .in("room_id", roomIds)
-        .eq("status", "accepted");
-
-      let countsMap = new Map<string, number>();
-      const uniqueUsers = new Map<string, Set<string>>();
-      (membersData || []).forEach((m) => {
-        if (!uniqueUsers.has(m.room_id)) uniqueUsers.set(m.room_id, new Set());
-        uniqueUsers.get(m.room_id)!.add(m.user_id);
-      });
-      (participantsData || []).forEach((p) => {
-        if (!uniqueUsers.has(p.room_id)) uniqueUsers.set(p.room_id, new Set());
-        uniqueUsers.get(p.room_id)!.add(p.user_id);
-      });
-      countsMap = new Map([...uniqueUsers].map(([roomId, users]) => [roomId, users.size]));
-
-      const roomsWithMembership: RoomWithMembershipCount[] = allRooms.map((room) => ({
-        ...room,
-        memberCount: countsMap.get(room.id) ?? 0,
-        isMember: (membershipMap.get(room.id) ?? null) === "accepted",
-        participationStatus: membershipMap.get(room.id) ?? null,
-      }));
-
-      dispatch({ type: "SET_AVAILABLE_ROOMS", payload: roomsWithMembership });
-    } catch (error) {
-      console.error("[RoomContext] Error fetching rooms:", error);
-      dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
-      toast.error("An error occurred while fetching rooms");
-    } finally {
-      dispatch({ type: "SET_LOADING", payload: false });
+    if (countError) {
+      console.error("Error counting members:", countError);
     }
-  }, [state.user, supabase]);
+
+    // Count members per room
+    const countsMap = new Map<string, number>();
+    memberCounts?.forEach((member) => {
+      const currentCount = countsMap.get(member.room_id) || 0;
+      countsMap.set(member.room_id, currentCount + 1);
+    });
+
+    const roomsWithMembership: RoomWithMembershipCount[] = allRooms.map((room) => ({
+      ...room,
+      memberCount: countsMap.get(room.id) || 0, // This shows actual member count
+      isMember: (membershipMap.get(room.id) ?? null) === "accepted",
+      participationStatus: membershipMap.get(room.id) ?? null,
+    }));
+
+    dispatch({ type: "SET_AVAILABLE_ROOMS", payload: roomsWithMembership });
+  } catch (error) {
+    console.error("[RoomContext] Error fetching rooms:", error);
+    dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
+    toast.error("An error occurred while fetching rooms");
+  } finally {
+    dispatch({ type: "SET_LOADING", payload: false });
+  }
+}, [state.user, supabase]);
 
   const fetchAllUsers = useCallback(async () => {
     if (!state.user) return [];
