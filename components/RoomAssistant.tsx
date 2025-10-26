@@ -978,126 +978,138 @@ const callSummarizeApi = useCallback(
 // In your RoomAssistantComponent, update the Card structure:
 
 <div className={cn("relative", !dialogMode && "inline-block")}>
-
-
-<Card className={cn(
-  "flex flex-col shadow-xl border-border/20 transition-all duration-300 ease-in-out",
-  dialogMode 
-    ? "h-full w-full" 
-    : isExpanded 
-      ? "w-[95vw] h-[65vh] fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 bg-background/95 backdrop-blur-sm shadow-2xl rounded-2xl max-w-[98vw] max-h-[95vh]"
-      : "w-[70vw] h-[60vh] max-w-4xl",
-  className
-)}>
-  <CardHeader className="flex-shrink-0 border-b bg-gradient-to-r from-background via-muted to-background/80 p-4 backdrop-blur-sm">
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-3">
-        <motion.div
-          className="w-12 h-12 bg-gradient-to-br from-primary to-secondary rounded-xl shadow-lg flex items-center justify-center"
-          whileHover={{ scale: 1.05, rotate: 5 }}
-          transition={{ type: "spring", stiffness: 300 }}
-        >
-          <Bot className="h-6 w-6 text-primary-foreground drop-shadow-sm" />
-        </motion.div>
-        <div className="flex items-center gap-2">
-          <CardTitle className="text-xl font-bold leading-tight">AI Assistant</CardTitle>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleToggleExpand}
-                  className="h-9 w-9 rounded-full hover:bg-accent/80 transition-all"
-                >
-                  {isExpanded ? (
-                    <Minimize2 className="h-4 w-4" />
-                  ) : (
-                    <Maximize2 className="h-4 w-4" />
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                {isExpanded ? "Minimize" : "Expand"}
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span className="bg-muted/50 px-2 py-0.5 rounded-full">#{roomName}</span>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full hover:bg-accent/80 transition-all">
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
-              </PopoverTrigger>
-              {popoverContent}
-            </Popover>
+  <Card className={cn(
+    "flex flex-col shadow-xl border-border/20 transition-all duration-300 ease-in-out",
+    dialogMode 
+      ? "h-full w-full" 
+      : isExpanded 
+        ? "w-[92vw] h-[88vh] fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 bg-background/95 backdrop-blur-sm shadow-2xl rounded-2xl max-w-[96vw] max-h-[92vh]"
+        : "w-[70vw] h-[55vh] max-w-4xl",
+    className
+  )}>
+      <CardHeader className="flex-shrink-0 border-b bg-gradient-to-r from-background via-muted to-background/80 p-4 backdrop-blur-sm">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <motion.div
+              className="w-12 h-12 bg-gradient-to-br from-primary to-secondary rounded-xl shadow-lg flex items-center justify-center"
+              whileHover={{ scale: 1.05, rotate: 5 }}
+              transition={{ type: "spring", stiffness: 300 }}
+            >
+              <Bot className="h-6 w-6 text-primary-foreground drop-shadow-sm" />
+            </motion.div>
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-xl font-bold leading-tight">AI Assistant</CardTitle>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={handleToggleExpand}
+                      className="h-9 w-9 rounded-full hover:bg-accent/80 transition-all"
+                    >
+                      {isExpanded ? (
+                        <Minimize2 className="h-4 w-4" />
+                      ) : (
+                        <Maximize2 className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {isExpanded ? "Minimize" : "Expand"}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span className="bg-muted/50 px-2 py-0.5 rounded-full">#{roomName}</span>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full hover:bg-accent/80 transition-all">
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </PopoverTrigger>
+                  {popoverContent}
+                </Popover>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
-    </div>
-  </CardHeader>
+      </CardHeader>
 
-  {/* Fix ScrollArea height to not be too tall */}
-  <ScrollArea 
-          ref={scrollContainerRef} 
-          onScroll={onUserScroll} 
-          className="flex-1 min-h-0"
+
+  
+      <ScrollArea 
+  ref={scrollContainerRef} 
+  onScroll={onUserScroll} 
+  className="flex-1 min-h-0"
+>
+  <div className={cn(
+    "p-4 space-y-6",
+    (isExpanded || dialogMode) ? "max-w-7xl mx-auto h-[70vh]" : "max-w-4xl mx-auto h-[30vh]"
+  )}>
+    <AnimatePresence mode="popLayout">
+      {messagePairs.length > 0 ? (
+        messagePairs.map((pair) => (
+          <PairedMessageRenderer 
+            key={pair.user.id + (pair.assistant?.id || '')} 
+            pair={pair} 
+            theme={theme}
+            copyToClipboard={copyToClipboard}
+          />
+        ))
+      ) : loading ? (
+        Array.from({ length: 3 }, (_, i) => <MessageSkeleton key={i} />)
+      ) : (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className={cn(
+            "flex flex-col items-center justify-center text-center",
+            (isExpanded || dialogMode) ? "py-20" : "py-12"
+          )}
         >
-          <div className={cn(
-            "p-4 space-y-6 overflow-y-auto h-[30vh] ai-response-container scrollbar-thin",
-            (isExpanded || dialogMode) ? "w-[80vw] mx-auto h-[60vh]" : "w-[60vw] mx-auto h-[30vh]"
-          )}>
-            <AnimatePresence mode="popLayout">
-              {messagePairs.length > 0 ? (
-                messagePairs.map((pair) => (
-                  <PairedMessageRenderer 
-                    key={pair.user.id + (pair.assistant?.id || '')} 
-                    pair={pair} 
-                    theme={theme}
-                    copyToClipboard={copyToClipboard}
-                  />
-                ))
-              ) : loading ? (
-                Array.from({ length: 3 }, (_, i) => <MessageSkeleton key={i} />)
-              ) : (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="flex flex-col items-center justify-center py-12 text-center" // Reduced py-20 to py-12
-                >
-                  <motion.div
-                    className="w-16 h-16 bg-gradient-to-br from-primary/20 to-secondary/20 rounded-2xl flex items-center justify-center mb-4 shadow-lg" // Smaller size
-                    animate={{ rotate: [0, 360] }}
-                    transition={{ duration: 6, repeat: Infinity, ease: "linear" }}
-                  >
-                    <Sparkles className="h-8 w-8 text-primary drop-shadow" /> {/* Smaller icon */}
-                  </motion.div>
-                  <h3 className="text-xl font-bold mb-2 bg-gradient-to-r from-foreground to-muted-foreground bg-clip-text text-transparent"> {/* Smaller text */}
-                    AI Assistant Ready
-                  </h3>
-                  <p className="text-sm text-muted-foreground max-w-md leading-relaxed">
-                    Dive into #{roomName} – get structured insights, paired queries, and actionable analysis.
-                  </p>
-                </motion.div>
-              )}
-            </AnimatePresence>
-            {error && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="mx-4 p-4 bg-destructive/10 rounded-xl border border-destructive/20 flex items-center gap-3 text-sm text-destructive backdrop-blur-sm"
-              >
-                <AlertCircle className="h-5 w-5 flex-shrink-0" />
-                {error}
-                <Button variant="ghost" size="icon" onClick={() => setError(null)} className="ml-auto h-7 w-7 p-0 hover:bg-destructive/20">
-                  <X className="h-3 w-3" />
-                </Button>
-              </motion.div>
+          <motion.div
+            className={cn(
+              "bg-gradient-to-br from-primary/20 to-secondary/20 rounded-2xl flex items-center justify-center mb-4 shadow-lg",
+              (isExpanded || dialogMode) ? "w-20 h-20" : "w-16 h-16"
             )}
-            <div ref={messagesEndRef} />
-          </div>
-        </ScrollArea>
+            animate={{ rotate: [0, 360] }}
+            transition={{ duration: 6, repeat: Infinity, ease: "linear" }}
+          >
+            <Sparkles className={cn(
+              "text-primary drop-shadow",
+              (isExpanded || dialogMode) ? "h-10 w-10" : "h-8 w-8"
+            )} />
+          </motion.div>
+          <h3 className={cn(
+            "font-bold bg-gradient-to-r from-foreground to-muted-foreground bg-clip-text text-transparent",
+            (isExpanded || dialogMode) ? "text-2xl mb-3" : "text-xl mb-2"
+          )}>
+            AI Assistant Ready
+          </h3>
+          <p className="text-sm text-muted-foreground max-w-md leading-relaxed">
+            Dive into #{roomName} – get structured insights, paired queries, and actionable analysis.
+          </p>
+        </motion.div>
+      )}
+    </AnimatePresence>
+    {error && (
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="mx-4 p-4 bg-destructive/10 rounded-xl border border-destructive/20 flex items-center gap-3 text-sm text-destructive backdrop-blur-sm"
+      >
+        <AlertCircle className="h-5 w-5 flex-shrink-0" />
+        {error}
+        <Button variant="ghost" size="icon" onClick={() => setError(null)} className="ml-auto h-7 w-7 p-0 hover:bg-destructive/20">
+          <X className="h-3 w-3" />
+        </Button>
+      </motion.div>
+    )}
+    <div ref={messagesEndRef} />
+  </div>
+</ScrollArea>
+
 
         <CardContent className="flex-shrink-0 p-4 border-t bg-gradient-to-r from-muted/30 to-background/50 backdrop-blur-sm">
 
