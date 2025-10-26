@@ -983,11 +983,11 @@ const callSummarizeApi = useCallback(
     dialogMode 
       ? "h-full w-full" 
       : isExpanded 
-        ? "w-[92vw] h-[88vh] fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 bg-background/95 backdrop-blur-sm shadow-2xl rounded-2xl max-w-[96vw] max-h-[92vh]"
+        ? "w-[92vw] h-[68vh] fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 bg-background/95 backdrop-blur-sm shadow-2xl rounded-2xl max-w-[96vw] max-h-[92vh]"
         : "w-[70vw] h-[55vh] max-w-4xl",
     className
   )}>
-      <CardHeader className="flex-shrink-0 border-b bg-gradient-to-r from-background via-muted to-background/80 p-4 backdrop-blur-sm">
+      <CardHeader className="border-b bg-gradient-to-r from-background via-muted to-background/80 p-4 backdrop-blur-sm">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <motion.div
@@ -1045,7 +1045,7 @@ const callSummarizeApi = useCallback(
 >
   <div className={cn(
     "p-4 space-y-6",
-    (isExpanded || dialogMode) ? "max-w-7xl mx-auto h-[70vh]" : "max-w-4xl mx-auto h-[30vh]"
+    (isExpanded || dialogMode) ? "max-w-7xl mx-auto h-[60vh]" : "max-w-4xl mx-auto h-[30vh]"
   )}>
     <AnimatePresence mode="popLayout">
       {messagePairs.length > 0 ? (
