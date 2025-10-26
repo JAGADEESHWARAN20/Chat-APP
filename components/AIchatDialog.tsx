@@ -36,8 +36,8 @@ export function RoomAssistantDialog({
       <DialogContent className={cn(
         "p-0 overflow-hidden transition-all duration-300 ease-in-out [&>button]:hidden",
         isExpanded 
-          ? "w-[95vw] h-[90vh] max-w-[98vw] max-h-[95vh]" 
-          : "w-[85vw] h-[70vh] max-w-[90vw] max-h-[85vh]"
+          ? "w-[95vw] lg:w-[85vw] h-[90vh] md:h-[90vh] max-w-[98vw] max-h-[95vh]" 
+          : "w-[85vw] lg:w-[65vw] h-[70vh] md:h-[80vh] max-w-[90vw] max-h-[85vh]"
       )}>
         
           <RoomAssistantComponent
