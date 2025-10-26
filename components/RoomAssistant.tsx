@@ -55,6 +55,7 @@ import ReactMarkdown from "react-markdown";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { cn } from "@/lib/utils";
 import { estimateTokens } from "@/lib/token-utils";
+import { RoomAssistantDialog } from "./AIchatDialog";
 
 // ----------------------------- Types ---------------------------------
 interface StructuredAnalysis {
@@ -974,6 +975,8 @@ const callSummarizeApi = useCallback(
 
   // ----------------- Render -----------------
   return (
+// In your RoomAssistantComponent, update the Card structure:
+
 <Card className={cn(
   "flex flex-col shadow-xl border-border/20 transition-all duration-300 ease-in-out relative min-h-[20rem] lg:min-h-[24rem]",
   dialogMode 
@@ -983,7 +986,26 @@ const callSummarizeApi = useCallback(
       : "w-[70vw] h-[50vh] md:h-[55vh] lg:h-[60vh] xl:h-[70vh]",
   className
 )}>
-  <CardHeader className="flex-shrink-0 border-b bg-gradient-to-r from-background via-muted to-background/80 p-4 backdrop-blur-sm">
+  {/* Dialog Trigger Button - Only show when NOT in dialog mode */}
+  {!dialogMode && (
+    <div className="absolute top-3 right-3 z-20"> {/* Changed from -top-2 -right-2 */}
+      <RoomAssistantDialog 
+        roomId={roomId}
+        roomName={roomName}
+        triggerButton={
+          <Button 
+            variant="secondary" 
+            size="icon"
+            className="h-8 w-8 rounded-full shadow-lg border bg-background/80 backdrop-blur-sm hover:bg-accent transition-all hover:scale-110"
+          >
+            <Bot className="h-4 w-4" />
+          </Button>
+        }
+      />
+    </div>
+  )}
+
+  <CardHeader className="flex-shrink-0 border-b bg-gradient-to-r from-background via-muted to-background/80 p-4 backdrop-blur-sm relative z-10"> {/* Added relative z-10 */}
     <div className="flex items-center justify-between">
       <div className="flex items-center gap-3">
         <motion.div
@@ -1032,13 +1054,15 @@ const callSummarizeApi = useCallback(
     </div>
   </CardHeader>
 
-      <ScrollArea 
+  {/* Fix ScrollArea height to not be too tall */}
+  <ScrollArea 
     ref={scrollContainerRef} 
     onScroll={onUserScroll} 
     className="flex-1 relative room-assistant-scroll scrollbar-custom min-h-0 overflow-hidden"
+    style={{ maxHeight: dialogMode ? 'calc(100% - 8rem)' : 'calc(100% - 8rem)' }} // Adjusted height
   >
    <div className={cn(
-    "p-4 space-y-6 mx-auto h-full",
+    "p-4 space-y-6 mx-auto",
     (isExpanded || dialogMode) ? "max-w-7xl" : "max-w-4xl"
   )}>
             <AnimatePresence mode="popLayout">
@@ -1057,16 +1081,16 @@ const callSummarizeApi = useCallback(
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className="flex flex-col items-center justify-center py-20 text-center"
+                  className="flex flex-col items-center justify-center py-12 text-center" // Reduced py-20 to py-12
                 >
                   <motion.div
-                    className="w-20 h-20 bg-gradient-to-br from-primary/20 to-secondary/20 rounded-2xl flex items-center justify-center mb-6 shadow-lg"
+                    className="w-16 h-16 bg-gradient-to-br from-primary/20 to-secondary/20 rounded-2xl flex items-center justify-center mb-4 shadow-lg" // Smaller size
                     animate={{ rotate: [0, 360] }}
                     transition={{ duration: 6, repeat: Infinity, ease: "linear" }}
                   >
-                    <Sparkles className="h-10 w-10 text-primary drop-shadow" />
+                    <Sparkles className="h-8 w-8 text-primary drop-shadow" /> {/* Smaller icon */}
                   </motion.div>
-                  <h3 className="text-2xl font-bold mb-3 bg-gradient-to-r from-foreground to-muted-foreground bg-clip-text text-transparent">
+                  <h3 className="text-xl font-bold mb-2 bg-gradient-to-r from-foreground to-muted-foreground bg-clip-text text-transparent"> {/* Smaller text */}
                     AI Assistant Ready
                   </h3>
                   <p className="text-sm text-muted-foreground max-w-md leading-relaxed">
@@ -1092,7 +1116,7 @@ const callSummarizeApi = useCallback(
           </div>
         </ScrollArea>
 
-        <CardContent className="flex-shrink-0 p-4 border-t bg-gradient-to-r from-muted/30 to-background/50 backdrop-blur-sm">
+        <CardContent className="flex-shrink-0 p-4 border-t bg-gradient-to-r from-muted/30 to-background/50 backdrop-blur-sm relative z-10"> {/* Added relative z-10 */}
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="relative">
             <Textarea
