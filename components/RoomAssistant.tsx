@@ -982,8 +982,8 @@ const callSummarizeApi = useCallback(
   dialogMode 
     ? "h-full w-full" 
     : isExpanded 
-      ? "w-[90vw] h-[70vh] md:h-[75vh] lg:h-[85vh] xl:h-[90vh] z-10 bg-background/95 backdrop-blur-sm shadow-2xl"
-      : "w-[70vw] h-[50vh] md:h-[55vh] lg:h-[60vh] xl:h-[70vh]",
+      ? "fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90vw] h-[70vh] md:h-[75vh] lg:h-[85vh] xl:h-[90vh] z-50 rounded-2xl bg-background/95 backdrop-blur-sm shadow-2xl max-w-[95vw] max-h-[95vh]"
+      : "w-[70vw] h-[50vh] md:h-[55vh] lg:h-[60vh] xl:h-[70vh] max-w-4xl",
   className
 )}>
   {/* Dialog Trigger Button - Only show when NOT in dialog mode */}
