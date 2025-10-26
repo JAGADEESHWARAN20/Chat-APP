@@ -977,35 +977,36 @@ const callSummarizeApi = useCallback(
   return (
 // In your RoomAssistantComponent, update the Card structure:
 
+<div className={cn("relative", !dialogMode && "inline-block")}>
+{/* Dialog Trigger Button - Only show when NOT in dialog mode */}
+{!dialogMode && (
+  <div className="absolute -top-2 -right-2 z-30">
+    <RoomAssistantDialog 
+      roomId={roomId}
+      roomName={roomName}
+      triggerButton={
+        <Button 
+          variant="secondary" 
+          size="icon"
+          className="h-8 w-8 rounded-full shadow-lg border bg-background hover:bg-accent transition-all hover:scale-110"
+        >
+          <Bot className="h-4 w-4" />
+        </Button>
+      }
+    />
+  </div>
+)}
+
 <Card className={cn(
-  "flex flex-col shadow-xl border-border/20 transition-all duration-300 ease-in-out relative min-h-[20rem] lg:min-h-[24rem]",
+  "flex flex-col shadow-xl border-border/20 transition-all duration-300 ease-in-out",
   dialogMode 
     ? "h-full w-full" 
     : isExpanded 
-      ? "fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90vw] h-[70vh] md:h-[75vh] lg:h-[85vh] xl:h-[90vh] z-50 rounded-2xl bg-background/95 backdrop-blur-sm shadow-2xl max-w-[95vw] max-h-[95vh]"
-      : "w-[70vw] h-[50vh] md:h-[55vh] lg:h-[60vh] xl:h-[70vh] max-w-4xl",
+      ? "w-[95vw] h-[85vh] fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 bg-background/95 backdrop-blur-sm shadow-2xl rounded-2xl max-w-[98vw] max-h-[95vh]"
+      : "w-[70vw] h-[60vh] max-w-4xl",
   className
 )}>
-  {/* Dialog Trigger Button - Only show when NOT in dialog mode */}
-  {!dialogMode && (
-    <div className="absolute top-3 right-3 z-20"> {/* Changed from -top-2 -right-2 */}
-      <RoomAssistantDialog 
-        roomId={roomId}
-        roomName={roomName}
-        triggerButton={
-          <Button 
-            variant="secondary" 
-            size="icon"
-            className="h-8 w-8 rounded-full shadow-lg border bg-background/80 backdrop-blur-sm hover:bg-accent transition-all hover:scale-110"
-          >
-            <Bot className="h-4 w-4" />
-          </Button>
-        }
-      />
-    </div>
-  )}
-
-  <CardHeader className="flex-shrink-0 border-b bg-gradient-to-r from-background via-muted to-background/80 p-4 backdrop-blur-sm relative z-10"> {/* Added relative z-10 */}
+  <CardHeader className="flex-shrink-0 border-b bg-gradient-to-r from-background via-muted to-background/80 p-4 backdrop-blur-sm">
     <div className="flex items-center justify-between">
       <div className="flex items-center gap-3">
         <motion.div
@@ -1034,7 +1035,7 @@ const callSummarizeApi = useCallback(
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                {isExpanded ? "Minimize Width" : "Expand Width"}
+                {isExpanded ? "Minimize" : "Expand"}
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -1056,15 +1057,14 @@ const callSummarizeApi = useCallback(
 
   {/* Fix ScrollArea height to not be too tall */}
   <ScrollArea 
-    ref={scrollContainerRef} 
-    onScroll={onUserScroll} 
-    className="flex-1 relative room-assistant-scroll scrollbar-custom min-h-0 overflow-hidden"
-    style={{ maxHeight: dialogMode ? 'calc(100% - 8rem)' : 'calc(100% - 8rem)' }} // Adjusted height
-  >
-   <div className={cn(
-    "p-4 space-y-6 mx-auto",
-    (isExpanded || dialogMode) ? "max-w-7xl" : "max-w-4xl"
-  )}>
+          ref={scrollContainerRef} 
+          onScroll={onUserScroll} 
+          className="flex-1 min-h-0"
+        >
+          <div className={cn(
+            "p-4 space-y-6",
+            (isExpanded || dialogMode) ? "max-w-7xl mx-auto" : "max-w-4xl mx-auto"
+          )}>
             <AnimatePresence mode="popLayout">
               {messagePairs.length > 0 ? (
                 messagePairs.map((pair) => (
@@ -1116,7 +1116,8 @@ const callSummarizeApi = useCallback(
           </div>
         </ScrollArea>
 
-        <CardContent className="flex-shrink-0 p-4 border-t bg-gradient-to-r from-muted/30 to-background/50 backdrop-blur-sm relative z-10"> {/* Added relative z-10 */}
+        <CardContent className="flex-shrink-0 p-4 border-t bg-gradient-to-r from-muted/30 to-background/50 backdrop-blur-sm">
+        
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="relative">
             <Textarea
@@ -1168,6 +1169,7 @@ const callSummarizeApi = useCallback(
         </form>
       </CardContent>
     </Card>
+    </div>
   );
 }
 
