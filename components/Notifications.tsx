@@ -1,3 +1,4 @@
+// components/Notifications.tsx - Full updated component with RoomContext integration, debugging, and refetch on open
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
@@ -97,12 +98,20 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
   const isMobile = useMediaQuery("(max-width: 768px)");
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
 
+  // Enhanced useEffect for init and open - add logging and refetch on open
   useEffect(() => {
-    if (!user?.id) return;
+    console.log("Notifications component - isOpen:", isOpen, "user.id:", user?.id); // Debug
+
+    if (!user?.id) {
+      console.log("No user, skipping fetch");
+      return;
+    }
 
     const init = async () => {
+      console.log("Starting init fetch for user:", user.id); // Debug
       try {
         await fetchNotifications(user.id);
+        console.log("Init fetch completed, notifications count:", notifications.length); // Debug
         subscribeToNotifications(user.id);
       } catch (err) {
         console.error("Init notifications error:", err);
@@ -110,16 +119,15 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
       }
     };
 
-    init();
-    return () => unsubscribeFromNotifications();
-  }, [user?.id, fetchNotifications, subscribeToNotifications, unsubscribeFromNotifications]);
+    if (isOpen) { // Only init/subscribe when open to avoid unnecessary calls
+      init();
+    }
 
-  // Add this useEffect to refetch notifications when the sheet opens (improves visibility/realtime sync):
-useEffect(() => {
-  if (isOpen && user?.id) {
-    fetchNotifications(user.id);
-  }
-}, [isOpen, user?.id, fetchNotifications]);
+    return () => {
+      console.log("Cleaning up subscription"); // Debug
+      unsubscribeFromNotifications();
+    };
+  }, [isOpen, user?.id, fetchNotifications, subscribeToNotifications, unsubscribeFromNotifications]);
 
   const handleAccept = async (id: string, roomId: string | null, type: string) => {
     if (!user || !roomId) {
@@ -140,7 +148,7 @@ useEffect(() => {
       }
   
       await markAsRead(id);
-      await fetchAvailableRooms();  // Refresh rooms to update membership and counts
+      await fetchAvailableRooms();  // Refresh rooms to update membership and counts (RoomContext integration)
   
       // Refetch notifications to ensure acceptance notification (if sent to self) is visible
       await fetchNotifications(user.id);
@@ -342,7 +350,17 @@ useEffect(() => {
         <div className="flex-1 overflow-y-auto py-2">
           {notifications.length === 0 ? (
             <div className="flex items-center justify-center h-full text-muted-foreground">
-              No notifications
+              <div className="text-center">
+                <p>No notifications</p>
+                {user?.id && (
+                  <button
+                    onClick={() => fetchNotifications(user.id)} // Manual refetch button for debugging
+                    className="mt-2 text-xs text-blue-500 underline"
+                  >
+                    Refresh
+                  </button>
+                )}
+              </div>
             </div>
           ) : (
             <div className="space-y-2">
@@ -364,7 +382,7 @@ useEffect(() => {
                       <Avatar className="h-10 w-10">
                         <AvatarImage src={n.users?.avatar_url || ""} alt={n.users?.username || "User"} />
                         <AvatarFallback>
-                          {(n.users?.username || "U")[0].toUpperCase()}
+                          {(n.users?.username || "U")[0]?.toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
 
@@ -383,7 +401,10 @@ useEffect(() => {
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => handleReject(n.id, n.sender_id, n.room_id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleReject(n.id, n.sender_id, n.room_id);
+                            }}
                             disabled={isLoading}
                           >
                             <X className="h-4 w-4" />
@@ -391,7 +412,10 @@ useEffect(() => {
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => handleAccept(n.id, n.room_id, n.type)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAccept(n.id, n.room_id, n.type);
+                            }}
                             disabled={isLoading}
                           >
                             <Check className="h-4 w-4" />
@@ -405,7 +429,10 @@ useEffect(() => {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleDeleteNotification(n.id)}>
+                            <DropdownMenuItem onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteNotification(n.id);
+                            }}>
                               <Trash2 className="mr-2 h-4 w-4" /> Delete
                             </DropdownMenuItem>
                           </DropdownMenuContent>
