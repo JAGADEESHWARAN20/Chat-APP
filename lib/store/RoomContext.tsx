@@ -445,21 +445,32 @@ export function RoomProvider({
     }
   }, [supabase]);
 
-
 const getRoomMemberCount = useCallback(async (roomId: string): Promise<number> => {
   try {
-    const { data, error } = await supabase
-      .from('room_members')
-      .select('user_id')
-      .eq('room_id', roomId)
-      .eq('status', 'accepted');
+    const [membersResult, participantsResult] = await Promise.all([
+      supabase
+        .from('room_members')
+        .select('user_id')
+        .eq('room_id', roomId)
+        .eq('status', 'accepted'),
+      
+      supabase
+        .from('room_participants')
+        .select('user_id')
+        .eq('room_id', roomId)
+        .eq('status', 'accepted')
+    ]);
 
-    if (error) {
-      console.error(`Error counting members for room ${roomId}:`, error);
-      return 0;
-    }
+    const memberUsers = membersResult.data || [];
+    const participantUsers = participantsResult.data || [];
+    
+    // Create a Set of unique user IDs
+    const uniqueUserIds = new Set([
+      ...memberUsers.map(m => m.user_id),
+      ...participantUsers.map(p => p.user_id)
+    ]);
 
-    return data?.length || 0;
+    return uniqueUserIds.size;
   } catch (error) {
     console.error(`Error counting members for room ${roomId}:`, error);
     return 0;
@@ -469,21 +480,49 @@ const getRoomMemberCount = useCallback(async (roomId: string): Promise<number> =
 // Function to get member counts for all rooms at once
 const getAllRoomMemberCounts = useCallback(async (): Promise<Map<string, number>> => {
   try {
-    const { data, error } = await supabase
-      .from('room_members')
-      .select('room_id, user_id')
-      .eq('status', 'accepted');
+    const [membersResult, participantsResult] = await Promise.all([
+      supabase
+        .from('room_members')
+        .select('room_id, user_id')
+        .eq('status', 'accepted'),
+      
+      supabase
+        .from('room_participants')
+        .select('room_id, user_id')
+        .eq('status', 'accepted')
+    ]);
 
-    if (error) {
-      console.error('Error fetching all room member counts:', error);
+    if (membersResult.error || participantsResult.error) {
+      console.error('Error fetching all room member counts:', membersResult.error || participantsResult.error);
       return new Map();
     }
 
-    // Group by room_id and count users
+    const membersData = membersResult.data || [];
+    const participantsData = participantsResult.data || [];
+
+    // Create a Map of room_id to Set of user_ids for uniqueness
+    const roomUserSets = new Map<string, Set<string>>();
+
+    // Process members
+    membersData.forEach(member => {
+      if (!roomUserSets.has(member.room_id)) {
+        roomUserSets.set(member.room_id, new Set());
+      }
+      roomUserSets.get(member.room_id)!.add(member.user_id);
+    });
+
+    // Process participants
+    participantsData.forEach(participant => {
+      if (!roomUserSets.has(participant.room_id)) {
+        roomUserSets.set(participant.room_id, new Set());
+      }
+      roomUserSets.get(participant.room_id)!.add(participant.user_id);
+    });
+
+    // Convert to counts Map
     const countsMap = new Map<string, number>();
-    data?.forEach(member => {
-      const currentCount = countsMap.get(member.room_id) || 0;
-      countsMap.set(member.room_id, currentCount + 1);
+    roomUserSets.forEach((userSet, roomId) => {
+      countsMap.set(roomId, userSet.size);
     });
 
     return countsMap;
