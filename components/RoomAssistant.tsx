@@ -984,7 +984,7 @@ const callSummarizeApi = useCallback(
       ? "h-full w-full" 
       : isExpanded 
         ? "w-[92vw] h-[90vh] fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 bg-background/95 backdrop-blur-sm shadow-2xl rounded-2xl max-w-[96vw] max-h-[92vh]"
-        : "w-[70vw] h-[55vh] max-w-4xl",
+        : "w-[70vw] h-[60vh] max-w-4xl",
     className
   )}>
       <CardHeader className="border-b bg-gradient-to-r from-background via-muted to-background/80 p-4 backdrop-blur-sm">
