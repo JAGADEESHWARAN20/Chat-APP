@@ -447,82 +447,41 @@ export function RoomProvider({
 
   const getRoomMemberCount = useCallback(async (roomId: string): Promise<number> => {
     try {
-      const [membersResult, participantsResult] = await Promise.all([
-        supabase
-          .from('room_members')
-          .select('user_id')
-          .eq('room_id', roomId)
-          .eq('status', 'accepted'),
-        
-        supabase
-          .from('room_participants')
-          .select('user_id')
-          .eq('room_id', roomId)
-          .eq('status', 'accepted')
-      ]);
+      const { data, error } = await supabase
+        .from('room_members')
+        .select('user_id')
+        .eq('room_id', roomId)
+        .eq('status', 'accepted');
   
-      const memberUsers = membersResult.data || [];
-      const participantUsers = participantsResult.data || [];
-      
-      // Create a Set of unique user IDs to avoid duplicates
-      const uniqueUserIds = new Set([
-        ...memberUsers.map(m => m.user_id),
-        ...participantUsers.map(p => p.user_id)
-      ]);
+      if (error) {
+        console.error(`Error counting members for room ${roomId}:`, error);
+        return 0;
+      }
   
-      return uniqueUserIds.size;
+      return data?.length || 0;
     } catch (error) {
       console.error(`Error counting members for room ${roomId}:`, error);
       return 0;
     }
   }, [supabase]);
   
-  // Replace the getAllRoomMemberCounts function with this updated version:
   const getAllRoomMemberCounts = useCallback(async (): Promise<Map<string, number>> => {
     try {
-      const [membersResult, participantsResult] = await Promise.all([
-        supabase
-          .from('room_members')
-          .select('room_id, user_id')
-          .eq('status', 'accepted'),
-        
-        supabase
-          .from('room_participants')
-          .select('room_id, user_id')
-          .eq('status', 'accepted')
-      ]);
+      const { data, error } = await supabase
+        .from('room_members')
+        .select('room_id, user_id')
+        .eq('status', 'accepted');
   
-      if (membersResult.error || participantsResult.error) {
-        console.error('Error fetching all room member counts:', membersResult.error || participantsResult.error);
+      if (error) {
+        console.error('Error fetching all room member counts:', error);
         return new Map();
       }
   
-      const membersData = membersResult.data || [];
-      const participantsData = participantsResult.data || [];
-  
-      // Create a Map of room_id to Set of user_ids for uniqueness
-      const roomUserSets = new Map<string, Set<string>>();
-  
-      // Process members
-      membersData.forEach(member => {
-        if (!roomUserSets.has(member.room_id)) {
-          roomUserSets.set(member.room_id, new Set());
-        }
-        roomUserSets.get(member.room_id)!.add(member.user_id);
-      });
-  
-      // Process participants
-      participantsData.forEach(participant => {
-        if (!roomUserSets.has(participant.room_id)) {
-          roomUserSets.set(participant.room_id, new Set());
-        }
-        roomUserSets.get(participant.room_id)!.add(participant.user_id);
-      });
-  
-      // Convert to counts Map
+      // Group by room_id and count users
       const countsMap = new Map<string, number>();
-      roomUserSets.forEach((userSet, roomId) => {
-        countsMap.set(roomId, userSet.size);
+      data?.forEach(member => {
+        const currentCount = countsMap.get(member.room_id) || 0;
+        countsMap.set(member.room_id, currentCount + 1);
       });
   
       return countsMap;
@@ -565,42 +524,26 @@ export function RoomProvider({
   }, [supabase]);
 
   // Function to fetch room users
-  const fetchRoomUsers = useCallback(async (roomId: string) => {
-    try {
-      // Get all users in this room from both tables
-      const [membersResult, participantsResult] = await Promise.all([
-        supabase
-          .from("room_members")
-          .select("user_id")
-          .eq("room_id", roomId)
-          .eq("status", "accepted"),
-        
-        supabase
-          .from("room_participants")
-          .select("user_id")
-          .eq("room_id", roomId)
-          .eq("status", "accepted")
-      ]);
+ // Update fetchRoomUsers to only use room_members table:
+const fetchRoomUsers = useCallback(async (roomId: string) => {
+  try {
+    const { data: membersResult } = await supabase
+      .from("room_members")
+      .select("user_id")
+      .eq("room_id", roomId)
+      .eq("status", "accepted");
 
-      // Combine users from both tables and remove duplicates
-      const memberUsers = membersResult.data || [];
-      const participantUsers = participantsResult.data || [];
-      
-      // Create a Set of unique user IDs
-      const uniqueUserIds = new Set([
-        ...memberUsers.map(m => m.user_id),
-        ...participantUsers.map(p => p.user_id)
-      ]);
+    const memberUsers = membersResult || [];
+    
+    const totalUsers = memberUsers.length;
+    const onlineUsers = 0; // Placeholder - implement presence system here
 
-      const totalUsers = uniqueUserIds.size;
-      const onlineUsers = 0; // Placeholder - implement presence system here
-
-      return { totalUsers, onlineUsers };
-    } catch (error) {
-      console.error(`Error fetching users for room ${roomId}:`, error);
-      return { totalUsers: 0, onlineUsers: 0 };
-    }
-  }, [supabase]);
+    return { totalUsers, onlineUsers };
+  } catch (error) {
+    console.error(`Error fetching users for room ${roomId}:`, error);
+    return { totalUsers: 0, onlineUsers: 0 };
+  }
+}, [supabase]);
 
   // Function to refresh individual room data
   const refreshRoomData = useCallback(async (roomId: string) => {
