@@ -1002,7 +1002,7 @@ const callSummarizeApi = useCallback(
   dialogMode 
     ? "h-full w-full" 
     : isExpanded 
-      ? "w-[95vw] h-[85vh] fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 bg-background/95 backdrop-blur-sm shadow-2xl rounded-2xl max-w-[98vw] max-h-[95vh]"
+      ? "w-[95vw] h-[65vh] fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 bg-background/95 backdrop-blur-sm shadow-2xl rounded-2xl max-w-[98vw] max-h-[95vh]"
       : "w-[70vw] h-[60vh] max-w-4xl",
   className
 )}>
@@ -1117,7 +1117,7 @@ const callSummarizeApi = useCallback(
         </ScrollArea>
 
         <CardContent className="flex-shrink-0 p-4 border-t bg-gradient-to-r from-muted/30 to-background/50 backdrop-blur-sm">
-        
+
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="relative">
             <Textarea
