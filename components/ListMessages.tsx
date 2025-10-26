@@ -298,9 +298,7 @@ return (
 
 
     {/* Typing Indicator */}
-    <div className="flex-shrink-0 min-h-[3rem]">
       <TypingIndicator />
-    </div>
 
     <DeleteAlert />
     <EditAlert />
