@@ -11,6 +11,7 @@ import { Database } from "@/lib/types/supabase";
 import { useRoomContext } from "@/lib/store/RoomContext";
 import TypingIndicator from "./TypingIndicator";
 import { useUser } from "@/lib/store/user";
+import { motion } from "framer-motion"; // <-- ADDED: Framer Motion import
 
 type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
@@ -277,7 +278,7 @@ return (
         height: "calc(100vh - 13rem)"
       }}
     >
-       <div className="w-full max-w-full">
+        <div className="w-full max-w-full">
         {isLoading ? (
           <div className="space-y-4">
             {Array.from({ length: 8 }, (_, index) => (
@@ -298,7 +299,12 @@ return (
 
 
     {/* Typing Indicator */}
+    <motion.div // <-- UPDATED: motion.div
+      layout // <-- ADDED: enables smooth layout animation on size change
+      className="h-[0em] min-h-[3rem] overflow-hidden" // <-- UPDATED: Removed 'animate' class
+    >
       <TypingIndicator />
+    </motion.div>
 
     <DeleteAlert />
     <EditAlert />
