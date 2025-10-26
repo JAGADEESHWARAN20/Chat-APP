@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo, memo } from "react";
 import { RoomWithMembershipCount, useRoomContext } from "@/lib/store/RoomContext";
 import { Avatar, AvatarImage } from "@/components/ui/avatar";
-import { Loader2, ChevronRight, MessageSquare, Users } from "lucide-react";
+import { Loader2, ChevronRight, MessageSquare, Users, Plus } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "./ui/button";
 
@@ -16,9 +16,12 @@ const LeftSidebar = memo(function LeftSidebar({
   isOpen: boolean;
   onClose?: () => void;
 }) {
-  const { state, fetchAvailableRooms, setSelectedRoom } = useRoomContext();
+  const { state, fetchAvailableRooms, setSelectedRoom, createRoom } = useRoomContext();
   const [searchTerm, setSearchTerm] = useState("");
   const [directChats] = useState<RoomWithMembershipCount[]>([]);
+  const [showCreateRoom, setShowCreateRoom] = useState(false);
+  const [newRoomName, setNewRoomName] = useState("");
+  const [isCreating, setIsCreating] = useState(false);
 
   useEffect(() => {
     if (user?.id) {
@@ -26,10 +29,16 @@ const LeftSidebar = memo(function LeftSidebar({
     }
   }, [user, fetchAvailableRooms]);
 
+  // Filter to only show joined rooms (isMember = true)
+  const joinedRooms = useMemo(() => 
+    state.availableRooms.filter(room => room.isMember === true),
+    [state.availableRooms]
+  );
+
   const filteredRooms = useMemo(() => 
-    state.availableRooms.filter((item) =>
+    joinedRooms.filter((item) =>
       item.name.toLowerCase().includes(searchTerm.toLowerCase())
-    ), [state.availableRooms, searchTerm]
+    ), [joinedRooms, searchTerm]
   );
 
   const filteredChats = useMemo(() => 
@@ -42,6 +51,21 @@ const LeftSidebar = memo(function LeftSidebar({
     [...filteredRooms, ...filteredChats], 
     [filteredRooms, filteredChats]
   );
+
+  const handleCreateRoom = async () => {
+    if (!newRoomName.trim()) return;
+    
+    setIsCreating(true);
+    try {
+      await createRoom(newRoomName, false); // false for public room
+      setNewRoomName("");
+      setShowCreateRoom(false);
+    } catch (error) {
+      console.error("Failed to create room:", error);
+    } finally {
+      setIsCreating(false);
+    }
+  };
 
   const renderItem = (item: RoomWithMembershipCount) => (
     <div
@@ -95,17 +119,10 @@ const LeftSidebar = memo(function LeftSidebar({
             </span>
           </div>
           
-          {/* Membership status badge */}
-          {item.isMember && (
-            <div className="text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300 rounded-full px-2 py-1">
-              Joined
-            </div>
-          )}
-          {item.participationStatus === 'pending' && (
-            <div className="text-xs bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300 rounded-full px-2 py-1">
-              Pending
-            </div>
-          )}
+          {/* Membership status badge - Only show for joined rooms */}
+          <div className="text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300 rounded-full px-2 py-1">
+            Joined
+          </div>
         </div>
 
         {/* Creation date */}
@@ -124,9 +141,8 @@ const LeftSidebar = memo(function LeftSidebar({
     >
       <Tabs defaultValue="rooms" className="w-full mt-0 lg:mt-0 flex flex-col gap-[.1em]">
         <div className="flex gap-[.2em] items-center">
-          <TabsList className="grid w-full grid-cols-3 mb-1">
-            <TabsTrigger value="all">All</TabsTrigger>
-            <TabsTrigger value="rooms">Rooms</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-2 mb-1">
+            <TabsTrigger value="rooms">My Rooms</TabsTrigger>
             <TabsTrigger value="chats">Chats</TabsTrigger>
           </TabsList>
           {onClose && (
@@ -139,35 +155,79 @@ const LeftSidebar = memo(function LeftSidebar({
             </Button>
           )}
         </div>
+
+        {/* Create Room Section */}
+        <div className="mb-3">
+          {showCreateRoom ? (
+            <div className="space-y-2 p-3 border border-border rounded-lg bg-background/50">
+              <input
+                type="text"
+                placeholder="Enter room name..."
+                value={newRoomName}
+                onChange={(e) => setNewRoomName(e.target.value)}
+                className="w-full p-2 border border-input rounded text-sm bg-background text-foreground placeholder-muted-foreground"
+                onKeyPress={(e) => e.key === 'Enter' && handleCreateRoom()}
+              />
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  onClick={handleCreateRoom}
+                  disabled={isCreating || !newRoomName.trim()}
+                  className="flex-1"
+                >
+                  {isCreating ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    "Create"
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setShowCreateRoom(false);
+                    setNewRoomName("");
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Button
+              variant="outline"
+              className="w-full flex items-center gap-2"
+              onClick={() => setShowCreateRoom(true)}
+            >
+              <Plus className="h-4 w-4" />
+              Create New Room
+            </Button>
+          )}
+        </div>
+
         <input
           type="text"
-          placeholder="Search rooms..."
+          placeholder="Search my rooms..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="w-full p-3 mb-1 border border-input rounded-lg focus:ring-2 focus:ring-primary outline-none bg-background text-foreground placeholder-muted-foreground"
         />
         
-        <TabsContent value="all">
-          <div className="space-y-2 flex-1 overflow-y-auto scrollbar-thin">
-            {allItems.length > 0 ? (
-              allItems.map(renderItem)
-            ) : (
-              <div className="text-muted-foreground text-center mt-10">
-                No items found. Try creating one!
-              </div>
-            )}
-          </div>
-        </TabsContent>
-        
         <TabsContent value="rooms">
           <div className="space-y-2 flex-1 overflow-y-auto scrollbar-thin">
             {state.isLoading ? (
-              <div className="flex justify-center items-center h-full">
+              <div className="flex justify-center items-center h-32">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
               </div>
             ) : filteredRooms.length === 0 ? (
-              <div className="text-muted-foreground text-center mt-10">
-                No rooms found. Try creating one!
+              <div className="text-center py-8">
+                <Users className="h-12 w-12 text-muted-foreground mx-auto mb-3 opacity-50" />
+                <div className="text-muted-foreground mb-2">
+                  {searchTerm ? 'No matching rooms found' : 'No rooms joined yet'}
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  {searchTerm ? 'Try a different search term' : 'Join or create a room to get started'}
+                </div>
               </div>
             ) : (
               filteredRooms.map(renderItem)
@@ -180,8 +240,14 @@ const LeftSidebar = memo(function LeftSidebar({
             {filteredChats.length > 0 ? (
               filteredChats.map(renderItem)
             ) : (
-              <div className="text-muted-foreground text-center mt-10">
-                No chats found. Start a new chat!
+              <div className="text-center py-8">
+                <MessageSquare className="h-12 w-12 text-muted-foreground mx-auto mb-3 opacity-50" />
+                <div className="text-muted-foreground">
+                  No direct chats yet
+                </div>
+                <div className="text-sm text-muted-foreground mt-1">
+                  Start a conversation with someone
+                </div>
               </div>
             )}
           </div>
