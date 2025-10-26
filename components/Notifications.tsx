@@ -97,37 +97,33 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
   const supabase = supabaseBrowser();
   const isMobile = useMediaQuery("(max-width: 768px)");
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
+// In your Notifications component
+useEffect(() => {
+  console.log("🔔 Notifications component - user:", user?.id);
 
-  // Enhanced useEffect for init and open - add logging and refetch on open
-  useEffect(() => {
-    console.log("Notifications component - isOpen:", isOpen, "user.id:", user?.id); // Debug
+  if (!user?.id) {
+    console.log("❌ No user ID, skipping notifications");
+    return;
+  }
 
-    if (!user?.id) {
-      console.log("No user, skipping fetch");
-      return;
+  // Initialize notifications
+  const initNotifications = async () => {
+    try {
+      console.log("🔄 Initializing notifications...");
+      await fetchNotifications(user.id);
+      subscribeToNotifications(user.id);
+    } catch (error) {
+      console.error("💥 Failed to initialize notifications:", error);
     }
+  };
 
-    const init = async () => {
-      console.log("Starting init fetch for user:", user.id); // Debug
-      try {
-        await fetchNotifications(user.id);
-        console.log("Init fetch completed, notifications count:", notifications.length); // Debug
-        subscribeToNotifications(user.id);
-      } catch (err) {
-        console.error("Init notifications error:", err);
-        toast.error("Failed to load notifications.");
-      }
-    };
+  initNotifications();
 
-    if (isOpen) { // Only init/subscribe when open to avoid unnecessary calls
-      init();
-    }
-
-    return () => {
-      console.log("Cleaning up subscription"); // Debug
-      unsubscribeFromNotifications();
-    };
-  }, [isOpen, user?.id, fetchNotifications, subscribeToNotifications, unsubscribeFromNotifications]);
+  return () => {
+    console.log("🧹 Cleaning up notifications");
+    unsubscribeFromNotifications();
+  };
+}, [user?.id]); // Only depend on user.id
 
   const handleAccept = async (id: string, roomId: string | null, type: string) => {
     if (!user || !roomId) {

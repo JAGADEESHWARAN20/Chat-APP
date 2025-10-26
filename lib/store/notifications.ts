@@ -1,4 +1,4 @@
-// lib/store/notifications.ts - Full updated notification store with fixes for TypeScript errors (no .catch() on PostgrestBuilder, inlined transformNotification, enhanced error handling)
+// lib/store/notifications.ts
 import { create } from "zustand";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { toast } from "sonner";
@@ -39,9 +39,9 @@ export interface Inotification {
   room_id: string | null;
   join_status: string | null;
   direct_chat_id: string | null;
-  users: ProfileType | null;    // sender (kept name for UI compatibility)
+  users: ProfileType | null;
   recipient: ProfileType | null;
-  rooms: RoomType | null;    // room
+  rooms: RoomType | null;
 }
 
 interface NotificationState {
@@ -50,12 +50,7 @@ interface NotificationState {
   addNotification: (notification: Inotification) => void;
   markAsRead: (notificationId: string) => Promise<void>;
   removeNotification: (notificationId: string) => void;
-  fetchNotifications: (
-    userId: string,
-    page?: number,
-    limit?: number,
-    retries?: number
-  ) => Promise<void>;
+  fetchNotifications: (userId: string) => Promise<void>;
   subscribeToNotifications: (userId: string) => void;
   unsubscribeFromNotifications: () => void;
 }
@@ -64,7 +59,6 @@ export const useNotification = create<NotificationState>((set, get) => {
   const supabase = supabaseBrowser();
   let notificationChannel: ReturnType<typeof supabase.channel> | null = null;
 
-  // Inlined transformNotification function to avoid import issues
   const transformNotification = (n: NotificationWithRelations): Inotification => ({
     id: n.id,
     message: n.message,
@@ -100,122 +94,74 @@ export const useNotification = create<NotificationState>((set, get) => {
     },
 
     markAsRead: async (notificationId: string) => {
-      const { error } = await supabase
-        .from("notifications")
-        .update({ status: "read" })
-        .eq("id", notificationId);
-      if (error) {
-        console.error("Mark as read error:", error);
-        toast.error("Failed to mark notification as read");
-      } else {
+      try {
+        const { error } = await supabase
+          .from("notifications")
+          .update({ status: "read" })
+          .eq("id", notificationId);
+
+        if (error) throw error;
+
         set({
           notifications: get().notifications.map((n) =>
             n.id === notificationId ? { ...n, status: "read" } : n
           ),
         });
+      } catch (error) {
+        console.error("Mark as read error:", error);
+        toast.error("Failed to mark notification as read");
       }
     },
 
-    fetchNotifications: async (userId, page = 1, limit = 20, retries = 3) => {
+    fetchNotifications: async (userId: string) => {
       try {
-        // First, try basic fetch without joins to isolate if joins are the issue
-        const { data: rawData, error: basicError } = await supabase
+        console.log("🔔 Fetching notifications for user:", userId);
+
+        // Use a single query with proper joins
+        const { data, error } = await supabase
           .from("notifications")
-          .select("*")
+          .select(`
+            *,
+            sender:profiles!notifications_sender_id_fkey(
+              id, username, display_name, avatar_url, created_at
+            ),
+            recipient:profiles!notifications_user_id_fkey(
+              id, username, display_name, avatar_url, created_at
+            ),
+            room:rooms!notifications_room_id_fkey(
+              id, name, created_at, created_by, is_private
+            )
+          `)
           .eq("user_id", userId)
           .order("created_at", { ascending: false })
-          .range((page - 1) * limit, page * limit - 1);
+          .limit(50);
 
-        if (basicError) throw basicError;
+        if (error) {
+          console.error("❌ Notification fetch error:", error);
+          throw error;
+        }
 
-        console.log("Basic fetch - Raw notifications count:", rawData?.length || 0);
-        console.log("Basic fetch - Sample data:", rawData?.slice(0, 2) || []); // Debug: log first 2
+        console.log("✅ Notifications fetched:", data?.length || 0);
 
-        if (!rawData || rawData.length === 0) {
-          console.log("No notifications found for user:", userId);
+        if (!data || data.length === 0) {
+          console.log("ℹ️ No notifications found for user");
           set({ notifications: [] });
           return;
         }
 
-        // Now enrich with relations if basic fetch succeeds
-        const enrichedData: NotificationWithRelations[] = [];
-        for (const n of rawData) {
-          try {
-            // Fetch sender profile
-            let senderData: ProfileType | null = null;
-            try {
-              const { data } = await supabase
-                .from("profiles")
-                .select("id, username, display_name, avatar_url, created_at")
-                .eq("id", n.sender_id || "")
-                .single();
-              senderData = data || null;
-            } catch (senderErr) {
-              console.warn("Sender profile fetch failed:", senderErr);
-              senderData = null;
-            }
-
-            // Fetch recipient (should be current user, but for completeness)
-            let recipientData: ProfileType | null = null;
-            try {
-              const { data } = await supabase
-                .from("profiles")
-                .select("id, username, display_name, avatar_url, created_at")
-                .eq("id", n.user_id)
-                .single();
-              recipientData = data || null;
-            } catch (recipientErr) {
-              console.warn("Recipient profile fetch failed:", recipientErr);
-              recipientData = null;
-            }
-
-            // Fetch room
-            let roomData: RoomType | null = null;
-            try {
-              const { data } = await supabase
-                .from("rooms")
-                .select("id, name, created_at, created_by, is_private")
-                .eq("id", n.room_id || "")
-                .single();
-              roomData = data || null;
-            } catch (roomErr) {
-              console.warn("Room fetch failed:", roomErr);
-              roomData = null;
-            }
-
-            enrichedData.push({
-              ...n,
-              sender: senderData,
-              recipient: recipientData,
-              room: roomData,
-            });
-          } catch (enrichErr) {
-            console.error("Enrichment failed for notification", n.id, ":", enrichErr);
-            // Fallback to raw data without relations
-            enrichedData.push({ ...n, sender: null, recipient: null, room: null } as NotificationWithRelations);
-          }
-        }
-
-        const transformed = enrichedData.map(transformNotification);
-        console.log("Enriched & transformed notifications count:", transformed.length);
-        console.log("Transformed sample:", transformed.slice(0, 2)); // Debug
-
+        const transformed = data.map(transformNotification);
         set({ notifications: transformed });
-      } catch (err: any) {
-        console.error("Error fetching notifications:", err);
-        toast.error("Failed to fetch notifications.");
-        if (retries > 0) {
-          console.log(`Retrying fetch... (${retries} left)`);
-          setTimeout(
-            () => get().fetchNotifications(userId, page, limit, retries - 1),
-            1000
-          );
-        }
+        
+      } catch (error: any) {
+        console.error("💥 Error fetching notifications:", error);
+        toast.error("Failed to load notifications");
       }
     },
 
     subscribeToNotifications: (userId: string) => {
-      notificationChannel?.unsubscribe(); // Clean up previous
+      console.log("🔔 Setting up real-time subscription for user:", userId);
+      
+      notificationChannel?.unsubscribe();
 
       notificationChannel = supabase
         .channel(`notifications-${userId}`)
@@ -228,84 +174,88 @@ export const useNotification = create<NotificationState>((set, get) => {
             filter: `user_id=eq.${userId}`,
           },
           async (payload) => {
-            const newNotifRaw = payload.new as NotificationRow;
-            console.log("Realtime raw notification:", newNotifRaw); // Debug
+            console.log("🎯 Real-time notification received:", payload);
 
-            // Enrich the realtime notification similarly
-            let enrichedNewNotif: NotificationWithRelations;
             try {
-              // Fetch sender profile
-              let senderData: ProfileType | null = null;
-              try {
-                const { data } = await supabase
-                  .from("profiles")
-                  .select("id, username, display_name, avatar_url, created_at")
-                  .eq("id", newNotifRaw.sender_id || "")
-                  .single();
-                senderData = data || null;
-              } catch (senderErr) {
-                console.warn("Realtime sender profile fetch failed:", senderErr);
-                senderData = null;
+              // Fetch the complete notification with relations
+              const { data: newNotification, error } = await supabase
+                .from("notifications")
+                .select(`
+                  *,
+                  sender:profiles!notifications_sender_id_fkey(
+                    id, username, display_name, avatar_url, created_at
+                  ),
+                  recipient:profiles!notifications_user_id_fkey(
+                    id, username, display_name, avatar_url, created_at
+                  ),
+                  room:rooms!notifications_room_id_fkey(
+                    id, name, created_at, created_by, is_private
+                  )
+                `)
+                .eq("id", payload.new.id)
+                .single();
+
+              if (error) {
+                console.error("❌ Error fetching new notification details:", error);
+                return;
               }
 
-              // Fetch recipient
-              let recipientData: ProfileType | null = null;
-              try {
-                const { data } = await supabase
-                  .from("profiles")
-                  .select("id, username, display_name, avatar_url, created_at")
-                  .eq("id", newNotifRaw.user_id)
-                  .single();
-                recipientData = data || null;
-              } catch (recipientErr) {
-                console.warn("Realtime recipient profile fetch failed:", recipientErr);
-                recipientData = null;
-              }
+              if (newNotification) {
+                const transformed = transformNotification(newNotification);
+                
+                set((state) => {
+                  // Avoid duplicates
+                  if (!state.notifications.some((n) => n.id === transformed.id)) {
+                    return {
+                      notifications: [transformed, ...state.notifications],
+                    };
+                  }
+                  return state;
+                });
 
-              // Fetch room
-              let roomData: RoomType | null = null;
-              try {
-                const { data } = await supabase
-                  .from("rooms")
-                  .select("id, name, created_at, created_by, is_private")
-                  .eq("id", newNotifRaw.room_id || "")
-                  .single();
-                roomData = data || null;
-              } catch (roomErr) {
-                console.warn("Realtime room fetch failed:", roomErr);
-                roomData = null;
+                toast.success("🔔 New notification!");
               }
-
-              enrichedNewNotif = {
-                ...newNotifRaw,
-                sender: senderData,
-                recipient: recipientData,
-                room: roomData,
-              };
-            } catch (enrichErr) {
-              console.error("Realtime enrichment failed:", enrichErr);
-              // Fallback to raw
-              enrichedNewNotif = { ...newNotifRaw, sender: null, recipient: null, room: null } as NotificationWithRelations;
+            } catch (error) {
+              console.error("💥 Error processing real-time notification:", error);
             }
-
-            const transformed = transformNotification(enrichedNewNotif);
-            console.log("Realtime transformed notification:", transformed); // Debug
-
-            set((state) => {
-              // Avoid duplicates
-              if (!state.notifications.some((n) => n.id === transformed.id)) {
-                return {
-                  notifications: [transformed, ...state.notifications],
-                };
-              }
-              return state;
-            });
-
-            toast("🔔 New notification received");
+          }
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "notifications",
+            filter: `user_id=eq.${userId}`,
+          },
+          (payload) => {
+            console.log("🔄 Notification updated:", payload);
+            
+            set((state) => ({
+              notifications: state.notifications.map((n) =>
+                n.id === payload.new.id ? { ...n, ...payload.new } : n
+              ),
+            }));
+          }
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "DELETE",
+            schema: "public",
+            table: "notifications",
+            filter: `user_id=eq.${userId}`,
+          },
+          (payload) => {
+            console.log("🗑️ Notification deleted:", payload);
+            
+            set((state) => ({
+              notifications: state.notifications.filter((n) => n.id !== payload.old.id),
+            }));
           }
         )
         .subscribe((status) => {
-          console.log("Subscription status:", status); // Debug
+          console.log("📡 Subscription status:", status);
         });
     },
 
@@ -313,6 +263,7 @@ export const useNotification = create<NotificationState>((set, get) => {
       if (notificationChannel) {
         supabase.removeChannel(notificationChannel);
         notificationChannel = null;
+        console.log("🧹 Unsubscribed from notifications");
       }
     },
   };
