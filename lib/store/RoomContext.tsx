@@ -7,6 +7,7 @@ import React, {
   useEffect,
   useCallback,
   useRef,
+  useMemo, // ADDED: Missing import for useMemo
 } from "react";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import {
@@ -50,6 +51,10 @@ type TypingUser = {
   username?: string;
 };
 
+// ADDED: Missing types for MessageRow and ProfileRow
+type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
+type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
+
 // ---- State ----
 interface RoomState {
   availableRooms: RoomWithMembershipCount[];
@@ -61,8 +66,10 @@ interface RoomState {
   user: SupabaseUser | null;
   typingUsers: TypingUser[];
   typingDisplayText: string;
+  unreadNotifications: number; // NEW: Global unread from scroll (resets on bottom)
 }
 
+// ---- Actions (ADDED: Include RESET_UNREAD_NOTIFICATIONS to union) ----
 type RoomAction =
   | { type: "SET_AVAILABLE_ROOMS"; payload: RoomWithMembershipCount[] }
   | { type: "SET_SELECTED_ROOM"; payload: RoomWithMembershipCount | null }
@@ -73,6 +80,7 @@ type RoomAction =
   | { type: "SET_USER"; payload: SupabaseUser | null }
   | { type: "SET_TYPING_USERS"; payload: TypingUser[] }
   | { type: "SET_TYPING_TEXT"; payload: string }
+  | { type: "RESET_UNREAD_NOTIFICATIONS"; payload?: number } // ADDED: New action type
   | {
       type: "UPDATE_ROOM_MEMBERSHIP";
       payload: {
@@ -108,6 +116,7 @@ const initialState: RoomState = {
   user: null,
   typingUsers: [],
   typingDisplayText: "",
+  unreadNotifications: 0,
 };
 
 function roomReducer(state: RoomState, action: RoomAction): RoomState {
@@ -130,6 +139,8 @@ function roomReducer(state: RoomState, action: RoomAction): RoomState {
       return { ...state, typingUsers: action.payload };
     case "SET_TYPING_TEXT":
       return { ...state, typingDisplayText: action.payload };
+    case "RESET_UNREAD_NOTIFICATIONS": // ADDED: Handle new action
+      return { ...state, unreadNotifications: action.payload ?? 0 };
     case "UPDATE_ROOM_MEMBERSHIP":
       return {
         ...state,
@@ -228,6 +239,11 @@ interface RoomContextType {
   fetchRoomMessages: (roomId: string) => Promise<{ latestMessage?: string; unreadCount?: number }>;
   fetchRoomUsers: (roomId: string) => Promise<{ totalUsers: number; onlineUsers: number }>;
   refreshRoomData: (roomId: string) => Promise<void>;
+  messagesForRoom: Imessage[]; // Memoized
+  typingDisplay: string;
+  handleScrollNotification: (isNearBottom: boolean, newUnreadDelta?: number) => void; // FIXED: Takes delta for increments
+  triggerScrollToBottom: () => void; // FIXED: Triggers event (no ref needed)
+  unreadNotifications: number; // NEW: Expose for UI (e.g., badge)
 }
 
 const RoomContext = createContext<RoomContextType | undefined>(undefined);
@@ -243,7 +259,17 @@ export function RoomProvider({
   const [state, dispatch] = useReducer(roomReducer, initialState);
   const supabase = supabaseBrowser();
   const profilesCache = useRef<Map<string, CachedProfile>>(new Map());
+  const scrollTriggerRef = useRef<(() => void) | null>(null);
 
+  // MOVED UP: Call useMessage early to avoid hoisting errors
+  const { addMessage: addMessageToStore, messages, optimisticIds, optimisticUpdateMessage, optimisticDeleteMessage } = useMessage();
+  
+  const addMessage = useCallback((message: Imessage) => {
+    // Avoid duplicate messages
+    if (!messages.some((m) => m.id === message.id)) {
+      addMessageToStore(message);
+    }
+  }, [messages, addMessageToStore]);
   // Set user
   useEffect(() => {
     dispatch({ type: "SET_USER", payload: user ?? null });
@@ -403,6 +429,101 @@ export function RoomProvider({
     updateTypingText(text);
   }, [state.typingUsers, updateTypingText]);
 
+  // FIXED: Memoized messagesForRoom (stable, no re-compute on scroll) - MOVED UP to use 'messages'
+  const messagesForRoom = useMemo(() => {
+    if (!messages || !Array.isArray(messages) || !state.selectedRoom?.id) return [];
+    return messages
+      .filter((msg): msg is Imessage => msg && msg.room_id === state.selectedRoom!.id) // FIXED: Non-null assertion after check
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  }, [messages, state.selectedRoom?.id]); // Stable deps
+
+  // NEW: Centralized realtime message handler (moved from ListMessages)
+  const handleRoomMessages = useCallback(
+    (payload: any) => {
+      try {
+        const messagePayload = payload.new as MessageRow | null;
+        if (!messagePayload || !state.selectedRoom || messagePayload.room_id !== state.selectedRoom.id) return;
+
+        if (payload.eventType === "INSERT") {
+          if (optimisticIds.includes(messagePayload.id)) return;
+
+          supabase
+            .from("profiles")
+            .select("*")
+            .eq("id", messagePayload.sender_id)
+            .single<ProfileRow>()
+            .then(({ data: profile, error }) => {
+              if (error || !profile) return;
+
+              if (messages.some((m) => m.id === messagePayload.id)) return;
+
+              const newMessage: Imessage = {
+                id: messagePayload.id,
+                created_at: messagePayload.created_at,
+                is_edited: messagePayload.is_edited,
+                sender_id: messagePayload.sender_id,
+                room_id: messagePayload.room_id,
+                direct_chat_id: messagePayload.direct_chat_id,
+                dm_thread_id: messagePayload.dm_thread_id,
+                status: messagePayload.status,
+                text: messagePayload.text,
+                profiles: {
+                  id: profile.id,
+                  avatar_url: profile.avatar_url ?? null,
+                  display_name: profile.display_name ?? null,
+                  username: profile.username ?? null,
+                  created_at: profile.created_at ?? null,
+                  bio: profile.bio ?? null,
+                  updated_at: profile.updated_at ?? null,
+                },
+              };
+
+              addMessage(newMessage); // Uses context's addMessage (optimistic-safe)
+            });
+        } else if (payload.eventType === "UPDATE") {
+          const oldMessage = messages.find((m) => m.id === messagePayload.id);
+          if (oldMessage) {
+            optimisticUpdateMessage(messagePayload.id, {
+              ...oldMessage,
+              text: messagePayload.text,
+              is_edited: messagePayload.is_edited,
+            });
+          }
+        } else if (payload.eventType === "DELETE") {
+          optimisticDeleteMessage((payload.old as MessageRow).id);
+        }
+      } catch (err) {
+        console.error("[RoomContext] Realtime message error:", err);
+        toast.error("Error processing message update");
+      }
+    },
+    [state.selectedRoom, optimisticIds, supabase, messages, addMessage, optimisticUpdateMessage, optimisticDeleteMessage]
+  );
+
+  // NEW: Realtime subscription for messages (centralized, runs once per room)
+  useEffect(() => {
+    if (!state.selectedRoom?.id) return;
+
+    const messageChannel = supabase.channel(`room_messages_${state.selectedRoom.id}`);
+
+    messageChannel
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "messages",
+          filter: `room_id=eq.${state.selectedRoom.id}`,
+        },
+        handleRoomMessages
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(messageChannel);
+    };
+  }, [state.selectedRoom?.id, supabase, handleRoomMessages]);
+
   // Utility function to check user room membership
   const checkUserRoomMembership = useCallback(async (userId: string, roomId: string) => {
     try {
@@ -487,6 +608,7 @@ export function RoomProvider({
       return new Map();
     }
   }, [supabase]);
+
   // Function to fetch room messages
   const fetchRoomMessages = useCallback(async (roomId: string) => {
     try {
@@ -571,68 +693,69 @@ export function RoomProvider({
     }
   }, [fetchRoomMessages, fetchRoomUsers, getRoomMemberCount]);
 
-  // Enhanced fetchRoomsWithMembership function
-// Enhanced fetchRoomsWithMembership function
-const fetchRoomsWithMembership = useCallback(async () => {
-  if (!state.user) {
-    dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
-    dispatch({ type: "SET_LOADING", payload: false });
-    return;
-  }
-
-  dispatch({ type: "SET_LOADING", payload: true });
   
-  try {
-    // Get all rooms and member counts in parallel
-    const [roomsResult, countsMap] = await Promise.all([
-      supabase.from("rooms").select("*"),
-      getAllRoomMemberCounts()
-    ]);
 
-    if (roomsResult.error) {
-      throw roomsResult.error;
-    }
-
-    const roomsData = roomsResult.data;
-    if (!roomsData || roomsData.length === 0) {
+  // Enhanced fetchRoomsWithMembership function
+  const fetchRoomsWithMembership = useCallback(async () => {
+    if (!state.user) {
       dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
+      dispatch({ type: "SET_LOADING", payload: false });
       return;
     }
 
-    // Process each room
-    const roomsWithMembership: RoomWithMembershipCount[] = await Promise.all(
-      roomsData.map(async (room) => {
-        // Check current user's membership status
-        const userMembership = await checkUserRoomMembership(state.user!.id, room.id);
-        
-        // Get member count from the pre-fetched map
-        const memberCount = countsMap.get(room.id) || 0;
-        
-        // Get messages and user data
-        const messagesData = await fetchRoomMessages(room.id);
+    dispatch({ type: "SET_LOADING", payload: true });
+    
+    try {
+      // Get all rooms and member counts in parallel
+      const [roomsResult, countsMap] = await Promise.all([
+        supabase.from("rooms").select("*"),
+        getAllRoomMemberCounts()
+      ]);
 
-        return {
-          ...room,
-          memberCount,
-          isMember: userMembership.isMember,
-          participationStatus: userMembership.participationStatus,
-          latestMessage: messagesData.latestMessage,
-          unreadCount: messagesData.unreadCount,
-          totalUsers: memberCount, // Use the same count for total users
-          onlineUsers: 0, // Placeholder
-        };
-      })
-    );
+      if (roomsResult.error) {
+        throw roomsResult.error;
+      }
 
-    dispatch({ type: "SET_AVAILABLE_ROOMS", payload: roomsWithMembership });
-  } catch (error) {
-    console.error("[RoomContext] Error fetching rooms with membership:", error);
-    toast.error("Failed to load rooms");
-    dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
-  } finally {
-    dispatch({ type: "SET_LOADING", payload: false });
-  }
-}, [state.user, supabase, checkUserRoomMembership, getAllRoomMemberCounts, fetchRoomMessages]);
+      const roomsData = roomsResult.data;
+      if (!roomsData || roomsData.length === 0) {
+        dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
+        return;
+      }
+
+      // Process each room
+      const roomsWithMembership: RoomWithMembershipCount[] = await Promise.all(
+        roomsData.map(async (room) => {
+          // Check current user's membership status
+          const userMembership = await checkUserRoomMembership(state.user!.id, room.id);
+          
+          // Get member count from the pre-fetched map
+          const memberCount = countsMap.get(room.id) || 0;
+          
+          // Get messages and user data
+          const messagesData = await fetchRoomMessages(room.id);
+
+          return {
+            ...room,
+            memberCount,
+            isMember: userMembership.isMember,
+            participationStatus: userMembership.participationStatus,
+            latestMessage: messagesData.latestMessage,
+            unreadCount: messagesData.unreadCount,
+            totalUsers: memberCount, // Use the same count for total users
+            onlineUsers: 0, // Placeholder
+          };
+        })
+      );
+
+      dispatch({ type: "SET_AVAILABLE_ROOMS", payload: roomsWithMembership });
+    } catch (error) {
+      console.error("[RoomContext] Error fetching rooms with membership:", error);
+      toast.error("Failed to load rooms");
+      dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
+    } finally {
+      dispatch({ type: "SET_LOADING", payload: false });
+    }
+  }, [state.user, supabase, checkUserRoomMembership, getAllRoomMemberCounts, fetchRoomMessages]);
 
   const acceptJoinNotification = useCallback(async (roomId: string) => {
     try {
@@ -867,14 +990,7 @@ const fetchRoomsWithMembership = useCallback(async () => {
     dispatch({ type: "SET_SELECTED_DIRECT_CHAT", payload: chat });
   }, [dispatch]);
 
-  const { addMessage: addMessageToStore, messages } = useMessage();
-
-  const addMessage = useCallback((message: Imessage) => {
-    // Avoid duplicate messages
-    if (!messages.some((m) => m.id === message.id)) {
-      addMessageToStore(message);
-    }
-  }, [messages, addMessageToStore]);
+  
 
   // Auto-fetch rooms when user changes
   useEffect(() => {
@@ -920,6 +1036,27 @@ const fetchRoomsWithMembership = useCallback(async () => {
     };
   }, [supabase, handleCountUpdate]);
 
+  // FIXED: Complete handleScrollNotification (now dispatches unread reset/increment)
+  const handleScrollNotification = useCallback((isNearBottom: boolean, newUnreadDelta = 0) => {
+    if (isNearBottom) {
+      dispatch({ type: "RESET_UNREAD_NOTIFICATIONS", payload: 0 }); // Global reset
+    } else {
+      dispatch({ type: "RESET_UNREAD_NOTIFICATIONS", payload: state.unreadNotifications + newUnreadDelta }); // Increment
+    }
+  }, [state.unreadNotifications]);
+
+  // FIXED: Complete triggerScrollToBottom (pub-sub: calls ref fn set by ListMessages)
+  const triggerScrollToBottom = useCallback(() => {
+    if (scrollTriggerRef.current) {
+      scrollTriggerRef.current(); // Triggers local scroll in ListMessages
+    }
+  }, []);
+
+  // NEW: Expose setter for scroll ref (called once by ListMessages)
+  const setScrollTrigger = useCallback((fn: () => void) => {
+    scrollTriggerRef.current = fn;
+  }, []);
+
   const value: RoomContextType = {
     state,
     fetchAvailableRooms: fetchRoomsWithMembership,
@@ -939,6 +1076,11 @@ const fetchRoomsWithMembership = useCallback(async () => {
     fetchRoomMessages,
     fetchRoomUsers,
     refreshRoomData,
+    messagesForRoom, // ADDED: Missing in value
+    typingDisplay: state.typingDisplayText, // ADDED: Missing in value
+    handleScrollNotification, // ADDED: Missing in value
+    triggerScrollToBottom, // ADDED: Missing in value
+    unreadNotifications: state.unreadNotifications, // ADDED: Missing in value
   };
 
   return <RoomContext.Provider value={value}>{children}</RoomContext.Provider>;
