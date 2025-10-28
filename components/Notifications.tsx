@@ -355,7 +355,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
                 <Bell className="h-12 w-12 mx-auto text-gray-300" />
                 <p className="text-lg font-medium">No notifications yet</p>
                 <p className="text-sm text-gray-500">
-                  When you get notifications, they'll appear here.
+                  When you get notifications, they&apos;ll appear here.
                 </p>
                 {user?.id && (
                   <button
