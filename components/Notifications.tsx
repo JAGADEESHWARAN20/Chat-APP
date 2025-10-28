@@ -102,32 +102,44 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    console.log("🔔 Notifications component - user:", user?.id);
-  
     if (!user?.id) {
-      console.log("❌ No user ID, clearing notifications");
-      setNotifications([]); // Clear notifications when no user
+      console.log("❌ No user ID yet, waiting for auth...");
       return;
     }
-  
-    // Initialize notifications
+
+    console.log("🔔 User authenticated:", user.id);
+    
     const initNotifications = async () => {
       try {
-        console.log("🔄 Initializing notifications...");
+        console.log("🔄 Initializing notifications for user:", user.id);
         await fetchNotifications(user.id);
         subscribeToNotifications(user.id);
       } catch (error) {
         console.error("💥 Failed to initialize notifications:", error);
+        // Retry after 2 seconds
+        setTimeout(() => {
+          if (user?.id) {
+            console.log("🔄 Retrying notification initialization...");
+            initNotifications();
+          }
+        }, 2000);
       }
     };
-  
+
     initNotifications();
-  
+
     return () => {
       console.log("🧹 Cleaning up notifications");
       unsubscribeFromNotifications();
     };
   }, [user?.id, fetchNotifications, subscribeToNotifications, unsubscribeFromNotifications, setNotifications]);
+  
+  useEffect(() => {
+    if (isOpen && user?.id) {
+      console.log("📱 Notifications opened, refreshing...");
+      fetchNotifications(user.id);
+    }
+  }, [isOpen, user?.id, fetchNotifications]);
 
 
   const handleAccept = async (id: string, roomId: string | null, type: string) => {

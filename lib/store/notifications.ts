@@ -222,21 +222,19 @@ fetchNotifications: async (userId: string) => {
 
     if (error) {
       console.error("❌ Notification fetch error:", error);
+      
+      // Handle 406 specifically
+      if (error.code === '406' || error.message.includes('406')) {
+        console.error("🔒 RLS Policy issue - check database policies");
+        toast.error("Permission denied - please refresh the page");
+      }
+      
       throw error;
     }
 
-    // DEBUG: Show raw types from database
-    console.log("🔍 Raw DB notification types:", 
-      data?.map(n => ({ id: n.id, type: n.type, message: n.message }))
-    );
+    console.log("✅ Notifications fetched:", data?.length || 0);
 
     const transformed = (data || []).map(transformNotification);
-    
-    // DEBUG: Show normalized types
-    console.log("🔍 Normalized notification types:", 
-      transformed.map(n => ({ id: n.id, type: n.type, message: n.message }))
-    );
-
     const unreadCount = transformed.filter(n => n.status === 'unread').length;
     
     set({ 
@@ -248,7 +246,13 @@ fetchNotifications: async (userId: string) => {
   } catch (error: any) {
     console.error("💥 Error fetching notifications:", error);
     set({ hasError: true, isLoading: false });
-    toast.error("Failed to load notifications");
+    
+    // Show specific error messages
+    if (error.code === '406' || error.message.includes('406')) {
+      toast.error("Access denied - please check your permissions");
+    } else {
+      toast.error("Failed to load notifications");
+    }
   }
 },
 
