@@ -265,67 +265,72 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
     [user, loadingIds, removeNotification]
   );
 
-  const getNotificationDisplay = useCallback((n: Inotification) => {
-    const sender = n.users?.display_name || n.users?.username || "Someone";
-    const room = n.rooms?.name || "a room";
+// In your Notifications component - update getNotificationDisplay
+const getNotificationDisplay = useCallback((n: Inotification) => {
+  const sender = n.users?.display_name || n.users?.username || "Someone";
+  const room = n.rooms?.name || "a room";
 
-    switch (n.type) {
-      case "room_invite":
-        return { 
-          icon: <UserPlus className="h-4 w-4 text-blue-500" />, 
-          text: `${sender} invited you to join ${room}` 
-        };
+  // Handle both normalized types and any unexpected ones
+  switch (n.type) {
+    case "room_invite":
+    case "room_switch": // Handle both just in case
+      return { 
+        icon: <UserPlus className="h-4 w-4 text-blue-500" />, 
+        text: `${sender} invited you to join ${room}` 
+      };
 
-      case "join_request":
-        return { 
-          icon: <Mail className="h-4 w-4 text-purple-500" />, 
-          text: `${sender} requested to join ${room}` 
-        };
+    case "join_request":
+      return { 
+        icon: <Mail className="h-4 w-4 text-purple-500" />, 
+        text: `${sender} requested to join ${room}` 
+      };
 
-      case "user_joined":
-        return { 
-          icon: <UserCheck className="h-4 w-4 text-green-500" />, 
-          text: n.message || `${sender} joined ${room}` 
-        };
+    case "user_joined":
+      return { 
+        icon: <UserCheck className="h-4 w-4 text-green-500" />, 
+        text: n.message || `${sender} joined ${room}` 
+      };
 
-      case "message":
-        return { 
-          icon: <Mail className="h-4 w-4 text-green-500" />, 
-          text: `New message from ${sender} in ${room}` 
-        };
+    case "message":
+    case "new_message": // Handle both
+      return { 
+        icon: <Mail className="h-4 w-4 text-green-500" />, 
+        text: `New message from ${sender} in ${room}` 
+      };
 
-      case "join_request_accepted":
-        return { 
-          icon: <UserCheck className="h-4 w-4 text-green-600" />, 
-          text: n.message || `Your request to join ${room} was accepted` 
-        };
+    case "join_request_accepted":
+      return { 
+        icon: <UserCheck className="h-4 w-4 text-green-600" />, 
+        text: n.message || `Your request to join ${room} was accepted` 
+      };
 
-      case "join_request_rejected":
-        return { 
-          icon: <UserX className="h-4 w-4 text-red-600" />, 
-          text: n.message || `Your request to join ${room} was rejected` 
-        };
+    case "join_request_rejected":
+      return { 
+        icon: <UserX className="h-4 w-4 text-red-600" />, 
+        text: n.message || `Your request to join ${room} was rejected` 
+      };
 
-      case "room_left":
-        return { 
-          icon: <LogOut className="h-4 w-4 text-gray-500" />, 
-          text: n.message || `${sender} left ${room}.` 
-        };
+    case "room_left":
+      return { 
+        icon: <LogOut className="h-4 w-4 text-gray-500" />, 
+        text: n.message || `${sender} left ${room}.` 
+      };
 
-      // 👇 Optional: handle old rows created before we removed "notification_unread"
-      case "notification_unread":
-        return { 
-          icon: <Mail className="h-4 w-4 text-gray-400" />, 
-          text: n.message || "New notification" 
-        };
+    case "notification_unread":
+      return { 
+        icon: <Mail className="h-4 w-4 text-gray-400" />, 
+        text: n.message || "New notification" 
+      };
 
-      default:
-        return { 
-          icon: <Mail className="h-4 w-4 text-gray-400" />, 
-          text: n.message || "New notification" 
-        };
-    }
-  }, []);
+    default:
+      console.warn("Unknown notification type:", n.type, n);
+      return { 
+        icon: <Mail className="h-4 w-4 text-gray-400" />, 
+        text: n.message || "New notification" 
+      };
+  }
+}, []);
+
 
   const shouldShowActions = useCallback((n: Inotification) => {
     return (n.type === "room_invite" || n.type === "join_request") && n.status !== "read";

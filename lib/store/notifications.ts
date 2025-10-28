@@ -39,7 +39,24 @@ export interface Inotification {
 
 type RawNotification = Database["public"]["Tables"]["notifications"]["Row"];
 
-// Move transformNotification inside the store
+// lib/store/notifications.ts - ADD THIS FUNCTION
+const normalizeNotificationType = (dbType: string): string => {
+  const typeMap: Record<string, string> = {
+    'new_message': 'message',
+    'room_switch': 'room_invite', // If this is what you use for invites
+    'join_request': 'join_request',
+    'user_joined': 'user_joined', 
+    'join_request_rejected': 'join_request_rejected',
+    'join_request_accepted': 'join_request_accepted', // Add if missing
+    'notification_unread': 'notification_unread',
+    'room_invite': 'room_invite', // In case it exists
+    'message': 'message', // In case it exists
+  };
+  
+  return typeMap[dbType] || dbType;
+};
+
+// Update the transformNotification function
 const transformNotification = (
   notif: RawNotification & {
     sender?: any;
@@ -65,12 +82,15 @@ const transformNotification = (
       : null
     : notif.room || null;
 
+  // NORMALIZE THE TYPE HERE
+  const normalizedType = normalizeNotificationType(notif.type);
+
   return {
     id: notif.id,
     message: notif.message,
     created_at: notif.created_at ?? null,
     status: notif.status,
-    type: notif.type,
+    type: normalizedType, // Use normalized type
     sender_id: notif.sender_id ?? "",
     user_id: notif.user_id,
     room_id: notif.room_id ?? null,
@@ -105,6 +125,8 @@ const transformNotification = (
       : null,
   };
 };
+
+
 
 interface NotificationState {
   notifications: Inotification[];
@@ -175,51 +197,54 @@ export const useNotification = create<NotificationState>((set, get) => {
       }
     },
 
-    fetchNotifications: async (userId: string) => {
-      try {
-        set({ isLoading: true, hasError: false });
-        console.log("🔄 Fetching notifications for user:", userId);
+   // Add this to your store's fetchNotifications for debugging
+fetchNotifications: async (userId: string) => {
+  try {
+    set({ isLoading: true, hasError: false });
+    console.log("🔄 Fetching notifications for user:", userId);
 
-        const { data, error } = await supabase
-          .from("notifications")
-          .select(`
-            *,
-            sender:profiles!notifications_sender_id_fkey(
-              id, username, display_name, avatar_url, created_at
-            ),
-            recipient:profiles!notifications_user_id_fkey(
-              id, username, display_name, avatar_url, created_at
-            ),
-            room:rooms!notifications_room_id_fkey(
-              id, name, created_at, created_by, is_private
-            )
-          `)
-          .eq("user_id", userId)
-          .order("created_at", { ascending: false })
-          .limit(50);
+    const { data, error } = await supabase
+      .from("notifications")
+      .select(`
+        *,
+        sender:profiles!notifications_sender_id_fkey(
+          id, username, display_name, avatar_url, created_at
+        ),
+        recipient:profiles!notifications_user_id_fkey(
+          id, username, display_name, avatar_url, created_at
+        ),
+        room:rooms!notifications_room_id_fkey(
+          id, name, created_at, created_by, is_private
+        )
+      `)
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(50);
 
-        if (error) {
-          console.error("❌ Notification fetch error:", error);
-          throw error;
-        }
+    if (error) {
+      console.error("❌ Notification fetch error:", error);
+      throw error;
+    }
 
-        console.log("✅ Notifications fetched:", data?.length || 0);
-
-        const transformed = (data || []).map(transformNotification);
-        const unreadCount = transformed.filter(n => n.status === 'unread').length;
-        
-        set({ 
-          notifications: transformed, 
-          unreadCount,
-          isLoading: false 
-        });
-        
-      } catch (error: any) {
-        console.error("💥 Error fetching notifications:", error);
-        set({ hasError: true, isLoading: false });
-        toast.error("Failed to load notifications");
-      }
-    },
+    console.log("✅ Raw notifications from DB:", data);
+    
+    const transformed = (data || []).map(transformNotification);
+    const unreadCount = transformed.filter(n => n.status === 'unread').length;
+    
+    console.log("✅ Transformed notifications:", transformed);
+    
+    set({ 
+      notifications: transformed, 
+      unreadCount,
+      isLoading: false 
+    });
+    
+  } catch (error: any) {
+    console.error("💥 Error fetching notifications:", error);
+    set({ hasError: true, isLoading: false });
+    toast.error("Failed to load notifications");
+  }
+},
 
     subscribeToNotifications: (userId: string) => {
       console.log("🔔 Setting up real-time subscription for user:", userId);
