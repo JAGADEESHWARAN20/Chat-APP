@@ -1,9 +1,10 @@
-// lib/store/notifications.ts
+// lib/store/notifications.ts - COMPLETE FIXED VERSION
 import { create } from "zustand";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { toast } from "sonner";
 import { Database } from "@/lib/types/supabase";
 
+// Define types locally to avoid circular dependencies
 type ProfileType = {
   id: string;
   username: string | null;
@@ -18,14 +19,6 @@ type RoomType = {
   created_at: string;
   created_by: string | null;
   is_private: boolean;
-};
-
-type NotificationRow = Database["public"]["Tables"]["notifications"]["Row"];
-
-type NotificationWithRelations = NotificationRow & {
-  sender: ProfileType | null;
-  recipient: ProfileType | null;
-  room: RoomType | null;
 };
 
 export interface Inotification {
@@ -44,8 +37,82 @@ export interface Inotification {
   rooms: RoomType | null;
 }
 
+type RawNotification = Database["public"]["Tables"]["notifications"]["Row"];
+
+// Move transformNotification inside the store
+const transformNotification = (
+  notif: RawNotification & {
+    sender?: any;
+    recipient?: any;
+    room?: any;
+  }
+): Inotification => {
+  const users = Array.isArray(notif.sender)
+    ? notif.sender.length > 0
+      ? notif.sender[0]
+      : null
+    : notif.sender || null;
+
+  const recipient = Array.isArray(notif.recipient)
+    ? notif.recipient.length > 0
+      ? notif.recipient[0]
+      : null
+    : notif.recipient || null;
+
+  const rooms = Array.isArray(notif.room)
+    ? notif.room.length > 0
+      ? notif.room[0]
+      : null
+    : notif.room || null;
+
+  return {
+    id: notif.id,
+    message: notif.message,
+    created_at: notif.created_at ?? null,
+    status: notif.status,
+    type: notif.type,
+    sender_id: notif.sender_id ?? "",
+    user_id: notif.user_id,
+    room_id: notif.room_id ?? null,
+    join_status: notif.join_status,
+    direct_chat_id: notif.direct_chat_id ?? null,
+    users: users
+      ? {
+          id: users.id,
+          username: users.username,
+          display_name: users.display_name,
+          avatar_url: users.avatar_url ?? null,
+          created_at: users.created_at,
+        }
+      : null,
+    recipient: recipient
+      ? {
+          id: recipient.id,
+          username: recipient.username,
+          display_name: recipient.display_name,
+          avatar_url: recipient.avatar_url ?? null,
+          created_at: recipient.created_at,
+        }
+      : null,
+    rooms: rooms
+      ? {
+          id: rooms.id,
+          name: rooms.name,
+          created_at: rooms.created_at,
+          created_by: rooms.created_by ?? "",
+          is_private: rooms.is_private,
+        }
+      : null,
+  };
+};
+
 interface NotificationState {
   notifications: Inotification[];
+  unreadCount: number;
+  isLoading: boolean;
+  hasError: boolean;
+  
+  // Actions
   setNotifications: (notifications: Inotification[]) => void;
   addNotification: (notification: Inotification) => void;
   markAsRead: (notificationId: string) => Promise<void>;
@@ -53,44 +120,37 @@ interface NotificationState {
   fetchNotifications: (userId: string) => Promise<void>;
   subscribeToNotifications: (userId: string) => void;
   unsubscribeFromNotifications: () => void;
+  clearError: () => void;
 }
 
 export const useNotification = create<NotificationState>((set, get) => {
   const supabase = supabaseBrowser();
   let notificationChannel: ReturnType<typeof supabase.channel> | null = null;
 
-  const transformNotification = (n: NotificationWithRelations): Inotification => ({
-    id: n.id,
-    message: n.message,
-    created_at: n.created_at,
-    status: n.status,
-    type: n.type,
-    sender_id: n.sender_id,
-    user_id: n.user_id,
-    room_id: n.room_id,
-    join_status: n.join_status,
-    direct_chat_id: n.direct_chat_id,
-    users: n.sender,
-    recipient: n.recipient,
-    rooms: n.room,
-  });
-
   return {
     notifications: [],
+    unreadCount: 0,
+    isLoading: false,
+    hasError: false,
 
-    setNotifications: (notifications) => set({ notifications }),
+    setNotifications: (notifications) => {
+      const unreadCount = notifications.filter(n => n.status === 'unread').length;
+      set({ notifications, unreadCount });
+    },
 
     addNotification: (notification) => {
       const current = get().notifications;
       if (!current.some((n) => n.id === notification.id)) {
-        set({ notifications: [notification, ...current] });
+        const newNotifications = [notification, ...current];
+        const unreadCount = newNotifications.filter(n => n.status === 'unread').length;
+        set({ notifications: newNotifications, unreadCount });
       }
     },
 
     removeNotification: (id) => {
-      set({
-        notifications: get().notifications.filter((n) => n.id !== id),
-      });
+      const newNotifications = get().notifications.filter((n) => n.id !== id);
+      const unreadCount = newNotifications.filter(n => n.status === 'unread').length;
+      set({ notifications: newNotifications, unreadCount });
     },
 
     markAsRead: async (notificationId: string) => {
@@ -102,10 +162,12 @@ export const useNotification = create<NotificationState>((set, get) => {
 
         if (error) throw error;
 
-        set({
-          notifications: get().notifications.map((n) =>
+        set(state => {
+          const newNotifications = state.notifications.map((n) =>
             n.id === notificationId ? { ...n, status: "read" } : n
-          ),
+          );
+          const unreadCount = newNotifications.filter(n => n.status === 'unread').length;
+          return { notifications: newNotifications, unreadCount };
         });
       } catch (error) {
         console.error("Mark as read error:", error);
@@ -115,9 +177,9 @@ export const useNotification = create<NotificationState>((set, get) => {
 
     fetchNotifications: async (userId: string) => {
       try {
-        console.log("🔔 Fetching notifications for user:", userId);
+        set({ isLoading: true, hasError: false });
+        console.log("🔄 Fetching notifications for user:", userId);
 
-        // Use a single query with proper joins
         const { data, error } = await supabase
           .from("notifications")
           .select(`
@@ -143,17 +205,18 @@ export const useNotification = create<NotificationState>((set, get) => {
 
         console.log("✅ Notifications fetched:", data?.length || 0);
 
-        if (!data || data.length === 0) {
-          console.log("ℹ️ No notifications found for user");
-          set({ notifications: [] });
-          return;
-        }
-
-        const transformed = data.map(transformNotification);
-        set({ notifications: transformed });
+        const transformed = (data || []).map(transformNotification);
+        const unreadCount = transformed.filter(n => n.status === 'unread').length;
+        
+        set({ 
+          notifications: transformed, 
+          unreadCount,
+          isLoading: false 
+        });
         
       } catch (error: any) {
         console.error("💥 Error fetching notifications:", error);
+        set({ hasError: true, isLoading: false });
         toast.error("Failed to load notifications");
       }
     },
@@ -177,7 +240,6 @@ export const useNotification = create<NotificationState>((set, get) => {
             console.log("🎯 Real-time notification received:", payload);
 
             try {
-              // Fetch the complete notification with relations
               const { data: newNotification, error } = await supabase
                 .from("notifications")
                 .select(`
@@ -203,11 +265,14 @@ export const useNotification = create<NotificationState>((set, get) => {
               if (newNotification) {
                 const transformed = transformNotification(newNotification);
                 
-                set((state) => {
+                set(state => {
                   // Avoid duplicates
                   if (!state.notifications.some((n) => n.id === transformed.id)) {
+                    const newNotifications = [transformed, ...state.notifications];
+                    const unreadCount = newNotifications.filter(n => n.status === 'unread').length;
                     return {
-                      notifications: [transformed, ...state.notifications],
+                      notifications: newNotifications,
+                      unreadCount
                     };
                   }
                   return state;
@@ -218,40 +283,6 @@ export const useNotification = create<NotificationState>((set, get) => {
             } catch (error) {
               console.error("💥 Error processing real-time notification:", error);
             }
-          }
-        )
-        .on(
-          "postgres_changes",
-          {
-            event: "UPDATE",
-            schema: "public",
-            table: "notifications",
-            filter: `user_id=eq.${userId}`,
-          },
-          (payload) => {
-            console.log("🔄 Notification updated:", payload);
-            
-            set((state) => ({
-              notifications: state.notifications.map((n) =>
-                n.id === payload.new.id ? { ...n, ...payload.new } : n
-              ),
-            }));
-          }
-        )
-        .on(
-          "postgres_changes",
-          {
-            event: "DELETE",
-            schema: "public",
-            table: "notifications",
-            filter: `user_id=eq.${userId}`,
-          },
-          (payload) => {
-            console.log("🗑️ Notification deleted:", payload);
-            
-            set((state) => ({
-              notifications: state.notifications.filter((n) => n.id !== payload.old.id),
-            }));
           }
         )
         .subscribe((status) => {
@@ -266,5 +297,7 @@ export const useNotification = create<NotificationState>((set, get) => {
         console.log("🧹 Unsubscribed from notifications");
       }
     },
+
+    clearError: () => set({ hasError: false })
   };
 });

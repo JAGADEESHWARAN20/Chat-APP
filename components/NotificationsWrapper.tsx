@@ -1,6 +1,7 @@
+// components/NotificationsWrapper.tsx - UPDATED
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Bell } from "lucide-react";
 import Notifications from "./Notifications";
 import { useNotificationHandler } from "@/hooks/useNotificationHandler";
@@ -11,32 +12,51 @@ import { cn } from "@/lib/utils";
 export default function NotificationsWrapper() {
     const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
     const { user } = useUser();
-    const { notifications } = useNotification();
+    const { unreadCount, fetchNotifications, hasError } = useNotification();
     
     // Initialize notification handler
     useNotificationHandler();
 
-    // Count unread notifications
-    const unreadCount = notifications.filter(n => n.status === 'unread').length;
+    // Auto-refresh notifications when sheet opens
+    useEffect(() => {
+        if (isNotificationsOpen && user?.id) {
+            console.log("🔄 Refreshing notifications on open");
+            fetchNotifications(user.id);
+        }
+    }, [isNotificationsOpen, user?.id, fetchNotifications]);
 
     return (
         <div className="relative">
             <button
                 title="notification"
                 onClick={() => setIsNotificationsOpen(true)}
-                className="w-[2em] h-[2em] flex items-center justify-center p-[.35em] relative"
+                className="w-[2em] h-[2em] flex items-center justify-center p-[.35em] relative group"
+                aria-label={`Notifications ${unreadCount > 0 ? `${unreadCount} unread` : ''}`}
             >
-                <Bell className="h-5 w-5 hover:fill-slate-800 dark:hover:fill-slate-50" />
+                <Bell className={cn(
+                    "h-5 w-5 transition-all duration-200",
+                    unreadCount > 0 
+                        ? "text-blue-600 fill-blue-600 animate-pulse" 
+                        : "hover:fill-slate-800 dark:hover:fill-slate-50",
+                    hasError && "text-red-500"
+                )} />
+                
                 {unreadCount > 0 && (
                     <span className={cn(
-                        "absolute -top-1 -right-1 h-4 w-4 text-[10px]",
+                        "absolute -top-1 -right-1 min-w-[1.25rem] h-5 text-xs",
                         "bg-red-500 text-white rounded-full flex items-center justify-center",
-                        "font-semibold animate-pulse"
+                        "font-semibold animate-bounce transition-all duration-300",
+                        "px-1 transform scale-100"
                     )}>
-                        {unreadCount}
+                        {unreadCount > 99 ? '99+' : unreadCount}
                     </span>
                 )}
+                
+                {hasError && (
+                    <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-ping" />
+                )}
             </button>
+            
             <Notifications
                 isOpen={isNotificationsOpen}
                 onClose={() => setIsNotificationsOpen(false)}

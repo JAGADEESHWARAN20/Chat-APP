@@ -1,4 +1,4 @@
-// components/Notifications.tsx - Full updated component with RoomContext integration, debugging, and refetch on open
+// components/Notifications.tsx - FIXED
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
@@ -23,11 +23,12 @@ import {
   UserCheck,
   UserX,
   LogOut,
+  Bell, // ADDED MISSING IMPORT
 } from "lucide-react";
 import { Database } from "@/lib/types/supabase";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { Swipeable } from "./ui/swipeable";
-import { Inotification } from "@/lib/store/notifications";
+import { Inotification } from "@/lib/store/notifications"; // Import from store instead
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -90,6 +91,8 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
     subscribeToNotifications,
     unsubscribeFromNotifications,
     removeNotification,
+    setNotifications,
+    isLoading, // ADDED MISSING IMPORT
   } = useNotification();
   const { setSelectedRoom } = useRoomStore();
   const { fetchAvailableRooms } = useRoomContext();
@@ -97,33 +100,35 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
   const supabase = supabaseBrowser();
   const isMobile = useMediaQuery("(max-width: 768px)");
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
-// In your Notifications component
-useEffect(() => {
-  console.log("🔔 Notifications component - user:", user?.id);
 
-  if (!user?.id) {
-    console.log("❌ No user ID, skipping notifications");
-    return;
-  }
-
-  // Initialize notifications
-  const initNotifications = async () => {
-    try {
-      console.log("🔄 Initializing notifications...");
-      await fetchNotifications(user.id);
-      subscribeToNotifications(user.id);
-    } catch (error) {
-      console.error("💥 Failed to initialize notifications:", error);
+  useEffect(() => {
+    console.log("🔔 Notifications component - user:", user?.id);
+  
+    if (!user?.id) {
+      console.log("❌ No user ID, clearing notifications");
+      setNotifications([]); // Clear notifications when no user
+      return;
     }
-  };
+  
+    // Initialize notifications
+    const initNotifications = async () => {
+      try {
+        console.log("🔄 Initializing notifications...");
+        await fetchNotifications(user.id);
+        subscribeToNotifications(user.id);
+      } catch (error) {
+        console.error("💥 Failed to initialize notifications:", error);
+      }
+    };
+  
+    initNotifications();
+  
+    return () => {
+      console.log("🧹 Cleaning up notifications");
+      unsubscribeFromNotifications();
+    };
+  }, [user?.id, fetchNotifications, subscribeToNotifications, unsubscribeFromNotifications, setNotifications]);
 
-  initNotifications();
-
-  return () => {
-    console.log("🧹 Cleaning up notifications");
-    unsubscribeFromNotifications();
-  };
-}, [user?.id]); // Only depend on user.id
 
   const handleAccept = async (id: string, roomId: string | null, type: string) => {
     if (!user || !roomId) {
@@ -326,7 +331,7 @@ useEffect(() => {
     return (n.type === "room_invite" || n.type === "join_request") && n.status !== "read";
   }, []);
 
-  return (
+    return (
     <Sheet open={isOpen} onOpenChange={onClose}>
       <SheetContent
         side={isMobile ? "right" : "right"}
@@ -345,15 +350,20 @@ useEffect(() => {
 
         <div className="flex-1 overflow-y-auto py-2">
           {notifications.length === 0 ? (
-            <div className="flex items-center justify-center h-full text-muted-foreground">
-              <div className="text-center">
-                <p>No notifications</p>
+            <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-8">
+              <div className="text-center space-y-4">
+                <Bell className="h-12 w-12 mx-auto text-gray-300" />
+                <p className="text-lg font-medium">No notifications yet</p>
+                <p className="text-sm text-gray-500">
+                  When you get notifications, they'll appear here.
+                </p>
                 {user?.id && (
                   <button
-                    onClick={() => fetchNotifications(user.id)} // Manual refetch button for debugging
-                    className="mt-2 text-xs text-blue-500 underline"
+                    onClick={() => fetchNotifications(user.id)}
+                    className="mt-4 px-4 py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                    disabled={isLoading}
                   >
-                    Refresh
+                    {isLoading ? "Refreshing..." : "Refresh Notifications"}
                   </button>
                 )}
               </div>
