@@ -39,18 +39,17 @@ export interface Inotification {
 
 type RawNotification = Database["public"]["Tables"]["notifications"]["Row"];
 
-// lib/store/notifications.ts - ADD THIS FUNCTION
+
 const normalizeNotificationType = (dbType: string): string => {
   const typeMap: Record<string, string> = {
-    'new_message': 'message',
-    'room_switch': 'room_invite', // If this is what you use for invites
-    'join_request': 'join_request',
-    'user_joined': 'user_joined', 
-    'join_request_rejected': 'join_request_rejected',
-    'join_request_accepted': 'join_request_accepted', // Add if missing
-    'notification_unread': 'notification_unread',
-    'room_invite': 'room_invite', // In case it exists
-    'message': 'message', // In case it exists
+    // Database types -> Client expected types
+    'join_request': 'join_request', // ✅ Matches
+    'new_message': 'message', // ✅ Map to client expected
+    'room_switch': 'room_invite', // ✅ Map to client expected  
+    'user_joined': 'user_joined', // ✅ Matches
+    'join_request_rejected': 'join_request_rejected', // ✅ Matches
+    'join_request_accepted': 'join_request_accepted', // ✅ Matches
+    'notification_unread': 'notification_unread', // ✅ Matches
   };
   
   return typeMap[dbType] || dbType;
@@ -197,7 +196,7 @@ export const useNotification = create<NotificationState>((set, get) => {
       }
     },
 
-   // Add this to your store's fetchNotifications for debugging
+// Add this to your store's fetchNotifications for better debugging
 fetchNotifications: async (userId: string) => {
   try {
     set({ isLoading: true, hasError: false });
@@ -226,12 +225,19 @@ fetchNotifications: async (userId: string) => {
       throw error;
     }
 
-    console.log("✅ Raw notifications from DB:", data);
-    
+    // DEBUG: Show raw types from database
+    console.log("🔍 Raw DB notification types:", 
+      data?.map(n => ({ id: n.id, type: n.type, message: n.message }))
+    );
+
     const transformed = (data || []).map(transformNotification);
-    const unreadCount = transformed.filter(n => n.status === 'unread').length;
     
-    console.log("✅ Transformed notifications:", transformed);
+    // DEBUG: Show normalized types
+    console.log("🔍 Normalized notification types:", 
+      transformed.map(n => ({ id: n.id, type: n.type, message: n.message }))
+    );
+
+    const unreadCount = transformed.filter(n => n.status === 'unread').length;
     
     set({ 
       notifications: transformed, 

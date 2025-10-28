@@ -265,15 +265,15 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
     [user, loadingIds, removeNotification]
   );
 
-// In your Notifications component - update getNotificationDisplay
+// components/Notifications.tsx - UPDATE getNotificationDisplay
 const getNotificationDisplay = useCallback((n: Inotification) => {
   const sender = n.users?.display_name || n.users?.username || "Someone";
   const room = n.rooms?.name || "a room";
 
-  // Handle both normalized types and any unexpected ones
+  // Handle ALL possible database types and normalized types
   switch (n.type) {
     case "room_invite":
-    case "room_switch": // Handle both just in case
+    case "room_switch": // Handle database type
       return { 
         icon: <UserPlus className="h-4 w-4 text-blue-500" />, 
         text: `${sender} invited you to join ${room}` 
@@ -292,10 +292,10 @@ const getNotificationDisplay = useCallback((n: Inotification) => {
       };
 
     case "message":
-    case "new_message": // Handle both
+    case "new_message": // Handle database type
       return { 
         icon: <Mail className="h-4 w-4 text-green-500" />, 
-        text: `New message from ${sender} in ${room}` 
+        text: n.message || `New message from ${sender} in ${room}` 
       };
 
     case "join_request_accepted":
@@ -332,9 +332,17 @@ const getNotificationDisplay = useCallback((n: Inotification) => {
 }, []);
 
 
-  const shouldShowActions = useCallback((n: Inotification) => {
-    return (n.type === "room_invite" || n.type === "join_request") && n.status !== "read";
-  }, []);
+ // components/Notifications.tsx - UPDATE shouldShowActions
+const shouldShowActions = useCallback((n: Inotification) => {
+  // Show actions for both normalized and database types
+  const actionableTypes = [
+    'join_request', // Normalized type
+    'room_invite', // Normalized type  
+    'room_switch', // Database type
+  ];
+  
+  return actionableTypes.includes(n.type) && n.status !== "read";
+}, []);
 
     return (
     <Sheet open={isOpen} onOpenChange={onClose}>

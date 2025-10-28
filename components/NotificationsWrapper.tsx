@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 export default function NotificationsWrapper() {
     const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
     const { user } = useUser();
-    const { unreadCount, fetchNotifications, hasError } = useNotification();
+    const { unreadCount, fetchNotifications, hasError, notifications } = useNotification();
     
     // Initialize notification handler
     useNotificationHandler();
@@ -25,6 +25,18 @@ export default function NotificationsWrapper() {
         }
     }, [isNotificationsOpen, user?.id, fetchNotifications]);
 
+    // Add debug logging
+    useEffect(() => {
+        if (notifications.length > 0) {
+            console.log("🔔 Current notifications:", notifications.map(n => ({
+                id: n.id,
+                type: n.type,
+                status: n.status,
+                message: n.message
+            })));
+        }
+    }, [notifications]);
+    
     return (
         <div className="relative">
             <button
