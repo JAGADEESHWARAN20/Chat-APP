@@ -1,10 +1,10 @@
-// lib/store/notifications.ts - COMPLETE FIXED VERSION
+// lib/store/notifications.ts
 import { create } from "zustand";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { toast } from "sonner";
 import { Database } from "@/lib/types/supabase";
+import { RealtimeChannel } from "@supabase/supabase-js";
 
-// Define types locally to avoid circular dependencies
 type ProfileType = {
   id: string;
   username: string | null;
@@ -39,23 +39,21 @@ export interface Inotification {
 
 type RawNotification = Database["public"]["Tables"]["notifications"]["Row"];
 
-
 const normalizeNotificationType = (dbType: string): string => {
   const typeMap: Record<string, string> = {
-    // Database types -> Client expected types
-    'join_request': 'join_request', // ✅ Matches
-    'new_message': 'message', // ✅ Map to client expected
-    'room_switch': 'room_invite', // ✅ Map to client expected  
-    'user_joined': 'user_joined', // ✅ Matches
-    'join_request_rejected': 'join_request_rejected', // ✅ Matches
-    'join_request_accepted': 'join_request_accepted', // ✅ Matches
-    'notification_unread': 'notification_unread', // ✅ Matches
+    'join_request': 'join_request',
+    'new_message': 'message',
+    'room_switch': 'room_invite',
+    'user_joined': 'user_joined',
+    'join_request_rejected': 'join_request_rejected',
+    'join_request_accepted': 'join_request_accepted',
+    'notification_unread': 'notification_unread',
+    'room_left': 'room_left',
   };
   
   return typeMap[dbType] || dbType;
 };
 
-// Update the transformNotification function
 const transformNotification = (
   notif: RawNotification & {
     sender?: any;
@@ -64,24 +62,17 @@ const transformNotification = (
   }
 ): Inotification => {
   const users = Array.isArray(notif.sender)
-    ? notif.sender.length > 0
-      ? notif.sender[0]
-      : null
+    ? notif.sender[0] || null
     : notif.sender || null;
 
   const recipient = Array.isArray(notif.recipient)
-    ? notif.recipient.length > 0
-      ? notif.recipient[0]
-      : null
+    ? notif.recipient[0] || null
     : notif.recipient || null;
 
   const rooms = Array.isArray(notif.room)
-    ? notif.room.length > 0
-      ? notif.room[0]
-      : null
+    ? notif.room[0] || null
     : notif.room || null;
 
-  // NORMALIZE THE TYPE HERE
   const normalizedType = normalizeNotificationType(notif.type);
 
   return {
@@ -89,8 +80,8 @@ const transformNotification = (
     message: notif.message,
     created_at: notif.created_at ?? null,
     status: notif.status,
-    type: normalizedType, // Use normalized type
-    sender_id: notif.sender_id ?? "",
+    type: normalizedType,
+    sender_id: notif.sender_id ?? null,
     user_id: notif.user_id,
     room_id: notif.room_id ?? null,
     join_status: notif.join_status,
@@ -118,22 +109,20 @@ const transformNotification = (
           id: rooms.id,
           name: rooms.name,
           created_at: rooms.created_at,
-          created_by: rooms.created_by ?? "",
+          created_by: rooms.created_by ?? null,
           is_private: rooms.is_private,
         }
       : null,
   };
 };
 
-
-
 interface NotificationState {
   notifications: Inotification[];
   unreadCount: number;
   isLoading: boolean;
   hasError: boolean;
+  lastFetch: number | null;
   
-  // Actions
   setNotifications: (notifications: Inotification[]) => void;
   addNotification: (notification: Inotification) => void;
   markAsRead: (notificationId: string) => Promise<void>;
@@ -144,17 +133,20 @@ interface NotificationState {
   clearError: () => void;
 }
 
+let notificationChannel: RealtimeChannel | null = null;
+
 export const useNotification = create<NotificationState>((set, get) => {
   const supabase = supabaseBrowser();
-  let notificationChannel: ReturnType<typeof supabase.channel> | null = null;
 
   return {
     notifications: [],
     unreadCount: 0,
     isLoading: false,
     hasError: false,
+    lastFetch: null,
 
     setNotifications: (notifications) => {
+      console.log("📝 Setting notifications:", notifications.length);
       const unreadCount = notifications.filter(n => n.status === 'unread').length;
       set({ notifications, unreadCount });
     },
@@ -162,6 +154,7 @@ export const useNotification = create<NotificationState>((set, get) => {
     addNotification: (notification) => {
       const current = get().notifications;
       if (!current.some((n) => n.id === notification.id)) {
+        console.log("➕ Adding new notification:", notification.id);
         const newNotifications = [notification, ...current];
         const unreadCount = newNotifications.filter(n => n.status === 'unread').length;
         set({ notifications: newNotifications, unreadCount });
@@ -169,6 +162,7 @@ export const useNotification = create<NotificationState>((set, get) => {
     },
 
     removeNotification: (id) => {
+      console.log("🗑️ Removing notification:", id);
       const newNotifications = get().notifications.filter((n) => n.id !== id);
       const unreadCount = newNotifications.filter(n => n.status === 'unread').length;
       set({ notifications: newNotifications, unreadCount });
@@ -176,6 +170,8 @@ export const useNotification = create<NotificationState>((set, get) => {
 
     markAsRead: async (notificationId: string) => {
       try {
+        console.log("✅ Marking as read:", notificationId);
+        
         const { error } = await supabase
           .from("notifications")
           .update({ status: "read" })
@@ -191,75 +187,85 @@ export const useNotification = create<NotificationState>((set, get) => {
           return { notifications: newNotifications, unreadCount };
         });
       } catch (error) {
-        console.error("Mark as read error:", error);
+        console.error("❌ Mark as read error:", error);
         toast.error("Failed to mark notification as read");
       }
     },
 
-// Add this to your store's fetchNotifications for better debugging
-fetchNotifications: async (userId: string) => {
-  try {
-    set({ isLoading: true, hasError: false });
-    console.log("🔄 Fetching notifications for user:", userId);
-
-    const { data, error } = await supabase
-      .from("notifications")
-      .select(`
-        *,
-        sender:profiles!notifications_sender_id_fkey(
-          id, username, display_name, avatar_url, created_at
-        ),
-        recipient:profiles!notifications_user_id_fkey(
-          id, username, display_name, avatar_url, created_at
-        ),
-        room:rooms!notifications_room_id_fkey(
-          id, name, created_at, created_by, is_private
-        )
-      `)
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(50);
-
-    if (error) {
-      console.error("❌ Notification fetch error:", error);
-      
-      // Handle 406 specifically
-      if (error.code === '406' || error.message.includes('406')) {
-        console.error("🔒 RLS Policy issue - check database policies");
-        toast.error("Permission denied - please refresh the page");
+    fetchNotifications: async (userId: string) => {
+      if (!userId) {
+        console.error("❌ No userId provided to fetchNotifications");
+        return;
       }
-      
-      throw error;
-    }
 
-    console.log("✅ Notifications fetched:", data?.length || 0);
+      try {
+        set({ isLoading: true, hasError: false });
+        console.log("🔄 Fetching notifications for user:", userId);
 
-    const transformed = (data || []).map(transformNotification);
-    const unreadCount = transformed.filter(n => n.status === 'unread').length;
-    
-    set({ 
-      notifications: transformed, 
-      unreadCount,
-      isLoading: false 
-    });
-    
-  } catch (error: any) {
-    console.error("💥 Error fetching notifications:", error);
-    set({ hasError: true, isLoading: false });
-    
-    // Show specific error messages
-    if (error.code === '406' || error.message.includes('406')) {
-      toast.error("Access denied - please check your permissions");
-    } else {
-      toast.error("Failed to load notifications");
-    }
-  }
-},
+        const { data, error } = await supabase
+          .from("notifications")
+          .select(`
+            *,
+            sender:profiles!notifications_sender_id_fkey(
+              id, username, display_name, avatar_url, created_at
+            ),
+            recipient:profiles!notifications_user_id_fkey(
+              id, username, display_name, avatar_url, created_at
+            ),
+            room:rooms!notifications_room_id_fkey(
+              id, name, created_at, created_by, is_private
+            )
+          `)
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false })
+          .limit(50);
+
+        if (error) {
+          console.error("❌ Notification fetch error:", error);
+          throw error;
+        }
+
+        console.log("✅ Raw notifications fetched:", data?.length || 0);
+        console.log("📦 Sample notification:", data?.[0]);
+
+        const transformed = (data || []).map(transformNotification);
+        const unreadCount = transformed.filter(n => n.status === 'unread').length;
+        
+        console.log("✅ Transformed notifications:", transformed.length);
+        console.log("📊 Unread count:", unreadCount);
+        
+        set({ 
+          notifications: transformed, 
+          unreadCount,
+          isLoading: false,
+          lastFetch: Date.now()
+        });
+        
+      } catch (error: any) {
+        console.error("💥 Error fetching notifications:", error);
+        set({ hasError: true, isLoading: false });
+        
+        if (error.code === '406' || error.message?.includes('406')) {
+          toast.error("Permission denied - please check RLS policies");
+        } else {
+          toast.error("Failed to load notifications");
+        }
+      }
+    },
 
     subscribeToNotifications: (userId: string) => {
+      if (!userId) {
+        console.error("❌ No userId for subscription");
+        return;
+      }
+
       console.log("🔔 Setting up real-time subscription for user:", userId);
       
-      notificationChannel?.unsubscribe();
+      // Unsubscribe from existing channel
+      if (notificationChannel) {
+        supabase.removeChannel(notificationChannel);
+        notificationChannel = null;
+      }
 
       notificationChannel = supabase
         .channel(`notifications-${userId}`)
@@ -299,20 +305,7 @@ fetchNotifications: async (userId: string) => {
 
               if (newNotification) {
                 const transformed = transformNotification(newNotification);
-                
-                set(state => {
-                  // Avoid duplicates
-                  if (!state.notifications.some((n) => n.id === transformed.id)) {
-                    const newNotifications = [transformed, ...state.notifications];
-                    const unreadCount = newNotifications.filter(n => n.status === 'unread').length;
-                    return {
-                      notifications: newNotifications,
-                      unreadCount
-                    };
-                  }
-                  return state;
-                });
-
+                get().addNotification(transformed);
                 toast.success("🔔 New notification!");
               }
             } catch (error) {

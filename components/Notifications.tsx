@@ -1,8 +1,7 @@
-// components/Notifications.tsx - FIXED
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { useNotification } from "@/lib/store/notifications";
+import { useEffect, useState, useCallback, useMemo } from "react";
+import { useNotification, Inotification } from "@/lib/store/notifications";
 import { useUser } from "@/lib/store/user";
 import { useRoomStore } from "@/lib/store/roomstore";
 import { supabaseBrowser } from "@/lib/supabase/browser";
@@ -23,12 +22,11 @@ import {
   UserCheck,
   UserX,
   LogOut,
-  Bell, // ADDED MISSING IMPORT
+  Bell,
 } from "lucide-react";
 import { Database } from "@/lib/types/supabase";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { Swipeable } from "./ui/swipeable";
-import { Inotification } from "@/lib/store/notifications"; // Import from store instead
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -53,23 +51,19 @@ const transformRoom = async (
   userId: string,
   supabase: ReturnType<typeof supabaseBrowser>
 ): Promise<RoomWithMembership> => {
-  const { data: membership, error: membershipError } = await supabase
+  const { data: membership } = await supabase
     .from("room_members")
     .select("status")
     .eq("room_id", room.id)
     .eq("user_id", userId)
     .single();
 
-  if (membershipError) console.error("Membership fetch error:", membershipError);
-
-  const { data: participation, error: participationError } = await supabase
+  const { data: participation } = await supabase
     .from("room_participants")
     .select("status")
     .eq("room_id", room.id)
     .eq("user_id", userId)
     .single();
-
-  if (participationError) console.error("Participation fetch error:", participationError);
 
   let participationStatus: string | null = null;
   if (membership) participationStatus = membership.status;
@@ -91,9 +85,9 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
     subscribeToNotifications,
     unsubscribeFromNotifications,
     removeNotification,
-    setNotifications,
-    isLoading, // ADDED MISSING IMPORT
+    isLoading,
   } = useNotification();
+  
   const { setSelectedRoom } = useRoomStore();
   const { fetchAvailableRooms } = useRoomContext();
   const router = useRouter();
@@ -101,46 +95,31 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
   const isMobile = useMediaQuery("(max-width: 768px)");
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
 
+  // Initialize notifications
   useEffect(() => {
     if (!user?.id) {
-      console.log("❌ No user ID yet, waiting for auth...");
+      console.log("❌ No user ID, skipping notification init");
       return;
     }
 
-    console.log("🔔 User authenticated:", user.id);
+    console.log("🔔 Initializing notifications for user:", user.id);
     
-    const initNotifications = async () => {
-      try {
-        console.log("🔄 Initializing notifications for user:", user.id);
-        await fetchNotifications(user.id);
-        subscribeToNotifications(user.id);
-      } catch (error) {
-        console.error("💥 Failed to initialize notifications:", error);
-        // Retry after 2 seconds
-        setTimeout(() => {
-          if (user?.id) {
-            console.log("🔄 Retrying notification initialization...");
-            initNotifications();
-          }
-        }, 2000);
-      }
-    };
-
-    initNotifications();
+    fetchNotifications(user.id);
+    subscribeToNotifications(user.id);
 
     return () => {
       console.log("🧹 Cleaning up notifications");
       unsubscribeFromNotifications();
     };
-  }, [user?.id, fetchNotifications, subscribeToNotifications, unsubscribeFromNotifications, setNotifications]);
-  
+  }, [user?.id]);
+
+  // Refresh when panel opens
   useEffect(() => {
     if (isOpen && user?.id) {
-      console.log("📱 Notifications opened, refreshing...");
+      console.log("📱 Notification panel opened, refreshing...");
       fetchNotifications(user.id);
     }
-  }, [isOpen, user?.id, fetchNotifications]);
-
+  }, [isOpen, user?.id]);
 
   const handleAccept = async (id: string, roomId: string | null, type: string) => {
     if (!user || !roomId) {
@@ -151,7 +130,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
     setLoadingIds((prev) => new Set([...prev, id]));
   
     try {
-      removeNotification(id); // Optimistic
+      removeNotification(id);
   
       const res = await fetch(`/api/notifications/${id}/accept`, { method: "POST" });
       const data = await res.json();
@@ -161,47 +140,26 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
       }
   
       await markAsRead(id);
-      await fetchAvailableRooms();  // Refresh rooms to update membership and counts (RoomContext integration)
-  
-      // Refetch notifications to ensure acceptance notification (if sent to self) is visible
+      await fetchAvailableRooms();
       await fetchNotifications(user.id);
   
       if (["room_invite", "join_request"].includes(type)) {
-        let retries = 3;
-        let room: Room | null = null;
-        while (retries > 0) {
-          const { data: fetchedRoom, error } = await supabase
-            .from("rooms")
-            .select("*")
-            .eq("id", roomId)
-            .single();
+        const { data: fetchedRoom, error } = await supabase
+          .from("rooms")
+          .select("*")
+          .eq("id", roomId)
+          .single();
   
-          if (error) {
-            console.error("Room fetch error:", error);
-            if (retries === 1) throw error;
-            await new Promise((resolve) => setTimeout(resolve, 1000));
-            retries--;
-            continue;
-          }
-  
-          room = fetchedRoom;
-          break;
-        }
-  
-        if (room) {
-          const enrichedRoom = await transformRoom(room, user.id, supabase);
+        if (!error && fetchedRoom) {
+          const enrichedRoom = await transformRoom(fetchedRoom, user.id, supabase);
           setSelectedRoom(enrichedRoom);
-          toast.success(`Joined ${room.name} successfully!`);
+          toast.success(`Joined ${fetchedRoom.name} successfully!`);
           router.push(`/chat/${roomId}`);
-          router.refresh();
-        } else {
-          toast.warning("Room joined but couldn't load details.");
         }
       } else {
         toast.success("Notification accepted.");
       }
     } catch (err: any) {
-      // Rollback optimistic update
       await fetchNotifications(user.id);
       toast.error(err.message || "Error accepting notification.");
     } finally {
@@ -222,7 +180,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
     setLoadingIds((prev) => new Set([...prev, id]));
 
     try {
-      removeNotification(id); // Optimistic
+      removeNotification(id);
 
       const res = await fetch(`/api/notifications/reject`, {
         method: "POST",
@@ -251,7 +209,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
 
   const handleDeleteNotification = useCallback(
     async (id: string) => {
-      if (!user || loadingIds.has(id)) return toast.error("Login required or in progress.");
+      if (!user || loadingIds.has(id)) return;
 
       setLoadingIds((prev) => new Set([...prev, id]));
 
@@ -277,89 +235,79 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
     [user, loadingIds, removeNotification]
   );
 
-// components/Notifications.tsx - UPDATE getNotificationDisplay
-const getNotificationDisplay = useCallback((n: Inotification) => {
-  const sender = n.users?.display_name || n.users?.username || "Someone";
-  const room = n.rooms?.name || "a room";
+  const getNotificationDisplay = useCallback((n: Inotification) => {
+    const sender = n.users?.display_name || n.users?.username || "Someone";
+    const room = n.rooms?.name || "a room";
 
-  // Handle ALL possible database types and normalized types
-  switch (n.type) {
-    case "room_invite":
-    case "room_switch": // Handle database type
-      return { 
-        icon: <UserPlus className="h-4 w-4 text-blue-500" />, 
-        text: `${sender} invited you to join ${room}` 
-      };
+    switch (n.type) {
+      case "room_invite":
+        return { 
+          icon: <UserPlus className="h-4 w-4 text-blue-500" />, 
+          text: `${sender} invited you to join ${room}` 
+        };
+      case "join_request":
+        return { 
+          icon: <Mail className="h-4 w-4 text-purple-500" />, 
+          text: `${sender} requested to join ${room}` 
+        };
+      case "user_joined":
+        return { 
+          icon: <UserCheck className="h-4 w-4 text-green-500" />, 
+          text: n.message || `${sender} joined ${room}` 
+        };
+      case "message":
+        return { 
+          icon: <Mail className="h-4 w-4 text-green-500" />, 
+          text: n.message || `New message from ${sender} in ${room}` 
+        };
+      case "join_request_accepted":
+        return { 
+          icon: <UserCheck className="h-4 w-4 text-green-600" />, 
+          text: n.message || `Your request to join ${room} was accepted` 
+        };
+      case "join_request_rejected":
+        return { 
+          icon: <UserX className="h-4 w-4 text-red-600" />, 
+          text: n.message || `Your request to join ${room} was rejected` 
+        };
+      case "room_left":
+        return { 
+          icon: <LogOut className="h-4 w-4 text-gray-500" />, 
+          text: n.message || `${sender} left ${room}` 
+        };
+      default:
+        return { 
+          icon: <Mail className="h-4 w-4 text-gray-400" />, 
+          text: n.message || "New notification" 
+        };
+    }
+  }, []);
 
-    case "join_request":
-      return { 
-        icon: <Mail className="h-4 w-4 text-purple-500" />, 
-        text: `${sender} requested to join ${room}` 
-      };
+  const shouldShowActions = useCallback((n: Inotification) => {
+    const actionableTypes = ['join_request', 'room_invite'];
+    return actionableTypes.includes(n.type) && n.status !== "read";
+  }, []);
 
-    case "user_joined":
-      return { 
-        icon: <UserCheck className="h-4 w-4 text-green-500" />, 
-        text: n.message || `${sender} joined ${room}` 
-      };
+  // Memoize sorted notifications
+  const sortedNotifications = useMemo(() => {
+    return [...notifications].sort((a, b) => {
+      const dateA = new Date(a.created_at || 0).getTime();
+      const dateB = new Date(b.created_at || 0).getTime();
+      return dateB - dateA;
+    });
+  }, [notifications]);
 
-    case "message":
-    case "new_message": // Handle database type
-      return { 
-        icon: <Mail className="h-4 w-4 text-green-500" />, 
-        text: n.message || `New message from ${sender} in ${room}` 
-      };
+  console.log("🎨 Rendering Notifications:", {
+    count: notifications.length,
+    isOpen,
+    userId: user?.id,
+    isLoading
+  });
 
-    case "join_request_accepted":
-      return { 
-        icon: <UserCheck className="h-4 w-4 text-green-600" />, 
-        text: n.message || `Your request to join ${room} was accepted` 
-      };
-
-    case "join_request_rejected":
-      return { 
-        icon: <UserX className="h-4 w-4 text-red-600" />, 
-        text: n.message || `Your request to join ${room} was rejected` 
-      };
-
-    case "room_left":
-      return { 
-        icon: <LogOut className="h-4 w-4 text-gray-500" />, 
-        text: n.message || `${sender} left ${room}.` 
-      };
-
-    case "notification_unread":
-      return { 
-        icon: <Mail className="h-4 w-4 text-gray-400" />, 
-        text: n.message || "New notification" 
-      };
-
-    default:
-      console.warn("Unknown notification type:", n.type, n);
-      return { 
-        icon: <Mail className="h-4 w-4 text-gray-400" />, 
-        text: n.message || "New notification" 
-      };
-  }
-}, []);
-
-
- // components/Notifications.tsx - UPDATE shouldShowActions
-const shouldShowActions = useCallback((n: Inotification) => {
-  // Show actions for both normalized and database types
-  const actionableTypes = [
-    'join_request', // Normalized type
-    'room_invite', // Normalized type  
-    'room_switch', // Database type
-  ];
-  
-  return actionableTypes.includes(n.type) && n.status !== "read";
-}, []);
-
-    return (
+  return (
     <Sheet open={isOpen} onOpenChange={onClose}>
       <SheetContent
-        side={isMobile ? "right" : "right"}
+        side="right"
         className="p-0 flex flex-col h-full w-full sm:max-w-sm"
       >
         <SheetHeader className="p-4 border-b">
@@ -368,59 +316,61 @@ const shouldShowActions = useCallback((n: Inotification) => {
               <Button variant="ghost" size="icon" onClick={onClose}>
                 <ArrowRight className="h-5 w-5" />
               </Button>
-              <SheetTitle>Notifications</SheetTitle>
+              <SheetTitle>Notifications ({notifications.length})</SheetTitle>
             </div>
           </div>
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto py-2">
-          {notifications.length === 0 ? (
+          {isLoading && notifications.length === 0 ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+            </div>
+          ) : notifications.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-8">
-              <div className="text-center space-y-4">
-                <Bell className="h-12 w-12 mx-auto text-gray-300" />
-                <p className="text-lg font-medium">No notifications yet</p>
-                <p className="text-sm text-gray-500">
-                  When you get notifications, they&apos;ll appear here.
-                </p>
-                {user?.id && (
-                  <button
-                    onClick={() => fetchNotifications(user.id)}
-                    className="mt-4 px-4 py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-                    disabled={isLoading}
-                  >
-                    {isLoading ? "Refreshing..." : "Refresh Notifications"}
-                  </button>
-                )}
-              </div>
+              <Bell className="h-12 w-12 mx-auto text-gray-300 mb-4" />
+              <p className="text-lg font-medium">No notifications yet</p>
+              <p className="text-sm text-gray-500">
+                When you get notifications, they'll appear here.
+              </p>
+              {user?.id && (
+                <button
+                  onClick={() => fetchNotifications(user.id)}
+                  className="mt-4 px-4 py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                  disabled={isLoading}
+                >
+                  {isLoading ? "Refreshing..." : "Refresh Notifications"}
+                </button>
+              )}
             </div>
           ) : (
             <div className="space-y-2">
-              {notifications.map((n) => {
+              {sortedNotifications.map((n) => {
                 const { icon, text } = getNotificationDisplay(n);
-                const isLoading = loadingIds.has(n.id);
+                const isLoadingItem = loadingIds.has(n.id);
 
                 return (
                   <Swipeable
                     key={n.id}
-                    onSwipeLeft={() => !isLoading && handleAccept(n.id, n.room_id, n.type)}
-                    onSwipeRight={() => !isLoading && handleReject(n.id, n.sender_id, n.room_id)}
+                    onSwipeLeft={() => !isLoadingItem && handleAccept(n.id, n.room_id, n.type)}
+                    onSwipeRight={() => !isLoadingItem && handleReject(n.id, n.sender_id, n.room_id)}
                   >
                     <div
                       className={`p-4 flex items-start space-x-4 hover:bg-muted/50 relative ${
                         n.status === "read" ? "opacity-50" : ""
-                      } ${isLoading ? "opacity-75 cursor-not-allowed" : ""}`}
+                      } ${isLoadingItem ? "opacity-75 cursor-not-allowed" : ""}`}
                     >
-                      <Avatar className="h-10 w-10">
+                      <Avatar className="h-10 w-10 flex-shrink-0">
                         <AvatarImage src={n.users?.avatar_url || ""} alt={n.users?.username || "User"} />
                         <AvatarFallback>
                           {(n.users?.username || "U")[0]?.toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
 
-                      <div className="flex-1 space-y-1">
+                      <div className="flex-1 space-y-1 min-w-0">
                         <div className="flex items-center gap-2 text-sm">
                           {icon}
-                          <span>{text}</span>
+                          <span className="line-clamp-2">{text}</span>
                         </div>
                         <p className="text-xs text-gray-400">
                           {new Date(n.created_at || "").toLocaleString()}
@@ -428,7 +378,7 @@ const shouldShowActions = useCallback((n: Inotification) => {
                       </div>
 
                       {shouldShowActions(n) ? (
-                        <div className="flex space-x-2">
+                        <div className="flex space-x-2 flex-shrink-0">
                           <Button
                             variant="ghost"
                             size="icon"
@@ -436,7 +386,7 @@ const shouldShowActions = useCallback((n: Inotification) => {
                               e.stopPropagation();
                               handleReject(n.id, n.sender_id, n.room_id);
                             }}
-                            disabled={isLoading}
+                            disabled={isLoadingItem}
                           >
                             <X className="h-4 w-4" />
                           </Button>
@@ -447,7 +397,7 @@ const shouldShowActions = useCallback((n: Inotification) => {
                               e.stopPropagation();
                               handleAccept(n.id, n.room_id, n.type);
                             }}
-                            disabled={isLoading}
+                            disabled={isLoadingItem}
                           >
                             <Check className="h-4 w-4" />
                           </Button>
@@ -455,21 +405,19 @@ const shouldShowActions = useCallback((n: Inotification) => {
                       ) : (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
+                            <Button variant="ghost" size="icon" className="flex-shrink-0">
                               <MoreVertical className="w-4 h-4" />
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteNotification(n.id);
-                            }}>
+                            <DropdownMenuItem onClick={() => handleDeleteNotification(n.id)}>
                               <Trash2 className="mr-2 h-4 w-4" /> Delete
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       )}
-                      {isLoading && (
+                      
+                      {isLoadingItem && (
                         <div className="absolute inset-0 bg-black/20 rounded flex items-center justify-center">
                           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                         </div>
