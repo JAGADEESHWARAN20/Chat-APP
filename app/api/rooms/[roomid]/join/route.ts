@@ -1,41 +1,38 @@
-import { NextRequest, NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabase/server";
-
-export const dynamic = "force-dynamic";
+import { supabaseServer } from '@/lib/supabase/server';
+import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(
   request: NextRequest,
-  context: { params: Promise<{ roomId: string }> }
+  { params }: { params: { roomId: string } }
 ) {
   try {
-    console.log("=== JOIN API STARTED ===");
-    
-    const params = await context.params;
-    const roomId = params.roomId;
-    
-    if (!roomId || roomId.trim().length === 0) {
-      return NextResponse.json({ 
-        error: "Invalid room ID"
-      }, { status: 400 });
-    }
-
     const supabase = await supabaseServer();
     
-    // Auth check
-    const { data: { session }, error: authError } = await supabase.auth.getSession();
+    // Get the current session
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     
-    if (authError || !session?.user) {
-      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    if (sessionError || !session) {
+      return NextResponse.json(
+        { error: 'Unauthorized - Please log in' },
+        { status: 401 }
+      );
     }
-    
+
     const userId = session.user.id;
+    const roomId = params.roomId;
+
+    console.log("🚀 Join room API called by user:", {
+      userId,
+      userEmail: session.user.email,
+      roomId
+    });
 
     // Room existence check - use maybeSingle to handle 406 gracefully
     const { data: room, error: roomError } = await supabase
       .from("rooms")
       .select("id, name, created_by, is_private")
       .eq("id", roomId)
-      .maybeSingle(); // ✅ Use maybeSingle instead of single
+      .maybeSingle();
 
     if (roomError) {
       console.error("Room database error:", roomError);
@@ -85,7 +82,7 @@ export async function POST(
       .from("profiles")
       .select("display_name, username")
       .eq("id", userId)
-      .maybeSingle(); // ✅ Use maybeSingle
+      .maybeSingle();
 
     const senderName = senderProfile?.display_name || senderProfile?.username || session.user.email || "A user";
     const now = new Date().toISOString();
@@ -105,6 +102,7 @@ export async function POST(
       );
 
       if (upsertError) {
+        console.error("Private room upsert error:", upsertError);
         return NextResponse.json({ error: "Failed to send join request" }, { status: 500 });
       }
 
@@ -155,6 +153,10 @@ export async function POST(
     ]);
 
     if (participantResult.error || memberResult.error) {
+      console.error("Public room upsert errors:", {
+        participant: participantResult.error,
+        member: memberResult.error
+      });
       return NextResponse.json({ error: "Failed to join room" }, { status: 500 });
     }
 

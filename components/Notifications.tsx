@@ -92,9 +92,17 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
   const { fetchAvailableRooms } = useRoomContext();
   const router = useRouter();
   const supabase = supabaseBrowser();
-  const isMobile = useMediaQuery("(max-width: 768px)");
+  // const isMobile = useMediaQuery("(max-width: 768px)");
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
 
+  useEffect(() => {
+    if (user?.id) {
+      console.log("👤 Current User ID in Notifications:", user.id);
+      console.log("👤 Current User Email:", user.email);
+    } else {
+      console.log("❌ No user found in Notifications component");
+    }
+  }, [user]);
   // Initialize notifications
   useEffect(() => {
     if (!user?.id) {

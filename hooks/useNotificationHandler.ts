@@ -9,7 +9,15 @@ export function useNotificationHandler() {
   const { addNotification } = useNotification();
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      console.log("❌ No user in notification handler");
+      return;
+    }
+
+    console.log("🔔 Setting up notification handler for user:", {
+      id: user.id,
+      email: user.email
+    });
 
     const supabase = supabaseBrowser();
     

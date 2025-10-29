@@ -47,8 +47,8 @@ type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 
 // Room member and participant types with explicit typing
-type RoomMember = { status: string | null };
-type RoomParticipant = { status: string };
+// type RoomMember = { status: string | null };
+// type RoomParticipant = { status: string };
 
 // ---- State ----
 interface RoomState {
@@ -239,7 +239,12 @@ interface RoomContextType {
   handleScrollNotification: (isNearBottom: boolean, newUnreadDelta?: number) => void;
   triggerScrollToBottom: () => void;
   unreadNotifications: number;
+  // ADD THESE:
+  currentUser: SupabaseUser | null;
+  currentUserId: string | null;
+  supabase: ReturnType<typeof getSupabaseBrowserClient>;
 }
+
 
 const RoomContext = createContext<RoomContextType | undefined>(undefined);
 
@@ -784,37 +789,56 @@ const fetchRoomsWithMembership = useCallback(async () => {
   }
 }, [state.user, supabase, checkUserRoomMembership, getAllRoomMemberCounts, fetchRoomMessages]);
   // FIXED: acceptJoinNotification with proper typing and variable scoping
-  const acceptJoinNotification = useCallback(async (roomId: string) => {
-    try {
-      const res = await fetch(`/api/notifications/${roomId}/accept`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
+ // In your RoomContext - update acceptJoinNotification
+const acceptJoinNotification = useCallback(async (roomId: string) => {
+  if (!state.user) {
+    toast.error("Please log in to accept join request");
+    return;
+  }
 
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to accept join request");
-      }
+  console.log("🔔 Accepting join notification for user:", {
+    userId: state.user.id,
+    userEmail: state.user.email,
+    roomId
+  });
 
-      // Refresh the room data after acceptance
-      await refreshRoomData(roomId);
-      
-      // Update membership status
-      dispatch({
-        type: "UPDATE_ROOM_MEMBERSHIP",
-        payload: { 
-          roomId, 
-          isMember: true, 
-          participationStatus: "accepted" 
-        },
-      });
+  try {
+    const res = await fetch(`/api/notifications/${roomId}/accept`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      // You can send the user ID for verification if needed
+      body: JSON.stringify({ 
+        userId: state.user.id,
+        userEmail: state.user.email 
+      }),
+    });
 
-      toast.success(data.message || `Accepted join request successfully`);
-    } catch (err: any) {
-      console.error("[RoomContext] Error in acceptJoinNotification:", err);
-      toast.error(err.message || "Failed to accept join request");
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || "Failed to accept join request");
     }
-  }, [refreshRoomData]);
+
+    console.log("✅ Join request accepted:", data);
+
+    // Refresh the room data after acceptance
+    await refreshRoomData(roomId);
+    
+    // Update membership status
+    dispatch({
+      type: "UPDATE_ROOM_MEMBERSHIP",
+      payload: { 
+        roomId, 
+        isMember: true, 
+        participationStatus: "accepted" 
+      },
+    });
+
+    toast.success(data.message || `Accepted join request successfully`);
+  } catch (err: any) {
+    console.error("[RoomContext] Error in acceptJoinNotification:", err);
+    toast.error(err.message || "Failed to accept join request");
+  }
+}, [state.user, refreshRoomData]);
 
   const checkRoomMembership = useCallback(async (roomId: string): Promise<boolean> => {
     if (!state.user) return false;
@@ -1193,6 +1217,10 @@ const fetchRoomsWithMembership = useCallback(async () => {
     handleScrollNotification,
     triggerScrollToBottom,
     unreadNotifications: state.unreadNotifications,
+    // ADD THESE:
+    currentUser: state.user,
+    currentUserId: state.user?.id || null,
+    supabase,
   };
 
   return <RoomContext.Provider value={value}>{children}</RoomContext.Provider>;
