@@ -1,15 +1,23 @@
-"use client";
-import { createBrowserClient } from "@supabase/ssr";
-import { Database } from "../types/supabase";
+import { createBrowserClient } from '@supabase/ssr'
 
-let supabase: ReturnType<typeof createBrowserClient<Database>>;
+class SupabaseClient {
+  private static instance: ReturnType<typeof createBrowserClient> | null = null
 
-export const getBrowserSupabaseClient = () => {
-  if (!supabase) {
-    supabase = createBrowserClient<Database>(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
+  private constructor() {}
+
+  public static getInstance() {
+    if (!this.instance) {
+      this.instance = createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      )
+    }
+    return this.instance
   }
-  return supabase;
-};
+
+  public static clearInstance() {
+    this.instance = null
+  }
+}
+
+export const getSupabaseBrowserClient = () => SupabaseClient.getInstance()
