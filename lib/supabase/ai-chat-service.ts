@@ -1,13 +1,14 @@
 // lib/supabase/ai-chat-service.ts
-import { createClient } from './client'; // Fixed import path
+import { getSupabaseBrowserClient } from './client'; // Fixed import path
 import { Database } from '@/lib/types/supabase';
 
 type AIChatHistory = Database['public']['Tables']['ai_chat_history']['Row'];
 type CreateAIChatHistory = Database['public']['Tables']['ai_chat_history']['Insert'];
 
+
 export class AIChatService {
   private static getClient() {
-    return createClient(); // This now correctly imports from './client'
+    return getSupabaseBrowserClient();
   }
 
   // Create new AI chat entry
@@ -25,7 +26,8 @@ export class AIChatService {
       return null;
     }
 
-    return data;
+    // FIXED: Type assertion to ensure proper typing
+    return data as AIChatHistory;
   }
 
   // Get AI chat history for a room
@@ -44,7 +46,8 @@ export class AIChatService {
       return [];
     }
 
-    return data || [];
+    // FIXED: Type assertion to ensure proper typing
+    return (data as AIChatHistory[]) || [];
   }
 
   // Get user's AI chat history
@@ -63,7 +66,8 @@ export class AIChatService {
       return [];
     }
 
-    return data || [];
+    // FIXED: Type assertion to ensure proper typing
+    return (data as AIChatHistory[]) || [];
   }
 
   // Delete AI chat entry
