@@ -111,7 +111,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
       console.log("🧹 Cleaning up notifications");
       unsubscribeFromNotifications();
     };
-  }, [user?.id]);
+  }, [user?.id, fetchNotifications, subscribeToNotifications, unsubscribeFromNotifications]);
 
   // Refresh when panel opens
   useEffect(() => {
@@ -119,7 +119,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
       console.log("📱 Notification panel opened, refreshing...");
       fetchNotifications(user.id);
     }
-  }, [isOpen, user?.id]);
+  }, [isOpen, user?.id, fetchNotifications]);
 
   const handleAccept = async (id: string, roomId: string | null, type: string) => {
     if (!user || !roomId) {
@@ -331,7 +331,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
               <Bell className="h-12 w-12 mx-auto text-gray-300 mb-4" />
               <p className="text-lg font-medium">No notifications yet</p>
               <p className="text-sm text-gray-500">
-                When you get notifications, they'll appear here.
+                When you get notifications, they&apos;ll appear here.
               </p>
               {user?.id && (
                 <button

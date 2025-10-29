@@ -435,7 +435,7 @@ export function RoomProvider({
     return messages
       .filter((msg): msg is Imessage => msg && msg.room_id === state.selectedRoom!.id) // FIXED: Non-null assertion after check
       .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-  }, [messages, state.selectedRoom?.id]); // Stable deps
+    }, [messages, state.selectedRoom]);
 
   // NEW: Centralized realtime message handler (moved from ListMessages)
   const handleRoomMessages = useCallback(
