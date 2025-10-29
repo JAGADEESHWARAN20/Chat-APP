@@ -1,59 +1,82 @@
-// components/NotificationsWrapper.tsx - UPDATED
+// components/NotificationsWrapper.tsx - Updated for your user store
 "use client";
 
 import { useState, useEffect } from "react";
 import { Bell } from "lucide-react";
 import Notifications from "./Notifications";
 import { useNotificationHandler } from "@/hooks/useNotificationHandler";
-import { useUser } from "@/lib/store/user";
+import { useUser } from "@/lib/store/user"; // Your actual user store
 import { useNotification } from "@/lib/store/notifications";
 import { cn } from "@/lib/utils";
 
 export default function NotificationsWrapper() {
     const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-    const { user } = useUser();
+    const { user: currentUser, authUser } = useUser(); // Use your store structure
     const { unreadCount, fetchNotifications, hasError, notifications } = useNotification();
     
     // Initialize notification handler
     useNotificationHandler();
 
+    // Get the actual user ID
+    const userId = currentUser?.id || authUser?.id;
+
+    // Add comprehensive logging
+    useEffect(() => {
+        console.log("🔔 NotificationsWrapper - User state:", {
+            userId,
+            currentUser: currentUser ? { id: currentUser.id, email: currentUser.email } : null,
+            authUser: authUser ? { id: authUser.id, email: authUser.email } : null,
+            unreadCount
+        });
+    }, [userId, currentUser, authUser, unreadCount]);
+
     // Auto-refresh notifications when sheet opens
     useEffect(() => {
-        if (isNotificationsOpen && user?.id) {
+        if (isNotificationsOpen && userId) {
             console.log("🔄 Refreshing notifications on open");
-            fetchNotifications(user.id);
+            fetchNotifications(userId);
         }
-    }, [isNotificationsOpen, user?.id, fetchNotifications]);
+    }, [isNotificationsOpen, userId, fetchNotifications]);
 
-    // Add debug logging
-    useEffect(() => {
-        if (notifications.length > 0) {
-            console.log("🔔 Current notifications:", notifications.map(n => ({
-                id: n.id,
-                type: n.type,
-                status: n.status,
-                message: n.message
-            })));
+    const handleBellClick = () => {
+        console.log("🔔 Bell icon clicked - User:", {
+            userId,
+            userEmail: currentUser?.email || authUser?.email
+        });
+        
+        if (!userId) {
+            console.log("🚫 No user - redirecting to sign in");
+            // Redirect to sign in
+            window.location.href = '/auth/signin';
+            return;
         }
-    }, [notifications]);
-    
+        
+        setIsNotificationsOpen(true);
+    };
+
     return (
         <div className="relative">
             <button
                 title="notification"
-                onClick={() => setIsNotificationsOpen(true)}
-                className="w-[2em] h-[2em] flex items-center justify-center p-[.35em] relative group"
+                onClick={handleBellClick}
+                className={cn(
+                    "w-[2em] h-[2em] flex items-center justify-center p-[.35em] relative group transition-all duration-200",
+                    !userId && "opacity-50 cursor-not-allowed"
+                )}
                 aria-label={`Notifications ${unreadCount > 0 ? `${unreadCount} unread` : ''}`}
+                disabled={!userId}
             >
                 <Bell className={cn(
                     "h-5 w-5 transition-all duration-200",
                     unreadCount > 0 
                         ? "text-blue-600 fill-blue-600 animate-pulse" 
-                        : "hover:fill-slate-800 dark:hover:fill-slate-50",
+                        : userId 
+                            ? "hover:fill-slate-800 dark:hover:fill-slate-50" 
+                            : "text-gray-400",
                     hasError && "text-red-500"
                 )} />
                 
-                {unreadCount > 0 && (
+                {unreadCount > 0 && userId && (
                     <span className={cn(
                         "absolute -top-1 -right-1 min-w-[1.25rem] h-5 text-xs",
                         "bg-red-500 text-white rounded-full flex items-center justify-center",
@@ -64,14 +87,14 @@ export default function NotificationsWrapper() {
                     </span>
                 )}
                 
-                {hasError && (
+                {hasError && userId && (
                     <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-ping" />
                 )}
             </button>
             
             <Notifications
                 isOpen={isNotificationsOpen}
-                onClose={() => setIsNotificationsOpen(false)}
+                onClose={() => setIsNotificationsOpen(true)}
             />
         </div>
     );

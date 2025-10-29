@@ -1,8 +1,9 @@
+// components/Notifications.tsx - Updated for your user store
 "use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useNotification, Inotification } from "@/lib/store/notifications";
-import { useUser } from "@/lib/store/user";
+import { useUser } from "@/lib/store/user"; // Your actual user store
 import { useRoomStore } from "@/lib/store/roomstore";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { toast } from "sonner";
@@ -77,7 +78,8 @@ const transformRoom = async (
 };
 
 export default function Notifications({ isOpen, onClose }: NotificationsProps) {
-  const user = useUser((state) => state.user) as SupabaseUser | undefined;
+  // Use your actual user store structure
+  const { user: currentUser, authUser, profile } = useUser();
   const {
     notifications,
     markAsRead,
@@ -92,46 +94,57 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
   const { fetchAvailableRooms } = useRoomContext();
   const router = useRouter();
   const supabase = supabaseBrowser();
-  // const isMobile = useMediaQuery("(max-width: 768px)");
+  const isMobile = useMediaQuery("(max-width: 768px)");
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
 
+  // Add comprehensive user logging
   useEffect(() => {
-    if (user?.id) {
-      console.log("👤 Current User ID in Notifications:", user.id);
-      console.log("👤 Current User Email:", user.email);
-    } else {
-      console.log("❌ No user found in Notifications component");
-    }
-  }, [user]);
-  // Initialize notifications
+    console.log("👤 Notifications - Current user state:", {
+      currentUser: currentUser ? { 
+        id: currentUser.id, 
+        email: currentUser.email,
+        hasProfile: !!currentUser.profile 
+      } : null,
+      authUser: authUser ? { id: authUser.id, email: authUser.email } : null,
+      profile: profile ? { id: profile.id, username: profile.username } : null,
+      isOpen
+    });
+  }, [currentUser, authUser, profile, isOpen]);
+
+  // Get the actual user ID from your store structure
+  const userId = currentUser?.id || authUser?.id;
+
+  // Initialize notifications only when user is available
   useEffect(() => {
-    if (!user?.id) {
-      console.log("❌ No user ID, skipping notification init");
+    if (!userId) {
+      console.log("❌ No user ID available, skipping notification init");
       return;
     }
 
-    console.log("🔔 Initializing notifications for user:", user.id);
+    console.log("🔔 Initializing notifications for user:", userId);
     
-    fetchNotifications(user.id);
-    subscribeToNotifications(user.id);
+    fetchNotifications(userId);
+    subscribeToNotifications(userId);
 
     return () => {
       console.log("🧹 Cleaning up notifications");
       unsubscribeFromNotifications();
     };
-  }, [user?.id, fetchNotifications, subscribeToNotifications, unsubscribeFromNotifications]);
+  }, [userId, fetchNotifications, subscribeToNotifications, unsubscribeFromNotifications]);
 
-  // Refresh when panel opens
+  // Refresh when panel opens and user is available
   useEffect(() => {
-    if (isOpen && user?.id) {
+    if (isOpen && userId) {
       console.log("📱 Notification panel opened, refreshing...");
-      fetchNotifications(user.id);
+      fetchNotifications(userId);
     }
-  }, [isOpen, user?.id, fetchNotifications]);
+  }, [isOpen, userId, fetchNotifications]);
 
   const handleAccept = async (id: string, roomId: string | null, type: string) => {
-    if (!user || !roomId) {
-      return toast.error("Missing data for action.");
+    if (!userId || !roomId) {
+      console.log("❌ Missing data for accept:", { userId, roomId });
+      toast.error("Missing data for action.");
+      return;
     }
     if (loadingIds.has(id)) return;
   
@@ -140,7 +153,13 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
     try {
       removeNotification(id);
   
-      const res = await fetch(`/api/notifications/${id}/accept`, { method: "POST" });
+      console.log("✅ Accepting notification:", { id, roomId, type, userId });
+      
+      const res = await fetch(`/api/notifications/${id}/accept`, { 
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }) // Send userId for verification
+      });
       const data = await res.json();
   
       if (!res.ok) {
@@ -149,7 +168,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
   
       await markAsRead(id);
       await fetchAvailableRooms();
-      await fetchNotifications(user.id);
+      await fetchNotifications(userId);
   
       if (["room_invite", "join_request"].includes(type)) {
         const { data: fetchedRoom, error } = await supabase
@@ -159,7 +178,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
           .single();
   
         if (!error && fetchedRoom) {
-          const enrichedRoom = await transformRoom(fetchedRoom, user.id, supabase);
+          const enrichedRoom = await transformRoom(fetchedRoom, userId, supabase);
           setSelectedRoom(enrichedRoom);
           toast.success(`Joined ${fetchedRoom.name} successfully!`);
           router.push(`/chat/${roomId}`);
@@ -168,7 +187,8 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
         toast.success("Notification accepted.");
       }
     } catch (err: any) {
-      await fetchNotifications(user.id);
+      console.error("❌ Error accepting notification:", err);
+      await fetchNotifications(userId);
       toast.error(err.message || "Error accepting notification.");
     } finally {
       setLoadingIds((prev) => {
@@ -180,8 +200,10 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
   };
 
   const handleReject = async (id: string, senderId: string | null, roomId: string | null) => {
-    if (!user || !senderId || !roomId) {
-      return toast.error("Missing data for reject.");
+    if (!userId || !senderId || !roomId) {
+      console.log("❌ Missing data for reject:", { userId, senderId, roomId });
+      toast.error("Missing data for reject.");
+      return;
     }
     if (loadingIds.has(id)) return;
 
@@ -190,10 +212,17 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
     try {
       removeNotification(id);
 
+      console.log("❌ Rejecting notification:", { id, senderId, roomId, userId });
+
       const res = await fetch(`/api/notifications/reject`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ notification_id: id, sender_id: senderId, room_id: roomId }),
+        body: JSON.stringify({ 
+          notification_id: id, 
+          sender_id: senderId, 
+          room_id: roomId,
+          userId // Send userId for verification
+        }),
       });
 
       if (!res.ok) {
@@ -201,10 +230,11 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
       }
 
       await markAsRead(id);
-      await fetchNotifications(user.id);
+      await fetchNotifications(userId);
       toast.success("Request rejected.");
     } catch (err: any) {
-      await fetchNotifications(user.id);
+      console.error("❌ Error rejecting notification:", err);
+      await fetchNotifications(userId);
       toast.error(err.message || "Reject error.");
     } finally {
       setLoadingIds((prev) => {
@@ -217,12 +247,18 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
 
   const handleDeleteNotification = useCallback(
     async (id: string) => {
-      if (!user || loadingIds.has(id)) return;
+      if (!userId || loadingIds.has(id)) return;
 
       setLoadingIds((prev) => new Set([...prev, id]));
 
       try {
-        const res = await fetch(`/api/notifications/${id}`, { method: "DELETE" });
+        console.log("🗑️ Deleting notification:", { id, userId });
+
+        const res = await fetch(`/api/notifications/${id}`, { 
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId }) // Send userId for verification
+        });
 
         if (!res.ok) {
           throw new Error((await res.json()).error || "Delete failed");
@@ -231,6 +267,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
         removeNotification(id);
         toast.success("Notification deleted.");
       } catch (err: any) {
+        console.error("❌ Error deleting notification:", err);
         toast.error(err.message || "Error deleting.");
       } finally {
         setLoadingIds((prev) => {
@@ -240,8 +277,18 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
         });
       }
     },
-    [user, loadingIds, removeNotification]
+    [userId, loadingIds, removeNotification]
   );
+
+  // Add click handler for notifications
+  const handleNotificationClick = (notification: Inotification) => {
+    console.log("🔔 Notification clicked by user:", {
+      userId: userId,
+      userEmail: currentUser?.email || authUser?.email,
+      notificationId: notification.id,
+      notificationType: notification.type
+    });
+  };
 
   const getNotificationDisplay = useCallback((n: Inotification) => {
     const sender = n.users?.display_name || n.users?.username || "Someone";
@@ -305,10 +352,43 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
     });
   }, [notifications]);
 
+  // Show sign in prompt if no user
+  if (!userId) {
+    return (
+      <Sheet open={isOpen} onOpenChange={onClose}>
+        <SheetContent side="right" className="p-0 flex flex-col h-full w-full sm:max-w-sm">
+          <SheetHeader className="p-4 border-b">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="icon" onClick={onClose}>
+                  <ArrowRight className="h-5 w-5" />
+                </Button>
+                <SheetTitle>Notifications</SheetTitle>
+              </div>
+            </div>
+          </SheetHeader>
+          <div className="flex flex-col items-center justify-center h-full p-8">
+            <Bell className="h-16 w-16 text-gray-300 mb-4" />
+            <h3 className="text-lg font-semibold mb-2">Sign In Required</h3>
+            <p className="text-sm text-gray-500 text-center mb-4">
+              Please sign in to view your notifications
+            </p>
+            <Button onClick={() => {
+              // Redirect to sign in page
+              window.location.href = '/auth/signin';
+            }}>
+              Sign In
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
+    );
+  }
+
   console.log("🎨 Rendering Notifications:", {
     count: notifications.length,
     isOpen,
-    userId: user?.id,
+    userId,
     isLoading
   });
 
@@ -341,9 +421,9 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
               <p className="text-sm text-gray-500">
                 When you get notifications, they&apos;ll appear here.
               </p>
-              {user?.id && (
+              {userId && (
                 <button
-                  onClick={() => fetchNotifications(user.id)}
+                  onClick={() => fetchNotifications(userId)}
                   className="mt-4 px-4 py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
                   disabled={isLoading}
                 >
@@ -367,6 +447,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
                       className={`p-4 flex items-start space-x-4 hover:bg-muted/50 relative ${
                         n.status === "read" ? "opacity-50" : ""
                       } ${isLoadingItem ? "opacity-75 cursor-not-allowed" : ""}`}
+                      onClick={() => handleNotificationClick(n)}
                     >
                       <Avatar className="h-10 w-10 flex-shrink-0">
                         <AvatarImage src={n.users?.avatar_url || ""} alt={n.users?.username || "User"} />

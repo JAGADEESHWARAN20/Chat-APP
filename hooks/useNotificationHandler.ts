@@ -1,22 +1,26 @@
+// hooks/useNotificationHandler.ts - Updated for your user store
 import { toast } from 'sonner';
 import { supabaseBrowser } from '@/lib/supabase/browser';
 import { useNotification } from '@/lib/store/notifications';
 import { useEffect } from 'react';
-import { useUser } from '@/lib/store/user';
+import { useUser } from '@/lib/store/user'; // Your actual user store
 
 export function useNotificationHandler() {
-  const { user } = useUser();
+  const { user: currentUser, authUser } = useUser(); // Use your store structure
   const { addNotification } = useNotification();
 
+  // Get the actual user ID
+  const userId = currentUser?.id || authUser?.id;
+
   useEffect(() => {
-    if (!user) {
+    if (!userId) {
       console.log("❌ No user in notification handler");
       return;
     }
 
     console.log("🔔 Setting up notification handler for user:", {
-      id: user.id,
-      email: user.email
+      id: userId,
+      email: currentUser?.email || authUser?.email
     });
 
     const supabase = supabaseBrowser();
@@ -30,7 +34,7 @@ export function useNotificationHandler() {
           event: 'INSERT',
           schema: 'public',
           table: 'notifications',
-          filter: `user_id=eq.${user.id}`,
+          filter: `user_id=eq.${userId}`,
         },
         async (payload) => {
           const rawNotification = payload.new;
@@ -92,30 +96,8 @@ export function useNotificationHandler() {
       )
       .subscribe();
 
-    // Handle real-time room presence
-    const presenceSubscription = supabase
-      .channel('presence-channel')
-      .on(
-        'presence',
-        { event: 'leave' },
-        (payload) => {
-          // According to Supabase types, the payload for 'leave' is RealtimePresenceLeavePayload
-          // which has a 'leftPresences' array, not 'leftPresence'
-          const leftPresences = (payload as { leftPresences?: any[] }).leftPresences;
-          if (Array.isArray(leftPresences)) {
-            leftPresences.forEach((user) => {
-              if (user?.user_id && user?.room_id) {
-                toast.info(`${user.username || 'Someone'} left the chat`);
-              }
-            });
-          }
-        }
-      )
-      .subscribe();
-
     return () => {
       notificationSubscription.unsubscribe();
-      presenceSubscription.unsubscribe();
     };
-  }, [user, addNotification]);
+  }, [userId, currentUser, authUser, addNotification]);
 }
