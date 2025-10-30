@@ -6,9 +6,9 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { roomId: string } }
+  { params }: { params: { roomid: string } }  
 ) {
-  // ✅ STEP 1 FIX: Log params IMMEDIATELY (before any logic)
+  const roomId = params.roomid;  // Extract using the correct case
   console.log('🔍 API ENTRY - Full Request URL:', request.url);
   console.log('🔍 API ENTRY - Raw Params Object:', params);
   console.log('🔍 API ENTRY - Extracted roomId:', params?.roomId, '(type:', typeof params?.roomId, ')');
