@@ -1,6 +1,9 @@
 import { supabaseServer } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
 
+// Simple UUID validation regex (matches the one in frontend)
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function POST(
   request: NextRequest,
   { params }: { params: { roomId: string } }
@@ -20,6 +23,15 @@ export async function POST(
 
     const userId = session.user.id;
     const roomId = params.roomId;
+
+    // ✅ FIX: Early validation for roomId to prevent DB errors
+    if (!roomId || roomId === 'undefined' || !UUID_REGEX.test(roomId)) {
+      console.warn("🚫 Invalid roomId in join request:", { userId, userEmail: session.user.email, roomId });
+      return NextResponse.json(
+        { error: 'Invalid or missing room ID' },
+        { status: 400 }
+      );
+    }
 
     console.log("🚀 Join room API called by user:", {
       userId,
