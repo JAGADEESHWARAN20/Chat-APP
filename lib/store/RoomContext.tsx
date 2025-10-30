@@ -727,8 +727,7 @@ export function RoomProvider({
     }
   }, [fetchRoomMessages, fetchRoomUsers, getRoomMemberCount]);
 
-  // FIXED: Enhanced fetchRoomsWithMembership function with proper typing and scoping
-// FIXED: Enhanced fetchRoomsWithMembership function with proper typing
+ // FIXED: Enhanced fetchRoomsWithMembership function with proper typing and scoping
 const fetchRoomsWithMembership = useCallback(async () => {
   if (!state.user) {
     dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
@@ -756,33 +755,42 @@ const fetchRoomsWithMembership = useCallback(async () => {
       return;
     }
 
-    // Process each room with proper typing - FIXED: Type is now properly inferred
-    const roomsWithMembership: RoomWithMembershipCount[] = await Promise.all(
-      roomsData.map(async (room) => { 
-        // Check current user's membership status
-        const userMembership = await checkUserRoomMembership(state.user!.id, room.id);
-        
-        // Get member count from the pre-fetched map
-        const memberCount = countsMap.get(room.id) || 0;
-        
-        // Get messages and user data
-        const messagesData = await fetchRoomMessages(room.id);
+    // ✅ NEW FIX: Process each room and filter out invalid ones (null/undefined id from DB)
+    const roomsWithMembershipPromises = roomsData.map(async (room) => {
+      if (!room.id) {
+        console.warn("[RoomContext] Skipping invalid room (missing id):", room);
+        return null;
+      }
+      // Check current user's membership status
+      const userMembership = await checkUserRoomMembership(state.user!.id, room.id);
+      
+      // Get member count from the pre-fetched map
+      const memberCount = countsMap.get(room.id) || 0;
+      
+      // Get messages and user data
+      const messagesData = await fetchRoomMessages(room.id);
 
-        // FIXED: Ensure all Room properties are preserved and extended
-        return {
-          ...room,
-          memberCount,
-          isMember: userMembership.isMember,
-          participationStatus: userMembership.participationStatus,
-          latestMessage: messagesData.latestMessage,
-          unreadCount: messagesData.unreadCount,
-          totalUsers: memberCount,
-          onlineUsers: 0,
-        } as RoomWithMembershipCount;
-      })
-    );
+      // FIXED: Ensure all Room properties are preserved and extended
+      return {
+        ...room,
+        memberCount,
+        isMember: userMembership.isMember,
+        participationStatus: userMembership.participationStatus,
+        latestMessage: messagesData.latestMessage,
+        unreadCount: messagesData.unreadCount,
+        totalUsers: memberCount,
+        onlineUsers: 0,
+      } as RoomWithMembershipCount;
+    });
 
-    dispatch({ type: "SET_AVAILABLE_ROOMS", payload: roomsWithMembership });
+    const roomsWithMembership: (RoomWithMembershipCount | null)[] = await Promise.all(roomsWithMembershipPromises);
+
+    // ✅ NEW FIX: Filter out any nulls (invalid rooms) before dispatching
+    const validRoomsWithMembership = roomsWithMembership.filter((r): r is RoomWithMembershipCount => r !== null && !!r.id);
+    
+    console.log("[RoomContext] Loaded valid rooms:", validRoomsWithMembership.length, "out of", roomsData.length); // Debug log
+
+    dispatch({ type: "SET_AVAILABLE_ROOMS", payload: validRoomsWithMembership });
   } catch (error) {
     console.error("[RoomContext] Error fetching rooms with membership:", error);
     toast.error("Failed to load rooms");
@@ -791,7 +799,7 @@ const fetchRoomsWithMembership = useCallback(async () => {
     dispatch({ type: "SET_LOADING", payload: false });
   }
 }, [state.user, supabase, checkUserRoomMembership, getAllRoomMemberCounts, fetchRoomMessages]);
-  // FIXED: acceptJoinNotification with proper typing and variable scoping
+
  // In your RoomContext - update acceptJoinNotification
 const acceptJoinNotification = useCallback(async (roomId: string) => {
   if (!state.user) {
