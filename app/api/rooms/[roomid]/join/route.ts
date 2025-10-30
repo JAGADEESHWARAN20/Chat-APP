@@ -24,9 +24,12 @@ export async function POST(
     const userId = session.user.id;
     const roomId = params.roomId;
 
+    // ✅ DIAGNOSTIC FIX: Log params IMMEDIATELY to expose extraction issue
+    console.log("🔍 API Raw Params on Entry:", { fullParams: params, extractedRoomId: roomId, typeOfRoomId: typeof roomId });
+
     // ✅ FIX: Early validation for roomId to prevent DB errors
     if (!roomId || roomId === 'undefined' || !UUID_REGEX.test(roomId)) {
-      console.warn("🚫 Invalid roomId in join request:", { userId, userEmail: session.user.email, roomId });
+      console.warn("🚫 Invalid roomId in join request:", { userId, userEmail: session.user.email, roomId, fullParams: params });
       return NextResponse.json(
         { error: 'Invalid or missing room ID' },
         { status: 400 }

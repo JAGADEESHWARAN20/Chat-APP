@@ -112,6 +112,7 @@ export default function SearchComponent({
     const q = debouncedSearchQuery.toLowerCase();
     return availableRooms.filter((room) => room.id && room.name.toLowerCase().includes(q)); // ✅ FIX: Ensure valid id + search
   }, [availableRooms, debouncedSearchQuery]);
+ 
   const handleJoinRoom = useCallback(
     async (roomId: string) => {
       console.log("handleJoinRoom called with roomId:", roomId); // ✅ Existing log for debugging
