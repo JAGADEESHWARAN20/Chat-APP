@@ -94,8 +94,9 @@ export default function NotificationsWrapper() {
             
             <Notifications
                 isOpen={isNotificationsOpen}
-                onClose={() => setIsNotificationsOpen(true)}
-            />
+                onClose={() => setIsNotificationsOpen(false)}  // ✅ FIXED
+                />
+
         </div>
     );
 }
