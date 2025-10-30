@@ -113,35 +113,39 @@ export default function SearchComponent({
     return availableRooms.filter((room) => room.id && room.name.toLowerCase().includes(q)); // ✅ FIX: Ensure valid id + search
   }, [availableRooms, debouncedSearchQuery]);
  
+  
+ 
   const handleJoinRoom = useCallback(
-    async (roomId: string) => {
-      console.log("handleJoinRoom called with roomId:", roomId); // ✅ Existing log for debugging
-      // ✅ ENHANCED FIX: Stricter validation matching API (catches "undefined" string too)
-      if (!roomId || roomId === 'undefined' || !UUID_REGEX.test(roomId)) {
-        console.error("❌ Invalid room ID in handleJoinRoom:", roomId);
-        toast.error("Invalid room ID. Try refreshing the list.");
-        return;
+  async (roomId: string) => {
+    console.log("handleJoinRoom called with roomId:", roomId);
+    // Validate room ID with UUID regex
+    if (!roomId || roomId === 'undefined' || !UUID_REGEX.test(roomId)) {
+      console.error("❌ Invalid room ID in handleJoinRoom:", roomId);
+      toast.error("Invalid room ID. Try refreshing the list.");
+      return;
+    }
+
+    if (!user) {
+      toast.error("You must be logged in to join a room");
+      return;
+    }
+
+    console.log("Attempting to join room:", roomId);
+    try {
+      await joinRoom(roomId);
+      await fetchAvailableRooms();
+    } catch (error) {
+      console.error("Join room error:", error);
+      const errorMsg = (error as Error).message || "Failed to join room";
+      // Handle API debug info if present
+      if (errorMsg.includes('debug')) {
+        console.log('API Debug Info:', error);
       }
-      if (!user) {
-        toast.error("You must be logged in to join a room");
-        return;
-      }
-      console.log("Attempting to join room:", roomId);
-      try {
-        await joinRoom(roomId);
-        await fetchAvailableRooms();
-      } catch (error) {
-        console.error("Join room error:", error);
-        const errorMsg = (error as Error).message || "Failed to join room";
-        // ✅ FIX: If API returns debug info
-        if (errorMsg.includes('debug')) {
-          console.log('API Debug Info:', error);  // Log for inspection
-        }
-        toast.error(errorMsg);
-      }
-    },
-    [user, UUID_REGEX, joinRoom, fetchAvailableRooms]
-  );
+      toast.error(errorMsg);
+    }
+  },
+  [user, UUID_REGEX, joinRoom, fetchAvailableRooms]
+);
   const renderRoomSearchResult = (result: RoomWithMembershipCount) => (
     // ✅ FIX: Early guard - skip render if invalid result (prevents bad onClick)
     !result.id ? null : (
