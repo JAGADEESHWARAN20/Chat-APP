@@ -8,6 +8,9 @@ import { Database } from "@/lib/types/supabase";
 import { useMessage, Imessage } from "./messages";
 // import { SafeSupabaseQuery } from "@/lib/utils/supabase-queries";
 
+// ✅ FIX: Define UUID_REGEX at the top of the file (matches API/SearchComponent)
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // ---- Types ----
 type Room = Database["public"]["Tables"]["rooms"]["Row"];
 type DirectChat = Database["public"]["Tables"]["direct_chats"]["Row"];
@@ -943,11 +946,23 @@ const acceptJoinNotification = useCallback(async (roomId: string) => {
 
   // FIXED: joinRoom with proper typing
   const joinRoom = useCallback(async (roomId: string) => {
+    // ✅ NEW FIX: Mirror API validation here to catch issues early (prevents invalid fetch)
+    if (!roomId || roomId === 'undefined' || !UUID_REGEX.test(roomId)) {
+      console.error("[RoomContext] Invalid roomId passed to joinRoom:", roomId);
+      toast.error("Invalid room ID - cannot join.");
+      // Reset optimistic update if any
+      dispatch({
+        type: "UPDATE_ROOM_MEMBERSHIP",
+        payload: { roomId: '', isMember: false, participationStatus: null },
+      });
+      return;
+    }
+  
     dispatch({
       type: "UPDATE_ROOM_MEMBERSHIP",
       payload: { roomId, isMember: false, participationStatus: "pending" },
     });
-
+  
     try {
       const response = await fetch(`/api/rooms/${roomId}/join`, {
         method: "POST",
@@ -971,7 +986,7 @@ const acceptJoinNotification = useCallback(async (roomId: string) => {
         });
         toast.success("Joined room successfully!");
         
-        if (data.roomJoined) {
+        if (data.roomJoined && data.roomJoined.id) { // ✅ FIX: Guard against missing id in response
           // FIXED: Ensure full Room typing
           const roomJoined: Room = {
             id: data.roomJoined.id,

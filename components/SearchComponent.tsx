@@ -1,5 +1,4 @@
 "use client";
-
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Button } from "./ui/button";
 import { User as SupabaseUser } from "@supabase/supabase-js";
@@ -26,14 +25,15 @@ type PartialProfile = {
   avatar_url: string | null;
   created_at: string | null;
 };
-
 type Room = Database["public"]["Tables"]["rooms"]["Row"];
-
 type RoomWithMembershipCount = Room & {
   isMember: boolean;
   participationStatus: string | null;
   memberCount: number;
 };
+
+// ✅ ADD: UUID regex for frontend validation (matches API)
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export default function SearchComponent({
   user,
@@ -47,25 +47,15 @@ export default function SearchComponent({
   const isMounted = useRef(true);
   const [isLoading, setIsLoading] = useState(false);
   const [isFaded, setIsFaded] = useState(false);
-
   useEffect(() => {
     const timer = setTimeout(() => setIsFaded(true), 2);
     return () => clearTimeout(timer);
   }, []);
-
   // debounce the searchQuery for filtering
   const [debouncedSearchQuery] = useDebounce(searchQuery, 300);
-
-  const UUID_REGEX = useMemo(
-    () =>
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
-    []
-  );
-
   // ✅ Use global state from context
   const { state, joinRoom, leaveRoom, fetchAvailableRooms, fetchAllUsers } = useRoomContext();
   const { availableRooms, isLoading: roomsLoading } = state;
-
   const handleSearchInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       // update the searchQuery; debouncedSearchQuery will update after 300ms
@@ -73,14 +63,12 @@ export default function SearchComponent({
     },
     []
   );
-
   const fetchUserResults = useCallback(async () => {
     if (searchType !== "users" || !user) {
       setIsLoading(false);
       setUserResults([]);
       return;
     }
-
     setIsLoading(true);
     try {
       const users = await fetchAllUsers();
@@ -107,51 +95,37 @@ export default function SearchComponent({
       if (isMounted.current) setIsLoading(false);
     }
   }, [searchType, user, debouncedSearchQuery, fetchAllUsers]);
-
   useEffect(() => {
     if (searchType === "users") {
       fetchUserResults();
     }
   }, [searchType, fetchUserResults]);
-
   useEffect(() => {
     return () => {
       isMounted.current = false;
     };
   }, []);
-
   const roomResults = useMemo(() => {
     if (!debouncedSearchQuery.trim()) {
-      return availableRooms;
+      return availableRooms.filter(room => room.id); // ✅ FIX: Filter out invalid rooms (no id)
     }
-
     const q = debouncedSearchQuery.toLowerCase();
-    return availableRooms.filter((room) => room.name.toLowerCase().includes(q));
+    return availableRooms.filter((room) => room.id && room.name.toLowerCase().includes(q)); // ✅ FIX: Ensure valid id + search
   }, [availableRooms, debouncedSearchQuery]);
-
   const handleJoinRoom = useCallback(
     async (roomId: string) => {
-      console.log("handleJoinRoom called with roomId:", roomId);
-
-      if (!roomId) {
-        console.error("❌ Missing room ID in handleJoinRoom");
-        toast.error("Room ID not found. Try refreshing the list.");
+      console.log("handleJoinRoom called with roomId:", roomId); // ✅ Existing log for debugging
+      // ✅ ENHANCED FIX: Stricter validation matching API (catches "undefined" string too)
+      if (!roomId || roomId === 'undefined' || !UUID_REGEX.test(roomId)) {
+        console.error("❌ Invalid room ID in handleJoinRoom:", roomId);
+        toast.error("Invalid room ID. Try refreshing the list.");
         return;
       }
-
       if (!user) {
         toast.error("You must be logged in to join a room");
         return;
       }
-
-      if (!UUID_REGEX.test(roomId)) {
-        console.error("❌ Invalid room ID format:", roomId);
-        toast.error("Invalid room ID format");
-        return;
-      }
-
       console.log("Attempting to join room:", roomId);
-
       try {
         await joinRoom(roomId);
         await fetchAvailableRooms();
@@ -162,69 +136,67 @@ export default function SearchComponent({
     },
     [user, UUID_REGEX, joinRoom, fetchAvailableRooms]
   );
-
   const renderRoomSearchResult = (result: RoomWithMembershipCount) => (
-    <li
-      key={result.id}
-      className="flex items-center justify-between pb-[1em] rounded-lg transition-colors hover:bg-accent/50"
-    >
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-500/30">
-          <span className="text-lg font-semibold text-indigo-400">
-            {result.name.charAt(0).toUpperCase()}
-          </span>
-        </div>
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-black dark:text-white">{result.name}</span>
-            {result.is_private && <LockIcon className="h-3.5 w-3.5 text-gray-400" />}
+    // ✅ FIX: Early guard - skip render if invalid result (prevents bad onClick)
+    !result.id ? null : (
+      <li
+        key={result.id}
+        className="flex items-center justify-between pb-[1em] rounded-lg transition-colors hover:bg-accent/50"
+      >
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-500/30">
+            <span className="text-lg font-semibold text-indigo-400">
+              {result.name.charAt(0).toUpperCase()}
+            </span>
           </div>
-          <div className="text-sm text-gray-600 dark:text-gray-400">
-            {result.memberCount} {result.memberCount === 1 ? "member" : "members"}
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-black dark:text-white">{result.name}</span>
+              {result.is_private && <LockIcon className="h-3.5 w-3.5 text-gray-400" />}
+            </div>
+            <div className="text-sm text-gray-600 dark:text-gray-400">
+              {result.memberCount} {result.memberCount === 1 ? "member" : "members"}
+            </div>
           </div>
         </div>
-      </div>
-
-      <div className="flex items-center gap-2">
-        {result.isMember ? (
-          <>
+        <div className="flex items-center gap-2">
+          {result.isMember ? (
+            <>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => router.push(`/rooms/${result.id}/settings`)}
+                className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300"
+              >
+                <Settings className="h-4 w-4" />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => leaveRoom(result.id)}
+                className="bg-red-500 hover:bg-red-600 rounded-md text-white"
+                title="Leave Room"
+              >
+                <LogOut className="h-4 w-4" />
+              </Button>
+            </>
+          ) : result.participationStatus === "pending" ? (
+            <span className="text-sm text-yellow-500 dark:text-yellow-400 font-medium">Pending</span>
+          ) : (
             <Button
               size="sm"
-              variant="ghost"
-              onClick={() => router.push(`/rooms/${result.id}/settings`)}
-              className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300"
+              onClick={() => handleJoinRoom(result.id)}
+              disabled={!user}
+              className="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20 hover:text-indigo-500 dark:hover:text-indigo-300 transition-colors"
             >
-              <Settings className="h-4 w-4" />
+              Join
             </Button>
-
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={() => leaveRoom(result.id)}
-              className="bg-red-500 hover:bg-red-600 rounded-md text-white"
-              title="Leave Room"
-            >
-              <LogOut className="h-4 w-4" />
-            </Button>
-          </>
-        ) : result.participationStatus === "pending" ? (
-          <span className="text-sm text-yellow-500 dark:text-yellow-400 font-medium">Pending</span>
-        ) : (
-          <Button
-            size="sm"
-            onClick={() => handleJoinRoom(result.id)}
-            disabled={!user}
-            className="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20 hover:text-indigo-500 dark:hover:text-indigo-300 transition-colors"
-          >
-            Join
-          </Button>
-        )}
-      </div>
-    </li>
+          )}
+        </div>
+      </li>
+    )
   );
-
   const showLoading = isLoading || (searchType === "rooms" && roomsLoading);
-
   return (
     <div className="w-full max-w-[400px] mx-auto p-4">
       <div className="flex justify-between items-center mb-4">
@@ -238,7 +210,6 @@ export default function SearchComponent({
           <Settings className="h-4 w-4" />
         </Button>
       </div>
-
       <Input
         type="text"
         placeholder={
@@ -252,7 +223,6 @@ export default function SearchComponent({
         onChange={handleSearchInputChange}
         className="mb-4 bg-muted/50 border-border text-foreground placeholder-muted-foreground rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
       />
-
       <Tabs
         defaultValue={searchType || "rooms"}
         onValueChange={(value) => setSearchType(value as "rooms" | "users")}
@@ -262,7 +232,6 @@ export default function SearchComponent({
           <TabsTrigger value="rooms">Rooms</TabsTrigger>
           <TabsTrigger value="users">Users</TabsTrigger>
         </TabsList>
-
         <TabsContent value="rooms">
           <div className="mt-4">
             <h4 className="font-semibold text-[1em] text-muted-foreground mb-3">Rooms</h4>
@@ -290,7 +259,6 @@ export default function SearchComponent({
             </ul>
           </div>
         </TabsContent>
-
         <TabsContent value="users">
           <div className="mt-4">
             <h4 className="font-semibold text-[1em] text-muted-foreground mb-3">User Profiles</h4>
@@ -336,13 +304,11 @@ export default function SearchComponent({
           </div>
         </TabsContent>
       </Tabs>
-
       {searchQuery.length === 0 && searchType && (
         <p className={`text-[1em] text-muted-foreground mt-3 transition-opacity duration-500 ${isFaded ? "opacity-0" : "opacity-100"}`}>
           Showing all {searchType}...
         </p>
       )}
-
       {showLoading && (
         <p className={`text-[1em] text-muted-foreground mt-3 transition-opacity duration-500 ${isFaded ? "opacity-0" : "opacity-100"}`}>
           Loading...
