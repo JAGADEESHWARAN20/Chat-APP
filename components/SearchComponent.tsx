@@ -144,7 +144,7 @@ export default function SearchComponent({
       toast.error(errorMsg);
     }
   },
-  [user, UUID_REGEX, joinRoom, fetchAvailableRooms]
+  [user, joinRoom, fetchAvailableRooms]
 );
   const renderRoomSearchResult = (result: RoomWithMembershipCount) => (
     // ✅ FIX: Early guard - skip render if invalid result (prevents bad onClick)
