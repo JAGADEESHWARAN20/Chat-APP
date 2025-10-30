@@ -728,6 +728,7 @@ export function RoomProvider({
   }, [fetchRoomMessages, fetchRoomUsers, getRoomMemberCount]);
 
  // FIXED: Enhanced fetchRoomsWithMembership function with proper typing and scoping
+// In RoomContext.tsx - replace the existing fetchRoomsWithMembership
 const fetchRoomsWithMembership = useCallback(async () => {
   if (!state.user) {
     dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
@@ -755,42 +756,41 @@ const fetchRoomsWithMembership = useCallback(async () => {
       return;
     }
 
-    // ✅ NEW FIX: Process each room and filter out invalid ones (null/undefined id from DB)
-    const roomsWithMembershipPromises = roomsData.map(async (room) => {
-      if (!room.id) {
-        console.warn("[RoomContext] Skipping invalid room (missing id):", room);
-        return null;
-      }
-      // Check current user's membership status
-      const userMembership = await checkUserRoomMembership(state.user!.id, room.id);
-      
-      // Get member count from the pre-fetched map
-      const memberCount = countsMap.get(room.id) || 0;
-      
-      // Get messages and user data
-      const messagesData = await fetchRoomMessages(room.id);
+    // ✅ ENHANCED FIX: Early filter + process only valid rooms
+    const validRoomsData = roomsData.filter(room => room.id && UUID_REGEX.test(room.id)); // Strict UUID check
+    if (validRoomsData.length < roomsData.length) {
+      console.warn("[RoomContext] Filtered out invalid rooms:", roomsData.length - validRoomsData.length);
+    }
 
-      // FIXED: Ensure all Room properties are preserved and extended
-      return {
-        ...room,
-        memberCount,
-        isMember: userMembership.isMember,
-        participationStatus: userMembership.participationStatus,
-        latestMessage: messagesData.latestMessage,
-        unreadCount: messagesData.unreadCount,
-        totalUsers: memberCount,
-        onlineUsers: 0,
-      } as RoomWithMembershipCount;
-    });
+    // Process each valid room
+    const roomsWithMembership: RoomWithMembershipCount[] = await Promise.all(
+      validRoomsData.map(async (room) => { 
+        // Check current user's membership status
+        const userMembership = await checkUserRoomMembership(state.user!.id, room.id);
+        
+        // Get member count from the pre-fetched map
+        const memberCount = countsMap.get(room.id) || 0;
+        
+        // Get messages and user data
+        const messagesData = await fetchRoomMessages(room.id);
 
-    const roomsWithMembership: (RoomWithMembershipCount | null)[] = await Promise.all(roomsWithMembershipPromises);
+        // FIXED: Ensure all Room properties are preserved and extended
+        return {
+          ...room,
+          memberCount,
+          isMember: userMembership.isMember,
+          participationStatus: userMembership.participationStatus,
+          latestMessage: messagesData.latestMessage,
+          unreadCount: messagesData.unreadCount,
+          totalUsers: memberCount,
+          onlineUsers: 0,
+        } as RoomWithMembershipCount;
+      })
+    );
 
-    // ✅ NEW FIX: Filter out any nulls (invalid rooms) before dispatching
-    const validRoomsWithMembership = roomsWithMembership.filter((r): r is RoomWithMembershipCount => r !== null && !!r.id);
-    
-    console.log("[RoomContext] Loaded valid rooms:", validRoomsWithMembership.length, "out of", roomsData.length); // Debug log
+    console.log("[RoomContext] Loaded valid rooms:", roomsWithMembership.length); // Debug: Track count
 
-    dispatch({ type: "SET_AVAILABLE_ROOMS", payload: validRoomsWithMembership });
+    dispatch({ type: "SET_AVAILABLE_ROOMS", payload: roomsWithMembership });
   } catch (error) {
     console.error("[RoomContext] Error fetching rooms with membership:", error);
     toast.error("Failed to load rooms");
@@ -799,6 +799,7 @@ const fetchRoomsWithMembership = useCallback(async () => {
     dispatch({ type: "SET_LOADING", payload: false });
   }
 }, [state.user, supabase, checkUserRoomMembership, getAllRoomMemberCounts, fetchRoomMessages]);
+
 
  // In your RoomContext - update acceptJoinNotification
 const acceptJoinNotification = useCallback(async (roomId: string) => {
