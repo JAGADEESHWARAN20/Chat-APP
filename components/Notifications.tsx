@@ -178,7 +178,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
           const enrichedRoom = await transformRoom(fetchedRoom, userId, supabase);
           setSelectedRoom(enrichedRoom);
           toast.success(`Joined ${fetchedRoom.name} successfully!`);
-          router.push(`/chat/${roomId}`);
+         
         } else {
           toast.success("Request accepted successfully!");
         }
