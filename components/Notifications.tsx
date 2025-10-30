@@ -209,10 +209,9 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
     setLoadingIds((prev) => new Set([...prev, id]));
 
     try {
-      removeNotification(id);
-
+      
       console.log("❌ Rejecting notification:", { id, senderId, roomId, userId });
-
+      
       const res = await fetch(`/api/notifications/reject`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -223,11 +222,12 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
           userId // Send userId for verification
         }),
       });
-
+      
       if (!res.ok) {
         throw new Error((await res.json()).error || "Reject failed");
       }
-
+      
+      removeNotification(id);
       await markAsRead(id);
       await fetchNotifications(userId);
       toast.success("Request rejected.");
@@ -354,7 +354,10 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
   // Show sign in prompt if no user
   if (!userId) {
     return (
-      <Sheet open={isOpen} onOpenChange={onClose}>
+      <Sheet open={isOpen} onOpenChange={(open) => {
+        if (!open) onClose();
+      }}>
+      
         <SheetContent side="right" className="p-0 flex flex-col h-full w-full sm:max-w-sm">
           <SheetHeader className="p-4 border-b">
             <div className="flex items-center justify-between">
