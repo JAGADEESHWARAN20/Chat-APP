@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Button } from "./ui/button";
-import { supabaseBrowser } from "@/lib/supabase/browser";
 import { User as SupabaseUser } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 import { Settings, UserIcon, LockIcon, LogOut } from "lucide-react";
@@ -45,7 +44,6 @@ export default function SearchComponent({
   const [searchQuery, setSearchQuery] = useState("");
   const [searchType, setSearchType] = useState<"rooms" | "users">("rooms");
   const [userResults, setUserResults] = useState<PartialProfile[]>([]);
-  const supabase = supabaseBrowser();
   const isMounted = useRef(true);
   const [isLoading, setIsLoading] = useState(false);
   const [isFaded, setIsFaded] = useState(false);
@@ -55,10 +53,7 @@ export default function SearchComponent({
     return () => clearTimeout(timer);
   }, []);
 
-  const [debouncedCallback] = useDebounce(
-    (value: string) => setSearchQuery(value),
-    300
-  );
+  // debounce the searchQuery for filtering
   const [debouncedSearchQuery] = useDebounce(searchQuery, 300);
 
   const UUID_REGEX = useMemo(
@@ -73,9 +68,10 @@ export default function SearchComponent({
 
   const handleSearchInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      debouncedCallback(e.target.value);
+      // update the searchQuery; debouncedSearchQuery will update after 300ms
+      setSearchQuery(e.target.value);
     },
-    [debouncedCallback]
+    []
   );
 
   const fetchUserResults = useCallback(async () => {
@@ -84,15 +80,16 @@ export default function SearchComponent({
       setUserResults([]);
       return;
     }
-    
+
     setIsLoading(true);
     try {
       const users = await fetchAllUsers();
       if (debouncedSearchQuery.trim()) {
+        const q = debouncedSearchQuery.toLowerCase();
         const filteredUsers = users.filter(
           (u) =>
-            u.username?.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
-            u.display_name?.toLowerCase().includes(debouncedSearchQuery.toLowerCase())
+            u.username?.toLowerCase().includes(q) ||
+            u.display_name?.toLowerCase().includes(q)
         );
         setUserResults(filteredUsers);
       } else {
@@ -102,9 +99,7 @@ export default function SearchComponent({
       console.error("User search error:", error);
       if (isMounted.current) {
         toast.error(
-          error instanceof Error
-            ? error.message
-            : "An error occurred while searching users"
+          error instanceof Error ? error.message : "An error occurred while searching users"
         );
         setUserResults([]);
       }
@@ -117,7 +112,7 @@ export default function SearchComponent({
     if (searchType === "users") {
       fetchUserResults();
     }
-  }, [searchType, fetchUserResults]); 
+  }, [searchType, fetchUserResults]);
 
   useEffect(() => {
     return () => {
@@ -129,34 +124,40 @@ export default function SearchComponent({
     if (!debouncedSearchQuery.trim()) {
       return availableRooms;
     }
-    
-    return availableRooms.filter(room =>
-      room.name.toLowerCase().includes(debouncedSearchQuery.toLowerCase())
-    );
+
+    const q = debouncedSearchQuery.toLowerCase();
+    return availableRooms.filter((room) => room.name.toLowerCase().includes(q));
   }, [availableRooms, debouncedSearchQuery]);
 
   const handleJoinRoom = useCallback(
     async (roomId: string) => {
       console.log("handleJoinRoom called with roomId:", roomId);
-      
+
+      if (!roomId) {
+        console.error("❌ Missing room ID in handleJoinRoom");
+        toast.error("Room ID not found. Try refreshing the list.");
+        return;
+      }
+
       if (!user) {
         toast.error("You must be logged in to join a room");
         return;
       }
 
       if (!UUID_REGEX.test(roomId)) {
-        console.error("Invalid room ID format:", roomId);
+        console.error("❌ Invalid room ID format:", roomId);
         toast.error("Invalid room ID format");
         return;
       }
 
       console.log("Attempting to join room:", roomId);
-      
+
       try {
         await joinRoom(roomId);
         await fetchAvailableRooms();
       } catch (error) {
         console.error("Join room error:", error);
+        toast.error((error as Error).message || "Failed to join room");
       }
     },
     [user, UUID_REGEX, joinRoom, fetchAvailableRooms]
@@ -175,16 +176,11 @@ export default function SearchComponent({
         </div>
         <div>
           <div className="flex items-center gap-2">
-            <span className="font-semibold text-black dark:text-white">
-              {result.name}
-            </span>
-            {result.is_private && (
-              <LockIcon className="h-3.5 w-3.5 text-gray-400" />
-            )}
+            <span className="font-semibold text-black dark:text-white">{result.name}</span>
+            {result.is_private && <LockIcon className="h-3.5 w-3.5 text-gray-400" />}
           </div>
           <div className="text-sm text-gray-600 dark:text-gray-400">
-            {result.memberCount}{" "}
-            {result.memberCount === 1 ? "member" : "members"}
+            {result.memberCount} {result.memberCount === 1 ? "member" : "members"}
           </div>
         </div>
       </div>
@@ -212,9 +208,7 @@ export default function SearchComponent({
             </Button>
           </>
         ) : result.participationStatus === "pending" ? (
-          <span className="text-sm text-yellow-500 dark:text-yellow-400 font-medium">
-            Pending
-          </span>
+          <span className="text-sm text-yellow-500 dark:text-yellow-400 font-medium">Pending</span>
         ) : (
           <Button
             size="sm"
@@ -261,36 +255,29 @@ export default function SearchComponent({
 
       <Tabs
         defaultValue={searchType || "rooms"}
-        onValueChange={(value) =>
-          setSearchType(value as "rooms" | "users")
-        }
+        onValueChange={(value) => setSearchType(value as "rooms" | "users")}
         className="w-full"
       >
         <TabsList className="grid w-full grid-cols-2 mb-4">
           <TabsTrigger value="rooms">Rooms</TabsTrigger>
           <TabsTrigger value="users">Users</TabsTrigger>
         </TabsList>
-        
+
         <TabsContent value="rooms">
           <div className="mt-4">
-            <h4 className="font-semibold text-[1em] text-muted-foreground mb-3">
-              Rooms
-            </h4>
+            <h4 className="font-semibold text-[1em] text-muted-foreground mb-3">Rooms</h4>
             <ul className="space-y-[0.1em] overflow-y-auto max-h-[440px] py-[0.2em] rounded-lg scrollbar-none lg:scrollbar-custom">
               {showLoading ? (
                 Array.from({ length: 3 }).map((_, i) => (
-                  <li
-                    key={i}
-                    className="flex items-center justify-between p-2 rounded-lg bg-muted animate-pulse"
-                  >
+                  <li key={i} className="flex items-center justify-between p-2 rounded-lg bg-muted animate-pulse">
                     <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-lg bg-accent"></div>
+                      <div className="h-10 w-10 rounded-lg bg-accent" />
                       <div>
-                        <div className="h-4 w-32 bg-accent rounded mb-2"></div>
-                        <div className="h-3 w-24 bg-accent rounded"></div>
+                        <div className="h-4 w-32 bg-accent rounded mb-2" />
+                        <div className="h-3 w-24 bg-accent rounded" />
                       </div>
                     </div>
-                    <div className="h-8 w-16 bg-accent rounded"></div>
+                    <div className="h-8 w-16 bg-accent rounded" />
                   </li>
                 ))
               ) : roomResults.length > 0 ? (
@@ -303,67 +290,47 @@ export default function SearchComponent({
             </ul>
           </div>
         </TabsContent>
-        
+
         <TabsContent value="users">
           <div className="mt-4">
-            <h4 className="font-semibold text-[1em] text-muted-foreground mb-3">
-              User Profiles
-            </h4>
+            <h4 className="font-semibold text-[1em] text-muted-foreground mb-3">User Profiles</h4>
             <ul className="space-y-3 overflow-y-auto max-h-[440px] scrollbar-none lg:scrollbar-custom">
               {showLoading ? (
                 Array.from({ length: 3 }).map((_, i) => (
-                  <li
-                    key={i}
-                    className="flex items-center justify-between p-2 rounded-lg bg-muted animate-pulse"
-                  >
+                  <li key={i} className="flex items-center justify-between p-2 rounded-lg bg-muted animate-pulse">
                     <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-full bg-accent"></div>
+                      <div className="h-10 w-10 rounded-full bg-accent" />
                       <div>
-                        <div className="h-4 w-24 bg-accent rounded mb-2"></div>
-                        <div className="h-3 w-16 bg-accent rounded"></div>
+                        <div className="h-4 w-24 bg-accent rounded mb-2" />
+                        <div className="h-3 w-16 bg-accent rounded" />
                       </div>
                     </div>
-                    <div className="h-6 w-6 bg-accent rounded"></div>
+                    <div className="h-6 w-6 bg-accent rounded" />
                   </li>
                 ))
               ) : userResults.length > 0 ? (
                 userResults.map((result) => (
-                  <li
-                    key={result.id}
-                    className="flex items-center justify-between p-2 rounded-lg hover:bg-accent transition-colors"
-                  >
+                  <li key={result.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-accent transition-colors">
                     <div className="flex items-center gap-3">
                       <Avatar className="h-10 w-10">
                         {result.avatar_url ? (
-                          <AvatarImage
-                            src={result.avatar_url}
-                            alt={result.username || "Avatar"}
-                            className="rounded-full"
-                          />
+                          <AvatarImage src={result.avatar_url} alt={result.username || "Avatar"} className="rounded-full" />
                         ) : (
                           <AvatarFallback className="bg-indigo-500 text-white rounded-full">
-                            {result.username?.charAt(0).toUpperCase() ||
-                              result.display_name?.charAt(0).toUpperCase() ||
-                              "?"}
+                            {result.username?.charAt(0).toUpperCase() || result.display_name?.charAt(0).toUpperCase() || "?"}
                           </AvatarFallback>
                         )}
                       </Avatar>
                       <div>
-                        <div className="text-xs text-muted-foreground">
-                          {result.username}
-                        </div>
-                        <div className="text-[1em] font-medium text-black dark:text-white">
-                          {result.display_name}
-                        </div>
+                        <div className="text-xs text-muted-foreground">{result.username}</div>
+                        <div className="text-[1em] font-medium text-black dark:text-white">{result.display_name}</div>
                       </div>
                     </div>
                     <UserIcon className="h-4 w-4 text-muted-foreground" />
                   </li>
                 ))
               ) : (
-                <li className="text-[1em] text-muted-foreground p-2 text-center">
-                  {debouncedSearchQuery ? "No users found" : "Search for users to see results"}
-                </li>
+                <li className="text-[1em] text-muted-foreground p-2 text-center">{debouncedSearchQuery ? "No users found" : "Search for users to see results"}</li>
               )}
             </ul>
           </div>
@@ -371,21 +338,13 @@ export default function SearchComponent({
       </Tabs>
 
       {searchQuery.length === 0 && searchType && (
-        <p
-          className={`text-[1em] text-muted-foreground mt-3 transition-opacity duration-500 ${
-            isFaded ? "opacity-0" : "opacity-100"
-          }`}
-        >
+        <p className={`text-[1em] text-muted-foreground mt-3 transition-opacity duration-500 ${isFaded ? "opacity-0" : "opacity-100"}`}>
           Showing all {searchType}...
         </p>
       )}
 
       {showLoading && (
-        <p
-          className={`text-[1em] text-muted-foreground mt-3 transition-opacity duration-500 ${
-            isFaded ? "opacity-0" : "opacity-100"
-          }`}
-        >
+        <p className={`text-[1em] text-muted-foreground mt-3 transition-opacity duration-500 ${isFaded ? "opacity-0" : "opacity-100"}`}>
           Loading...
         </p>
       )}
