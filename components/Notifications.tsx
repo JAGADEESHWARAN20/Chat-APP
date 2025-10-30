@@ -154,17 +154,14 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
       removeNotification(id);
   
       console.log("✅ Accepting notification:", { id, roomId, type, userId });
-      
-      const res = await fetch(`/api/notifications/${id}/accept`, { 
+  
+      const res = await fetch(`/api/notifications/${id}/accept`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId }) // Send userId for verification
       });
-      const data = await res.json();
   
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to accept notification");
-      }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to accept notification");
   
       await markAsRead(id);
       await fetchAvailableRooms();
@@ -182,6 +179,8 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
           setSelectedRoom(enrichedRoom);
           toast.success(`Joined ${fetchedRoom.name} successfully!`);
           router.push(`/chat/${roomId}`);
+        } else {
+          toast.success("Request accepted successfully!");
         }
       } else {
         toast.success("Notification accepted.");
@@ -198,7 +197,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
       });
     }
   };
-
+  
   const handleReject = async (id: string, senderId: string | null, roomId: string | null) => {
     if (!userId || !senderId || !roomId) {
       console.log("❌ Missing data for reject:", { userId, senderId, roomId });
