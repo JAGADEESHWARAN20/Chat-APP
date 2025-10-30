@@ -8,6 +8,11 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { roomId: string } }
 ) {
+  // ✅ STEP 1 FIX: Log params IMMEDIATELY (before any logic)
+  console.log('🔍 API ENTRY - Full Request URL:', request.url);
+  console.log('🔍 API ENTRY - Raw Params Object:', params);
+  console.log('🔍 API ENTRY - Extracted roomId:', params?.roomId, '(type:', typeof params?.roomId, ')');
+
   try {
     const supabase = await supabaseServer();
     
@@ -22,16 +27,13 @@ export async function POST(
     }
 
     const userId = session.user.id;
-    const roomId = params.roomId;
+    const roomId = params?.roomId;  // ✅ FIX: Use optional chaining for safety
 
-    // ✅ DIAGNOSTIC FIX: Log params IMMEDIATELY to expose extraction issue
-    console.log("🔍 API Raw Params on Entry:", { fullParams: params, extractedRoomId: roomId, typeOfRoomId: typeof roomId });
-
-    // ✅ FIX: Early validation for roomId to prevent DB errors
+    // ✅ STEP 1 FIX: Enhanced validation with more logging
     if (!roomId || roomId === 'undefined' || !UUID_REGEX.test(roomId)) {
-      console.warn("🚫 Invalid roomId in join request:", { userId, userEmail: session.user.email, roomId, fullParams: params });
+      console.error('🚫 Validation Failed - roomId Details:', { roomId, isFalsy: !roomId, isUndefinedStr: roomId === 'undefined', regexMatch: UUID_REGEX.test(roomId || ''), fullParams: params });
       return NextResponse.json(
-        { error: 'Invalid or missing room ID' },
+        { error: 'Invalid or missing room ID', debug: { roomId, params } },  // Include debug in response for frontend catch
         { status: 400 }
       );
     }

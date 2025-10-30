@@ -132,7 +132,12 @@ export default function SearchComponent({
         await fetchAvailableRooms();
       } catch (error) {
         console.error("Join room error:", error);
-        toast.error((error as Error).message || "Failed to join room");
+        const errorMsg = (error as Error).message || "Failed to join room";
+        // ✅ FIX: If API returns debug info
+        if (errorMsg.includes('debug')) {
+          console.log('API Debug Info:', error);  // Log for inspection
+        }
+        toast.error(errorMsg);
       }
     },
     [user, UUID_REGEX, joinRoom, fetchAvailableRooms]
