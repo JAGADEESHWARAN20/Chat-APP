@@ -1,6 +1,4 @@
-// components/ListMessages.tsx
 "use client";
-
 import { Imessage, useMessage } from "@/lib/store/messages";
 import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import Message from "./Message";
@@ -11,7 +9,7 @@ import { Database } from "@/lib/types/supabase";
 import { useRoomContext } from "@/lib/store/RoomContext";
 import TypingIndicator from "./TypingIndicator";
 import { useUser } from "@/lib/store/user";
-import { motion } from "framer-motion"; // <-- ADDED: Framer Motion import
+import { motion } from "framer-motion";
 
 type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
@@ -23,7 +21,7 @@ export default function ListMessages() {
   const [isLoading, setIsLoading] = useState(false);
 
   const { state } = useRoomContext();
-  const { selectedRoom, user: contextUser, typingUsers } = state; // <-- Get typingUsers
+  const { selectedRoom, user: contextUser, typingUsers } = state;
   const storeUser = useUser((state) => state.user);
   const user = contextUser ?? storeUser;
 
@@ -131,7 +129,6 @@ export default function ListMessages() {
       try {
         const messagePayload = payload.new as MessageRow | null;
 
-        // FIXED: Null check for selectedRoom
         if (!messagePayload || !selectedRoom || messagePayload.room_id !== selectedRoom.id) return;
 
         if (payload.eventType === "INSERT") {
@@ -255,9 +252,8 @@ export default function ListMessages() {
 
   SkeletonMessage.displayName = "SkeletonMessage";
 
-  // New: Calculate dynamic height for the motion.div
+  // Typing indicator state
   const isTyping = selectedRoom?.id && typingUsers.length > 0;
-  const wrapperHeight = isTyping ? "3em" : "0em";
 
   if (!selectedRoom?.id) {
     return (
@@ -267,53 +263,49 @@ export default function ListMessages() {
     );
   }
 
-return (
-  <div className="h-full flex flex-col min-h-0 overflow-hidden">
-    {/* Messages Scroll Area */}
-    <div
-      ref={scrollRef}
-      onScroll={handleOnScroll}
-      className="flex-1 overflow-y-auto px-4 py-2 space-y-2 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent"
-      style={{ 
-        maxWidth: "100%",
-        height: "calc(100vh - 13rem)"
-      }}
-    >
+  return (
+    <div className="h-full flex flex-col min-h-0 overflow-hidden">
+      {/* Messages Scroll Area */}
+      <div
+        ref={scrollRef}
+        onScroll={handleOnScroll}
+        className="flex-1 overflow-y-auto px-4 py-2 space-y-2 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent"
+        style={{ 
+          maxWidth: "100%",
+          height: "calc(100vh - 13rem)"
+        }}
+      >
         <div className="w-full max-w-full">
-        {isLoading ? (
-          <div className="space-y-4">
-            {Array.from({ length: 8 }, (_, index) => (
-              <SkeletonMessage key={index} />
-            ))}
-          </div>
-        ) : filteredMessages.length > 0 ? (
-          filteredMessages.map((message) => (
-            <Message key={message.id} message={message} />
-          ))
-        ) : (
-          <div className="flex items-center justify-center h-full text-gray-500">
-            <p>No messages yet. Start a conversation!</p>
-          </div>
-        )}
+          {isLoading ? (
+            <div className="space-y-4">
+              {Array.from({ length: 8 }, (_, index) => (
+                <SkeletonMessage key={index} />
+              ))}
+            </div>
+          ) : filteredMessages.length > 0 ? (
+            filteredMessages.map((message) => (
+              <Message key={message.id} message={message} />
+            ))
+          ) : (
+            <div className="flex items-center justify-center h-full text-gray-500">
+              <p>No messages yet. Start a conversation!</p>
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Typing Indicator */}
+      <motion.div
+        layout
+        animate={{ height: isTyping ? "auto" : 0 }}
+        transition={{ duration: 0.2, ease: "easeInOut" }}
+        className="overflow-hidden bg-transparent"
+      >
+        <TypingIndicator />
+      </motion.div>
+
+      <DeleteAlert />
+      <EditAlert />
     </div>
-
-
-    {/* Typing Indicator - Dynamic height via Framer Motion's 'animate' */}
-    <motion.div
-      layout
-      // Use Framer Motion's 'animate' to transition the height
-      animate={{ height: wrapperHeight }} 
-      transition={{ duration: 0.2, ease: "easeInOut" }}
-      className="overflow-hidden bg-transparent" // Tailwind will apply the dynamic height
-      // The content inside TypingIndicator will drive the layout further
-      style={{ height: wrapperHeight }} // Initial/current height must be set
-    >
-      <TypingIndicator />
-    </motion.div>
-
-    <DeleteAlert />
-    <EditAlert />
-  </div>
-);
+  );
 }

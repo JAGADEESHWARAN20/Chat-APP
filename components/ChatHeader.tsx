@@ -2,9 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Button } from "./ui/button";
-
 import { User as SupabaseUser } from "@supabase/supabase-js";
-
 import ChatPresence from "./ChatPresence";
 import {
   Popover,
@@ -15,18 +13,15 @@ import {
   Search,
   ArrowRightLeft,
   LockIcon,
-  Bot, // Add Bot icon for AI
+  Bot,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
-
 import { Switch } from "@/components/ui/switch";
 import { useRoomContext } from "@/lib/store/RoomContext";
-import { useRoomPresence } from "@/hooks/useRoomPresence";
+import { useActiveUsers } from "@/hooks/useActiveUsers"; // Updated import
 import { useMessage, Imessage } from "@/lib/store/messages";
 import { useSearchHighlight } from "@/lib/store/SearchHighlightContext";
-
-// Import RoomAssistant
-import {RoomAssistantDialog} from "./AIchatDialog"; // Adjust path as needed
+import { RoomAssistantDialog } from "./AIchatDialog";
 
 export default function ChatHeader({ user }: { user: SupabaseUser | undefined }) {
   const { searchMessages } = useMessage();
@@ -34,23 +29,17 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const [isSearching, setIsSearching] = useState(false);
   const [isSwitchRoomPopoverOpen, setIsSwitchRoomPopoverOpen] = useState(false);
   const [isMessageSearchOpen, setIsMessageSearchOpen] = useState(false);
-  // const [isAssistantOpen, setIsAssistantOpen] = useState(false); // New state for AI popover
   const [messageSearchQuery, setMessageSearchQuery] = useState("");
+  
   const { state, switchRoom } = useRoomContext();
   const { selectedRoom, availableRooms } = state;
+  
   const isMounted = useRef(true);
   const [, setIsMember] = useState(false);
   const { setHighlightedMessageId, setSearchQuery } = useSearchHighlight();
 
-  // Compute all room IDs for presence tracking
-  const allRoomIds = useMemo(() => {
-    const ids = new Set([
-      ...availableRooms.map((r) => r.id),
-    ]);
-    return Array.from(ids);
-  }, [availableRooms]);
-
-  const onlineCounts = useRoomPresence(allRoomIds);
+  // Use the unified hook for active users
+  const activeUsers = useActiveUsers(selectedRoom?.id || null);
 
   const handleSearch = async (query: string) => {
     setMessageSearchQuery(query);
@@ -132,7 +121,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                       key={msg.id}
                       className="p-2 rounded-md bg-accent hover:bg-accent/70 cursor-pointer"
                       onClick={() => {
-                        // Highlight and scroll to this message in ListMessages
                         setHighlightedMessageId(msg.id);
                         document.getElementById(`msg-${msg.id}`)?.scrollIntoView({
                           behavior: "smooth",
@@ -140,7 +128,6 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                         });
                         setIsMessageSearchOpen(false);
 
-                        // Clear highlight after 3 seconds
                         setTimeout(() => {
                           setHighlightedMessageId(null);
                         }, 3000);
@@ -156,24 +143,23 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                   <p className="text-sm text-muted-foreground">Type to search messages...</p>
                 )}
               </div>
-
             </div>
           </PopoverContent>
         </Popover>
 
         {/* AI Assistant Popover */}
         {selectedRoom && (
-            <RoomAssistantDialog 
-              roomId={selectedRoom.id} 
-              roomName={selectedRoom.name}
-              triggerButton={
-                <Button variant="outline" size="sm" className="gap-2">
-                  <Bot className="h-4 w-4" />
-                  AI Assistant
-                </Button>
-              }
-            />
-          )}
+          <RoomAssistantDialog 
+            roomId={selectedRoom.id} 
+            roomName={selectedRoom.name}
+            triggerButton={
+              <Button variant="outline" size="sm" className="gap-2">
+                <Bot className="h-4 w-4" />
+                AI Assistant
+              </Button>
+            }
+          />
+        )}
 
         {/* Switch Room */}
         <Popover open={isSwitchRoomPopoverOpen} onOpenChange={setIsSwitchRoomPopoverOpen}>
@@ -238,7 +224,10 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                               <LockIcon className="h-3.5 w-3.5 text-muted-foreground" />
                             )}
                           </div>
-                          <p className="text-[0.8em] px-2 py-1 text-center text-green-800 dark:text-white bg-green-500/20 dark:bg-green-500/20 border border-green-500/30 dark:border-green-500/30 rounded-full">{onlineCounts.get(room.id) ?? 0} active</p>
+                          {/* Updated: Use the unified active users hook */}
+                          <p className="text-[0.8em] px-2 py-1 text-center text-green-800 dark:text-white bg-green-500/20 dark:bg-green-500/20 border border-green-500/30 dark:border-green-500/30 rounded-full">
+                            {room.id === selectedRoom?.id ? activeUsers : 0} active
+                          </p>
                         </div>
                       </div>
 

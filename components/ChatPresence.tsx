@@ -1,17 +1,17 @@
 "use client";
 import React from "react";
 import { useRoomContext } from "@/lib/store/RoomContext";
+import { useRoomPresence } from "@/hooks/useRoomPresence"; // Updated import
 import { Users, Wifi, Circle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 export default function ChatPresence() {
-  const { state, getOnlineCount, getOnlineUsers } = useRoomContext();
-  const { selectedRoom, presence } = state;
+  const { state } = useRoomContext();
+  const { selectedRoom } = state;
 
-  // Get presence data directly from context
-  const onlineCount = selectedRoom ? getOnlineCount(selectedRoom.id) : 0;
-  const roomOnlineUsers = selectedRoom ? getOnlineUsers(selectedRoom.id) : [];
+  // Use the unified hook for presence data
+  const { onlineCount, onlineUsers, isLoading, error } = useRoomPresence(selectedRoom?.id || null);
 
   if (!selectedRoom) {
     return (
@@ -40,7 +40,7 @@ export default function ChatPresence() {
               <span className={`text-xs font-medium ${
                 onlineCount > 0 ? 'text-green-600' : 'text-muted-foreground'
               }`}>
-                {onlineCount} online
+                {isLoading ? "..." : `${onlineCount} online`}
               </span>
             </div>
           </TooltipTrigger>
@@ -65,18 +65,18 @@ export default function ChatPresence() {
         </Tooltip>
 
         {/* Online Users List */}
-        {roomOnlineUsers.length > 0 && (
+        {onlineUsers.length > 0 && (
           <Tooltip>
             <TooltipTrigger asChild>
               <Badge variant="secondary" className="text-xs h-5">
-                {roomOnlineUsers.length} active now
+                {onlineUsers.length} active now
               </Badge>
             </TooltipTrigger>
             <TooltipContent side="bottom">
               <div className="space-y-2 max-w-[200px]">
                 <p className="text-xs font-semibold text-foreground">Online Now:</p>
                 <div className="space-y-1">
-                  {roomOnlineUsers.slice(0, 10).map((user) => (
+                  {onlineUsers.slice(0, 10).map((user) => (
                     <div key={user.user_id} className="flex items-center gap-2 text-xs">
                       <div className="h-1.5 w-1.5 rounded-full bg-green-500 flex-shrink-0" />
                       <span className="truncate text-muted-foreground">
@@ -84,9 +84,9 @@ export default function ChatPresence() {
                       </span>
                     </div>
                   ))}
-                  {roomOnlineUsers.length > 10 && (
+                  {onlineUsers.length > 10 && (
                     <p className="text-xs text-muted-foreground pt-1">
-                      +{roomOnlineUsers.length - 10} more
+                      +{onlineUsers.length - 10} more
                     </p>
                   )}
                 </div>
@@ -96,7 +96,7 @@ export default function ChatPresence() {
         )}
 
         {/* Presence Error */}
-        {presence.error && (
+        {error && (
           <Tooltip>
             <TooltipTrigger asChild>
               <Badge variant="destructive" className="text-xs h-5">
@@ -104,7 +104,7 @@ export default function ChatPresence() {
               </Badge>
             </TooltipTrigger>
             <TooltipContent>
-              <p>Unable to connect to presence service</p>
+              <p>{error}</p>
             </TooltipContent>
           </Tooltip>
         )}

@@ -7,6 +7,8 @@ import { Database } from "@/lib/types/supabase";
 import { useMessage, Imessage } from "./messages";
 import type { RealtimeChannel, RealtimePresenceState } from "@supabase/supabase-js";
 
+
+
 // ✅ UUID validation regex
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -274,7 +276,6 @@ function roomReducer(state: RoomState, action: RoomAction): RoomState {
   }
 }
 
-// ---- Enhanced Context ----
 interface RoomContextType {
   state: RoomState;
   fetchAvailableRooms: () => Promise<void>;
@@ -306,6 +307,15 @@ interface RoomContextType {
   getOnlineCount: (roomId: string) => number;
   getOnlineUsers: (roomId: string) => PresenceData[];
   refreshPresence: (roomIds: string[]) => void;
+  
+  presence: {
+    onlineCounts: Map<string, number>;
+    onlineUsers: Map<string, PresenceData[]>;
+    isLoading: boolean;
+    error: string | null;
+  };
+  getAllRoomMemberCounts: () => Promise<Map<string, number>>;
+  updateTypingUsersWithProfiles: (userIds: string[]) => Promise<void>;
 }
 
 const RoomContext = createContext<RoomContextType | undefined>(undefined);
@@ -343,36 +353,39 @@ export function RoomProvider({
     return ids.filter(id => id && UUID_REGEX.test(id));
   }, []);
 
-  const extractPresenceData = useCallback((presenceState: RealtimePresenceState, currentUserId?: string): PresenceData[] => {
-    const presenceData: PresenceData[] = [];
-    
-    try {
-      Object.values(presenceState).forEach((presenceArray: any[]) => {
-        if (Array.isArray(presenceArray)) {
-          presenceArray.forEach((presence: any) => {
-            if (presence && typeof presence === 'object' && presence.user_id) {
-              // Skip current user if userId provided
-              if (currentUserId && presence.user_id === currentUserId) return;
-              
-              presenceData.push({
-                user_id: String(presence.user_id),
-                online_at: presence.online_at || new Date().toISOString(),
-                room_id: presence.room_id || '',
-                display_name: String(presence.display_name || ''),
-                username: String(presence.username || ''),
-                last_seen: presence.last_seen,
-              });
-            }
-          });
-        }
-      });
-    } catch (err) {
-      console.error('Error extracting presence data:', err);
-    }
-    
-    return presenceData;
-  }, []);
-
+// ✅ Correct
+const extractPresenceData = useCallback((presenceState: RealtimePresenceState, currentUserId?: string): PresenceData[] => {
+  const presenceData: PresenceData[] = [];
+  
+  try {
+    Object.values(presenceState).forEach((presenceArray: any[]) => {
+      if (Array.isArray(presenceArray)) {
+        presenceArray.forEach((presence: any) => {
+          // Access presence data directly, not through .public
+          const presencePayload = presence;
+          if (presencePayload && typeof presencePayload === 'object' && presencePayload.user_id) {
+            // Skip current user if userId provided
+            if (currentUserId && presencePayload.user_id === currentUserId) return;
+            
+            presenceData.push({
+              user_id: String(presencePayload.user_id),
+              online_at: presencePayload.online_at || new Date().toISOString(),
+              room_id: presencePayload.room_id || '',
+              display_name: presencePayload.display_name ? String(presencePayload.display_name) : 'Unknown User',
+              username: presencePayload.username ? String(presencePayload.username) : '',
+              last_seen: presencePayload.last_seen,
+            });
+          }
+        });
+      }
+    });
+  } catch (err) {
+    console.error('Error extracting presence data:', err);
+  }
+  
+  return presenceData;
+}, []);
+ 
   
   const updateRoomPresence = useCallback((roomId: string, count: number, users: PresenceData[]) => {
     dispatch({
@@ -1088,6 +1101,7 @@ const presenceData = extractPresenceData(presenceState, state.user?.id);
       dispatch({ type: "SET_LOADING", payload: false });
     }
   }, [state.user, supabase, checkUserRoomMembership, getAllRoomMemberCounts, fetchRoomMessages]);
+  
 
   // acceptJoinNotification
   const acceptJoinNotification = useCallback(async (roomId: string) => {
@@ -1487,13 +1501,14 @@ const presenceData = extractPresenceData(presenceState, state.user?.id);
       dispatch({ type: "RESET_UNREAD_NOTIFICATIONS", payload: state.unreadNotifications + newUnreadDelta });
     }
   }, [state.unreadNotifications]);
-
+  
   // triggerScrollToBottom with proper typing
   const triggerScrollToBottom = useCallback(() => {
     if (scrollTriggerRef.current) {
       scrollTriggerRef.current();
     }
   }, []);
+  
 
   const value: RoomContextType = {
     state,
@@ -1526,6 +1541,10 @@ const presenceData = extractPresenceData(presenceState, state.user?.id);
     getOnlineCount,
     getOnlineUsers,
     refreshPresence,
+    presence: state.presence,
+    // ✅ MAKE SURE THESE ARE INCLUDED:
+    getAllRoomMemberCounts,
+    updateTypingUsersWithProfiles,
   };
 
   return <RoomContext.Provider value={value}>{children}</RoomContext.Provider>;
@@ -1536,3 +1555,40 @@ export function useRoomContext() {
   if (context === undefined) throw new Error("useRoomContext must be used within a RoomProvider");
   return context;
 }
+// In your RoomContext.tsx file, update the test utility:
+export const extractPresenceDataForTest = (presenceState: RealtimePresenceState, currentUserId?: string): PresenceData[] => {
+  const presenceData: PresenceData[] = [];
+  
+  try {
+    Object.values(presenceState).forEach((presenceArray: unknown) => {
+      if (Array.isArray(presenceArray)) {
+        presenceArray.forEach((presence: unknown) => {
+          // Type guard to check if it's a valid presence object
+          if (presence && 
+              typeof presence === 'object' && 
+              'user_id' in presence && 
+              typeof (presence as any).user_id === 'string') {
+            
+            const presenceObj = presence as any;
+            
+            // Skip current user if userId provided
+            if (currentUserId && presenceObj.user_id === currentUserId) return;
+            
+            presenceData.push({
+              user_id: String(presenceObj.user_id),
+              online_at: presenceObj.online_at || new Date().toISOString(),
+              room_id: presenceObj.room_id || '',
+              display_name: presenceObj.display_name ? String(presenceObj.display_name) : 'Unknown User',
+              username: presenceObj.username ? String(presenceObj.username) : '',
+              last_seen: presenceObj.last_seen,
+            });
+          }
+        });
+      }
+    });
+  } catch (err) {
+    console.error('Error extracting presence data:', err);
+  }
+  
+  return presenceData;
+};

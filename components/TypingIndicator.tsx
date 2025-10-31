@@ -1,6 +1,4 @@
-// components/TypingIndicator.tsx
 "use client";
-
 import React, { useEffect, useState } from "react";
 import { useRoomContext } from "@/lib/store/RoomContext";
 import { motion } from "framer-motion"; 
@@ -12,30 +10,16 @@ export default function TypingIndicator() {
 
   const isTyping = selectedRoom?.id && typingUsers.length > 0;
 
-  // Update display text with debounce
+  // Use the computed text from RoomContext directly
   useEffect(() => {
     if (!isTyping) {
       setDisplayText("");
       return;
     }
 
-    // Use the computed text from context, or compute locally as fallback
+    // RoomContext already computes this, so we can use it directly
     if (typingDisplayText) {
       setDisplayText(typingDisplayText);
-    } else {
-      const typingNames = typingUsers
-        .map(user => user.display_name || user.username || "User")
-        .filter(Boolean);
-
-      let text = "";
-      if (typingNames.length === 1) {
-        text = `${typingNames[0]} is typing...`;
-      } else if (typingNames.length === 2) {
-        text = `${typingNames[0]} and ${typingNames[1]} are typing...`;
-      } else if (typingNames.length > 2) {
-        text = "Several people are typing...";
-      }
-      setDisplayText(text);
     }
   }, [typingUsers, typingDisplayText, isTyping]);
 
