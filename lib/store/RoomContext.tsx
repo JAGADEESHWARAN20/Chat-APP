@@ -542,11 +542,12 @@ const extractPresenceData = useCallback((presenceState: RealtimePresenceState, c
   }, [validateRoomIds, subscribeToRoomPresence, unsubscribeFromRoomPresence, updateRoomPresenceFromChannel]);
 
   
+// Fix the critical cleanup effect
 useEffect(() => {
   if (!state.user?.id) {
-    // Clean up all presence subscriptions when user logs out
+    // Capture current state for cleanup
     const currentChannels = new Map(channelsRef.current);
-    currentChannels.forEach((channel, roomId) => {
+    currentChannels.forEach((_, roomId) => {
       unsubscribeFromRoomPresence(roomId);
     });
     return;
@@ -559,20 +560,22 @@ useEffect(() => {
   refreshPresence(roomIds);
 
   return () => {
-    // Cleanup on unmount - capture current ref values
     isSubscribedRef.current = false;
     
-    // ✅ CAPTURE CURRENT REF VALUES FOR CLEANUP
-    const channelsToCleanup = new Map(channelsRef.current);
-    const presenceDataToCleanup = new Map(presenceDataRef.current);
+    // ✅ CRITICAL: Capture current ref values before cleanup
+    const channelsSnapshot = new Map(channelsRef.current);
+    const presenceDataSnapshot = new Map(presenceDataRef.current);
     
-    channelsToCleanup.forEach((channel, roomId) => {
+    // Cleanup using captured values
+    channelsSnapshot.forEach((channel, roomId) => {
       channel.untrack().catch(() => {});
       channel.unsubscribe();
+      channelsRef.current.delete(roomId);
     });
     
-    channelsRef.current.clear();
-    presenceDataRef.current.clear();
+    presenceDataSnapshot.forEach((_, roomId) => {
+      presenceDataRef.current.delete(roomId);
+    });
   };
 }, [state.user?.id, state.availableRooms, refreshPresence, unsubscribeFromRoomPresence]);
 
