@@ -492,19 +492,32 @@ export type Database = {
           user_count: number
         }[]
       }
-      get_rooms_with_counts: {
-        Args: { user_id: string }
-        Returns: {
-          created_at: string
-          created_by: string
-          id: string
-          is_member: boolean
-          is_private: boolean
-          member_count: number
-          name: string
-          participation_status: string
-        }[]
-      }
+      get_rooms_with_counts:
+        | {
+            Args: { p_query?: string; p_user_id: string }
+            Returns: {
+              created_at: string
+              created_by: string
+              id: string
+              is_member: boolean
+              is_private: boolean
+              member_count: number
+              name: string
+            }[]
+          }
+        | {
+            Args: { user_id: string }
+            Returns: {
+              created_at: string
+              created_by: string
+              id: string
+              is_member: boolean
+              is_private: boolean
+              member_count: number
+              name: string
+              participation_status: string
+            }[]
+          }
       get_typing_users: {
         Args: { p_room_id: string; p_stale_threshold?: unknown }
         Returns: {
@@ -512,6 +525,16 @@ export type Database = {
           updated_at: string
           user_id: string
         }[]
+      }
+      handle_notification_action: {
+        Args: {
+          p_action: string
+          p_notification_id: string
+          p_room_id?: string
+          p_sender_id?: string
+          p_user_id: string
+        }
+        Returns: undefined
       }
       handle_room_join_request: {
         Args: { p_room_id: string; p_user_id: string }
@@ -531,6 +554,19 @@ export type Database = {
           p_room_id: string
           p_sender_id: string
         }
+        Returns: undefined
+      }
+      send_message_with_notify: {
+        Args: {
+          p_direct_chat_id: string
+          p_room_id: string
+          p_text: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      switch_room: {
+        Args: { p_room_id: string; p_user_id: string }
         Returns: undefined
       }
       transfer_room_ownership: {
