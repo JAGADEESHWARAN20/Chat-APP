@@ -405,14 +405,13 @@ const extractPresenceData = useCallback((presenceState: RealtimePresenceState, c
   const updateRoomPresenceFromChannel = useCallback((roomId: string) => {
     const channel = channelsRef.current.get(roomId);
     if (!channel) return;
-
+  
     try {
       const presenceState = channel.presenceState();
       const currentPresence = presenceDataRef.current.get(roomId) || new Map();
       const now = Date.now();
-
-
-const presenceData = extractPresenceData(presenceState, state.user?.id);
+  
+      const presenceData = extractPresenceData(presenceState, state.user?.id); // Uses state.user
 
       // Update presence data
       presenceData.forEach((presence) => {
@@ -446,7 +445,7 @@ const presenceData = extractPresenceData(presenceState, state.user?.id);
       console.error(`Error updating presence for room ${roomId}:`, error);
       dispatch({ type: "SET_PRESENCE_ERROR", payload: `Failed to update presence for room ${roomId}` });
     }
-  }, [state.user?.id, extractPresenceData, updateRoomPresence]);
+  }, [state.user?.id, extractPresenceData, updateRoomPresence]); // ✅ Add state.user?.id
 
   const subscribeToRoomPresence = useCallback(async (roomId: string) => {
     if (channelsRef.current.has(roomId) || !state.user?.id) return;
@@ -542,33 +541,40 @@ const presenceData = extractPresenceData(presenceState, state.user?.id);
     });
   }, [validateRoomIds, subscribeToRoomPresence, unsubscribeFromRoomPresence, updateRoomPresenceFromChannel]);
 
-  // Enhanced: Auto-manage presence subscriptions when rooms change
-  useEffect(() => {
-    if (!state.user?.id) {
-      // Clean up all presence subscriptions when user logs out
-      channelsRef.current.forEach((channel, roomId) => {
-        unsubscribeFromRoomPresence(roomId);
-      });
-      return;
-    }
+  
+useEffect(() => {
+  if (!state.user?.id) {
+    // Clean up all presence subscriptions when user logs out
+    const currentChannels = new Map(channelsRef.current);
+    currentChannels.forEach((channel, roomId) => {
+      unsubscribeFromRoomPresence(roomId);
+    });
+    return;
+  }
 
-    const roomIds = state.availableRooms
-      .map(room => room?.id)
-      .filter((id): id is string => Boolean(id) && typeof id === 'string' && UUID_REGEX.test(id));
+  const roomIds = state.availableRooms
+    .map(room => room?.id)
+    .filter((id): id is string => Boolean(id) && typeof id === 'string' && UUID_REGEX.test(id));
+  
+  refreshPresence(roomIds);
+
+  return () => {
+    // Cleanup on unmount - capture current ref values
+    isSubscribedRef.current = false;
     
-    refreshPresence(roomIds);
-
-    return () => {
-      // Cleanup on unmount
-      isSubscribedRef.current = false;
-      channelsRef.current.forEach((channel, roomId) => {
-        channel.untrack().catch(() => {});
-        channel.unsubscribe();
-      });
-      channelsRef.current.clear();
-      presenceDataRef.current.clear();
-    };
-  }, [state.user?.id, state.availableRooms, refreshPresence, unsubscribeFromRoomPresence]);
+    // ✅ CAPTURE CURRENT REF VALUES FOR CLEANUP
+    const channelsToCleanup = new Map(channelsRef.current);
+    const presenceDataToCleanup = new Map(presenceDataRef.current);
+    
+    channelsToCleanup.forEach((channel, roomId) => {
+      channel.untrack().catch(() => {});
+      channel.unsubscribe();
+    });
+    
+    channelsRef.current.clear();
+    presenceDataRef.current.clear();
+  };
+}, [state.user?.id, state.availableRooms, refreshPresence, unsubscribeFromRoomPresence]);
 
   // Set user
   useEffect(() => {
