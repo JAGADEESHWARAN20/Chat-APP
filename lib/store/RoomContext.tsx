@@ -1048,7 +1048,7 @@ useEffect(() => {
       dispatch({ type: "SET_LOADING", payload: false });
       return;
     }
-
+  
     dispatch({ type: "SET_LOADING", payload: true });
     
     try {
@@ -1057,50 +1057,47 @@ useEffect(() => {
         supabase.from("rooms").select("*"),
         getAllRoomMemberCounts()
       ]);
-
+  
       if (roomsResult.error) {
         throw roomsResult.error;
       }
-
+  
       const roomsData = roomsResult.data as Room[] | null;
       if (!roomsData || roomsData.length === 0) {
         dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
         return;
       }
-
-      // Early filter + process only valid rooms
-      const validRoomsData = roomsData.filter(room => room.id && UUID_REGEX.test(room.id));
-      if (validRoomsData.length < roomsData.length) {
-        console.warn("[RoomContext] Filtered out invalid rooms:", roomsData.length - validRoomsData.length);
-      }
-
+  
       // Process each valid room
       const roomsWithMembership: RoomWithMembershipCount[] = await Promise.all(
-        validRoomsData.map(async (room) => { 
+        roomsData.map(async (room) => { 
           // Check current user's membership status
           const userMembership = await checkUserRoomMembership(state.user!.id, room.id);
           
-          // Get member count from the pre-fetched map
+          // Get member count from the pre-fetched map - FIXED
           const memberCount = countsMap.get(room.id) || 0;
           
           // Get messages and user data
           const messagesData = await fetchRoomMessages(room.id);
-
+          const usersData = await fetchRoomUsers(room.id);
+  
           return {
             ...room,
-            memberCount,
+            memberCount, // This sets the memberCount
             isMember: userMembership.isMember,
             participationStatus: userMembership.participationStatus,
             latestMessage: messagesData.latestMessage,
             unreadCount: messagesData.unreadCount,
-            totalUsers: memberCount,
-            onlineUsers: 0,
+            totalUsers: memberCount, // This should match memberCount
+            onlineUsers: usersData.onlineUsers, // Use actual online count
           } as RoomWithMembershipCount;
         })
       );
-
-      console.log("[RoomContext] Loaded valid rooms:", roomsWithMembership.length);
-
+  
+      console.log("[RoomContext] Loaded rooms with counts:", 
+        roomsWithMembership.map(r => ({ name: r.name, totalUsers: r.totalUsers, memberCount: r.memberCount }))
+      );
+  
       dispatch({ type: "SET_AVAILABLE_ROOMS", payload: roomsWithMembership });
     } catch (error) {
       console.error("[RoomContext] Error fetching rooms with membership:", error);
@@ -1109,9 +1106,7 @@ useEffect(() => {
     } finally {
       dispatch({ type: "SET_LOADING", payload: false });
     }
-  }, [state.user, supabase, checkUserRoomMembership, getAllRoomMemberCounts, fetchRoomMessages]);
-  
-
+  }, [state.user, supabase, checkUserRoomMembership, getAllRoomMemberCounts, fetchRoomMessages, fetchRoomUsers]);
   // acceptJoinNotification
   const acceptJoinNotification = useCallback(async (roomId: string) => {
     if (!state.user) {
