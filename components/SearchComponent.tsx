@@ -109,12 +109,17 @@ export default function SearchComponent({
     };
   }, []);
   const roomResults = useMemo(() => {
+    // Show empty if still loading
+    if (roomsLoading && availableRooms.length === 0) {
+      return [];
+    }
+    
     if (!debouncedSearchQuery.trim()) {
       return availableRooms.filter(room => room.id); // ✅ FIX: Filter out invalid rooms (no id)
     }
     const q = debouncedSearchQuery.toLowerCase();
     return availableRooms.filter((room) => room.id && room.name.toLowerCase().includes(q)); // ✅ FIX: Ensure valid id + search
-  }, [availableRooms, debouncedSearchQuery]);
+  }, [availableRooms, debouncedSearchQuery, roomsLoading]);
  
   
  
@@ -169,7 +174,12 @@ export default function SearchComponent({
               {result.is_private && <LockIcon className="h-3.5 w-3.5 text-gray-400" />}
             </div>
             <div className="text-sm text-gray-600 dark:text-gray-400">
-              {result.memberCount} {result.memberCount === 1 ? "member" : "members"}
+              {result.memberCount || 0} {result.memberCount === 1 ? "member" : "members"}
+              {result.onlineUsers !== undefined && result.onlineUsers > 0 && (
+                <span className="text-green-600 dark:text-green-400 ml-1 font-medium">
+                  • {result.onlineUsers} online
+                </span>
+              )}
             </div>
           </div>
         </div>

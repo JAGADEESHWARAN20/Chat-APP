@@ -116,9 +116,9 @@ const joinedRooms = useMemo(() => {
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Users className="h-3 w-3" />
             <span>
-              {item.totalUsers || 0} {item.totalUsers === 1 ? 'user' : 'users'}
-              {item.onlineUsers && item.onlineUsers > 0 && (
-                <span className="text-green-600 ml-1">
+              {item.totalUsers || item.memberCount || 0} {item.totalUsers === 1 ? 'user' : 'users'}
+              {item.onlineUsers !== undefined && item.onlineUsers > 0 && (
+                <span className="text-green-600 dark:text-green-400 ml-1 font-medium">
                   ({item.onlineUsers} online)
                 </span>
               )}
