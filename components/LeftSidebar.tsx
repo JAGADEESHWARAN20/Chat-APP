@@ -28,12 +28,39 @@ const LeftSidebar = memo(function LeftSidebar({
       fetchAvailableRooms();
     }
   }, [user, fetchAvailableRooms]);
+// In LeftSidebar component - add this useEffect for debugging
+useEffect(() => {
+  console.log("📊 Room state in LeftSidebar:", {
+    availableRooms: state.availableRooms?.length,
+    isLoading: state.isLoading,
+    rooms: state.availableRooms?.map(r => ({
+      id: r.id,
+      name: r.name,
+      isMember: r.isMember,
+      memberCount: r.memberCount,
+      totalUsers: r.totalUsers,
+      onlineUsers: r.onlineUsers
+    }))
+  });
+}, [state.availableRooms, state.isLoading]);
 
-  // Filter to only show joined rooms (isMember = true)
-  const joinedRooms = useMemo(() => 
-    state.availableRooms.filter(room => room.isMember === true),
-    [state.availableRooms]
-  );
+// Update your joinedRooms filter to be more permissive for testing
+const joinedRooms = useMemo(() => {
+  console.log("🔄 Filtering rooms...");
+  const allRooms = state.availableRooms || [];
+  
+  // TEMPORARY: Show all rooms for debugging
+  const showAllRooms = true; // Set to false later
+  const roomsToShow = showAllRooms ? allRooms : allRooms.filter(room => room.isMember === true);
+  
+  console.log("🏠 Room breakdown:", {
+    total: allRooms.length,
+    showing: roomsToShow.length,
+    joined: allRooms.filter(r => r.isMember).length
+  });
+  
+  return roomsToShow;
+}, [state.availableRooms]);
 
   const filteredRooms = useMemo(() => 
     joinedRooms.filter((item) =>

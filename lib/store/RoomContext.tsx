@@ -7,8 +7,6 @@ import { Database } from "@/lib/types/supabase";
 import { useMessage, Imessage } from "./messages";
 import type { RealtimeChannel, RealtimePresenceState } from "@supabase/supabase-js";
 
-
-
 // ✅ UUID validation regex
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -46,6 +44,15 @@ type CachedProfile = {
   avatar_url?: string;
 };
 
+// Enhanced TypingUser with lastSeen property
+type TypingUser = {
+  user_id: string;
+  is_typing: boolean;
+  display_name?: string;
+  username?: string;
+  lastSeen?: number;
+};
+
 export type RoomWithMembershipCount = Room & {
   isMember: boolean;
   participationStatus: string | null;
@@ -54,13 +61,6 @@ export type RoomWithMembershipCount = Room & {
   unreadCount?: number;
   totalUsers?: number;
   onlineUsers?: number;
-};
-
-type TypingUser = {
-  user_id: string;
-  is_typing: boolean;
-  display_name?: string;
-  username?: string;
 };
 
 type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
@@ -316,6 +316,8 @@ interface RoomContextType {
   };
   getAllRoomMemberCounts: () => Promise<Map<string, number>>;
   updateTypingUsersWithProfiles: (userIds: string[]) => Promise<void>;
+  startTyping: (roomId: string) => Promise<void>;
+  stopTyping: (roomId: string) => Promise<void>;
 }
 
 const RoomContext = createContext<RoomContextType | undefined>(undefined);
@@ -353,40 +355,38 @@ export function RoomProvider({
     return ids.filter(id => id && UUID_REGEX.test(id));
   }, []);
 
-// ✅ Correct
-const extractPresenceData = useCallback((presenceState: RealtimePresenceState, currentUserId?: string): PresenceData[] => {
-  const presenceData: PresenceData[] = [];
-  
-  try {
-    Object.values(presenceState).forEach((presenceArray: any[]) => {
-      if (Array.isArray(presenceArray)) {
-        presenceArray.forEach((presence: any) => {
-          // Access presence data directly, not through .public
-          const presencePayload = presence;
-          if (presencePayload && typeof presencePayload === 'object' && presencePayload.user_id) {
-            // Skip current user if userId provided
-            if (currentUserId && presencePayload.user_id === currentUserId) return;
-            
-            presenceData.push({
-              user_id: String(presencePayload.user_id),
-              online_at: presencePayload.online_at || new Date().toISOString(),
-              room_id: presencePayload.room_id || '',
-              display_name: presencePayload.display_name ? String(presencePayload.display_name) : 'Unknown User',
-              username: presencePayload.username ? String(presencePayload.username) : '',
-              last_seen: presencePayload.last_seen,
-            });
-          }
-        });
-      }
-    });
-  } catch (err) {
-    console.error('Error extracting presence data:', err);
-  }
-  
-  return presenceData;
-}, []);
+  const extractPresenceData = useCallback((presenceState: RealtimePresenceState, currentUserId?: string): PresenceData[] => {
+    const presenceData: PresenceData[] = [];
+    
+    try {
+      Object.values(presenceState).forEach((presenceArray: any) => {
+        if (Array.isArray(presenceArray)) {
+          presenceArray.forEach((presence: any) => {
+            // Access presence data directly
+            const presencePayload = presence;
+            if (presencePayload && typeof presencePayload === 'object' && presencePayload.user_id) {
+              // Skip current user if userId provided
+              if (currentUserId && presencePayload.user_id === currentUserId) return;
+              
+              presenceData.push({
+                user_id: String(presencePayload.user_id),
+                online_at: presencePayload.online_at || new Date().toISOString(),
+                room_id: presencePayload.room_id || '',
+                display_name: presencePayload.display_name ? String(presencePayload.display_name) : 'Unknown User',
+                username: presencePayload.username ? String(presencePayload.username) : '',
+                last_seen: presencePayload.last_seen,
+              });
+            }
+          });
+        }
+      });
+    } catch (err) {
+      console.error('Error extracting presence data:', err);
+    }
+    
+    return presenceData;
+  }, []);
  
-  
   const updateRoomPresence = useCallback((roomId: string, count: number, users: PresenceData[]) => {
     dispatch({
       type: "UPDATE_ROOM_PRESENCE",
@@ -411,7 +411,7 @@ const extractPresenceData = useCallback((presenceState: RealtimePresenceState, c
       const currentPresence = presenceDataRef.current.get(roomId) || new Map();
       const now = Date.now();
   
-      const presenceData = extractPresenceData(presenceState, state.user?.id); // Uses state.user
+      const presenceData = extractPresenceData(presenceState, state.user?.id);
 
       // Update presence data
       presenceData.forEach((presence) => {
@@ -445,7 +445,7 @@ const extractPresenceData = useCallback((presenceState: RealtimePresenceState, c
       console.error(`Error updating presence for room ${roomId}:`, error);
       dispatch({ type: "SET_PRESENCE_ERROR", payload: `Failed to update presence for room ${roomId}` });
     }
-  }, [state.user?.id, extractPresenceData, updateRoomPresence]); // ✅ Add state.user?.id
+  }, [state.user?.id, extractPresenceData, updateRoomPresence]);
 
   const subscribeToRoomPresence = useCallback(async (roomId: string) => {
     if (channelsRef.current.has(roomId) || !state.user?.id) return;
@@ -481,7 +481,6 @@ const extractPresenceData = useCallback((presenceState: RealtimePresenceState, c
                 console.error('Error fetching user profile for presence:', error);
               }
   
-              // Fix: Add proper type checking and string conversion
               const presencePayload: PresenceData = {
                 user_id: state.user!.id,
                 room_id: roomId,
@@ -541,43 +540,42 @@ const extractPresenceData = useCallback((presenceState: RealtimePresenceState, c
     });
   }, [validateRoomIds, subscribeToRoomPresence, unsubscribeFromRoomPresence, updateRoomPresenceFromChannel]);
 
-  
-// Fix the critical cleanup effect
-useEffect(() => {
-  if (!state.user?.id) {
-    // Capture current state for cleanup
-    const currentChannels = new Map(channelsRef.current);
-    currentChannels.forEach((_, roomId) => {
-      unsubscribeFromRoomPresence(roomId);
-    });
-    return;
-  }
+  // Fix the critical cleanup effect
+  useEffect(() => {
+    if (!state.user?.id) {
+      // Capture current state for cleanup
+      const currentChannels = new Map(channelsRef.current);
+      currentChannels.forEach((_, roomId) => {
+        unsubscribeFromRoomPresence(roomId);
+      });
+      return;
+    }
 
-  const roomIds = state.availableRooms
-    .map(room => room?.id)
-    .filter((id): id is string => Boolean(id) && typeof id === 'string' && UUID_REGEX.test(id));
-  
-  refreshPresence(roomIds);
+    const roomIds = state.availableRooms
+      .map(room => room?.id)
+      .filter((id): id is string => Boolean(id) && typeof id === 'string' && UUID_REGEX.test(id));
+    
+    refreshPresence(roomIds);
 
-  return () => {
-    isSubscribedRef.current = false;
-    
-    // ✅ CRITICAL: Capture current ref values before cleanup
-    const channelsSnapshot = new Map(channelsRef.current);
-    const presenceDataSnapshot = new Map(presenceDataRef.current);
-    
-    // Cleanup using captured values
-    channelsSnapshot.forEach((channel, roomId) => {
-      channel.untrack().catch(() => {});
-      channel.unsubscribe();
-      channelsRef.current.delete(roomId);
-    });
-    
-    presenceDataSnapshot.forEach((_, roomId) => {
-      presenceDataRef.current.delete(roomId);
-    });
-  };
-}, [state.user?.id, state.availableRooms, refreshPresence, unsubscribeFromRoomPresence]);
+    return () => {
+      isSubscribedRef.current = false;
+      
+      // ✅ CRITICAL: Capture current ref values before cleanup
+      const channelsSnapshot = new Map(channelsRef.current);
+      const presenceDataSnapshot = new Map(presenceDataRef.current);
+      
+      // Cleanup using captured values
+      channelsSnapshot.forEach((channel, roomId) => {
+        channel.untrack().catch(() => {});
+        channel.unsubscribe();
+        channelsRef.current.delete(roomId);
+      });
+      
+      presenceDataSnapshot.forEach((_, roomId) => {
+        presenceDataRef.current.delete(roomId);
+      });
+    };
+  }, [state.user?.id, state.availableRooms, refreshPresence, unsubscribeFromRoomPresence]);
 
   // Set user
   useEffect(() => {
@@ -628,14 +626,12 @@ useEffect(() => {
       // Update cache
       if (profiles) {
         profiles.forEach((profile) => {
-         // Fix: Add proper typing and string conversion in fetchProfiles
           const cachedProfile: CachedProfile = {
             display_name: profile.display_name ? String(profile.display_name) : undefined,
             username: profile.username ? String(profile.username) : undefined,
             avatar_url: profile.avatar_url ? String(profile.avatar_url) : undefined,
           };
-          // Fix: Ensure profile.id is properly typed as string
-          profilesCache.current.set(String(profile.id), cachedProfile); // Add String() conversion
+          profilesCache.current.set(String(profile.id), cachedProfile);
         });
       }
     } catch (error) {
@@ -679,65 +675,99 @@ useEffect(() => {
     return () => clearInterval(interval);
   }, []);
 
-  // Realtime typing subscription
+  // Enhanced typing subscription
   useEffect(() => {
-    if (!state.selectedRoom?.id) return;
+    if (!state.selectedRoom?.id || !state.user?.id) {
+      updateTypingUsers([]);
+      return;
+    }
 
     const roomId = state.selectedRoom.id;
+    console.log(`⌨️ Setting up typing subscription for room: ${roomId}`);
+
     const channel = supabase.channel(`typing:${roomId}`);
 
-    channel
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "typing_status",
-          filter: `room_id=eq.${roomId}`,
-        },
-        async (payload) => {
-          const { data: typingRecords, error } = await supabase
-            .from("typing_status")
-            .select("user_id, is_typing, updated_at")
-            .eq("room_id", roomId)
-            .gt("updated_at", new Date(Date.now() - 5000).toISOString())
-            .eq("is_typing", true);
+    // Handle incoming typing events
+    channel.on(
+      'broadcast',
+      { event: 'typing' },
+      ({ payload }) => {
+        console.log('⌨️ Received typing event:', payload);
+        if (payload.user_id === state.user!.id) return;
 
-          if (error) return;
+        const now = Date.now();
+        const updatedUsers = [...state.typingUsers];
+        const existingIndex = updatedUsers.findIndex(u => u.user_id === payload.user_id);
 
-          const typingUserIds = typingRecords?.map((record) => record.user_id as string) || [];
-          await updateTypingUsersWithProfiles(typingUserIds);
+        if (payload.is_typing) {
+          // User started typing
+          if (existingIndex >= 0) {
+            updatedUsers[existingIndex] = { 
+              ...updatedUsers[existingIndex], 
+              is_typing: true,
+              lastSeen: now 
+            };
+          } else {
+            // Fetch user profile for new typing user
+            fetchProfiles([payload.user_id]).then(() => {
+              const profile = profilesCache.current.get(payload.user_id);
+              const newUser: TypingUser = {
+                user_id: payload.user_id,
+                is_typing: true,
+                display_name: profile?.display_name,
+                username: profile?.username,
+                lastSeen: now
+              };
+              updatedUsers.push(newUser);
+              updateTypingUsers(updatedUsers);
+            });
+          }
+        } else {
+          // User stopped typing
+          if (existingIndex >= 0) {
+            updatedUsers.splice(existingIndex, 1);
+          }
         }
-      )
-      .subscribe();
 
-    // Cleanup stale typing every 2s
-    const interval = setInterval(async () => {
-      const { data: typingRecords } = await supabase
-        .from("typing_status")
-        .select("user_id, is_typing, updated_at")
-        .eq("room_id", roomId)
-        .gt("updated_at", new Date(Date.now() - 5000).toISOString())
-        .eq("is_typing", true);
-
-      if (typingRecords) {
-        const typingUserIds = typingRecords.map((record) => record.user_id as string);
-        await updateTypingUsersWithProfiles(typingUserIds);
-      } else {
-        updateTypingUsers([]);
+        updateTypingUsers(updatedUsers);
       }
-    }, 2000);
+    ).subscribe();
+
+    // Cleanup stale typing users every second
+    const cleanupInterval = setInterval(() => {
+      const now = Date.now();
+      const staleThreshold = 3000; // 3 seconds
+      
+      const activeUsers = state.typingUsers.filter(user => {
+        const userWithLastSeen = user as TypingUser;
+        return userWithLastSeen.lastSeen && (now - userWithLastSeen.lastSeen < staleThreshold);
+      });
+      
+      if (activeUsers.length !== state.typingUsers.length) {
+        updateTypingUsers(activeUsers);
+      }
+    }, 1000);
 
     return () => {
+      console.log(`⌨️ Cleaning up typing subscription for room: ${roomId}`);
       supabase.removeChannel(channel);
-      clearInterval(interval);
+      clearInterval(cleanupInterval);
+      updateTypingUsers([]);
     };
-  }, [state.selectedRoom?.id, supabase, updateTypingUsers, updateTypingUsersWithProfiles]);
+  }, [state.selectedRoom?.id, state.user?.id, state.typingUsers, supabase, updateTypingUsers, fetchProfiles]);
 
   // Compute typing text from users
   useEffect(() => {
-    const typingNames = state.typingUsers
-      .map(user => user.display_name || user.username || "User")
+    const activeTypingUsers = state.typingUsers.filter(user => user.is_typing);
+    
+    if (activeTypingUsers.length === 0) {
+      updateTypingText("");
+      return;
+    }
+
+    const typingNames = activeTypingUsers
+      .slice(0, 3) // Limit to 3 names
+      .map(user => user.display_name || user.username || "Someone")
       .filter(Boolean);
 
     let text = "";
@@ -745,7 +775,9 @@ useEffect(() => {
       text = `${typingNames[0]} is typing...`;
     } else if (typingNames.length === 2) {
       text = `${typingNames[0]} and ${typingNames[1]} are typing...`;
-    } else if (typingNames.length > 2) {
+    } else if (typingNames.length === 3) {
+      text = `${typingNames[0]}, ${typingNames[1]}, and ${typingNames[2]} are typing...`;
+    } else {
       text = "Several people are typing...";
     }
 
@@ -849,51 +881,56 @@ useEffect(() => {
   }, [state.selectedRoom?.id, supabase, handleRoomMessages]);
 
   // Utility function to check user room membership with proper typing and error handling
-  const checkUserRoomMembership = useCallback(async (userId: string, roomId: string) => {
-    try {
-      const [membersResult, participantsResult] = await Promise.all([
-        supabase
-          .from("room_members")
-          .select("status")
-          .eq("room_id", roomId)
-          .eq("user_id", userId),
-        supabase
-          .from("room_participants")
-          .select("status")
-          .eq("room_id", roomId)
-          .eq("user_id", userId)
-      ]);
+ // FIXED: Add proper type assertions
+const checkUserRoomMembership = useCallback(async (userId: string, roomId: string) => {
+  try {
+    console.log(`🔍 Checking membership for user ${userId} in room ${roomId}`);
+    
+    const [membersResult, participantsResult] = await Promise.all([
+      supabase
+        .from("room_members")
+        .select("status")
+        .eq("room_id", roomId)
+        .eq("user_id", userId)
+        .maybeSingle(),
+      supabase
+        .from("room_participants")
+        .select("status")
+        .eq("room_id", roomId)
+        .eq("user_id", userId)
+        .maybeSingle()
+    ]);
   
-      // Handle errors from either query
-      if (membersResult.error) {
-        console.error("Error fetching room members:", membersResult.error);
-      }
-      if (participantsResult.error) {
-        console.error("Error fetching room participants:", participantsResult.error);
-      }
+    // Handle errors gracefully - not finding a record is not an error
+    const memberStatus = membersResult.data?.status as string | null;
+    const participantStatus = participantsResult.data?.status as string | null;
   
-      const memberStatus = membersResult.data?.[0]?.status ?? null;
-      const participantStatus = participantsResult.data?.[0]?.status ?? null;
+    console.log(`📊 Membership results for room ${roomId}:`, { 
+      memberStatus, 
+      participantStatus,
+      hasMemberData: !!membersResult.data,
+      hasParticipantData: !!participantsResult.data
+    });
   
-      const isAccepted = memberStatus === 'accepted' || participantStatus === 'accepted';
-      const isPending = memberStatus === 'pending' || participantStatus === 'pending';
-      
-      return {
-        isMember: isAccepted,
-        participationStatus: memberStatus || participantStatus || null,
-        isPending,
-        isAccepted
-      };
-    } catch (error) {
-      console.error(`Error checking membership for user ${userId} in room ${roomId}:`, error);
-      return {
-        isMember: false,
-        participationStatus: null,
-        isPending: false,
-        isAccepted: false
-      };
-    }
-  }, [supabase]);
+    const isAccepted = memberStatus === 'accepted' || participantStatus === 'accepted';
+    const isPending = memberStatus === 'pending' || participantStatus === 'pending';
+    
+    return {
+      isMember: isAccepted,
+      participationStatus: memberStatus || participantStatus || null,
+      isPending,
+      isAccepted
+    };
+  } catch (error) {
+    console.error(`❌ Error checking membership for user ${userId} in room ${roomId}:`, error);
+    return {
+      isMember: false,
+      participationStatus: null,
+      isPending: false,
+      isAccepted: false
+    };
+  }
+}, [supabase]);
 
   // getRoomMemberCount with proper typing
   const getRoomMemberCount = useCallback(async (roomId: string): Promise<number> => {
@@ -919,25 +956,60 @@ useEffect(() => {
   // getAllRoomMemberCounts with proper typing
   const getAllRoomMemberCounts = useCallback(async (): Promise<Map<string, number>> => {
     try {
-      const { data, error } = await supabase
-        .rpc('get_room_user_counts');
+      console.log("🔍 Fetching all room member counts...");
+      
+      // Method 1: Direct query - count members per room
+      const { data: allRooms, error: roomsError } = await supabase
+        .from('rooms')
+        .select('id');
   
-      if (error) {
-        console.error('Error fetching all room member counts:', error);
+      if (roomsError) {
+        console.error("❌ Error fetching rooms:", roomsError);
         return new Map();
       }
   
-      // Convert array to Map with proper typing
-      const countsMap = new Map<string, number>();
-      if (data && Array.isArray(data)) {
-        data.forEach((row: { room_id: string; user_count: number }) => {
-          countsMap.set(row.room_id, row.user_count);
-        });
+      if (!allRooms || allRooms.length === 0) {
+        console.log("ℹ️ No rooms found for counting members");
+        return new Map();
       }
   
+      const countsMap = new Map<string, number>();
+      
+      // Count members for each room
+      for (const room of allRooms) {
+        try {
+          const roomId = typeof room.id === 'string' ? room.id : String(room.id);
+          if (!roomId || !UUID_REGEX.test(roomId)) {
+            console.error(`❌ Invalid room ID: ${roomId}`);
+            continue;
+          }
+
+          const { count, error } = await supabase
+            .from('room_members')
+            .select('*', { count: 'exact', head: true })
+            .eq('room_id', roomId)
+            .eq('status', 'accepted');
+  
+          if (error) {
+            console.error(`❌ Error counting members for room ${roomId}:`, error);
+            countsMap.set(roomId, 0);
+          } else {
+            countsMap.set(roomId, count || 0);
+          }
+        } catch (error) {
+          const roomId = typeof room.id === 'string' ? room.id : String(room.id);
+          console.error(`❌ Error processing room ${roomId}:`, error);
+          if (roomId && UUID_REGEX.test(roomId)) {
+            countsMap.set(roomId, 0);
+          }
+        }
+      }
+  
+      console.log("✅ Room member counts:", Object.fromEntries(countsMap));
       return countsMap;
+      
     } catch (error) {
-      console.error('Error fetching all room member counts:', error);
+      console.error("💥 Error in getAllRoomMemberCounts:", error);
       return new Map();
     }
   }, [supabase]);
@@ -1041,72 +1113,161 @@ useEffect(() => {
     }
   }, [fetchRoomMessages, fetchRoomUsers, getRoomMemberCount]);
 
-  // Enhanced fetchRoomsWithMembership function with proper typing and scoping
+  // Typing helper functions
+  const startTyping = useCallback(async (roomId: string) => {
+    if (!state.user?.id) return;
+
+    try {
+      await supabase
+        .from('typing_status')
+        .upsert({
+          user_id: state.user.id,
+          room_id: roomId,
+          is_typing: true,
+          updated_at: new Date().toISOString(),
+        });
+    } catch (error) {
+      console.error('Error starting typing:', error);
+    }
+  }, [state.user?.id, supabase]);
+
+  const stopTyping = useCallback(async (roomId: string) => {
+    if (!state.user?.id) return;
+
+    try {
+      await supabase
+        .from('typing_status')
+        .upsert({
+          user_id: state.user.id,
+          room_id: roomId,
+          is_typing: false,
+          updated_at: new Date().toISOString(),
+        });
+    } catch (error) {
+      console.error('Error stopping typing:', error);
+    }
+  }, [state.user?.id, supabase]);
+
+  // Fixed fetchRoomsWithMembership function
   const fetchRoomsWithMembership = useCallback(async () => {
     if (!state.user) {
+      console.log("❌ No user - skipping room fetch");
       dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
       dispatch({ type: "SET_LOADING", payload: false });
       return;
     }
-  
+
+    console.log("🔄 Starting room fetch for user:", state.user.id);
     dispatch({ type: "SET_LOADING", payload: true });
     
     try {
-      // Get all rooms and member counts in parallel
-      const [roomsResult, countsMap] = await Promise.all([
-        supabase.from("rooms").select("*"),
-        getAllRoomMemberCounts()
-      ]);
-  
-      if (roomsResult.error) {
-        throw roomsResult.error;
+      // Get all rooms
+      const { data: roomsData, error: roomsError } = await supabase
+        .from("rooms")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (roomsError) {
+        console.error("❌ Rooms fetch error:", roomsError);
+        throw roomsError;
       }
-  
-      const roomsData = roomsResult.data as Room[] | null;
+
+      console.log("📦 Raw rooms data:", roomsData);
+
       if (!roomsData || roomsData.length === 0) {
+        console.log("ℹ️ No rooms found in database");
         dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
         return;
       }
-  
-      // Process each valid room
+
+      // Get member counts using direct query (more reliable than RPC)
+      const countsMap = await getAllRoomMemberCounts();
+      console.log("👥 Member counts map:", Object.fromEntries(countsMap));
+
+      // Process each room
       const roomsWithMembership: RoomWithMembershipCount[] = await Promise.all(
         roomsData.map(async (room) => { 
-          // Check current user's membership status
-          const userMembership = await checkUserRoomMembership(state.user!.id, room.id);
-          
-          // Get member count from the pre-fetched map - FIXED
-          const memberCount = countsMap.get(room.id) || 0;
-          
-          // Get messages and user data
-          const messagesData = await fetchRoomMessages(room.id);
-          const usersData = await fetchRoomUsers(room.id);
-  
-          return {
-            ...room,
-            memberCount, // This sets the memberCount
-            isMember: userMembership.isMember,
-            participationStatus: userMembership.participationStatus,
-            latestMessage: messagesData.latestMessage,
-            unreadCount: messagesData.unreadCount,
-            totalUsers: memberCount, // This should match memberCount
-            onlineUsers: usersData.onlineUsers, // Use actual online count
-          } as RoomWithMembershipCount;
+          try {
+            // Type assertion for room - ensure it's properly typed
+            const typedRoom = room as Room;
+            const roomId = typedRoom.id;
+            
+            if (!roomId || !UUID_REGEX.test(roomId)) {
+              console.error(`❌ Invalid room ID: ${roomId}`);
+              throw new Error(`Invalid room ID: ${roomId}`);
+            }
+
+            console.log(`🔍 Processing room: ${typedRoom.name} (${roomId})`);
+            
+            // Check current user's membership status
+            const userMembership = await checkUserRoomMembership(state.user!.id, roomId);
+            console.log(`👤 Room ${typedRoom.name} membership:`, userMembership);
+            
+            // Get member count
+            const memberCount = countsMap.get(roomId) || 0;
+            
+            // Get messages data
+            const messagesData = await fetchRoomMessages(roomId);
+            
+            // Get online users count from presence
+            const onlineUsers = getOnlineCount(roomId);
+
+            const roomWithData: RoomWithMembershipCount = {
+              ...typedRoom,
+              memberCount,
+              isMember: userMembership.isMember,
+              participationStatus: userMembership.participationStatus,
+              latestMessage: messagesData.latestMessage,
+              unreadCount: messagesData.unreadCount,
+              totalUsers: memberCount,
+              onlineUsers: onlineUsers,
+            };
+
+            console.log(`✅ Processed room: ${typedRoom.name}`, {
+              isMember: roomWithData.isMember,
+              memberCount: roomWithData.memberCount,
+              totalUsers: roomWithData.totalUsers,
+              onlineUsers: roomWithData.onlineUsers
+            });
+
+            return roomWithData;
+          } catch (error) {
+            const typedRoom = room as Room;
+            console.error(`❌ Error processing room ${typedRoom.name}:`, error);
+            // Return a basic room object even if there's an error
+            // FIXED: Add proper Room properties with type assertion
+            return {
+              ...typedRoom,
+              memberCount: 0,
+              isMember: false,
+              participationStatus: null,
+              latestMessage: undefined,
+              unreadCount: 0,
+              totalUsers: 0,
+              onlineUsers: 0,
+            } as RoomWithMembershipCount;
+          }
         })
       );
-  
-      console.log("[RoomContext] Loaded rooms with counts:", 
-        roomsWithMembership.map(r => ({ name: r.name, totalUsers: r.totalUsers, memberCount: r.memberCount }))
-      );
-  
+
+      console.log("🎯 Final rooms with membership:", roomsWithMembership.map(r => ({
+        name: r.name,
+        isMember: r.isMember,
+        memberCount: r.memberCount,
+        totalUsers: r.totalUsers
+      })));
+
       dispatch({ type: "SET_AVAILABLE_ROOMS", payload: roomsWithMembership });
+      
     } catch (error) {
-      console.error("[RoomContext] Error fetching rooms with membership:", error);
+      console.error("💥 Error fetching rooms with membership:", error);
       toast.error("Failed to load rooms");
       dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
     } finally {
       dispatch({ type: "SET_LOADING", payload: false });
     }
-  }, [state.user, supabase, checkUserRoomMembership, getAllRoomMemberCounts, fetchRoomMessages, fetchRoomUsers]);
+  }, [state.user, supabase, checkUserRoomMembership, getAllRoomMemberCounts, fetchRoomMessages, getOnlineCount]);
+
   // acceptJoinNotification
   const acceptJoinNotification = useCallback(async (roomId: string) => {
     if (!state.user) {
@@ -1546,9 +1707,10 @@ useEffect(() => {
     getOnlineUsers,
     refreshPresence,
     presence: state.presence,
-    // ✅ MAKE SURE THESE ARE INCLUDED:
     getAllRoomMemberCounts,
     updateTypingUsersWithProfiles,
+    startTyping,
+    stopTyping,
   };
 
   return <RoomContext.Provider value={value}>{children}</RoomContext.Provider>;
@@ -1559,14 +1721,16 @@ export function useRoomContext() {
   if (context === undefined) throw new Error("useRoomContext must be used within a RoomProvider");
   return context;
 }
+
 // In your RoomContext.tsx file, update the test utility:
+// FIXED: Add proper type assertions
 export const extractPresenceDataForTest = (presenceState: RealtimePresenceState, currentUserId?: string): PresenceData[] => {
   const presenceData: PresenceData[] = [];
   
   try {
-    Object.values(presenceState).forEach((presenceArray: unknown) => {
+    Object.values(presenceState).forEach((presenceArray: any) => {
       if (Array.isArray(presenceArray)) {
-        presenceArray.forEach((presence: unknown) => {
+        presenceArray.forEach((presence: any) => {
           // Type guard to check if it's a valid presence object
           if (presence && 
               typeof presence === 'object' && 

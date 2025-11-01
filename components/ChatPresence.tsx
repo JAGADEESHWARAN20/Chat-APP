@@ -1,17 +1,13 @@
 "use client";
 import React from "react";
 import { useRoomContext } from "@/lib/store/RoomContext";
-import { useRoomPresence } from "@/hooks/useRoomPresence"; // Updated import
 import { Users, Wifi, Circle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 export default function ChatPresence() {
-  const { state } = useRoomContext();
+  const { state, getOnlineCount, getOnlineUsers } = useRoomContext();
   const { selectedRoom } = state;
-
-  // Use the unified hook for presence data
-  const { onlineCount, onlineUsers, isLoading, error } = useRoomPresence(selectedRoom?.id || null);
 
   if (!selectedRoom) {
     return (
@@ -21,6 +17,9 @@ export default function ChatPresence() {
       </div>
     );
   }
+
+  const onlineCount = getOnlineCount(selectedRoom.id);
+  const onlineUsers = getOnlineUsers(selectedRoom.id);
 
   return (
     <TooltipProvider>
@@ -40,7 +39,7 @@ export default function ChatPresence() {
               <span className={`text-xs font-medium ${
                 onlineCount > 0 ? 'text-green-600' : 'text-muted-foreground'
               }`}>
-                {isLoading ? "..." : `${onlineCount} online`}
+                {onlineCount} online
               </span>
             </div>
           </TooltipTrigger>
@@ -91,20 +90,6 @@ export default function ChatPresence() {
                   )}
                 </div>
               </div>
-            </TooltipContent>
-          </Tooltip>
-        )}
-
-        {/* Presence Error */}
-        {error && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Badge variant="destructive" className="text-xs h-5">
-                Presence offline
-              </Badge>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>{error}</p>
             </TooltipContent>
           </Tooltip>
         )}
