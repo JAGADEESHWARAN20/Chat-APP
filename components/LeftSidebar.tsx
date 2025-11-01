@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, memo } from "react";
+import React, { useState, useEffect, useMemo, useCallback, memo } from "react";
 import { RoomWithMembershipCount, useRoomContext } from "@/lib/store/RoomContext";
 import { Avatar, AvatarImage } from "@/components/ui/avatar";
 import { Loader2, ChevronRight, MessageSquare, Users, Plus } from "lucide-react";
@@ -33,12 +33,11 @@ const LeftSidebar = memo(function LeftSidebar({
 // REMOVED: Debug useEffect that was causing unnecessary re-renders
 // If needed for debugging, use console.log directly in render or remove in production
 
-// FIXED: Optimized room filtering - removed excessive logging
+// FIXED: Only show joined rooms (where isMember === true)
 const joinedRooms = useMemo(() => {
   const allRooms = state.availableRooms || [];
-  // Show all rooms - can be changed to filter by membership if needed
-  const showAllRooms = true;
-  return showAllRooms ? allRooms : allRooms.filter(room => room.isMember === true);
+  // Only show rooms where user is a member
+  return allRooms.filter(room => room.isMember === true);
 }, [state.availableRooms]);
 
   const filteredRooms = useMemo(() => 
@@ -73,7 +72,7 @@ const joinedRooms = useMemo(() => {
     }
   };
 
-  const renderItem = (item: RoomWithMembershipCount) => (
+  const renderItem = useCallback((item: RoomWithMembershipCount) => (
     <div
       key={item.id}
       className={`flex items-start p-3 rounded-lg cursor-pointer transition-colors duration-200 ${
@@ -137,7 +136,7 @@ const joinedRooms = useMemo(() => {
         </div>
       </div>
     </div>
-  );
+  ), [state.selectedRoom?.id, setSelectedRoom]);
 
   return (
     <div

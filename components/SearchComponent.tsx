@@ -1,9 +1,9 @@
 "use client";
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import { Button } from "./ui/button";
 import { User as SupabaseUser } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
-import { Settings, UserIcon, LockIcon, LogOut } from "lucide-react";
+import { Settings, UserIcon, LockIcon, LogOut, Users } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { toast } from "sonner";
@@ -148,35 +148,40 @@ export default function SearchComponent({
     },
     [user?.id, joinRoom] // FIXED: Only depend on user ID, removed fetchAvailableRooms
   );
-  const renderRoomSearchResult = (result: RoomWithMembershipCount) => (
+  const renderRoomSearchResult = React.useCallback((result: RoomWithMembershipCount) => (
     // ✅ FIX: Early guard - skip render if invalid result (prevents bad onClick)
     !result.id ? null : (
-      <li
+      <div
         key={result.id}
-        className="flex items-center justify-between pb-[1em] rounded-lg transition-colors hover:bg-accent/50"
+        className="flex flex-col p-4 rounded-lg border border-border bg-card hover:bg-accent/50 transition-all hover:shadow-md"
       >
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-500/30">
-            <span className="text-lg font-semibold text-indigo-400">
-              {result.name.charAt(0).toUpperCase()}
-            </span>
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-black dark:text-white">{result.name}</span>
-              {result.is_private && <LockIcon className="h-3.5 w-3.5 text-gray-400" />}
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex items-center gap-3 flex-1">
+            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-indigo-500/30 flex-shrink-0">
+              <span className="text-xl font-semibold text-indigo-400">
+                {result.name.charAt(0).toUpperCase()}
+              </span>
             </div>
-            <div className="text-sm text-gray-600 dark:text-gray-400">
-              {result.memberCount || 0} {result.memberCount === 1 ? "member" : "members"}
-              {result.onlineUsers !== undefined && result.onlineUsers > 0 && (
-                <span className="text-green-600 dark:text-green-400 ml-1 font-medium">
-                  • {result.onlineUsers} online
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="font-semibold text-lg text-foreground truncate">#{result.name}</span>
+                {result.is_private && <LockIcon className="h-4 w-4 text-muted-foreground flex-shrink-0" />}
+              </div>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Users className="h-3.5 w-3.5" />
+                <span>
+                  {result.memberCount || 0} {result.memberCount === 1 ? "member" : "members"}
                 </span>
-              )}
+                {result.onlineUsers !== undefined && result.onlineUsers > 0 && (
+                  <span className="text-green-600 dark:text-green-400 ml-1 font-medium">
+                    • {result.onlineUsers} online
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
           {result.isMember ? (
             <>
               <Button
@@ -185,34 +190,38 @@ export default function SearchComponent({
                 onClick={() => router.push(`/rooms/${result.id}/settings`)}
                 className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300"
               >
-                <Settings className="h-4 w-4" />
+                <Settings className="h-4 w-4 mr-2" />
+                Settings
               </Button>
               <Button
-                size="icon"
+                size="sm"
                 variant="ghost"
                 onClick={() => leaveRoom(result.id)}
-                className="bg-red-500 hover:bg-red-600 rounded-md text-white"
+                className="bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400"
                 title="Leave Room"
               >
-                <LogOut className="h-4 w-4" />
+                <LogOut className="h-4 w-4 mr-2" />
+                Leave
               </Button>
             </>
           ) : result.participationStatus === "pending" ? (
-            <span className="text-sm text-yellow-500 dark:text-yellow-400 font-medium">Pending</span>
+            <span className="text-sm text-yellow-500 dark:text-yellow-400 font-medium px-3 py-1 bg-yellow-500/10 rounded-md">
+              Pending Request
+            </span>
           ) : (
             <Button
               size="sm"
               onClick={() => handleJoinRoom(result.id)}
               disabled={!user}
-              className="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20 hover:text-indigo-500 dark:hover:text-indigo-300 transition-colors"
+              className="bg-indigo-500 text-white hover:bg-indigo-600 transition-colors w-full"
             >
-              Join
+              Join Room
             </Button>
           )}
         </div>
-      </li>
+      </div>
     )
-  );
+  ), [router, user, handleJoinRoom, leaveRoom]);
   const showLoading = isLoading || (searchType === "rooms" && roomsLoading);
   return (
     <div className="w-full max-w-[400px] mx-auto p-4">
@@ -252,28 +261,28 @@ export default function SearchComponent({
         <TabsContent value="rooms">
           <div className="mt-4">
             <h4 className="font-semibold text-[1em] text-muted-foreground mb-3">Rooms</h4>
-            <ul className="space-y-[0.1em] overflow-y-auto max-h-[440px] py-[0.2em] rounded-lg scrollbar-none lg:scrollbar-custom">
+            <div className="grid gap-3 overflow-y-auto max-h-[440px] py-[0.2em] rounded-lg scrollbar-none lg:scrollbar-custom">
               {showLoading ? (
                 Array.from({ length: 3 }).map((_, i) => (
-                  <li key={i} className="flex items-center justify-between p-2 rounded-lg bg-muted animate-pulse">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-lg bg-accent" />
-                      <div>
-                        <div className="h-4 w-32 bg-accent rounded mb-2" />
-                        <div className="h-3 w-24 bg-accent rounded" />
+                  <div key={i} className="flex flex-col p-4 rounded-lg border border-border bg-card animate-pulse">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="h-12 w-12 rounded-lg bg-accent" />
+                      <div className="flex-1">
+                        <div className="h-5 w-32 bg-accent rounded mb-2" />
+                        <div className="h-4 w-24 bg-accent rounded" />
                       </div>
                     </div>
-                    <div className="h-8 w-16 bg-accent rounded" />
-                  </li>
+                    <div className="h-8 w-full bg-accent rounded" />
+                  </div>
                 ))
               ) : roomResults.length > 0 ? (
                 roomResults.map((result) => renderRoomSearchResult(result))
               ) : (
-                <li className="text-[1em] text-muted-foreground p-2 text-center">
+                <div className="text-[1em] text-muted-foreground p-4 text-center border border-border rounded-lg bg-card">
                   {debouncedSearchQuery ? "No rooms found" : "No rooms available"}
-                </li>
+                </div>
               )}
-            </ul>
+            </div>
           </div>
         </TabsContent>
         <TabsContent value="users">
@@ -333,4 +342,5 @@ export default function SearchComponent({
       )}
     </div>
   );
+}
 }
