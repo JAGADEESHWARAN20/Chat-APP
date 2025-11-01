@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 
 export default function Page() {
   const [user, setUser] = useState<any>(null);
+  console.log(user)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"home" | "search">("home");
 

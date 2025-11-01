@@ -7,6 +7,7 @@ import RoomInitializer from "@/lib/initialization/RoomInitializer";
 import { supabaseServer } from "@/lib/supabase/server";
 import ThemeTransitionWrapper from "@/components/ThemeTransitionWrapper";
 import "@/app/globals.css";
+import ClientInitializer from "@/lib/initialization/clientinitializer";
 
 const space_Grotesk = Space_Grotesk({ subsets: ["latin"] });
 
@@ -31,6 +32,7 @@ export default async function RootLayout({
             <ThemeTransitionWrapper>
               <RoomProvider user={data.session?.user}>
                 <SearchHighlightProvider>
+                <ClientInitializer /> {/* ✅ ensures Zustand store stays synced */}
                   <RoomInitializer />
                   {children}
                   <ResponsiveToaster />

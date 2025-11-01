@@ -1,5 +1,6 @@
+// lib/utils/notifications.ts - UPDATED
 import { Database } from "@/lib/types/supabase";
-import { Inotification } from "@/lib/store/notifications";
+import { Inotification } from "@/lib/types/notifications";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 type Room = Database["public"]["Tables"]["rooms"]["Row"];

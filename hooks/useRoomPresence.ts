@@ -1,78 +1,25 @@
-// hooks/useRoomPresence.ts
-import { useState, useEffect } from "react";
-import { supabaseBrowser } from "@/lib/supabase/browser";
-import { useUser } from "@/lib/store/user";
-
-interface PresenceState {
-    user_id: string;
-    online_at: string;
-}
+"use client";
+import { useRoomContext } from "@/lib/store/RoomContext";
 
 /**
- * A hook to track online users for a list of rooms using Supabase Presence.
- * @param roomIds An array of room IDs to track.
- * @returns A map of online user counts for each room.
+ * Unified hook for room presence using RoomContext
  */
-export const useRoomPresence = (roomIds: string[]) => {
-    const user = useUser((state) => state.user);
-    const supabase = supabaseBrowser();
-    const [onlineCounts, setOnlineCounts] = useState<Map<string, number>>(new Map());
+export function useRoomPresence(roomId: string | null) {
+  const { 
+    presence, 
+    getOnlineCount, 
+    getOnlineUsers,
+    refreshPresence 
+  } = useRoomContext();
 
-    useEffect(() => {
-        if (!user || roomIds.length === 0) {
-            setOnlineCounts(new Map());
-            return;
-        }
+  const onlineCount = roomId ? getOnlineCount(roomId) : 0;
+  const onlineUsers = roomId ? getOnlineUsers(roomId) : [];
 
-        const channels = roomIds.map(roomId => {
-            const channelName = `room_${roomId}_presence`;
-            return supabase.channel(channelName, {
-                config: { presence: { key: user.id } }
-            });
-        });
-
-        // Set up event listeners for all channels
-        channels.forEach(channel => {
-            const handlePresence = () => {
-                const presenceState = channel.presenceState<PresenceState>();
-                const userIds = new Set<string>();
-                Object.values(presenceState).forEach(stateList => {
-                    stateList.forEach(presence => {
-                        if (presence.user_id) {
-                            userIds.add(presence.user_id);
-                        }
-                    });
-                });
-                
-                // Update the count for this specific room, excluding the current user
-                const roomId = channel.topic.split('_')[1];
-                const otherUsersCount = Array.from(userIds).filter(userId => userId !== user.id).length;
-                setOnlineCounts(prev => new Map(prev).set(roomId, otherUsersCount));
-            };
-
-            channel
-                .on('presence', { event: 'sync' }, handlePresence)
-                .on('presence', { event: 'join' }, handlePresence)
-                .on('presence', { event: 'leave' }, handlePresence)
-                .subscribe(async (status) => {
-                    if (status === 'SUBSCRIBED') {
-                        await channel.track({
-                            user_id: user.id,
-                            online_at: new Date().toISOString(),
-                        });
-                    }
-                });
-        });
-
-        // Cleanup function to unsubscribe from all channels
-        return () => {
-            channels.forEach(channel => {
-                channel.untrack();
-                channel.unsubscribe();
-            });
-        };
-
-    }, [user, supabase, roomIds]);
-
-    return onlineCounts;
-};
+  return {
+    onlineCount,
+    onlineUsers,
+    isLoading: presence.isLoading,
+    error: presence.error,
+    refreshPresence,
+  };
+}

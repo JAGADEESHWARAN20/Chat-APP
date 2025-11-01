@@ -14,6 +14,59 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_chat_history: {
+        Row: {
+          ai_response: string
+          analysis_type: string | null
+          created_at: string | null
+          id: string
+          message_count: number | null
+          model_used: string | null
+          room_id: string
+          structured_data: Json | null
+          token_count: number | null
+          updated_at: string | null
+          user_id: string
+          user_query: string
+        }
+        Insert: {
+          ai_response: string
+          analysis_type?: string | null
+          created_at?: string | null
+          id?: string
+          message_count?: number | null
+          model_used?: string | null
+          room_id: string
+          structured_data?: Json | null
+          token_count?: number | null
+          updated_at?: string | null
+          user_id: string
+          user_query: string
+        }
+        Update: {
+          ai_response?: string
+          analysis_type?: string | null
+          created_at?: string | null
+          id?: string
+          message_count?: number | null
+          model_used?: string | null
+          room_id?: string
+          structured_data?: Json | null
+          token_count?: number | null
+          updated_at?: string | null
+          user_id?: string
+          user_query?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_room"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       direct_chats: {
         Row: {
           created_at: string | null
@@ -139,6 +192,7 @@ export type Database = {
           sender_id: string | null
           status: string | null
           type: string
+          updated_at: string | null
           user_id: string
         }
         Insert: {
@@ -151,6 +205,7 @@ export type Database = {
           sender_id?: string | null
           status?: string | null
           type: string
+          updated_at?: string | null
           user_id: string
         }
         Update: {
@@ -163,6 +218,7 @@ export type Database = {
           sender_id?: string | null
           status?: string | null
           type?: string
+          updated_at?: string | null
           user_id?: string
         }
         Relationships: [
@@ -289,6 +345,7 @@ export type Database = {
           joined_at: string
           room_id: string
           status: string
+          updated_at: string | null
           user_id: string
         }
         Insert: {
@@ -297,6 +354,7 @@ export type Database = {
           joined_at?: string
           room_id: string
           status?: string
+          updated_at?: string | null
           user_id: string
         }
         Update: {
@@ -305,6 +363,7 @@ export type Database = {
           joined_at?: string
           room_id?: string
           status?: string
+          updated_at?: string | null
           user_id?: string
         }
         Relationships: [
@@ -427,7 +486,11 @@ export type Database = {
         }[]
       }
       get_rooms_with_counts: {
-        Args: { user_id: string }
+        Args: {
+          p_include_participants?: boolean
+          p_query?: string
+          p_user_id: string
+        }
         Returns: {
           created_at: string
           created_by: string
@@ -447,6 +510,16 @@ export type Database = {
           user_id: string
         }[]
       }
+      handle_notification_action: {
+        Args: {
+          p_action: string
+          p_notification_id: string
+          p_room_id?: string
+          p_sender_id?: string
+          p_user_id: string
+        }
+        Returns: undefined
+      }
       handle_room_join_request: {
         Args: { p_room_id: string; p_user_id: string }
         Returns: undefined
@@ -465,6 +538,19 @@ export type Database = {
           p_room_id: string
           p_sender_id: string
         }
+        Returns: undefined
+      }
+      send_message_with_notify: {
+        Args: {
+          p_direct_chat_id: string
+          p_room_id: string
+          p_text: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      switch_room: {
+        Args: { p_room_id: string; p_user_id: string }
         Returns: undefined
       }
       transfer_room_ownership: {
