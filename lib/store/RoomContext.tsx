@@ -1148,16 +1148,22 @@ const checkUserRoomMembership = useCallback(async (userId: string, roomId: strin
     }
   }, [state.user?.id, supabase]);
 
-  // Fixed fetchRoomsWithMembership function
+  // Fixed fetchRoomsWithMembership function - FIXED: Use user ID ref to prevent recreation
+  const userIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    userIdRef.current = state.user?.id || null;
+  }, [state.user?.id]);
+
   const fetchRoomsWithMembership = useCallback(async () => {
-    if (!state.user) {
+    const currentUserId = userIdRef.current;
+    if (!currentUserId) {
       console.log("❌ No user - skipping room fetch");
       dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
       dispatch({ type: "SET_LOADING", payload: false });
       return;
     }
 
-    console.log("🔄 Starting room fetch for user:", state.user.id);
+    console.log("🔄 Starting room fetch for user:", currentUserId);
     dispatch({ type: "SET_LOADING", payload: true });
     
     try {
@@ -1200,7 +1206,7 @@ const checkUserRoomMembership = useCallback(async (userId: string, roomId: strin
             console.log(`🔍 Processing room: ${typedRoom.name} (${roomId})`);
             
             // Check current user's membership status
-            const userMembership = await checkUserRoomMembership(state.user!.id, roomId);
+            const userMembership = await checkUserRoomMembership(currentUserId, roomId);
             console.log(`👤 Room ${typedRoom.name} membership:`, userMembership);
             
             // Get member count
@@ -1266,7 +1272,7 @@ const checkUserRoomMembership = useCallback(async (userId: string, roomId: strin
     } finally {
       dispatch({ type: "SET_LOADING", payload: false });
     }
-  }, [state.user, supabase, checkUserRoomMembership, getAllRoomMemberCounts, fetchRoomMessages, getOnlineCount]);
+  }, [supabase, checkUserRoomMembership, getAllRoomMemberCounts, fetchRoomMessages, getOnlineCount]);
 
   // acceptJoinNotification
   const acceptJoinNotification = useCallback(async (roomId: string) => {
@@ -1604,10 +1610,12 @@ const checkUserRoomMembership = useCallback(async (userId: string, roomId: strin
     dispatch({ type: "SET_SELECTED_DIRECT_CHAT", payload: chat });
   }, [dispatch]);
 
-  // Auto-fetch rooms when user changes
+  // Auto-fetch rooms when user ID changes - FIXED: Only depend on user ID, not entire user object
   useEffect(() => {
-    if (state.user?.id) fetchRoomsWithMembership();
-  }, [state.user, fetchRoomsWithMembership]);
+    if (state.user?.id) {
+      fetchRoomsWithMembership();
+    }
+  }, [state.user?.id, fetchRoomsWithMembership]);
 
   // subscribe to changes on room_members and room_participants with proper typing
   useEffect(() => {

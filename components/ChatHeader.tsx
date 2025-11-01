@@ -41,9 +41,13 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   // Use the unified hook for active users
   const activeUsers = useActiveUsers(selectedRoom?.id || null);
 
-  const handleSearch = async (query: string) => {
+  // FIXED: Add debouncing to prevent excessive searches
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  const handleSearch = useCallback(async (query: string) => {
     setMessageSearchQuery(query);
     setSearchQuery(query);
+    
     if (!selectedRoom?.id) return;
 
     if (query.trim().length === 0) {
@@ -52,11 +56,34 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
       return;
     }
 
-    setIsSearching(true);
-    const results = await searchMessages(selectedRoom.id, query);
-    setSearchResults(results);
-    setIsSearching(false);
-  };
+    // Clear previous timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    // Debounce search by 300ms
+    searchTimeoutRef.current = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const results = await searchMessages(selectedRoom.id, query);
+        setSearchResults(results);
+      } catch (error) {
+        console.error("Search error:", error);
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+  }, [selectedRoom?.id, searchMessages, setSearchQuery, setHighlightedMessageId]);
+  
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleRoomSwitch = useCallback(
     async (newRoomId: string) => {

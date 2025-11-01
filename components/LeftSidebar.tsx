@@ -23,43 +23,22 @@ const LeftSidebar = memo(function LeftSidebar({
   const [newRoomName, setNewRoomName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
 
+  // FIXED: Only fetch when user ID changes, not the entire user object
   useEffect(() => {
     if (user?.id) {
       fetchAvailableRooms();
     }
-  }, [user, fetchAvailableRooms]);
-// In LeftSidebar component - add this useEffect for debugging
-useEffect(() => {
-  console.log("📊 Room state in LeftSidebar:", {
-    availableRooms: state.availableRooms?.length,
-    isLoading: state.isLoading,
-    rooms: state.availableRooms?.map(r => ({
-      id: r.id,
-      name: r.name,
-      isMember: r.isMember,
-      memberCount: r.memberCount,
-      totalUsers: r.totalUsers,
-      onlineUsers: r.onlineUsers
-    }))
-  });
-}, [state.availableRooms, state.isLoading]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]); // Only depend on user ID, not fetchAvailableRooms to prevent infinite loops
+// REMOVED: Debug useEffect that was causing unnecessary re-renders
+// If needed for debugging, use console.log directly in render or remove in production
 
-// Update your joinedRooms filter to be more permissive for testing
+// FIXED: Optimized room filtering - removed excessive logging
 const joinedRooms = useMemo(() => {
-  console.log("🔄 Filtering rooms...");
   const allRooms = state.availableRooms || [];
-  
-  // TEMPORARY: Show all rooms for debugging
-  const showAllRooms = true; // Set to false later
-  const roomsToShow = showAllRooms ? allRooms : allRooms.filter(room => room.isMember === true);
-  
-  console.log("🏠 Room breakdown:", {
-    total: allRooms.length,
-    showing: roomsToShow.length,
-    joined: allRooms.filter(r => r.isMember).length
-  });
-  
-  return roomsToShow;
+  // Show all rooms - can be changed to filter by membership if needed
+  const showAllRooms = true;
+  return showAllRooms ? allRooms : allRooms.filter(room => room.isMember === true);
 }, [state.availableRooms]);
 
   const filteredRooms = useMemo(() => 

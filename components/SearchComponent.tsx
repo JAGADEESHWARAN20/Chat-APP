@@ -64,7 +64,7 @@ export default function SearchComponent({
     []
   );
   const fetchUserResults = useCallback(async () => {
-    if (searchType !== "users" || !user) {
+    if (searchType !== "users" || !user?.id) {
       setIsLoading(false);
       setUserResults([]);
       return;
@@ -94,12 +94,15 @@ export default function SearchComponent({
     } finally {
       if (isMounted.current) setIsLoading(false);
     }
-  }, [searchType, user, debouncedSearchQuery, fetchAllUsers]);
+  }, [searchType, user?.id, debouncedSearchQuery, fetchAllUsers]);
+  
+  // FIXED: Only fetch when searchType or debouncedSearchQuery changes, not fetchUserResults
   useEffect(() => {
     if (searchType === "users") {
       fetchUserResults();
     }
-  }, [searchType, fetchUserResults]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchType, debouncedSearchQuery]); // Removed fetchUserResults from dependencies
   useEffect(() => {
     return () => {
       isMounted.current = false;
@@ -116,36 +119,37 @@ export default function SearchComponent({
   
  
   const handleJoinRoom = useCallback(
-  async (roomId: string) => {
-    console.log("handleJoinRoom called with roomId:", roomId);
-    // Validate room ID with UUID regex
-    if (!roomId || roomId === 'undefined' || !UUID_REGEX.test(roomId)) {
-      console.error("❌ Invalid room ID in handleJoinRoom:", roomId);
-      toast.error("Invalid room ID. Try refreshing the list.");
-      return;
-    }
-
-    if (!user) {
-      toast.error("You must be logged in to join a room");
-      return;
-    }
-
-    console.log("Attempting to join room:", roomId);
-    try {
-      await joinRoom(roomId);
-      await fetchAvailableRooms();
-    } catch (error) {
-      console.error("Join room error:", error);
-      const errorMsg = (error as Error).message || "Failed to join room";
-      // Handle API debug info if present
-      if (errorMsg.includes('debug')) {
-        console.log('API Debug Info:', error);
+    async (roomId: string) => {
+      console.log("handleJoinRoom called with roomId:", roomId);
+      // Validate room ID with UUID regex
+      if (!roomId || roomId === 'undefined' || !UUID_REGEX.test(roomId)) {
+        console.error("❌ Invalid room ID in handleJoinRoom:", roomId);
+        toast.error("Invalid room ID. Try refreshing the list.");
+        return;
       }
-      toast.error(errorMsg);
-    }
-  },
-  [user, joinRoom, fetchAvailableRooms]
-);
+
+      if (!user?.id) {
+        toast.error("You must be logged in to join a room");
+        return;
+      }
+
+      console.log("Attempting to join room:", roomId);
+      try {
+        await joinRoom(roomId);
+        // FIXED: Don't manually fetch - RoomContext will update automatically via realtime subscriptions
+        // await fetchAvailableRooms(); // Removed to prevent infinite loops
+      } catch (error) {
+        console.error("Join room error:", error);
+        const errorMsg = (error as Error).message || "Failed to join room";
+        // Handle API debug info if present
+        if (errorMsg.includes('debug')) {
+          console.log('API Debug Info:', error);
+        }
+        toast.error(errorMsg);
+      }
+    },
+    [user?.id, joinRoom] // FIXED: Only depend on user ID, removed fetchAvailableRooms
+  );
   const renderRoomSearchResult = (result: RoomWithMembershipCount) => (
     // ✅ FIX: Early guard - skip render if invalid result (prevents bad onClick)
     !result.id ? null : (
