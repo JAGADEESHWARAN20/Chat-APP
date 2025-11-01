@@ -30,6 +30,7 @@ export default function LoginPage() {
 
       if (error) {
         toast.error(error.message);
+        setIsLoading(false);
         return;
       }
 

@@ -38,6 +38,9 @@ export type RoomWithMembershipCount = Room & {
   isMember: boolean;
   participationStatus: string | null;
   memberCount: number;
+  unreadCount?: number;
+  latestMessage?: string;
+  onlineUsers?: number;
 };
 
 type TypingUser = {

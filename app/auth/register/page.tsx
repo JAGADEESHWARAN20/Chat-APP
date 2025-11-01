@@ -46,6 +46,7 @@ export default function RegisterPage() {
 
       if (signUpError) {
         toast.error(signUpError.message);
+        setIsLoading(false);
         return;
       }
 
@@ -62,6 +63,7 @@ export default function RegisterPage() {
 
         if (profileError) {
           toast.error("Error creating user profile");
+          setIsLoading(false);
           return;
         }
       }
@@ -114,6 +116,22 @@ export default function RegisterPage() {
               required
               minLength={2}
               maxLength={50}
+              className="w-full px-4 py-2 bg-background text-foreground border border-border rounded-[var(--radius)] focus:ring-2 focus:ring-primary"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="username">Username</Label>
+            <Input
+              id="username"
+              type="text"
+              placeholder="Enter your username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              required
+              minLength={3}
+              maxLength={30}
+              pattern="[a-zA-Z0-9_]+"
               className="w-full px-4 py-2 bg-background text-foreground border border-border rounded-[var(--radius)] focus:ring-2 focus:ring-primary"
             />
           </div>
