@@ -6,9 +6,8 @@ import { useRouter } from "next/navigation";
 import { Settings, UserIcon, LockIcon, LogOut } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { Database } from "@/lib/types/supabase";
 import { toast } from "sonner";
-import { useRoomContext } from "@/lib/store/RoomContext";
+import { useRoomContext, RoomWithMembershipCount } from "@/lib/store/RoomContext";
 import { useDebounce } from "use-debounce";
 import {
   Tabs,
@@ -24,12 +23,6 @@ type PartialProfile = {
   display_name: string | null;
   avatar_url: string | null;
   created_at: string | null;
-};
-type Room = Database["public"]["Tables"]["rooms"]["Row"];
-type RoomWithMembershipCount = Room & {
-  isMember: boolean;
-  participationStatus: string | null;
-  memberCount: number;
 };
 
 // ✅ ADD: UUID regex for frontend validation (matches API)
