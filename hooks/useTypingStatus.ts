@@ -9,12 +9,12 @@ export function useTypingStatus() {
   const { 
     state, 
     updateTypingUsers, 
-    updateTypingText,
-    currentUserId 
+    updateTypingText
   } = useRoomContext();
   
-  const { selectedRoom, typingUsers } = state;
+  const { selectedRoom, typingUsers, user } = state;
   const roomId = selectedRoom?.id ?? null;
+  const currentUserId = user?.id ?? null;
 
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
