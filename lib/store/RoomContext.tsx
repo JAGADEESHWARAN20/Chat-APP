@@ -1,4 +1,4 @@
-// lib/store/RoomContext.tsx - COMPLETELY REFACTORED & OPTIMIZED
+// lib/store/RoomContext.tsx - FIXED INFINITE LOOP
 "use client";
 
 import React, {
@@ -18,7 +18,6 @@ import { useMessage, Imessage } from "./messages";
 
 // ==================== OPTIMIZED TYPES ====================
 type Room = Database["public"]["Tables"]["rooms"]["Row"];
-type DirectChat = Database["public"]["Tables"]["direct_chats"]["Row"];
 
 export type RoomWithMembershipCount = Room & {
   isMember: boolean;
@@ -53,7 +52,6 @@ type RoomMembersPayload = {
 interface RoomState {
   availableRooms: RoomWithMembershipCount[];
   selectedRoom: RoomWithMembershipCount | null;
-  selectedDirectChat: DirectChat | null;
   isLoading: boolean;
   isLeaving: boolean;
   user: SupabaseUser | null;
@@ -80,7 +78,6 @@ type RoomAction =
 const initialState: RoomState = {
   availableRooms: [],
   selectedRoom: null,
-  selectedDirectChat: null,
   isLoading: false,
   isLeaving: false,
   user: null,
@@ -96,11 +93,7 @@ function roomReducer(state: RoomState, action: RoomAction): RoomState {
       return { ...state, availableRooms: action.payload };
     
     case "SET_SELECTED_ROOM":
-      return { 
-        ...state, 
-        selectedRoom: action.payload, 
-        selectedDirectChat: null 
-      };
+      return { ...state, selectedRoom: action.payload };
     
     case "SET_LOADING":
       return { ...state, isLoading: action.payload };
@@ -223,6 +216,10 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
   const presenceChannelsRef = useRef<Map<string, any>>(new Map());
   const typingCleanupRef = useRef<NodeJS.Timeout>();
   const profilesCacheRef = useRef<Map<string, { display_name?: string; username?: string }>>(new Map());
+  
+  // ✅ FIX: Track if we're already fetching to prevent loops
+  const isFetchingRef = useRef(false);
+  const lastFetchRef = useRef<number>(0);
 
   // ==================== CORE FUNCTIONS ====================
 
@@ -273,12 +270,22 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
     }
   }, [supabase]);
 
+  // ✅ FIX: Remove state.roomPresence dependency to break the loop
   const fetchAvailableRooms = useCallback(async () => {
+    // ✅ Prevent rapid consecutive fetches
+    const now = Date.now();
+    if (isFetchingRef.current || (now - lastFetchRef.current < 2000)) {
+      return;
+    }
+
     if (!user?.id) {
       dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
       return;
     }
 
+    isFetchingRef.current = true;
+    lastFetchRef.current = now;
+    
     dispatch({ type: "SET_LOADING", payload: true });
 
     try {
@@ -325,12 +332,15 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
         memberCounts.set(room_id, (memberCounts.get(room_id) || 0) + 1);
       });
 
+      // ✅ FIX: Use current presence data without creating dependency
+      const currentPresence = state.roomPresence;
+
       const roomsWithMembership: RoomWithMembershipCount[] = allRooms.map((room) => ({
         ...room,
         memberCount: memberCounts.get(room.id) || 0,
         isMember: (membershipMap.get(room.id) ?? null) === "accepted",
         participationStatus: membershipMap.get(room.id) ?? null,
-        onlineUsers: state.roomPresence[room.id]?.onlineUsers ?? 0,
+        onlineUsers: currentPresence[room.id]?.onlineUsers ?? 0, // Use current value, not dependency
       }));
 
       dispatch({ type: "SET_AVAILABLE_ROOMS", payload: roomsWithMembership });
@@ -341,8 +351,9 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
       dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
     } finally {
       dispatch({ type: "SET_LOADING", payload: false });
+      isFetchingRef.current = false;
     }
-  }, [user?.id, supabase, state.roomPresence]);
+  }, [user?.id, supabase]); // ✅ REMOVED: state.roomPresence dependency
 
   const joinRoom = useCallback(async (roomId: string) => {
     if (!user?.id) {
@@ -515,9 +526,10 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
     dispatch({ type: "SET_USER", payload: user ?? null });
   }, [user]);
 
-  // Auto-fetch rooms when user changes
+  // Auto-fetch rooms when user changes - FIXED: Only fetch when user changes
   useEffect(() => {
     if (user?.id) {
+      console.log("🔄 Fetching rooms for user:", user.id);
       fetchAvailableRooms();
     } else {
       dispatch({ type: "BATCH_UPDATE_ROOMS", payload: { 
@@ -527,7 +539,7 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
         typingDisplayText: "" 
       }});
     }
-  }, [user?.id, fetchAvailableRooms]);
+  }, [user?.id]); // ✅ REMOVED: fetchAvailableRooms dependency
 
   // ==================== PRESENCE SYSTEM ====================
   
@@ -626,52 +638,6 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
 
   // ==================== TYPING SYSTEM ====================
   
-  // Fetch profiles for typing users
-  const fetchProfiles = useCallback(async (userIds: string[]) => {
-    const uncachedIds = userIds.filter((id) => !profilesCacheRef.current.has(id));
-    if (uncachedIds.length === 0) return;
-
-    const { data: profiles, error } = await supabase
-      .from("profiles")
-      .select("id, username, display_name")
-      .in("id", uncachedIds);
-
-    if (error) {
-      console.error("Failed to fetch profiles:", error);
-      return;
-    }
-
-    profiles?.forEach((profile: any) => {
-      profilesCacheRef.current.set(profile.id, {
-        display_name: profile.display_name || undefined,
-        username: profile.username || undefined,
-      });
-    });
-  }, [supabase]);
-
-  const updateTypingUsersWithProfiles = useCallback(
-    async (userIds: string[]) => {
-      if (!userIds || userIds.length === 0) {
-        updateTypingUsers([]);
-        return;
-      }
-      await fetchProfiles(userIds);
-
-      const updatedTypingUsers: TypingUser[] = userIds.map((id) => {
-        const profile = profilesCacheRef.current.get(id);
-        return {
-          user_id: id,
-          is_typing: true,
-          display_name: profile?.display_name,
-          username: profile?.username,
-        } as TypingUser;
-      });
-
-      updateTypingUsers(updatedTypingUsers);
-    },
-    [fetchProfiles, updateTypingUsers]
-  );
-
   // Typing subscription for selected room only
   useEffect(() => {
     if (!state.selectedRoom?.id || !user?.id) return;
@@ -689,7 +655,34 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
 
       if (typingRecords) {
         const typingUserIds = typingRecords.map(record => record.user_id);
-        await updateTypingUsersWithProfiles(typingUserIds);
+        
+        // Fetch profiles for uncached users
+        const uncachedIds = typingUserIds.filter(id => !profilesCacheRef.current.has(id));
+        if (uncachedIds.length > 0) {
+          const { data: profiles } = await supabase
+            .from("profiles")
+            .select("id, username, display_name")
+            .in("id", uncachedIds);
+
+          profiles?.forEach((profile: any) => {
+            profilesCacheRef.current.set(profile.id, {
+              display_name: profile.display_name || undefined,
+              username: profile.username || undefined,
+            });
+          });
+        }
+
+        const typingUsers: TypingUser[] = typingUserIds.map(id => {
+          const profile = profilesCacheRef.current.get(id);
+          return {
+            user_id: id,
+            is_typing: true,
+            display_name: profile?.display_name,
+            username: profile?.username,
+          };
+        });
+
+        updateTypingUsers(typingUsers);
       } else {
         updateTypingUsers([]);
       }
@@ -717,7 +710,7 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
       }
       supabase.removeChannel(channel);
     };
-  }, [state.selectedRoom?.id, user?.id, supabase, updateTypingUsers, updateTypingUsersWithProfiles]);
+  }, [state.selectedRoom?.id, user?.id, supabase, updateTypingUsers]);
 
   // Auto-update typing text
   useEffect(() => {

@@ -16,21 +16,15 @@ const LeftSidebar = memo(function LeftSidebar({
   isOpen: boolean;
   onClose?: () => void;
 }) {
-  const { state, fetchAvailableRooms, setSelectedRoom, createRoom } = useRoomContext();
+  const { state, setSelectedRoom, createRoom } = useRoomContext();
   const [searchTerm, setSearchTerm] = useState("");
   const [showCreateRoom, setShowCreateRoom] = useState(false);
   const [newRoomName, setNewRoomName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
 
+  // ✅ FIX: Remove automatic fetch - let RoomContext handle it
   // Direct chats (empty for now)
   const [directChats] = useState<RoomWithMembershipCount[]>([]);
-
-  // Fetch rooms when user changes
-  useEffect(() => {
-    if (user?.id) {
-      fetchAvailableRooms();
-    }
-  }, [user?.id, fetchAvailableRooms]);
 
   // ✅ Optimized room filtering
   const joinedRooms = useMemo(() => {
@@ -105,14 +99,13 @@ const LeftSidebar = memo(function LeftSidebar({
             {item.latestMessage || "No messages yet"}
           </div>
 
-          {/* User count and status - ✅ FIXED with real-time data */}
+          {/* User count and status */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Users className="h-3 w-3" />
               <span>
                 {item.memberCount || 0} {item.memberCount === 1 ? 'user' : 'users'}
               </span>
-              {/* ✅ Use RoomActiveUsers component for real-time online count */}
               <RoomActiveUsers roomId={item.id} compact />
             </div>
             
