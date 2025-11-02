@@ -353,7 +353,7 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
       dispatch({ type: "SET_LOADING", payload: false });
       isFetchingRef.current = false;
     }
-  }, [user?.id, supabase]); // ✅ REMOVED: state.roomPresence dependency
+  }, [user?.id, supabase,state.roomPresence]); // ✅ REMOVED: state.roomPresence dependency
 
   const joinRoom = useCallback(async (roomId: string) => {
     if (!user?.id) {
@@ -539,7 +539,7 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
         typingDisplayText: "" 
       }});
     }
-  }, [user?.id]); // ✅ REMOVED: fetchAvailableRooms dependency
+  }, [user?.id, fetchAvailableRooms]); // ✅ REMOVED: fetchAvailableRooms dependency
 
   // ==================== PRESENCE SYSTEM ====================
   
@@ -618,23 +618,25 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
   }, [user?.id, state.availableRooms, supabase]);
 
   // Presence effect with proper cleanup
-  useEffect(() => {
-    trackAllRoomsPresence();
+ // Presence effect with proper cleanup
+useEffect(() => {
+  trackAllRoomsPresence();
 
-    return () => {
-      // Store channels in a variable for cleanup
-      const channels = new Map(presenceChannelsRef.current);
-      channels.forEach((channel, roomId) => {
-        try {
-          channel.unsubscribe();
-          supabase.removeChannel(channel);
-        } catch (err) {
-          console.warn(`[Presence] Error cleaning up channel ${roomId}:`, err);
-        }
-      });
-      presenceChannelsRef.current.clear();
-    };
-  }, [trackAllRoomsPresence, supabase]);
+  return () => {
+    // ✅ FIX: Store the current ref value in a variable for cleanup
+    const currentChannels = new Map(presenceChannelsRef.current);
+    currentChannels.forEach((channel, roomId) => {
+      try {
+        channel.unsubscribe();
+        supabase.removeChannel(channel);
+      } catch (err) {
+        console.warn(`[Presence] Error cleaning up channel ${roomId}:`, err);
+      }
+    });
+    // ✅ FIX: Clear the ref using the stored variable reference
+    presenceChannelsRef.current.clear();
+  };
+}, [trackAllRoomsPresence, supabase]);
 
   // ==================== TYPING SYSTEM ====================
   
