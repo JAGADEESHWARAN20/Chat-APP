@@ -50,6 +50,14 @@ type TypingUser = {
   username?: string;
 };
 
+// Room presence tracking
+type RoomPresence = {
+  [roomId: string]: {
+    onlineUsers: number;
+    lastUpdated: string;
+  };
+};
+
 // ---- State ----
 interface RoomState {
   availableRooms: RoomWithMembershipCount[];
@@ -61,6 +69,7 @@ interface RoomState {
   user: SupabaseUser | null;
   typingUsers: TypingUser[];
   typingDisplayText: string;
+  roomPresence: RoomPresence;
 }
 
 type RoomAction =
@@ -89,6 +98,10 @@ type RoomAction =
       type: "UPDATE_ROOM_ONLINE_USERS";
       payload: { roomId: string; onlineUsers: number };
     }
+  | {
+      type: "UPDATE_ROOM_PRESENCE";
+      payload: { roomId: string; onlineUsers: number };
+    }
   | { type: "REMOVE_ROOM"; payload: string }
   | { type: "ADD_ROOM"; payload: RoomWithMembershipCount };
 
@@ -102,6 +115,7 @@ const initialState: RoomState = {
   user: null,
   typingUsers: [],
   typingDisplayText: "",
+  roomPresence: {},
 };
 
 function roomReducer(state: RoomState, action: RoomAction): RoomState {
@@ -185,6 +199,17 @@ function roomReducer(state: RoomState, action: RoomAction): RoomState {
         ...state,
         availableRooms: [...state.availableRooms, action.payload],
       };
+    case "UPDATE_ROOM_PRESENCE":
+      return {
+        ...state,
+        roomPresence: {
+          ...state.roomPresence,
+          [action.payload.roomId]: {
+            onlineUsers: action.payload.onlineUsers,
+            lastUpdated: new Date().toISOString(),
+          },
+        },
+      };
     default:
       return state;
   }
@@ -219,6 +244,7 @@ export function RoomProvider({
   children: React.ReactNode;
   user: SupabaseUser | undefined;
 }) {
+  const presenceChannelsRef = useRef<Map<string, any>>(new Map());
   const [state, dispatch] = useReducer(roomReducer, initialState);
   const supabase = supabaseBrowser();
   const profilesCache = useRef<Map<string, CachedProfile>>(new Map()); // Cache profiles (lightweight)
@@ -452,13 +478,12 @@ const handleCountUpdate = useCallback(async (room_id: string | undefined) => {
   if (!room_id) return;
   
   try {
-    // Count total members for the specific room - match Supabase query exactly
-    // Count all rows from room_members table (no status filter)
+    // ✅ FIX: Count only accepted members
     const { count, error } = await supabase
       .from("room_members")
       .select("*", { count: "exact", head: true })
-      .eq("room_id", room_id);
-      // Removed .eq("status", "accepted") to match user's query which counts all members
+      .eq("room_id", room_id)
+      .eq("status", "accepted"); // ✅ Only count accepted members
 
     if (error) {
       console.error(`Error updating room count for ${room_id}:`, error);
@@ -519,19 +544,18 @@ const fetchAvailableRooms = useCallback(async () => {
       if (!membershipMap.has(p.room_id)) membershipMap.set(p.room_id, p.status);
     });
 
-    // COUNT TOTAL MEMBERS FOR EACH ROOM - Match Supabase query exactly
-    // Count all rows from room_members table (no status filter to match user's query)
-    const { data: allMembersData, error: membersError } = await supabase
+    // ✅ FIX: Count only ACCEPTED members (not all rows)
+    const { data: acceptedMembersData, error: membersError } = await supabase
       .from("room_members")
-      .select("room_id, user_id")
-      .in("room_id", roomIds);
-      // Removed .eq("status", "accepted") to match user's query which counts all members
+      .select("room_id")
+      .in("room_id", roomIds)
+      .eq("status", "accepted"); // ✅ Only count accepted members
 
     if (membersError) {
       console.error("Error counting members:", membersError);
     }
 
-    // Create a map to count members per room (matching SQL: SELECT room_id, COUNT(*) FROM room_members GROUP BY room_id)
+    // Create a map to count ACCEPTED members per room
     const memberCounts = new Map<string, number>();
     
     // Initialize all rooms with 0 count
@@ -539,8 +563,8 @@ const fetchAvailableRooms = useCallback(async () => {
       memberCounts.set(roomId, 0);
     });
 
-    // Count all members from room_members table (no status filter, no participants)
-    (allMembersData || []).forEach(({ room_id }) => {
+    // Count only accepted members
+    (acceptedMembersData || []).forEach(({ room_id }) => {
       memberCounts.set(room_id, (memberCounts.get(room_id) || 0) + 1);
     });
 
@@ -778,123 +802,132 @@ const fetchAvailableRooms = useCallback(async () => {
     };
   }, [supabase, handleCountUpdate]);
 
-  // Real-time presence tracking for online users in selected room
+  // Track presence for all rooms the user is a member of
+  const trackAllRoomsPresence = useCallback(async () => {
+    if (!state.user?.id || state.availableRooms.length === 0) return;
+
+    // Create a presence channel for each room the user is a member of
+    const memberRooms = state.availableRooms.filter(room => room.isMember);
+    
+    memberRooms.forEach(async (room) => {
+      // Skip if already tracking this room
+      if (presenceChannelsRef.current.has(room.id)) {
+        return;
+      }
+
+      const channel = supabase.channel(`presence:${room.id}`);
+      
+      channel
+        .on('presence', { event: 'sync' }, () => {
+          try {
+            const presenceState = channel.presenceState();
+            const onlineUsers = new Set<string>();
+            
+            Object.values(presenceState).forEach((presences: any) => {
+              if (Array.isArray(presences)) {
+                presences.forEach((presence: any) => {
+                  if (presence?.user_id) {
+                    onlineUsers.add(presence.user_id);
+                  }
+                });
+              }
+            });
+
+            const onlineCount = onlineUsers.size;
+            dispatch({
+              type: 'UPDATE_ROOM_PRESENCE',
+              payload: { roomId: room.id, onlineUsers: onlineCount },
+            });
+          } catch (err) {
+            console.error(`[RoomProvider] Error updating presence for room ${room.id}:`, err);
+          }
+        })
+        .on('presence', { event: 'join' }, () => {
+          try {
+            const presenceState = channel.presenceState();
+            const onlineUsers = new Set<string>();
+            
+            Object.values(presenceState).forEach((presences: any) => {
+              if (Array.isArray(presences)) {
+                presences.forEach((presence: any) => {
+                  if (presence?.user_id) {
+                    onlineUsers.add(presence.user_id);
+                  }
+                });
+              }
+            });
+
+            const onlineCount = onlineUsers.size;
+            dispatch({
+              type: 'UPDATE_ROOM_PRESENCE',
+              payload: { roomId: room.id, onlineUsers: onlineCount },
+            });
+          } catch (err) {
+            console.error(`[RoomProvider] Error handling join for room ${room.id}:`, err);
+          }
+        })
+        .on('presence', { event: 'leave' }, () => {
+          try {
+            const presenceState = channel.presenceState();
+            const onlineUsers = new Set<string>();
+            
+            Object.values(presenceState).forEach((presences: any) => {
+              if (Array.isArray(presences)) {
+                presences.forEach((presence: any) => {
+                  if (presence?.user_id) {
+                    onlineUsers.add(presence.user_id);
+                  }
+                });
+              }
+            });
+
+            const onlineCount = onlineUsers.size;
+            dispatch({
+              type: 'UPDATE_ROOM_PRESENCE',
+              payload: { roomId: room.id, onlineUsers: onlineCount },
+            });
+          } catch (err) {
+            console.error(`[RoomProvider] Error handling leave for room ${room.id}:`, err);
+          }
+        })
+        .subscribe(async (status) => {
+          if (status === 'SUBSCRIBED') {
+            try {
+              await channel.track({
+                user_id: state.user?.id,
+                room_id: room.id,
+                online_at: new Date().toISOString(),
+              });
+            } catch (err) {
+              console.error(`[RoomProvider] Error tracking presence for room ${room.id}:`, err);
+            }
+          }
+        });
+
+      // Store channel reference for cleanup
+      presenceChannelsRef.current.set(room.id, channel);
+    });
+  }, [state.user?.id, state.availableRooms, supabase, dispatch]);
+
+  // Update your useEffect to track all rooms
   useEffect(() => {
-    if (!state.selectedRoom?.id || !state.user?.id) return;
+    if (state.user?.id && state.availableRooms.length > 0) {
+      trackAllRoomsPresence();
+    }
 
-    const roomId = state.selectedRoom.id;
-    const channel = supabase
-      .channel(`presence:${roomId}`)
-      .on(
-        'presence',
-        { event: 'sync' },
-        () => {
-          try {
-            const presenceState = channel.presenceState();
-            const onlineUsers = new Set<string>();
-            
-            Object.values(presenceState).forEach((presences: any) => {
-              if (Array.isArray(presences)) {
-                presences.forEach((presence: any) => {
-                  if (presence?.user_id) {
-                    onlineUsers.add(presence.user_id);
-                  }
-                });
-              }
-            });
-
-            const onlineCount = onlineUsers.size;
-            
-            // Update online users count in state
-            dispatch({
-              type: 'UPDATE_ROOM_ONLINE_USERS',
-              payload: { roomId, onlineUsers: onlineCount },
-            });
-          } catch (err) {
-            console.error('[RoomProvider] Error updating presence:', err);
-          }
-        }
-      )
-      .on(
-        'presence',
-        { event: 'join' },
-        () => {
-          try {
-            const presenceState = channel.presenceState();
-            const onlineUsers = new Set<string>();
-            
-            Object.values(presenceState).forEach((presences: any) => {
-              if (Array.isArray(presences)) {
-                presences.forEach((presence: any) => {
-                  if (presence?.user_id) {
-                    onlineUsers.add(presence.user_id);
-                  }
-                });
-              }
-            });
-
-            const onlineCount = onlineUsers.size;
-            dispatch({
-              type: 'UPDATE_ROOM_ONLINE_USERS',
-              payload: { roomId, onlineUsers: onlineCount },
-            });
-          } catch (err) {
-            console.error('[RoomProvider] Error handling join:', err);
-          }
-        }
-      )
-      .on(
-        'presence',
-        { event: 'leave' },
-        () => {
-          try {
-            const presenceState = channel.presenceState();
-            const onlineUsers = new Set<string>();
-            
-            Object.values(presenceState).forEach((presences: any) => {
-              if (Array.isArray(presences)) {
-                presences.forEach((presence: any) => {
-                  if (presence?.user_id) {
-                    onlineUsers.add(presence.user_id);
-                  }
-                });
-              }
-            });
-
-            const onlineCount = onlineUsers.size;
-            dispatch({
-              type: 'UPDATE_ROOM_ONLINE_USERS',
-              payload: { roomId, onlineUsers: onlineCount },
-            });
-          } catch (err) {
-            console.error('[RoomProvider] Error handling leave:', err);
-          }
-        }
-      )
-      .subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
-          try {
-            // Track current user's presence
-            await channel.track({
-              user_id: state.user?.id,
-              room_id: roomId,
-              online_at: new Date().toISOString(),
-            });
-          } catch (err) {
-            console.error('[RoomProvider] Error tracking presence:', err);
-          }
+    // Cleanup function
+    return () => {
+      presenceChannelsRef.current.forEach((channel, roomId) => {
+        try {
+          channel.unsubscribe();
+          supabase.removeChannel(channel);
+        } catch (err) {
+          console.warn(`[RoomProvider] Error cleaning up presence channel for room ${roomId}:`, err);
         }
       });
-
-    return () => {
-      try {
-        channel.unsubscribe();
-        supabase.removeChannel(channel);
-      } catch (err) {
-        console.warn('[RoomProvider] Error cleaning up presence channel:', err);
-      }
+      presenceChannelsRef.current.clear();
     };
-  }, [state.selectedRoom?.id, state.user?.id, supabase, dispatch]);
+  }, [state.user?.id, state.availableRooms, trackAllRoomsPresence, supabase]);
 
   const value: RoomContextType = {
     state,
