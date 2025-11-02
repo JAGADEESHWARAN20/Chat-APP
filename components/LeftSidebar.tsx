@@ -24,24 +24,9 @@ const LeftSidebar = memo(function LeftSidebar({
 
   const [directChats] = useState<RoomWithMembershipCount[]>([]);
 
-  // ✅ FIXED: Filter to show ONLY joined rooms
+  // ✅ Filter to show ONLY joined rooms (status = "accepted")
   const joinedRooms = useMemo(() => {
-    const filtered = (state.availableRooms || []).filter(room => {
-      // Only show rooms where user is actually a member
-      const isMember = room.isMember === true;
-      const hasAcceptedStatus = room.participationStatus === "accepted" || room.participationStatus === null;
-      
-      console.log(`[LeftSidebar] Room: ${room.name}`, {
-        isMember,
-        participationStatus: room.participationStatus,
-        shouldShow: isMember && hasAcceptedStatus
-      });
-      
-      return isMember && hasAcceptedStatus;
-    });
-    
-    console.log(`[LeftSidebar] Total available: ${state.availableRooms.length}, Joined: ${filtered.length}`);
-    return filtered;
+    return (state.availableRooms || []).filter(room => room.isMember === true);
   }, [state.availableRooms]);
 
   const filteredRooms = useMemo(() => 
@@ -73,8 +58,16 @@ const LeftSidebar = memo(function LeftSidebar({
 
   // ✅ FIXED: Render item with proper member count display
   const renderItem = useCallback((item: RoomWithMembershipCount) => {
-    // Debug log to see actual values
-    console.log(`Room: ${item.name}, memberCount: ${item.memberCount}, onlineUsers: ${item.onlineUsers}`);
+    // Ensure we have valid member count
+    const memberCount = item.memberCount ?? 0;
+    const onlineCount = item.onlineUsers ?? 0;
+    
+    console.log(`[LeftSidebar] Rendering: ${item.name}`, {
+      memberCount,
+      onlineCount,
+      isMember: item.isMember,
+      status: item.participationStatus
+    });
     
     return (
       <div
@@ -114,26 +107,34 @@ const LeftSidebar = memo(function LeftSidebar({
             {item.latestMessage || "No messages yet"}
           </div>
 
-          {/* ✅ FIXED: User count display - ensure we use the actual memberCount */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Users className="h-3 w-3" />
-              <span>
-                {/* ✅ Use memberCount directly from item, fallback to 0 */}
-                {item.memberCount ?? 0} {(item.memberCount ?? 0) === 1 ? 'member' : 'members'}
-              </span>
+          {/* ✅ FIXED: User count display with actual numbers */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-3">
+              {/* Total Members */}
+              <div className="flex items-center gap-1 text-xs px-2 py-1 bg-blue-500/10 border border-blue-500/30 rounded-full">
+                <Users className="h-3 w-3 text-blue-600 dark:text-blue-400" />
+                <span className="font-medium text-blue-600 dark:text-blue-400">
+                  {memberCount} {memberCount === 1 ? 'member' : 'members'}
+                </span>
+              </div>
+              
+              {/* Active/Online Users */}
+              {onlineCount > 0 && (
+                <div className="flex items-center gap-1 text-xs px-2 py-1 bg-green-500/10 border border-green-500/30 rounded-full">
+                  <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                  <span className="font-medium text-green-600 dark:text-green-400">
+                    {onlineCount} online
+                  </span>
+                </div>
+              )}
             </div>
-            
-            {/* ✅ Active users badge */}
-            <RoomActiveUsers roomId={item.id} compact />
           </div>
 
-          {/* Membership status badge */}
+          {/* Bottom row: Status badge and date */}
           <div className="flex items-center justify-between mt-2">
             <div className="text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300 rounded-full px-2 py-1">
               Joined
             </div>
-            {/* Creation date */}
             <div className="text-xs text-muted-foreground">
               {new Date(item.created_at).toLocaleDateString()}
             </div>

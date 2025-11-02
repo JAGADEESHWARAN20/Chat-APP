@@ -100,25 +100,21 @@ const SearchComponent = memo(function SearchComponent({
     }
   }, [searchType, debouncedSearchQuery, fetchUserResults]);
 
-  // ✅ FIXED: Show ALL rooms in search, not filtered by membership
+  // ✅ Show ALL rooms in search (not filtered by membership)
   const roomResults = useMemo(() => {
     if (roomsLoading && availableRooms.length === 0) {
       return [];
     }
     
-    // Filter by search query, but show all rooms (not just joined ones)
+    // Show all rooms, filter only by search query
     if (!debouncedSearchQuery.trim()) {
-      console.log(`[SearchComponent] Showing all ${availableRooms.length} rooms`);
       return availableRooms.filter(room => room.id);
     }
     
     const q = debouncedSearchQuery.toLowerCase();
-    const filtered = availableRooms.filter((room) => 
+    return availableRooms.filter((room) => 
       room.id && room.name.toLowerCase().includes(q)
     );
-    
-    console.log(`[SearchComponent] Filtered ${filtered.length} rooms for query: "${q}"`);
-    return filtered;
   }, [availableRooms, debouncedSearchQuery, roomsLoading]);
 
   const handleJoinRoom = useCallback(
@@ -148,14 +144,21 @@ const SearchComponent = memo(function SearchComponent({
     [user?.id, joinRoom]
   );
 
-  // ✅ FIXED: Render room with proper member count
+  // ✅ FIXED: Render room with better member count display
   const renderRoomSearchResult = useCallback((result: RoomWithMembershipCount) => {
     if (!result.id) return null;
 
     const { onlineUsers } = getRoomPresence(result.id);
+    const memberCount = result.memberCount ?? 0;
     
     // Debug log
-    console.log(`SearchComponent - Room: ${result.name}, memberCount: ${result.memberCount}, onlineUsers: ${onlineUsers}`);
+    console.log(`[SearchComponent] Rendering: ${result.name}`, {
+      id: result.id,
+      memberCount,
+      onlineUsers,
+      isMember: result.isMember,
+      status: result.participationStatus
+    });
 
     return (
       <div
@@ -170,7 +173,7 @@ const SearchComponent = memo(function SearchComponent({
               </span>
             </div>
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
+              <div className="flex items-center gap-2 mb-2">
                 <span className="font-semibold text-lg text-foreground truncate">
                   #{result.name}
                 </span>
@@ -179,21 +182,37 @@ const SearchComponent = memo(function SearchComponent({
                 )}
               </div>
               
-              {/* ✅ FIXED: Display actual member count from database */}
-              <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
-                <div className="flex items-center gap-1">
-                  <Users className="h-3.5 w-3.5" />
-                  <span className="font-medium">
-                    {result.memberCount ?? 0} {(result.memberCount ?? 0) === 1 ? "member" : "members"}
+              {/* ✅ FIXED: Better member count display with badges */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Total Members Badge */}
+                <div className="flex items-center gap-1 text-xs px-2.5 py-1.5 bg-blue-500/10 border border-blue-500/30 rounded-full">
+                  <Users className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                  <span className="font-semibold text-blue-600 dark:text-blue-400">
+                    {memberCount}
+                  </span>
+                  <span className="text-blue-600/70 dark:text-blue-400/70">
+                    {memberCount === 1 ? "member" : "members"}
                   </span>
                 </div>
                 
-                {/* Show online users */}
+                {/* Online Users Badge */}
                 {onlineUsers > 0 && (
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1 text-xs px-2.5 py-1.5 bg-green-500/10 border border-green-500/30 rounded-full">
                     <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-                    <span className="text-green-600 dark:text-green-400 font-medium">
-                      {onlineUsers} online
+                    <span className="font-semibold text-green-600 dark:text-green-400">
+                      {onlineUsers}
+                    </span>
+                    <span className="text-green-600/70 dark:text-green-400/70">
+                      online
+                    </span>
+                  </div>
+                )}
+                
+                {/* Membership Status Badge */}
+                {result.isMember && (
+                  <div className="flex items-center gap-1 text-xs px-2.5 py-1.5 bg-green-500/10 border border-green-500/30 rounded-full">
+                    <span className="text-green-600 dark:text-green-400">
+                      ✓ Joined
                     </span>
                   </div>
                 )}

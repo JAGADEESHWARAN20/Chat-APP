@@ -235,8 +235,9 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
     dispatch({ type: "SET_TYPING_TEXT", payload: text });
   }, []);
 
+  // ✅ Use existing useActiveUsers hook for consistency
   const getRoomPresence = useCallback((roomId: string) => {
-    const presence = roomPresenceRef.current[roomId]; // ✅ FIXED: Use ref instead of state
+    const presence = roomPresenceRef.current[roomId];
     return {
       onlineUsers: presence?.onlineUsers ?? 0
     };
