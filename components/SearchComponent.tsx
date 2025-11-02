@@ -12,7 +12,6 @@ import { useDebounce } from "use-debounce";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RoomActiveUsers } from "@/components/reusable/RoomActiveUsers";
 
-// Limited type for fetched profiles (matches select fields)
 type PartialProfile = {
   id: string;
   username: string | null;
@@ -21,7 +20,6 @@ type PartialProfile = {
   created_at: string | null;
 };
 
-// ✅ UUID regex for frontend validation
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const SearchComponent = memo(function SearchComponent({
@@ -39,24 +37,20 @@ const SearchComponent = memo(function SearchComponent({
   const isMounted = useRef(true);
   const [debouncedSearchQuery] = useDebounce(searchQuery, 300);
   
-  // ✅ Use optimized RoomContext
   const { state, joinRoom, leaveRoom, fetchAllUsers, getRoomPresence } = useRoomContext();
   const { availableRooms, isLoading: roomsLoading } = state;
 
-  // Fade effect
   useEffect(() => {
     const timer = setTimeout(() => setIsFaded(true), 2);
     return () => clearTimeout(timer);
   }, []);
 
-  // Cleanup
   useEffect(() => {
     return () => {
       isMounted.current = false;
     };
   }, []);
 
-  // Search input handler
   const handleSearchInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       setSearchQuery(e.target.value);
@@ -64,7 +58,6 @@ const SearchComponent = memo(function SearchComponent({
     []
   );
 
-  // User search with optimization
   const fetchUserResults = useCallback(async () => {
     if (searchType !== "users" || !user?.id) {
       setIsLoading(false);
@@ -101,33 +94,35 @@ const SearchComponent = memo(function SearchComponent({
     }
   }, [searchType, user?.id, debouncedSearchQuery, fetchAllUsers]);
 
-  // User search effect
   useEffect(() => {
     if (searchType === "users") {
       fetchUserResults();
     }
   }, [searchType, debouncedSearchQuery, fetchUserResults]);
 
-  // Optimized room results with proper filtering
+  // ✅ FIXED: Show ALL rooms in search, not filtered by membership
   const roomResults = useMemo(() => {
     if (roomsLoading && availableRooms.length === 0) {
       return [];
     }
     
+    // Filter by search query, but show all rooms (not just joined ones)
     if (!debouncedSearchQuery.trim()) {
+      console.log(`[SearchComponent] Showing all ${availableRooms.length} rooms`);
       return availableRooms.filter(room => room.id);
     }
     
     const q = debouncedSearchQuery.toLowerCase();
-    return availableRooms.filter((room) => 
+    const filtered = availableRooms.filter((room) => 
       room.id && room.name.toLowerCase().includes(q)
     );
+    
+    console.log(`[SearchComponent] Filtered ${filtered.length} rooms for query: "${q}"`);
+    return filtered;
   }, [availableRooms, debouncedSearchQuery, roomsLoading]);
 
-  // Optimized join room handler
   const handleJoinRoom = useCallback(
     async (roomId: string) => {
-      // Validate room ID
       if (!roomId || roomId === 'undefined' || !UUID_REGEX.test(roomId)) {
         console.error("❌ Invalid room ID:", roomId);
         toast.error("Invalid room ID. Try refreshing the list.");
@@ -153,12 +148,14 @@ const SearchComponent = memo(function SearchComponent({
     [user?.id, joinRoom]
   );
 
-  // Optimized room result renderer
+  // ✅ FIXED: Render room with proper member count
   const renderRoomSearchResult = useCallback((result: RoomWithMembershipCount) => {
     if (!result.id) return null;
 
-    // ✅ Get real-time presence data
     const { onlineUsers } = getRoomPresence(result.id);
+    
+    // Debug log
+    console.log(`SearchComponent - Room: ${result.name}, memberCount: ${result.memberCount}, onlineUsers: ${onlineUsers}`);
 
     return (
       <div
@@ -181,16 +178,24 @@ const SearchComponent = memo(function SearchComponent({
                   <LockIcon className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                 )}
               </div>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Users className="h-3.5 w-3.5" />
-                <span>
-                  {result.memberCount || 0} {result.memberCount === 1 ? "member" : "members"}
-                </span>
-                {/* ✅ Use real-time active users */}
-                {onlineUsers > 0 && (
-                  <span className="text-green-600 dark:text-green-400 ml-1 font-medium">
-                    • {onlineUsers} online
+              
+              {/* ✅ FIXED: Display actual member count from database */}
+              <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
+                <div className="flex items-center gap-1">
+                  <Users className="h-3.5 w-3.5" />
+                  <span className="font-medium">
+                    {result.memberCount ?? 0} {(result.memberCount ?? 0) === 1 ? "member" : "members"}
                   </span>
+                </div>
+                
+                {/* Show online users */}
+                {onlineUsers > 0 && (
+                  <div className="flex items-center gap-1">
+                    <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                    <span className="text-green-600 dark:text-green-400 font-medium">
+                      {onlineUsers} online
+                    </span>
+                  </div>
                 )}
               </div>
             </div>

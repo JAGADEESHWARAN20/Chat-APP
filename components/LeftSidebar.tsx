@@ -24,9 +24,24 @@ const LeftSidebar = memo(function LeftSidebar({
 
   const [directChats] = useState<RoomWithMembershipCount[]>([]);
 
-  // Filter joined rooms
+  // ✅ FIXED: Filter to show ONLY joined rooms
   const joinedRooms = useMemo(() => {
-    return (state.availableRooms || []).filter(room => room.isMember === true);
+    const filtered = (state.availableRooms || []).filter(room => {
+      // Only show rooms where user is actually a member
+      const isMember = room.isMember === true;
+      const hasAcceptedStatus = room.participationStatus === "accepted" || room.participationStatus === null;
+      
+      console.log(`[LeftSidebar] Room: ${room.name}`, {
+        isMember,
+        participationStatus: room.participationStatus,
+        shouldShow: isMember && hasAcceptedStatus
+      });
+      
+      return isMember && hasAcceptedStatus;
+    });
+    
+    console.log(`[LeftSidebar] Total available: ${state.availableRooms.length}, Joined: ${filtered.length}`);
+    return filtered;
   }, [state.availableRooms]);
 
   const filteredRooms = useMemo(() => 

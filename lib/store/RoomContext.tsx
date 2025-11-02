@@ -353,13 +353,16 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
       const roomsWithMembership: RoomWithMembershipCount[] = allRooms.map((room) => {
         const count = memberCounts.get(room.id) || 0;
         const membershipStatus = membershipMap.get(room.id) ?? null;
-        const isMember = membershipStatus === "accepted" || membershipStatus === null; // ✅ Treat null as accepted
+        
+        // ✅ User is a member if they have any status (accepted or null)
+        // Pending and rejected users are NOT members
+        const isMember = membershipStatus === "accepted" || (membershipStatus === null && membershipMap.has(room.id));
         
         // ✅ Debug log to verify counts
         console.log(`[fetchAvailableRooms] Room: ${room.name}`, {
-          id: room.id,
-          memberCount: count,
-          userStatus: membershipStatus,
+          id: room.id.slice(0, 8),
+          totalMembers: count,
+          userStatus: membershipStatus || 'not joined',
           isMember,
           onlineUsers: currentPresence[room.id]?.onlineUsers ?? 0
         });
