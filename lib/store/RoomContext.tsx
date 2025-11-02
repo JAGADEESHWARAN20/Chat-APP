@@ -266,34 +266,37 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
   }, []);
 
   // ==================== FIXED MEMBER COUNT LOGIC ====================
-  const refreshMemberCount = useCallback(async (roomId: string) => {
-    if (!roomId) return;
+ const refreshMemberCount = useCallback(async (roomId: string) => {
+  if (!roomId) return;
+  try {
+    const { count, error } = await supabase
+      .from("room_members")
+      .select("user_id", { count: "exact", head: true })
+      .eq("room_id", roomId)
+      .eq("status", "accepted");
 
-    try {
-      // ✅ FIXED: Accurate member count using Supabase query
-      const { data, error, count } = await supabase
-        .from("room_members")
-        .select("user_id", { count: 'exact' })
-        .eq("room_id", roomId)
-        .eq("status", "accepted");
+    if (error) throw error;
 
-      if (error) {
-        console.error(`[refreshMemberCount] Supabase error for ${roomId}:`, error);
-        return;
-      }
+    const memberCount = count ?? 0;
 
-      const memberCount = count || 0;
+    dispatch({
+      type: "UPDATE_ROOM_MEMBER_COUNT",
+      payload: { roomId, memberCount },
+    });
 
-      console.log(`[refreshMemberCount] Room ${roomId}: ${memberCount} members`);
-
+    // ✅ Keep selectedRoom synced
+    const currentSelected = stateRef.current.selectedRoom;
+    if (currentSelected?.id === roomId) {
       dispatch({
-        type: "UPDATE_ROOM_MEMBER_COUNT",
-        payload: { roomId, memberCount },
+        type: "SET_SELECTED_ROOM",
+        payload: { ...currentSelected, memberCount },
       });
-    } catch (err) {
-      console.error(`[refreshMemberCount] Unexpected error for ${roomId}:`, err);
     }
-  }, [supabase]);
+  } catch (err) {
+    console.error(`[refreshMemberCount] Error for ${roomId}:`, err);
+  }
+}, [supabase]);
+
 
   // ==================== REAL-TIME PRESENCE SYSTEM ====================
   const setupPresenceChannel = useCallback((roomId: string) => {
@@ -340,31 +343,40 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
     };
 
     // Subscribe to presence events
-    channel
-      .on("presence", { event: "sync" }, handlePresenceSync)
-      .on("presence", { event: "join" }, handlePresenceSync)
-      .on("presence", { event: "leave" }, handlePresenceSync)
-      .subscribe(async (status) => {
-        console.log(`[Presence] Room ${roomId} subscription status:`, status);
-        
-        if (status === "SUBSCRIBED" && user?.id) {
-          try {
-            // Track user presence
-            await channel.track({
-              user_id: user.id,
-              room_id: roomId,
-              online_at: new Date().toISOString(),
-              last_seen: new Date().toISOString(),
-            });
-            console.log(`[Presence] User ${user.id} tracked in room ${roomId}`);
-          } catch (err) {
-            console.error(`[Presence] Track error for room ${roomId}:`, err);
-          }
-        }
-      });
+   channel
+  .on("presence", { event: "sync" }, handlePresenceSync)
+  .on("presence", { event: "join" }, handlePresenceSync)
+  .on("presence", { event: "leave" }, handlePresenceSync)
+  .subscribe(async (status) => {
+    console.log(`[Presence] Room ${roomId} status:`, status);
 
-    presenceChannelsRef.current.set(roomId, channel);
-    return channel;
+    if (status === "SUBSCRIBED" && user?.id) {
+      await channel.track({
+        user_id: user.id,
+        room_id: roomId,
+        last_seen: new Date().toISOString(),
+      });
+    }
+  });
+
+// ✅ Fix: re-sync on tab visibility changes (multi-tab)
+const handleVisibility = () => {
+  if (document.visibilityState === "visible" && user?.id) {
+    channel.track({
+      user_id: user.id,
+      room_id: roomId,
+      last_seen: new Date().toISOString(),
+    });
+  }
+};
+document.addEventListener("visibilitychange", handleVisibility);
+
+presenceChannelsRef.current.set(roomId, channel);
+return () => {
+  document.removeEventListener("visibilitychange", handleVisibility);
+  channel.unsubscribe();
+};
+
   }, [user?.id, supabase]);
 
   // ==================== TYPING INDICATOR SYSTEM ====================
@@ -419,11 +431,11 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
           });
 
           // Auto-remove typing indicator after 3 seconds
-          const timeoutId = setTimeout(() => {
-            updateTypingUsers(prev => 
-              prev.filter(u => u.user_id !== payload.user_id)
-            );
-          }, 3000);
+         const timeoutId = setTimeout(() => {
+  updateTypingUsers(prev => prev.filter(u => u.user_id !== payload.user_id));
+  typingTimeoutsRef.current.delete(payload.user_id);
+}, 3500); // small buffer to avoid flicker
+
 
           // Clear existing timeout for this user
           const existingTimeout = typingTimeoutsRef.current.get(payload.user_id);
@@ -467,6 +479,8 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
     if (!channel) return;
 
     console.log(`[Typing] User ${user.id} started typing in room ${roomId}`);
+    const timeout = typingTimeoutsRef.current.get(user.id);
+    if (timeout) clearTimeout(timeout);
 
     channel.send({
       type: "broadcast",
@@ -771,36 +785,51 @@ useEffect(() => {
 }, [user?.id, supabase, refreshMemberCount]);
 
   // Setup real-time features for member rooms
- useEffect(() => {
+// ==================== REAL-TIME FEATURES FOR MEMBER ROOMS ====================
+// ==================== REAL-TIME FEATURES FOR MEMBER ROOMS ====================
+useEffect(() => {
   if (!user?.id || state.availableRooms.length === 0) return;
 
-  const memberRooms = state.availableRooms.filter(room => room.isMember);
+  const memberRooms = state.availableRooms.filter((room) => room.isMember);
   console.log(`[Real-time] Setting up features for ${memberRooms.length} member rooms`);
 
-  memberRooms.forEach(room => {
+  // Local copies to prevent eslint/react-hooks ref warnings
+  const presenceRefs = presenceChannelsRef.current;
+  const typingRefs = typingChannelsRef.current;
+  const timeouts = typingTimeoutsRef.current;
+
+  // Setup presence and typing for all member rooms
+  memberRooms.forEach((room) => {
     setupPresenceChannel(room.id);
     setupTypingChannel(room.id);
     refreshMemberCount(room.id);
   });
 
-  // Capture ref values for stable cleanup
-  const presenceRefs = presenceChannelsRef.current;
-  const typingRefs = typingChannelsRef.current;
-  const timeoutRefs = typingTimeoutsRef.current;
-
+  // Cleanup function
   return () => {
     console.log(`[Real-time] Cleaning up real-time features`);
-
     presenceRefs.forEach((channel) => channel.unsubscribe());
     presenceRefs.clear();
 
     typingRefs.forEach((channel) => channel.unsubscribe());
     typingRefs.clear();
 
-    timeoutRefs.forEach((timeout) => clearTimeout(timeout));
-    timeoutRefs.clear();
+    timeouts.forEach((timeout) => clearTimeout(timeout));
+    timeouts.clear();
   };
+  // ✅ Include stable callbacks to satisfy ESLint
 }, [user?.id, state.availableRooms, setupPresenceChannel, setupTypingChannel, refreshMemberCount]);
+
+// ✅ Always restore presence & typing when user switches rooms
+useEffect(() => {
+  if (state.selectedRoom?.id && user?.id) {
+    setupPresenceChannel(state.selectedRoom.id);
+    setupTypingChannel(state.selectedRoom.id);
+    refreshMemberCount(state.selectedRoom.id);
+  }
+  // ✅ Include callbacks in deps for proper linting
+}, [state.selectedRoom?.id, user?.id, setupPresenceChannel, setupTypingChannel, refreshMemberCount]);
+
 
   // Update typing text when typing users change
   const typingUserIds = useMemo(() => 
@@ -841,6 +870,8 @@ useEffect(() => {
       }});
     }
   }, [user?.id, fetchAvailableRooms]);
+
+  
 
   // Context value
   const contextValue = useMemo(
