@@ -253,25 +253,23 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
 
 const handleCountUpdate = useCallback(
   async (room_id: string) => {
-    if (!user?.id || !room_id) return;
+    if (!room_id) return;
 
     try {
-      // ✅ Get all user_ids for this room
-      const { data, error } = await supabase
-        .from("room_members")
-        .select("user_id")
-        .eq("room_id", room_id);
-
-      if (error) {
-        console.error(`[handleCountUpdate] Error fetching members for ${room_id}:`, error);
+      // Use server-side API to get accurate member counts (avoids RLS limits on client)
+      const res = await fetch(`/api/rooms/all`);
+      if (!res.ok) {
+        console.error(`[handleCountUpdate] Failed to fetch /api/rooms/all for ${room_id}:`, await res.text());
         return;
       }
 
-      // ✅ Count unique user_ids only
-      const uniqueUserIds = [...new Set((data || []).map((m) => m.user_id))];
-      const totalCount = uniqueUserIds.length;
+      const json = await res.json();
+      const rooms = json?.rooms || json?.roomsWithMembership || [];
+      const room = rooms.find((r: any) => r.id === room_id);
 
-      console.log(`[handleCountUpdate] Room ${room_id}: ${totalCount} members`, uniqueUserIds);
+      const totalCount = room?.memberCount ?? 0;
+
+      console.log(`[handleCountUpdate] (server) Room ${room_id}: ${totalCount} members`);
 
       dispatch({
         type: "UPDATE_ROOM_MEMBER_COUNT",
@@ -281,7 +279,7 @@ const handleCountUpdate = useCallback(
       console.error(`[handleCountUpdate] Unexpected error for ${room_id}:`, err);
     }
   },
-  [supabase, user?.id, dispatch]
+  [dispatch]
 );
 
 
@@ -304,70 +302,30 @@ const handleCountUpdate = useCallback(
     dispatch({ type: "SET_LOADING", payload: true });
 
     try {
-      // Fetch all rooms
-      const { data: allRooms, error } = await supabase
-        .from("rooms")
-        .select("id, name, is_private, created_by, created_at");
-
-      if (error) throw error;
-
-      if (!allRooms || allRooms.length === 0) {
+      // Use server-side API which returns accurate member counts and membership status
+      const res = await fetch(`/api/rooms/all`);
+      if (!res.ok) {
+        const text = await res.text();
+        console.error("[fetchAvailableRooms] /api/rooms/all failed:", text);
         dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
         return;
       }
 
-      const roomIds = allRooms.map((r) => r.id);
+      const json = await res.json();
+      const rooms = json?.rooms || json?.roomsWithMembership || [];
 
-      // User's membership status (filter for isMember)
-      const { data: memberships } = await supabase
-        .from("room_members")
-        .select("room_id, status")
-        .in("room_id", roomIds)
-        .eq("user_id", user.id);
-
-      const membershipMap = new Map<string, string | null>();
-      (memberships || []).forEach((m) => membershipMap.set(m.room_id, m.status));
-
-      const { data: allMembersData, error: membersError } = await supabase
-            .from("room_members")
-            .select("room_id, user_id")
-            .in("room_id", roomIds);
-
-          if (membersError) {
-            console.error("Error fetching all members:", membersError);
-          }
-
-          const memberCounts = new Map<string, number>();
-          roomIds.forEach((roomId) => memberCounts.set(roomId, 0));
-
-          if (allMembersData && allMembersData.length > 0) {
-            const grouped = allMembersData.reduce((acc, curr) => {
-              const { room_id, user_id } = curr;
-              if (!acc[room_id]) acc[room_id] = new Set<string>();
-              acc[room_id].add(user_id);
-              return acc;
-            }, {} as Record<string, Set<string>>);
-
-            for (const roomId of Object.keys(grouped)) {
-              memberCounts.set(roomId, grouped[roomId].size);
-            }
-          }
-
-
-      // Log to verify (remove in prod)
-      console.log("[fetchAvailableRooms] Member counts match SQL?", 
-        allRooms.map((room) => ({
-          name: room.name,
-          totalMembers: memberCounts.get(room.id) || 0,
-          userIsMember: membershipMap.get(room.id) === "accepted"
-        }))
-      );
-
-      const roomsWithMembership: RoomWithMembershipCount[] = allRooms.map((room) => ({
-        ...room,
-        memberCount: memberCounts.get(room.id) || 0,  // FIXED: Total from all rows
-        isMember: (membershipMap.get(room.id) ?? null) === "accepted",
-        participationStatus: membershipMap.get(room.id) ?? null,
+      const roomsWithMembership: RoomWithMembershipCount[] = rooms.map((room: any) => ({
+        id: room.id,
+        name: room.name,
+        is_private: room.is_private,
+        created_by: room.created_by,
+        created_at: room.created_at,
+        // Ensure optional fields exist on the typed object
+        isMember: !!room.isMember,
+        participationStatus: room.participationStatus ?? null,
+        memberCount: room.memberCount ?? 0,
+        unreadCount: room.unreadCount ?? 0,
+        latestMessage: room.latestMessage ?? undefined,
         onlineUsers: roomPresenceRef.current[room.id]?.onlineUsers ?? 0,
       }));
 
@@ -381,7 +339,7 @@ const handleCountUpdate = useCallback(
       dispatch({ type: "SET_LOADING", payload: false });
       isFetchingRef.current = false;
     }
-  }, [user?.id, supabase]);  
+  }, [user?.id, dispatch]);  
 
   const joinRoom = useCallback(async (roomId: string) => {
     if (!user?.id) {
@@ -562,6 +520,14 @@ const handleCountUpdate = useCallback(
   }, [user?.id, fetchAvailableRooms]);
 
   // ✅ FIXED: Presence tracking with stable dependencies
+  // Extract a stable key derived from availableRooms to use in deps
+  const availableRoomIdsKey = useMemo(() => state.availableRooms.map((r) => r.id).join(","), [state.availableRooms]);
+  // Stable derived key for typing users to use in effects
+  const typingUserIdsKey = useMemo(
+    () => state.typingUsers.map((u) => u.user_id).join(","),
+    [state.typingUsers]
+  );
+
 const trackAllRoomsPresence = useCallback(async () => {
   if (!user?.id || state.availableRooms.length === 0) return;
 
@@ -636,29 +602,30 @@ const trackAllRoomsPresence = useCallback(async () => {
       presenceChannelsRef.current.set(room.id, channel);
     });
   }, [
-  user?.id,
-  supabase,
-  state.availableRooms.map((r) => r.id).join(","),
-]);
+    user?.id,
+    supabase,
+    state.availableRooms,
+  ]);
 
   useEffect(() => {
-  trackAllRoomsPresence();
+    trackAllRoomsPresence();
 
-  // ✅ copy ref snapshot first
-  const channelsSnapshot = new Map(presenceChannelsRef.current);
+    // copy ref snapshot for safe cleanup
+    const channelsSnapshot = new Map(presenceChannelsRef.current);
 
-  return () => {
-    channelsSnapshot.forEach((channel) => {
-      try {
-        channel.unsubscribe();
-        supabase.removeChannel(channel);
-      } catch (err) {
-        console.warn(`[Presence] Cleanup error:`, err);
-      }
-    });
-    presenceChannelsRef.current.clear();
-  };
-}, [trackAllRoomsPresence, supabase]);
+    return () => {
+      channelsSnapshot.forEach((channel) => {
+        try {
+          channel.unsubscribe();
+          supabase.removeChannel(channel);
+        } catch (err) {
+          console.warn(`[Presence] Cleanup error:`, err);
+        }
+      });
+      // reset the ref to a new Map to avoid reusing stale references
+      presenceChannelsRef.current = new Map();
+    };
+  }, [trackAllRoomsPresence, supabase]);
 
 
   // Typing status
@@ -731,7 +698,7 @@ const trackAllRoomsPresence = useCallback(async () => {
     };
   }, [state.selectedRoom?.id, user?.id, supabase, updateTypingUsers]);
 
- useEffect(() => {
+useEffect(() => {
   const typingNames = state.typingUsers
     .map((user) => user.display_name || user.username || "User")
     .filter(Boolean);
@@ -742,10 +709,7 @@ const trackAllRoomsPresence = useCallback(async () => {
   else if (typingNames.length > 2) text = "Several people are typing...";
 
   updateTypingText(text);
-}, [
-  state.typingUsers.map((u) => u.user_id).join(","), // ✅ derived dependency
-  updateTypingText,
-]);
+}, [typingUserIdsKey, state.typingUsers, updateTypingText]);
 
   
 useEffect(() => {
@@ -835,7 +799,7 @@ const contextValue = useMemo(
     getRoomPresence,
   }),
   [
-    stateHash,
+    state,
     fetchAvailableRooms,
     setSelectedRoom,
     setSelectedDirectChat,
