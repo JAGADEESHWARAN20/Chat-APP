@@ -1,4 +1,4 @@
-// components/ChatInput.tsx - UPDATED PART
+// components/ChatInput.tsx - FIXED VERSION
 "use client";
 
 import React, { useState, useCallback, useEffect, useRef } from "react";
@@ -18,13 +18,16 @@ export default function ChatInput() {
   const inputRef = useRef<HTMLInputElement>(null);
   const { addMessage, addOptimisticId } = useMessage();
   const { state } = useRoomContext();
-  const { selectedRoom, selectedDirectChat, user } = state;
+  
+  // ✅ FIX: Remove selectedDirectChat since it doesn't exist in RoomState
+  const { selectedRoom, user } = state;
 
   // FIXED: Use handleTyping instead of start/stop directly
   const { handleTyping, stopTyping } = useTypingStatus();
 
-  const canSend = Boolean(text.trim()) && !isSending && (selectedRoom || selectedDirectChat) && user;
-  const hasActiveChat = Boolean(selectedRoom || selectedDirectChat);
+  // ✅ FIX: Update canSend and hasActiveChat to only check selectedRoom
+  const canSend = Boolean(text.trim()) && !isSending && selectedRoom && user;
+  const hasActiveChat = Boolean(selectedRoom);
 
   // FIXED: Use handleTyping for proper debouncing
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -56,7 +59,8 @@ export default function ChatInput() {
       text: text.trim(),
       sender_id: user!.id,
       room_id: selectedRoom?.id || null,
-      direct_chat_id: selectedDirectChat?.id || null,
+      // ✅ FIX: Remove direct_chat_id since we don't have selectedDirectChat
+      direct_chat_id: null,
       dm_thread_id: null,
       created_at: new Date().toISOString(),
       is_edited: false,
@@ -82,7 +86,7 @@ export default function ChatInput() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           roomId: selectedRoom?.id,
-          directChatId: selectedDirectChat?.id,
+          // ✅ FIX: Remove directChatId from the request body
           text: text.trim(),
         }),
       });
@@ -99,7 +103,7 @@ export default function ChatInput() {
       setIsSending(false);
       inputRef.current?.focus();
     }
-  }, [canSend, text, user, selectedRoom, selectedDirectChat, addOptimisticId, addMessage, stopTyping]);
+  }, [canSend, text, user, selectedRoom, addOptimisticId, addMessage, stopTyping]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -125,7 +129,7 @@ export default function ChatInput() {
         onChange={handleInputChange}
         onBlur={handleBlur}
         onKeyDown={handleKeyDown}
-        placeholder={hasActiveChat ? "Type a message..." : "Select a room or chat to start messaging..."}
+        placeholder={hasActiveChat ? `Message #${selectedRoom?.name}` : "Select a room to start messaging..."}
         className="flex-1 min-h-[44px] resize-none focus-visible:ring-2 focus-visible:ring-indigo-500"
         disabled={isSending}
       />
