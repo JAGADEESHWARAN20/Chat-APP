@@ -284,6 +284,8 @@ const handleCountUpdate = useCallback(
 
 
 
+
+
   const fetchAvailableRooms = useCallback(async () => {
     // Debounce: Prevent rapid calls
     const now = Date.now();
