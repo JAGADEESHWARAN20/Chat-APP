@@ -2,6 +2,7 @@
 
 import { useRoomContext } from "@/lib/store/RoomContext";
 import { Users } from "lucide-react";
+import { useEffect, useState } from "react";
 
 interface RoomActiveUsersProps {
   roomId: string;
@@ -15,7 +16,23 @@ export function RoomActiveUsers({
   compact = false 
 }: RoomActiveUsersProps) {
   const { getRoomPresence } = useRoomContext();
-  const { onlineUsers } = getRoomPresence(roomId);
+  const [onlineUsers, setOnlineUsers] = useState(0);
+
+  // ✅ Update when presence changes
+  useEffect(() => {
+    const updatePresence = () => {
+      const { onlineUsers: count } = getRoomPresence(roomId);
+      console.log(`[RoomActiveUsers] Room ${roomId}: ${count} online`);
+      setOnlineUsers(count);
+    };
+
+    updatePresence();
+    
+    // Poll every 2 seconds to catch updates
+    const interval = setInterval(updatePresence, 2000);
+    
+    return () => clearInterval(interval);
+  }, [roomId, getRoomPresence]);
 
   // Don't render if no users and showZero is false
   if (onlineUsers === 0 && !showZero) {

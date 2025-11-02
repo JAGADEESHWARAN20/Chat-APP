@@ -255,11 +255,12 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
   const handleCountUpdate = useCallback(async (room_id: string) => {
     if (!user?.id) return;
     try {
+      // ✅ FIXED: Count ALL members to match SQL query, not just "accepted"
       const { count: membersCount, error: membersError } = await supabase
         .from("room_members")
         .select("*", { count: "exact", head: true })
-        .eq("room_id", room_id)
-        .eq("status", "accepted");
+        .eq("room_id", room_id);
+        // Removed .eq("status", "accepted")
 
       if (membersError) {
         console.error(`[Count] Error counting members for ${room_id}:`, membersError);
@@ -267,6 +268,7 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
       }
 
       const totalCount = membersCount ?? 0;
+      console.log(`[handleCountUpdate] Room ${room_id}: ${totalCount} members`);
 
       dispatch({
         type: "UPDATE_ROOM_MEMBER_COUNT",
@@ -350,14 +352,23 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
 
       const roomsWithMembership: RoomWithMembershipCount[] = allRooms.map((room) => {
         const count = memberCounts.get(room.id) || 0;
+        const membershipStatus = membershipMap.get(room.id) ?? null;
+        const isMember = membershipStatus === "accepted" || membershipStatus === null; // ✅ Treat null as accepted
+        
         // ✅ Debug log to verify counts
-        console.log(`[fetchAvailableRooms] Room: ${room.name}, DB Count: ${count}`);
+        console.log(`[fetchAvailableRooms] Room: ${room.name}`, {
+          id: room.id,
+          memberCount: count,
+          userStatus: membershipStatus,
+          isMember,
+          onlineUsers: currentPresence[room.id]?.onlineUsers ?? 0
+        });
         
         return {
           ...room,
           memberCount: count,
-          isMember: (membershipMap.get(room.id) ?? null) === "accepted",
-          participationStatus: membershipMap.get(room.id) ?? null,
+          isMember,
+          participationStatus: membershipStatus,
           onlineUsers: currentPresence[room.id]?.onlineUsers ?? 0,
         };
       });
@@ -594,6 +605,12 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
           });
 
           const onlineCount = onlineUsers.size;
+          
+          console.log(`[Presence] Room ${room.name} (${room.id}):`, {
+            onlineCount,
+            userIds: Array.from(onlineUsers),
+            rawState: presenceState
+          });
           
           dispatch({
             type: "UPDATE_ROOM_PRESENCE",
