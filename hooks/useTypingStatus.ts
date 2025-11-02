@@ -9,7 +9,7 @@ export function useTypingStatus() {
   const { 
     state, 
     updateTypingUsers, 
-    updateTypingText
+    updateTypingText // ✅ NOW AVAILABLE
   } = useRoomContext();
   
   const { selectedRoom, typingUsers, user } = state;

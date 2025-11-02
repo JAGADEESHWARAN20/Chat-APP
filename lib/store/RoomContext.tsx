@@ -1,4 +1,4 @@
-// lib/store/RoomContext.tsx - ULTRA OPTIMIZED
+// lib/store/RoomContext.tsx - FIXED VERSION
 "use client";
 
 import React, {
@@ -16,7 +16,7 @@ import { toast } from "sonner";
 import { Database } from "@/lib/types/supabase";
 import { useMessage, Imessage } from "./messages";
 
-// ==================== OPTIMIZED TYPES ====================
+// ==================== TYPES ====================
 type Room = Database["public"]["Tables"]["rooms"]["Row"];
 type DirectChat = Database["public"]["Tables"]["direct_chats"]["Row"];
 
@@ -44,7 +44,13 @@ type RoomPresence = {
   };
 };
 
-// ==================== OPTIMIZED STATE ====================
+// Payload types for real-time subscriptions
+type RoomMembersPayload = {
+  new: { room_id?: string } | null;
+  old: { room_id?: string } | null;
+};
+
+// ==================== STATE ====================
 interface RoomState {
   availableRooms: RoomWithMembershipCount[];
   selectedRoom: RoomWithMembershipCount | null;
@@ -84,34 +90,27 @@ const initialState: RoomState = {
   roomPresence: {},
 };
 
-// ==================== OPTIMIZED REDUCER ====================
+// ==================== REDUCER ====================
 function roomReducer(state: RoomState, action: RoomAction): RoomState {
   switch (action.type) {
     case "SET_AVAILABLE_ROOMS":
       return { ...state, availableRooms: action.payload };
-    
     case "SET_SELECTED_ROOM":
       return { 
         ...state, 
         selectedRoom: action.payload, 
         selectedDirectChat: null 
       };
-    
     case "SET_LOADING":
       return { ...state, isLoading: action.payload };
-    
     case "SET_IS_LEAVING":
       return { ...state, isLeaving: action.payload };
-    
     case "SET_USER":
       return { ...state, user: action.payload };
-    
     case "SET_TYPING_USERS":
       return { ...state, typingUsers: action.payload };
-    
     case "SET_TYPING_TEXT":
       return { ...state, typingDisplayText: action.payload };
-    
     case "UPDATE_ROOM_MEMBERSHIP":
       return {
         ...state,
@@ -133,7 +132,6 @@ function roomReducer(state: RoomState, action: RoomAction): RoomState {
               }
             : state.selectedRoom,
       };
-    
     case "UPDATE_ROOM_MEMBER_COUNT":
       return {
         ...state,
@@ -147,7 +145,6 @@ function roomReducer(state: RoomState, action: RoomAction): RoomState {
             ? { ...state.selectedRoom, memberCount: action.payload.memberCount }
             : state.selectedRoom,
       };
-    
     case "UPDATE_ROOM_PRESENCE":
       return {
         ...state,
@@ -165,29 +162,25 @@ function roomReducer(state: RoomState, action: RoomAction): RoomState {
             ? { ...state.selectedRoom, onlineUsers: action.payload.presence.onlineUsers }
             : state.selectedRoom,
       };
-    
     case "REMOVE_ROOM":
       return {
         ...state,
         availableRooms: state.availableRooms.filter((room) => room.id !== action.payload),
         selectedRoom: state.selectedRoom?.id === action.payload ? null : state.selectedRoom,
       };
-    
     case "ADD_ROOM":
       return { 
         ...state, 
         availableRooms: [...state.availableRooms, action.payload] 
       };
-    
     case "BATCH_UPDATE_ROOMS":
       return { ...state, ...action.payload };
-    
     default:
       return state;
   }
 }
 
-// ==================== OPTIMIZED CONTEXT ====================
+// ==================== CONTEXT ====================
 interface RoomContextType {
   state: RoomState;
   fetchAvailableRooms: () => Promise<void>;
@@ -200,12 +193,13 @@ interface RoomContextType {
   addMessage: (message: Imessage) => void;
   fetchAllUsers: () => Promise<any[]>;
   updateTypingUsers: (users: TypingUser[]) => void;
+  updateTypingText: (text: string) => void;
   getRoomPresence: (roomId: string) => { onlineUsers: number; userCount: number };
 }
 
 const RoomContext = createContext<RoomContextType | undefined>(undefined);
 
-// ==================== ULTRA OPTIMIZED PROVIDER ====================
+// ==================== PROVIDER ====================
 export function RoomProvider({ children, user }: { children: React.ReactNode; user: SupabaseUser | undefined }) {
   const [state, dispatch] = useReducer(roomReducer, initialState);
   const supabase = supabaseBrowser();
@@ -216,133 +210,7 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
   const profilesCacheRef = useRef<Map<string, { display_name?: string; username?: string }>>(new Map());
   const roomMemberCountsRef = useRef<Map<string, number>>(new Map());
 
-  // ==================== OPTIMIZED EFFECTS ====================
-  
-  // User management
-  useEffect(() => {
-    dispatch({ type: "SET_USER", payload: user ?? null });
-  }, [user]);
-
-  // Auto-fetch rooms when user changes
-  useEffect(() => {
-    if (user?.id) {
-      fetchAvailableRooms();
-    } else {
-      dispatch({ type: "BATCH_UPDATE_ROOMS", payload: { 
-        availableRooms: [], 
-        selectedRoom: null, 
-        typingUsers: [], 
-        typingDisplayText: "" 
-      }});
-    }
-  }, [user?.id]);
-
-  // ==================== OPTIMIZED PRESENCE SYSTEM ====================
-  
-  const trackAllRoomsPresence = useCallback(async () => {
-    if (!user?.id || state.availableRooms.length === 0) return;
-
-    const memberRooms = state.availableRooms.filter(room => room.isMember);
-
-    // Clean up unused channels first
-    const currentRoomIds = new Set(memberRooms.map(room => room.id));
-    presenceChannelsRef.current.forEach((channel, roomId) => {
-      if (!currentRoomIds.has(roomId)) {
-        channel.unsubscribe();
-        supabase.removeChannel(channel);
-        presenceChannelsRef.current.delete(roomId);
-      }
-    });
-
-    // Subscribe to member rooms
-    memberRooms.forEach(async (room) => {
-      if (presenceChannelsRef.current.has(room.id)) return;
-
-      const channel = supabase.channel(`room-presence:${room.id}`, {
-        config: {
-          presence: { key: room.id }
-        }
-      });
-
-      const handlePresenceUpdate = () => {
-        try {
-          const presenceState = channel.presenceState();
-          const userPresence = new Map<string, { user_id: string; online_at: string }>();
-          const onlineUsers = new Set<string>();
-
-          Object.values(presenceState).forEach((presences: any) => {
-            if (Array.isArray(presences)) {
-              presences.forEach((presence: any) => {
-                if (presence?.user_id) {
-                  onlineUsers.add(presence.user_id);
-                  userPresence.set(presence.user_id, {
-                    user_id: presence.user_id,
-                    online_at: presence.online_at || new Date().toISOString()
-                  });
-                }
-              });
-            }
-          });
-
-          const onlineCount = onlineUsers.size;
-          
-          dispatch({
-            type: "UPDATE_ROOM_PRESENCE",
-            payload: {
-              roomId: room.id,
-              presence: {
-                onlineUsers: onlineCount,
-                userPresence,
-                lastUpdated: new Date().toISOString()
-              }
-            }
-          });
-
-        } catch (err) {
-          console.error(`[Presence] Error updating presence for room ${room.id}:`, err);
-        }
-      };
-
-      channel
-        .on("presence", { event: "sync" }, handlePresenceUpdate)
-        .on("presence", { event: "join" }, handlePresenceUpdate)
-        .on("presence", { event: "leave" }, handlePresenceUpdate)
-        .subscribe(async (status) => {
-          if (status === "SUBSCRIBED" && user?.id) {
-            try {
-              await channel.track({
-                user_id: user.id,
-                room_id: room.id,
-                online_at: new Date().toISOString(),
-              });
-            } catch (err) {
-              console.error(`[Presence] Error tracking presence:`, err);
-            }
-          }
-        });
-
-      presenceChannelsRef.current.set(room.id, channel);
-    });
-  }, [user?.id, state.availableRooms, supabase]);
-
-  // Presence effect
-  useEffect(() => {
-    trackAllRoomsPresence();
-
-    return () => {
-      presenceChannelsRef.current.forEach((channel, roomId) => {
-        try {
-          channel.unsubscribe();
-          supabase.removeChannel(channel);
-        } catch (err) {
-          console.warn(`[Presence] Error cleaning up channel ${roomId}:`, err);
-        }
-      });
-      presenceChannelsRef.current.clear();
-    };
-  }, [trackAllRoomsPresence]);
-
-  // ==================== OPTIMIZED TYPING SYSTEM ====================
+  // ==================== TYPING FUNCTIONS ====================
   
   const updateTypingUsers = useCallback((users: TypingUser[]) => {
     dispatch({ type: "SET_TYPING_USERS", payload: users });
@@ -352,99 +220,7 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
     dispatch({ type: "SET_TYPING_TEXT", payload: text });
   }, []);
 
-  // Typing subscription for selected room only
-  useEffect(() => {
-    if (!state.selectedRoom?.id || !user?.id) return;
-
-    const roomId = state.selectedRoom.id;
-    const channel = supabase.channel(`typing:${roomId}`);
-
-    const handleTypingUpdate = async () => {
-      const { data: typingRecords } = await supabase
-        .from("typing_status")
-        .select("user_id, is_typing, updated_at")
-        .eq("room_id", roomId)
-        .gt("updated_at", new Date(Date.now() - 5000).toISOString())
-        .eq("is_typing", true);
-
-      if (typingRecords) {
-        const typingUserIds = typingRecords.map(record => record.user_id);
-        
-        // Fetch profiles for uncached users
-        const uncachedIds = typingUserIds.filter(id => !profilesCacheRef.current.has(id));
-        if (uncachedIds.length > 0) {
-          const { data: profiles } = await supabase
-            .from("profiles")
-            .select("id, username, display_name")
-            .in("id", uncachedIds);
-
-          profiles?.forEach(profile => {
-            profilesCacheRef.current.set(profile.id, {
-              display_name: profile.display_name || undefined,
-              username: profile.username || undefined,
-            });
-          });
-        }
-
-        const typingUsers: TypingUser[] = typingUserIds.map(id => {
-          const profile = profilesCacheRef.current.get(id);
-          return {
-            user_id: id,
-            is_typing: true,
-            display_name: profile?.display_name,
-            username: profile?.username,
-          };
-        });
-
-        updateTypingUsers(typingUsers);
-      } else {
-        updateTypingUsers([]);
-      }
-    };
-
-    channel
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "typing_status",
-          filter: `room_id=eq.${roomId}`,
-        },
-        handleTypingUpdate
-      )
-      .subscribe();
-
-    // Auto-cleanup stale typing
-    typingCleanupRef.current = setInterval(handleTypingUpdate, 2000);
-
-    return () => {
-      if (typingCleanupRef.current) {
-        clearInterval(typingCleanupRef.current);
-      }
-      supabase.removeChannel(channel);
-    };
-  }, [state.selectedRoom?.id, user?.id, supabase, updateTypingUsers]);
-
-  // Auto-update typing text
-  useEffect(() => {
-    const typingNames = state.typingUsers
-      .map(user => user.display_name || user.username || "User")
-      .filter(Boolean);
-
-    let text = "";
-    if (typingNames.length === 1) {
-      text = `${typingNames[0]} is typing...`;
-    } else if (typingNames.length === 2) {
-      text = `${typingNames[0]} and ${typingNames[1]} are typing...`;
-    } else if (typingNames.length > 2) {
-      text = "Several people are typing...";
-    }
-
-    updateTypingText(text);
-  }, [state.typingUsers, updateTypingText]);
-
-  // ==================== OPTIMIZED ROOM OPERATIONS ====================
+  // ==================== ROOM OPERATIONS ====================
 
   const handleCountUpdate = useCallback(async (room_id: string) => {
     try {
@@ -682,7 +458,7 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
       const { data } = await supabase
         .from("profiles")
         .select("id, username, display_name, avatar_url, created_at")
-        .limit(100); // Limit for safety
+        .limit(100);
 
       return data || [];
     } catch (error) {
@@ -711,19 +487,239 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
     dispatch({ type: "SET_SELECTED_ROOM", payload: room });
   }, []);
 
+  // ==================== EFFECTS ====================
+  
+  // User management
+  useEffect(() => {
+    dispatch({ type: "SET_USER", payload: user ?? null });
+  }, [user]);
+
+  // Auto-fetch rooms when user changes - FIXED: Use useCallback reference
+  useEffect(() => {
+    if (user?.id) {
+      fetchAvailableRooms();
+    } else {
+      dispatch({ type: "BATCH_UPDATE_ROOMS", payload: { 
+        availableRooms: [], 
+        selectedRoom: null, 
+        typingUsers: [], 
+        typingDisplayText: "" 
+      }});
+    }
+  }, [user?.id, fetchAvailableRooms]);
+
+  // ==================== PRESENCE SYSTEM ====================
+  
+  const trackAllRoomsPresence = useCallback(async () => {
+    if (!user?.id || state.availableRooms.length === 0) return;
+
+    const memberRooms = state.availableRooms.filter(room => room.isMember);
+
+    // Clean up unused channels first
+    const currentRoomIds = new Set(memberRooms.map(room => room.id));
+    presenceChannelsRef.current.forEach((channel, roomId) => {
+      if (!currentRoomIds.has(roomId)) {
+        channel.unsubscribe();
+        supabase.removeChannel(channel);
+        presenceChannelsRef.current.delete(roomId);
+      }
+    });
+
+    // Subscribe to member rooms
+    memberRooms.forEach(async (room) => {
+      if (presenceChannelsRef.current.has(room.id)) return;
+
+      const channel = supabase.channel(`room-presence:${room.id}`, {
+        config: {
+          presence: { key: room.id }
+        }
+      });
+
+      const handlePresenceUpdate = () => {
+        try {
+          const presenceState = channel.presenceState();
+          const userPresence = new Map<string, { user_id: string; online_at: string }>();
+          const onlineUsers = new Set<string>();
+
+          Object.values(presenceState).forEach((presences: any) => {
+            if (Array.isArray(presences)) {
+              presences.forEach((presence: any) => {
+                if (presence?.user_id) {
+                  onlineUsers.add(presence.user_id);
+                  userPresence.set(presence.user_id, {
+                    user_id: presence.user_id,
+                    online_at: presence.online_at || new Date().toISOString()
+                  });
+                }
+              });
+            }
+          });
+
+          const onlineCount = onlineUsers.size;
+          
+          dispatch({
+            type: "UPDATE_ROOM_PRESENCE",
+            payload: {
+              roomId: room.id,
+              presence: {
+                onlineUsers: onlineCount,
+                userPresence,
+                lastUpdated: new Date().toISOString()
+              }
+            }
+          });
+
+        } catch (err) {
+          console.error(`[Presence] Error updating presence for room ${room.id}:`, err);
+        }
+      };
+
+      channel
+        .on("presence", { event: "sync" }, handlePresenceUpdate)
+        .on("presence", { event: "join" }, handlePresenceUpdate)
+        .on("presence", { event: "leave" }, handlePresenceUpdate)
+        .subscribe(async (status) => {
+          if (status === "SUBSCRIBED" && user?.id) {
+            try {
+              await channel.track({
+                user_id: user.id,
+                room_id: room.id,
+                online_at: new Date().toISOString(),
+              });
+            } catch (err) {
+              console.error(`[Presence] Error tracking presence:`, err);
+            }
+          }
+        });
+
+      presenceChannelsRef.current.set(room.id, channel);
+    });
+  }, [user?.id, state.availableRooms, supabase]);
+
+  // Presence effect - FIXED CLEANUP
+  useEffect(() => {
+    trackAllRoomsPresence();
+
+    return () => {
+      // Store channels in a variable for cleanup
+      const channels = new Map(presenceChannelsRef.current);
+      channels.forEach((channel, roomId) => {
+        try {
+          channel.unsubscribe();
+          supabase.removeChannel(channel);
+        } catch (err) {
+          console.warn(`[Presence] Error cleaning up channel ${roomId}:`, err);
+        }
+      });
+      presenceChannelsRef.current.clear();
+    };
+  }, [trackAllRoomsPresence, supabase]);
+
+  // ==================== TYPING SYSTEM ====================
+  
+  // Typing subscription for selected room only
+  useEffect(() => {
+    if (!state.selectedRoom?.id || !user?.id) return;
+
+    const roomId = state.selectedRoom.id;
+    const channel = supabase.channel(`typing:${roomId}`);
+
+    const handleTypingUpdate = async () => {
+      const { data: typingRecords } = await supabase
+        .from("typing_status")
+        .select("user_id, is_typing, updated_at")
+        .eq("room_id", roomId)
+        .gt("updated_at", new Date(Date.now() - 5000).toISOString())
+        .eq("is_typing", true);
+
+      if (typingRecords) {
+        const typingUserIds = typingRecords.map(record => record.user_id);
+        
+        // Fetch profiles for uncached users
+        const uncachedIds = typingUserIds.filter(id => !profilesCacheRef.current.has(id));
+        if (uncachedIds.length > 0) {
+          const { data: profiles } = await supabase
+            .from("profiles")
+            .select("id, username, display_name")
+            .in("id", uncachedIds);
+
+          profiles?.forEach(profile => {
+            profilesCacheRef.current.set(profile.id, {
+              display_name: profile.display_name || undefined,
+              username: profile.username || undefined,
+            });
+          });
+        }
+
+        const typingUsers: TypingUser[] = typingUserIds.map(id => {
+          const profile = profilesCacheRef.current.get(id);
+          return {
+            user_id: id,
+            is_typing: true,
+            display_name: profile?.display_name,
+            username: profile?.username,
+          };
+        });
+
+        updateTypingUsers(typingUsers);
+      } else {
+        updateTypingUsers([]);
+      }
+    };
+
+    channel
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "typing_status",
+          filter: `room_id=eq.${roomId}`,
+        },
+        handleTypingUpdate
+      )
+      .subscribe();
+
+    // Auto-cleanup stale typing
+    typingCleanupRef.current = setInterval(handleTypingUpdate, 2000);
+
+    return () => {
+      if (typingCleanupRef.current) {
+        clearInterval(typingCleanupRef.current);
+      }
+      supabase.removeChannel(channel);
+    };
+  }, [state.selectedRoom?.id, user?.id, supabase, updateTypingUsers]);
+
+  // Auto-update typing text
+  useEffect(() => {
+    const typingNames = state.typingUsers
+      .map(user => user.display_name || user.username || "User")
+      .filter(Boolean);
+
+    let text = "";
+    if (typingNames.length === 1) {
+      text = `${typingNames[0]} is typing...`;
+    } else if (typingNames.length === 2) {
+      text = `${typingNames[0]} and ${typingNames[1]} are typing...`;
+    } else if (typingNames.length > 2) {
+      text = "Several people are typing...";
+    }
+
+    updateTypingText(text);
+  }, [state.typingUsers, updateTypingText]);
+
   // ==================== REAL-TIME SUBSCRIPTIONS ====================
 
-  // Real-time member count updates
+  // Real-time member count updates - FIXED: Proper typing for payload
   useEffect(() => {
     const channel = supabase
       .channel("room-members-realtime")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "room_members" },
-        (payload) => {
-          const roomId =
-            (payload.new && (payload.new as { [key: string]: any }).room_id) ||
-            (payload.old && (payload.old as { [key: string]: any }).room_id);
+        (payload: RoomMembersPayload) => {
+          const roomId = payload.new?.room_id ?? payload.old?.room_id;
           if (roomId) {
             handleCountUpdate(roomId);
           }
@@ -736,7 +732,7 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
     };
   }, [supabase, handleCountUpdate]);
 
-  // ==================== OPTIMIZED CONTEXT VALUE ====================
+  // ==================== CONTEXT VALUE ====================
 
   const contextValue = useMemo((): RoomContextType => ({
     state,
@@ -750,6 +746,7 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
     addMessage,
     fetchAllUsers,
     updateTypingUsers,
+    updateTypingText,
     getRoomPresence,
   }), [
     state,
@@ -763,6 +760,7 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
     addMessage,
     fetchAllUsers,
     updateTypingUsers,
+    updateTypingText,
     getRoomPresence,
   ]);
 
