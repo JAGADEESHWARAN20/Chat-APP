@@ -35,7 +35,7 @@ const SearchComponent = memo(function SearchComponent({
   const [isFaded, setIsFaded] = useState(false);
   
   const isMounted = useRef(true);
-  const [debouncedSearchQuery] = useDebounce(searchQuery, 300);
+  const [debouncedSearchQuery] = useDebounce(searchQuery, 500); // Increased debounce
   
   const { state, joinRoom, leaveRoom, fetchAllUsers, getRoomPresence } = useRoomContext();
   const { availableRooms, isLoading: roomsLoading } = state;
@@ -51,6 +51,7 @@ const SearchComponent = memo(function SearchComponent({
     };
   }, []);
 
+  // FIXED: Stable search handler
   const handleSearchInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       setSearchQuery(e.target.value);
@@ -58,6 +59,7 @@ const SearchComponent = memo(function SearchComponent({
     []
   );
 
+  // FIXED: Stable user search
   const fetchUserResults = useCallback(async () => {
     if (searchType !== "users" || !user?.id) {
       setIsLoading(false);
@@ -97,10 +99,12 @@ const SearchComponent = memo(function SearchComponent({
   useEffect(() => {
     if (searchType === "users") {
       fetchUserResults();
+    } else {
+      setUserResults([]);
     }
   }, [searchType, debouncedSearchQuery, fetchUserResults]);
 
-  // ✅ Show ALL rooms in search (not filtered by membership)
+  // FIXED: Stable room results
   const roomResults = useMemo(() => {
     if (roomsLoading && availableRooms.length === 0) {
       return [];
@@ -117,6 +121,7 @@ const SearchComponent = memo(function SearchComponent({
     );
   }, [availableRooms, debouncedSearchQuery, roomsLoading]);
 
+  // FIXED: Stable join room handler
   const handleJoinRoom = useCallback(
     async (roomId: string) => {
       if (!roomId || roomId === 'undefined' || !UUID_REGEX.test(roomId)) {
@@ -144,22 +149,13 @@ const SearchComponent = memo(function SearchComponent({
     [user?.id, joinRoom]
   );
 
-  // ✅ FIXED: Render room with better member count display
+  // FIXED: Stable room render with proper dependencies
   const renderRoomSearchResult = useCallback((result: RoomWithMembershipCount) => {
     if (!result.id) return null;
 
     const { onlineUsers } = getRoomPresence(result.id);
     const memberCount = result.memberCount ?? 0;
     
-    // Debug log
-    console.log(`[SearchComponent] Rendering: ${result.name}`, {
-      id: result.id,
-      memberCount,
-      onlineUsers,
-      isMember: result.isMember,
-      status: result.participationStatus
-    });
-
     return (
       <div
         key={result.id}
@@ -182,7 +178,7 @@ const SearchComponent = memo(function SearchComponent({
                 )}
               </div>
               
-              {/* ✅ FIXED: Better member count display with badges */}
+              {/* Member count display */}
               <div className="flex items-center gap-2 flex-wrap">
                 {/* Total Members Badge */}
                 <div className="flex items-center gap-1 text-xs px-2.5 py-1.5 bg-blue-500/10 border border-blue-500/30 rounded-full">

@@ -529,11 +529,19 @@ const handleCountUpdate = useCallback(
   }, [user?.id, fetchAvailableRooms]);
 
   // ✅ FIXED: Presence tracking with stable dependencies
-  // Extract a stable key derived from availableRooms to use in deps
-  const availableRoomIdsKey = useMemo(() => state.availableRooms.map((r) => r.id).join(","), [state.availableRooms]);
+  // memberRoomIds: stable, sorted key of rooms where user is a member
+  const memberRoomIds = useMemo(() =>
+    state.availableRooms
+      .filter(room => room.isMember)
+      .map(room => room.id)
+      .sort()
+      .join(','),
+    [state.availableRooms]
+  );
+
   // Stable derived key for typing users to use in effects
-  const typingUserIdsKey = useMemo(
-    () => state.typingUsers.map((u) => u.user_id).join(","),
+  const typingUserIds = useMemo(
+    () => state.typingUsers.map((u) => u.user_id).sort().join(","),
     [state.typingUsers]
   );
 
@@ -619,7 +627,7 @@ const trackAllRoomsPresence = useCallback(async () => {
   useEffect(() => {
     trackAllRoomsPresence();
 
-    // copy ref snapshot for safe cleanup
+    // snapshot channels for safe cleanup
     const channelsSnapshot = new Map(presenceChannelsRef.current);
 
     return () => {
@@ -631,7 +639,7 @@ const trackAllRoomsPresence = useCallback(async () => {
           console.warn(`[Presence] Cleanup error:`, err);
         }
       });
-      // reset the ref to a new Map to avoid reusing stale references
+      // replace the live ref map to avoid mutating while iterating elsewhere
       presenceChannelsRef.current = new Map();
     };
   }, [trackAllRoomsPresence, supabase]);
@@ -717,8 +725,8 @@ useEffect(() => {
   else if (typingNames.length === 2) text = `${typingNames[0]} and ${typingNames[1]} are typing...`;
   else if (typingNames.length > 2) text = "Several people are typing...";
 
-  updateTypingText(text);
-}, [typingUserIdsKey, state.typingUsers, updateTypingText]);
+    updateTypingText(text);
+}, [typingUserIds, state.typingUsers, updateTypingText]);
 
   
 useEffect(() => {

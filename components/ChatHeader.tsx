@@ -21,7 +21,6 @@ import { useMessage, Imessage } from "@/lib/store/messages";
 import { useSearchHighlight } from "@/lib/store/SearchHighlightContext";
 import { RoomActiveUsers } from "@/components/reusable/RoomActiveUsers";
 
-
 export default function ChatHeader({ user }: { user: SupabaseUser | undefined }) {
   const { searchMessages } = useMessage();
   const [searchResults, setSearchResults] = useState<Imessage[]>([]);
@@ -33,12 +32,13 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const { selectedRoom, availableRooms } = state;
   const { setHighlightedMessageId, setSearchQuery } = useSearchHighlight();
 
-  // Filter rooms to show only those where user is a member
+  // FIXED: Stable member rooms filter
   const memberRooms = useMemo(() => {
     return availableRooms.filter(room => room.isMember);
   }, [availableRooms]);
 
-  const handleSearch = async (query: string) => {
+  // FIXED: Stable search handler
+  const handleSearch = useCallback(async (query: string) => {
     setMessageSearchQuery(query);
     setSearchQuery(query);
     if (!selectedRoom?.id) return;
@@ -50,11 +50,18 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
     }
 
     setIsSearching(true);
-    const results = await searchMessages(selectedRoom.id, query);
-    setSearchResults(results);
-    setIsSearching(false);
-  };
+    try {
+      const results = await searchMessages(selectedRoom.id, query);
+      setSearchResults(results);
+    } catch (error) {
+      console.error("Search error:", error);
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
+    }
+  }, [selectedRoom?.id, searchMessages, setSearchQuery, setHighlightedMessageId]);
 
+  // FIXED: Stable room switch handler
   const handleRoomSwitch = useCallback(
     async (newRoomId: string) => {
       await switchRoom(newRoomId);

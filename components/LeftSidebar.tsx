@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 
 interface LeftSidebarProps {
-  user: { id: string } | null;  // FIXED: Typed prop
+  user: { id: string } | null;
   isOpen: boolean;
   onClose?: () => void;
 }
@@ -22,9 +22,7 @@ const LeftSidebar = memo<LeftSidebarProps>(({ user, isOpen, onClose }) => {
   const [newRoomName, setNewRoomName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
 
-  const directChats = useMemo<RoomWithMembershipCount[]>(() => [], []);
-
-  // Filter joined rooms
+  // FIXED: Stable filtered rooms
   const joinedRooms = useMemo(() => 
     state.availableRooms.filter((room) => room.isMember), 
     [state.availableRooms]
@@ -37,6 +35,9 @@ const LeftSidebar = memo<LeftSidebarProps>(({ user, isOpen, onClose }) => {
     [joinedRooms, searchTerm]
   );
 
+  // Empty direct chats for now
+  const directChats = useMemo<RoomWithMembershipCount[]>(() => [], []);
+
   const filteredChats = useMemo(() => 
     directChats.filter((chat) =>
       chat.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -44,16 +45,20 @@ const LeftSidebar = memo<LeftSidebarProps>(({ user, isOpen, onClose }) => {
     [directChats, searchTerm]
   );
 
+  // FIXED: Stable create room handler
   const handleCreateRoom = useCallback(async () => {
     const trimmedName = newRoomName.trim();
-    if (!trimmedName) return;
+    if (!trimmedName) {
+      toast.error("Room name cannot be empty");
+      return;
+    }
     
     setIsCreating(true);
     try {
-      await createRoom(trimmedName, false);  // FIXED: Trim validation
+      await createRoom(trimmedName, false);
       setNewRoomName("");
       setShowCreateRoom(false);
-      toast.success("Room created!");  // UX: Feedback
+      toast.success("Room created!");
     } catch (error) {
       console.error("Failed to create room:", error);
       toast.error("Failed to create room");
@@ -62,6 +67,7 @@ const LeftSidebar = memo<LeftSidebarProps>(({ user, isOpen, onClose }) => {
     }
   }, [newRoomName, createRoom]);
 
+  // FIXED: Stable render function
   const renderItem = useCallback((item: RoomWithMembershipCount) => {
     const memberCount = item.memberCount ?? 0;
     const onlineCount = item.onlineUsers ?? 0;
@@ -146,21 +152,36 @@ const LeftSidebar = memo<LeftSidebarProps>(({ user, isOpen, onClose }) => {
                 value={newRoomName}
                 onChange={(e) => setNewRoomName(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleCreateRoom()}
+                disabled={isCreating}
               />
               <div className="flex gap-2">
-                <Button size="sm" onClick={handleCreateRoom} disabled={isCreating || !newRoomName.trim()} className="flex-1">
+                <Button 
+                  size="sm" 
+                  onClick={handleCreateRoom} 
+                  disabled={isCreating || !newRoomName.trim()} 
+                  className="flex-1"
+                >
                   {isCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create"}
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => {
-                  setShowCreateRoom(false);
-                  setNewRoomName("");
-                }}>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => {
+                    setShowCreateRoom(false);
+                    setNewRoomName("");
+                  }}
+                  disabled={isCreating}
+                >
                   Cancel
                 </Button>
               </div>
             </div>
           ) : (
-            <Button variant="outline" className="w-full" onClick={() => setShowCreateRoom(true)}>
+            <Button 
+              variant="outline" 
+              className="w-full" 
+              onClick={() => setShowCreateRoom(true)}
+            >
               <Plus className="h-4 w-4 mr-2" />
               Create New Room
             </Button>
@@ -175,7 +196,7 @@ const LeftSidebar = memo<LeftSidebarProps>(({ user, isOpen, onClose }) => {
         />
         
         <TabsContent value="rooms" className="flex-1 overflow-hidden">
-          <div className="space-y-2 overflow-y-auto">
+          <div className="space-y-2 overflow-y-auto max-h-[calc(100vh-200px)]">
             {state.isLoading ? (
               <div className="flex justify-center items-center h-32">
                 <Loader2 className="h-8 w-8 animate-spin" />
@@ -197,7 +218,7 @@ const LeftSidebar = memo<LeftSidebarProps>(({ user, isOpen, onClose }) => {
         </TabsContent>
         
         <TabsContent value="chats" className="flex-1 overflow-hidden">
-          <div className="space-y-2 overflow-y-auto">
+          <div className="space-y-2 overflow-y-auto max-h-[calc(100vh-200px)]">
             {filteredChats.length > 0 ? (
               filteredChats.map(renderItem)
             ) : (
