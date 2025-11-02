@@ -356,42 +356,38 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
   }, [user?.id, supabase]);
 
   // ✅ FIXED: Now handleCountUpdate can use fetchAvailableRooms since it's declared above
-  const handleCountUpdate = useCallback(async (room_id: string) => {
-    if (!user?.id) return;
+ // ✅ FIXED: Improved handleCountUpdate
+const handleCountUpdate = useCallback(async (room_id: string) => {
+  if (!user?.id) return;
+  
+  try {
+    console.log(`[Count] Starting count update for room: ${room_id}`);
     
-    try {
-      console.log(`[Count] Starting count update for room: ${room_id}`);
-      
-      // ✅ COUNT ALL MEMBERS (regardless of status)
-      const { count: membersCount, error: membersError } = await supabase
-        .from("room_members")
-        .select("*", { count: "exact", head: true })
-        .eq("room_id", room_id);
+    // ✅ COUNT ALL MEMBERS (regardless of status)
+    const { count: membersCount, error: membersError } = await supabase
+      .from("room_members")
+      .select("*", { count: "exact", head: true })
+      .eq("room_id", room_id);
 
-      if (membersError) {
-        console.error(`[Count] Error counting members for ${room_id}:`, membersError);
-        return;
-      }
-
-      const totalCount = membersCount ?? 0;
-      console.log(`[Count] Room ${room_id} now has: ${totalCount} total members`);
-
-      // Force update the count in the state
-      dispatch({
-        type: "UPDATE_ROOM_MEMBER_COUNT",
-        payload: { roomId: room_id, memberCount: totalCount },
-      });
-
-      // Also refetch all rooms to ensure complete consistency
-      setTimeout(async () => {
-        console.log(`[Count] Refetching all rooms after count update`);
-        await fetchAvailableRooms();
-      }, 500);
-
-    } catch (error) {
-      console.error(`[Count] Error updating count for ${room_id}:`, error);
+    if (membersError) {
+      console.error(`[Count] Error counting members for ${room_id}:`, membersError);
+      return;
     }
-  }, [supabase, user?.id, fetchAvailableRooms]);
+
+    const totalCount = membersCount ?? 0;
+    console.log(`[Count] Room ${room_id} now has: ${totalCount} total members`);
+
+    // Update the count in the state
+    dispatch({
+      type: "UPDATE_ROOM_MEMBER_COUNT",
+      payload: { roomId: room_id, memberCount: totalCount },
+    });
+
+  } catch (error) {
+    console.error(`[Count] Error updating count for ${room_id}:`, error);
+  }
+}, [supabase, user?.id]);
+// ✅ REMOVED: fetchAvailableRooms dependency to prevent loops
 
   const joinRoom = useCallback(async (roomId: string) => {
     if (!user?.id) {
@@ -752,17 +748,14 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
     updateTypingText(text);
   }, [state.typingUsers.length, updateTypingText]);
 
-  // Realtime subscriptions
- // ==================== REAL-TIME SUBSCRIPTIONS ====================
-// ==================== FIXED REAL-TIME SUBSCRIPTIONS ====================
-
+  
 useEffect(() => {
   if (!user?.id) return;
 
-  console.log("[Real-time] Setting up room members subscription");
+  console.log("[Real-time] Setting up SINGLE room members subscription");
 
   const channel = supabase
-    .channel("room-members-count-realtime")
+    .channel("room-members-realtime")
     .on(
       "postgres_changes",
       { 
@@ -775,7 +768,7 @@ useEffect(() => {
         console.log(`[Real-time INSERT] New member in room: ${roomId}`, payload.new);
         
         if (roomId) {
-          // Wait a bit for the database to be consistent, then update count
+          // Update count after a short delay for database consistency
           setTimeout(() => {
             handleCountUpdate(roomId);
           }, 300);
@@ -792,26 +785,6 @@ useEffect(() => {
       async (payload: any) => {
         const roomId = payload.old?.room_id;
         console.log(`[Real-time DELETE] Member removed from room: ${roomId}`, payload.old);
-        
-        if (roomId) {
-          // Wait a bit for the database to be consistent, then update count
-          setTimeout(() => {
-            handleCountUpdate(roomId);
-          }, 300);
-        }
-      }
-    )
-    .on(
-      "postgres_changes",
-      { 
-        event: "UPDATE", 
-        schema: "public", 
-        table: "room_members",
-        filter: "status=eq.accepted" // Only care about status changes to accepted
-      },
-      async (payload: any) => {
-        const roomId = payload.new?.room_id;
-        console.log(`[Real-time UPDATE] Member status changed in room: ${roomId}`, payload.new);
         
         if (roomId) {
           setTimeout(() => {
@@ -832,37 +805,6 @@ useEffect(() => {
     supabase.removeChannel(channel);
   };
 }, [supabase, user?.id, handleCountUpdate]);
-
-  
-useEffect(() => {
-  const channel = supabase
-    .channel("room-members-realtime")
-    .on(
-      "postgres_changes",
-      { 
-        event: "*", 
-        schema: "public", 
-        table: "room_members" 
-      },
-      (payload: any) => {
-        const roomId = payload.new?.room_id ?? payload.old?.room_id;
-        if (roomId) {
-          console.log(`[Real-time] Room members changed for ${roomId}`, payload.event);
-          handleCountUpdate(roomId);
-          
-          // Also refetch rooms to update all counts
-          if (payload.event === 'INSERT' || payload.event === 'DELETE') {
-            setTimeout(() => fetchAvailableRooms(), 500);
-          }
-        }
-      }
-    )
-    .subscribe();
-
-  return () => {
-    supabase.removeChannel(channel);
-  };
-}, [supabase, handleCountUpdate, fetchAvailableRooms]);
 
   // ✅ FIXED: Optimized context value with stable dependencies
   const contextValue = useMemo((): RoomContextType => ({
