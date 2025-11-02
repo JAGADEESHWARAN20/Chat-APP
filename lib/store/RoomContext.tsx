@@ -1,4 +1,4 @@
-// lib/store/RoomContext.tsx
+// lib/store/RoomContext.tsx - REFACTORED & OPTIMIZED
 "use client";
 
 import React, {
@@ -10,16 +10,15 @@ import React, {
   useRef,
 } from "react";
 import { supabaseBrowser } from "@/lib/supabase/browser";
-import {
-  User as SupabaseUser,
-} from "@supabase/supabase-js";
+import { User as SupabaseUser } from "@supabase/supabase-js";
 import { toast } from "sonner";
 import { Database } from "@/lib/types/supabase";
-import {useMessage, Imessage } from "./messages";
+import { useMessage, Imessage } from "./messages";
 
-// ---- Types ----
+// ==================== TYPES ====================
 type Room = Database["public"]["Tables"]["rooms"]["Row"];
 type DirectChat = Database["public"]["Tables"]["direct_chats"]["Row"];
+
 type PartialProfile = {
   id: string;
   username: string | null;
@@ -28,7 +27,6 @@ type PartialProfile = {
   created_at: string | null;
 };
 
-// Small cached profile shape used only for typing indicators
 type CachedProfile = {
   display_name?: string;
   username?: string;
@@ -50,7 +48,6 @@ type TypingUser = {
   username?: string;
 };
 
-// Room presence tracking
 type RoomPresence = {
   [roomId: string]: {
     onlineUsers: number;
@@ -58,7 +55,7 @@ type RoomPresence = {
   };
 };
 
-// ---- State ----
+// ==================== STATE ====================
 interface RoomState {
   availableRooms: RoomWithMembershipCount[];
   selectedRoom: RoomWithMembershipCount | null;
@@ -82,26 +79,10 @@ type RoomAction =
   | { type: "SET_USER"; payload: SupabaseUser | null }
   | { type: "SET_TYPING_USERS"; payload: TypingUser[] }
   | { type: "SET_TYPING_TEXT"; payload: string }
-  | {
-      type: "UPDATE_ROOM_MEMBERSHIP";
-      payload: {
-        roomId: string;
-        isMember: boolean;
-        participationStatus: string | null;
-      };
-    }
-  | {
-      type: "UPDATE_ROOM_MEMBER_COUNT";
-      payload: { roomId: string; memberCount: number };
-    }
-  | {
-      type: "UPDATE_ROOM_ONLINE_USERS";
-      payload: { roomId: string; onlineUsers: number };
-    }
-  | {
-      type: "UPDATE_ROOM_PRESENCE";
-      payload: { roomId: string; onlineUsers: number };
-    }
+  | { type: "UPDATE_ROOM_MEMBERSHIP"; payload: { roomId: string; isMember: boolean; participationStatus: string | null } }
+  | { type: "UPDATE_ROOM_MEMBER_COUNT"; payload: { roomId: string; memberCount: number } }
+  | { type: "UPDATE_ROOM_ONLINE_USERS"; payload: { roomId: string; onlineUsers: number } }
+  | { type: "UPDATE_ROOM_PRESENCE"; payload: { roomId: string; onlineUsers: number } }
   | { type: "REMOVE_ROOM"; payload: string }
   | { type: "ADD_ROOM"; payload: RoomWithMembershipCount };
 
@@ -143,29 +124,19 @@ function roomReducer(state: RoomState, action: RoomAction): RoomState {
         ...state,
         availableRooms: state.availableRooms.map((room) =>
           room.id === action.payload.roomId
-            ? {
-                ...room,
-                isMember: action.payload.isMember,
-                participationStatus: action.payload.participationStatus,
-              }
+            ? { ...room, isMember: action.payload.isMember, participationStatus: action.payload.participationStatus }
             : room
         ),
         selectedRoom:
           state.selectedRoom?.id === action.payload.roomId
-            ? {
-                ...state.selectedRoom,
-                isMember: action.payload.isMember,
-                participationStatus: action.payload.participationStatus,
-              }
+            ? { ...state.selectedRoom, isMember: action.payload.isMember, participationStatus: action.payload.participationStatus }
             : state.selectedRoom ?? null,
       };
     case "UPDATE_ROOM_MEMBER_COUNT":
       return {
         ...state,
         availableRooms: state.availableRooms.map((room) =>
-          room.id === action.payload.roomId
-            ? { ...room, memberCount: action.payload.memberCount }
-            : room
+          room.id === action.payload.roomId ? { ...room, memberCount: action.payload.memberCount } : room
         ),
         selectedRoom:
           state.selectedRoom?.id === action.payload.roomId
@@ -176,9 +147,7 @@ function roomReducer(state: RoomState, action: RoomAction): RoomState {
       return {
         ...state,
         availableRooms: state.availableRooms.map((room) =>
-          room.id === action.payload.roomId
-            ? { ...room, onlineUsers: action.payload.onlineUsers }
-            : room
+          room.id === action.payload.roomId ? { ...room, onlineUsers: action.payload.onlineUsers } : room
         ),
         selectedRoom:
           state.selectedRoom?.id === action.payload.roomId
@@ -188,26 +157,17 @@ function roomReducer(state: RoomState, action: RoomAction): RoomState {
     case "REMOVE_ROOM":
       return {
         ...state,
-        availableRooms: state.availableRooms.filter(
-          (room) => room.id !== action.payload
-        ),
-        selectedRoom:
-          state.selectedRoom?.id === action.payload ? null : state.selectedRoom ?? null,
+        availableRooms: state.availableRooms.filter((room) => room.id !== action.payload),
+        selectedRoom: state.selectedRoom?.id === action.payload ? null : state.selectedRoom ?? null,
       };
     case "ADD_ROOM":
-      return {
-        ...state,
-        availableRooms: [...state.availableRooms, action.payload],
-      };
+      return { ...state, availableRooms: [...state.availableRooms, action.payload] };
     case "UPDATE_ROOM_PRESENCE":
       return {
         ...state,
         roomPresence: {
           ...state.roomPresence,
-          [action.payload.roomId]: {
-            onlineUsers: action.payload.onlineUsers,
-            lastUpdated: new Date().toISOString(),
-          },
+          [action.payload.roomId]: { onlineUsers: action.payload.onlineUsers, lastUpdated: new Date().toISOString() },
         },
       };
     default:
@@ -215,7 +175,7 @@ function roomReducer(state: RoomState, action: RoomAction): RoomState {
   }
 }
 
-// ---- Context ----
+// ==================== CONTEXT ====================
 interface RoomContextType {
   state: RoomState;
   fetchAvailableRooms: () => Promise<void>;
@@ -236,18 +196,12 @@ interface RoomContextType {
 
 const RoomContext = createContext<RoomContextType | undefined>(undefined);
 
-// ---- Provider ----
-export function RoomProvider({
-  children,
-  user,
-}: {
-  children: React.ReactNode;
-  user: SupabaseUser | undefined;
-}) {
+// ==================== PROVIDER ====================
+export function RoomProvider({ children, user }: { children: React.ReactNode; user: SupabaseUser | undefined }) {
   const presenceChannelsRef = useRef<Map<string, any>>(new Map());
   const [state, dispatch] = useReducer(roomReducer, initialState);
   const supabase = supabaseBrowser();
-  const profilesCache = useRef<Map<string, CachedProfile>>(new Map()); // Cache profiles (lightweight)
+  const profilesCache = useRef<Map<string, CachedProfile>>(new Map());
 
   // Set user
   useEffect(() => {
@@ -289,7 +243,6 @@ export function RoomProvider({
       return;
     }
 
-    // Update cache
     profiles?.forEach((profile: any) => {
       profilesCache.current.set(profile.id, {
         display_name: profile.display_name || undefined,
@@ -298,7 +251,6 @@ export function RoomProvider({
     });
   }, [supabase]);
 
-  // Enhanced typing users update with profile fetching
   const updateTypingUsersWithProfiles = useCallback(
     async (userIds: string[]) => {
       if (!userIds || userIds.length === 0) {
@@ -322,14 +274,12 @@ export function RoomProvider({
     [fetchProfiles, updateTypingUsers]
   );
 
-  // Cleanup function to clear cache periodically
   useEffect(() => {
     const interval = setInterval(() => {
-      // Clear cache if it grows too large to prevent memory leaks
       if (profilesCache.current.size > 100) {
         profilesCache.current.clear();
       }
-    }, 300000); // 5 minutes
+    }, 300000);
 
     return () => clearInterval(interval);
   }, []);
@@ -355,7 +305,7 @@ export function RoomProvider({
             .from("typing_status")
             .select("user_id, is_typing, updated_at")
             .eq("room_id", roomId)
-            .gt("updated_at", new Date(Date.now() - 5000).toISOString()) // Recent only (<5s)
+            .gt("updated_at", new Date(Date.now() - 5000).toISOString())
             .eq("is_typing", true);
 
           if (typingRecords.error) return;
@@ -366,9 +316,7 @@ export function RoomProvider({
       )
       .subscribe();
 
-    // Cleanup stale typing every 2s
     const interval = setInterval(async () => {
-      // Re-fetch recent to clear stale
       const typingRecords = await supabase
         .from("typing_status")
         .select("user_id, is_typing, updated_at")
@@ -392,9 +340,7 @@ export function RoomProvider({
 
   // Compute typing text from users
   useEffect(() => {
-    const typingNames = state.typingUsers
-      .map(user => user.display_name || user.username || "User")
-      .filter(Boolean);
+    const typingNames = state.typingUsers.map((user) => user.display_name || user.username || "User").filter(Boolean);
 
     let text = "";
     if (typingNames.length === 1) {
@@ -402,7 +348,7 @@ export function RoomProvider({
     } else if (typingNames.length === 2) {
       text = `${typingNames[0]} and ${typingNames[1]} are typing...`;
     } else if (typingNames.length > 2) {
-  text = "Several people are typing...";
+      text = "Several people are typing...";
     }
 
     updateTypingText(text);
@@ -466,154 +412,146 @@ export function RoomProvider({
       .eq("user_id", state.user.id);
 
     let participationStatus = null;
-    if (memberStatus && memberStatus.length > 0 && memberStatus[0].status === "accepted") participationStatus = "accepted";
-    else if (participantStatus && participantStatus.length > 0 && participantStatus[0].status === "accepted") participationStatus = "accepted";
-    else if (memberStatus && memberStatus.length > 0 && memberStatus[0].status === "pending") participationStatus = "pending";
-    else if (participantStatus && participantStatus.length > 0 && participantStatus[0].status === "pending") participationStatus = "pending";
+    if (memberStatus && memberStatus.length > 0 && memberStatus[0].status === "accepted")
+      participationStatus = "accepted";
+    else if (participantStatus && participantStatus.length > 0 && participantStatus[0].status === "accepted")
+      participationStatus = "accepted";
+    else if (memberStatus && memberStatus.length > 0 && memberStatus[0].status === "pending")
+      participationStatus = "pending";
+    else if (participantStatus && participantStatus.length > 0 && participantStatus[0].status === "pending")
+      participationStatus = "pending";
 
     return participationStatus;
   }, [state.user, supabase]);
 
-const handleCountUpdate = useCallback(async (room_id: string | undefined) => {
-  if (!room_id) return;
-  
-  try {
-    // ✅ FIX: Count accepted members from both tables
-    const { count: membersCount, error: membersError } = await supabase
-      .from("room_members")
-      .select("*", { count: "exact", head: true })
-      .eq("room_id", room_id)
-      .eq("status", "accepted");
+  const handleCountUpdate = useCallback(
+    async (room_id: string | undefined) => {
+      if (!room_id) return;
 
-    const { count: participantsCount, error: participantsError } = await supabase
-      .from("room_participants")
-      .select("*", { count: "exact", head: true })
-      .eq("room_id", room_id)
-      .eq("status", "accepted");
+      try {
+        // Count accepted members from both tables
+        const { count: membersCount, error: membersError } = await supabase
+          .from("room_members")
+          .select("*", { count: "exact", head: true })
+          .eq("room_id", room_id)
+          .eq("status", "accepted");
 
-    if (membersError || participantsError) {
-      console.error(`Error updating room count for ${room_id}:`, membersError || participantsError);
-      return;
-    }
+        const { count: participantsCount, error: participantsError } = await supabase
+          .from("room_participants")
+          .select("*", { count: "exact", head: true })
+          .eq("room_id", room_id)
+          .eq("status", "accepted");
 
-    const totalCount = (membersCount ?? 0) + (participantsCount ?? 0);
+        if (membersError || participantsError) {
+          console.error(`Error updating room count for ${room_id}:`, membersError || participantsError);
+          return;
+        }
 
-    console.log(`Updated room ${room_id} member count:`, totalCount);
-    
-    dispatch({
-      type: "UPDATE_ROOM_MEMBER_COUNT",
-      payload: { roomId: room_id, memberCount: totalCount },
-    });
-  } catch (error) {
-    console.error("Error updating room count:", error);
-  }
-}, [supabase]);
+        const totalCount = (membersCount ?? 0) + (participantsCount ?? 0);
 
+        dispatch({
+          type: "UPDATE_ROOM_MEMBER_COUNT",
+          payload: { roomId: room_id, memberCount: totalCount },
+        });
+      } catch (error) {
+        console.error("Error updating room count:", error);
+      }
+    },
+    [supabase]
+  );
 
-const fetchAvailableRooms = useCallback(async () => {
-  if (!state.user) {
-    dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
-    dispatch({ type: "SET_LOADING", payload: false });
-    return;
-  }
-
-  dispatch({ type: "SET_LOADING", payload: true });
-  try {
-    const { data: allRooms } = await supabase
-      .from("rooms")
-      .select("id, name, is_private, created_by, created_at");
-
-    if (!allRooms || allRooms.length === 0) {
+  const fetchAvailableRooms = useCallback(async () => {
+    if (!state.user) {
       dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
       dispatch({ type: "SET_LOADING", payload: false });
       return;
     }
 
-    const roomIds = allRooms.map((r) => r.id);
+    dispatch({ type: "SET_LOADING", payload: true });
+    try {
+      const { data: allRooms } = await supabase
+        .from("rooms")
+        .select("id, name, is_private, created_by, created_at");
 
-    // Get current user's membership status
-    const { data: memberships } = await supabase
-      .from("room_members")
-      .select("room_id, status")
-      .in("room_id", roomIds)
-      .eq("user_id", state.user.id);
+      if (!allRooms || allRooms.length === 0) {
+        dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
+        dispatch({ type: "SET_LOADING", payload: false });
+        return;
+      }
 
-    const { data: participations } = await supabase
-      .from("room_participants")
-      .select("room_id, status")
-      .in("room_id", roomIds)
-      .eq("user_id", state.user.id);
+      const roomIds = allRooms.map((r) => r.id);
 
-    const membershipMap = new Map<string, string | null>();
-    (memberships || []).forEach((m) => membershipMap.set(m.room_id, m.status));
-    (participations || []).forEach((p) => {
-      if (!membershipMap.has(p.room_id)) membershipMap.set(p.room_id, p.status);
-    });
+      // Get current user's membership status
+      const { data: memberships } = await supabase
+        .from("room_members")
+        .select("room_id, status")
+        .in("room_id", roomIds)
+        .eq("user_id", state.user.id);
 
-    // ✅ FIX: Count ACCEPTED members from both tables
-    const { data: acceptedMembersData, error: membersError } = await supabase
-      .from("room_members")
-      .select("room_id")
-      .in("room_id", roomIds)
-      .eq("status", "accepted"); // ✅ Only count accepted members
+      const { data: participations } = await supabase
+        .from("room_participants")
+        .select("room_id, status")
+        .in("room_id", roomIds)
+        .eq("user_id", state.user.id);
 
-    const { data: acceptedParticipantsData, error: participantsError } = await supabase
-      .from("room_participants")
-      .select("room_id")
-      .in("room_id", roomIds)
-      .eq("status", "accepted");
+      const membershipMap = new Map<string, string | null>();
+      (memberships || []).forEach((m) => membershipMap.set(m.room_id, m.status));
+      (participations || []).forEach((p) => {
+        if (!membershipMap.has(p.room_id)) membershipMap.set(p.room_id, p.status);
+      });
 
-    if (membersError || participantsError) {
-      console.error("Error counting members/participants:", membersError || participantsError);
+      // Count ACCEPTED members from both tables (UNION ALL approach)
+      const { data: acceptedMembersData, error: membersError } = await supabase
+        .from("room_members")
+        .select("room_id")
+        .in("room_id", roomIds)
+        .eq("status", "accepted");
+
+      const { data: acceptedParticipantsData, error: participantsError } = await supabase
+        .from("room_participants")
+        .select("room_id")
+        .in("room_id", roomIds)
+        .eq("status", "accepted");
+
+      if (membersError || participantsError) {
+        console.error("Error counting members/participants:", membersError || participantsError);
+      }
+
+      // Create a map to count ACCEPTED members per room
+      const memberCounts = new Map<string, number>();
+      roomIds.forEach((roomId) => memberCounts.set(roomId, 0));
+
+      // Count accepted members
+      (acceptedMembersData || []).forEach(({ room_id }) => {
+        memberCounts.set(room_id, (memberCounts.get(room_id) || 0) + 1);
+      });
+
+      // Count accepted participants and add to total
+      (acceptedParticipantsData || []).forEach(({ room_id }) => {
+        memberCounts.set(room_id, (memberCounts.get(room_id) || 0) + 1);
+      });
+
+      const roomsWithMembership: RoomWithMembershipCount[] = allRooms.map((room) => ({
+        ...room,
+        memberCount: memberCounts.get(room.id) || 0,
+        isMember: (membershipMap.get(room.id) ?? null) === "accepted",
+        participationStatus: membershipMap.get(room.id) ?? null,
+      }));
+
+      dispatch({ type: "SET_AVAILABLE_ROOMS", payload: roomsWithMembership });
+    } catch (error) {
+      console.error("[RoomContext] Error fetching rooms:", error);
+      dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
+      toast.error("An error occurred while fetching rooms");
+    } finally {
+      dispatch({ type: "SET_LOADING", payload: false });
     }
-
-    // Create a map to count ACCEPTED members per room
-    const memberCounts = new Map<string, number>();
-    
-    // Initialize all rooms with 0 count
-    roomIds.forEach(roomId => {
-      memberCounts.set(roomId, 0);
-    });
-
-    // Count accepted members
-    (acceptedMembersData || []).forEach(({ room_id }) => {
-      memberCounts.set(room_id, (memberCounts.get(room_id) || 0) + 1);
-    });
-
-    // Count accepted participants and add to total
-    (acceptedParticipantsData || []).forEach(({ room_id }) => {
-      memberCounts.set(room_id, (memberCounts.get(room_id) || 0) + 1);
-    });
-
-    const roomsWithMembership: RoomWithMembershipCount[] = allRooms.map((room) => ({
-      ...room,
-      memberCount: memberCounts.get(room.id) || 0, // Total members count
-      isMember: (membershipMap.get(room.id) ?? null) === "accepted",
-      participationStatus: membershipMap.get(room.id) ?? null,
-    }));
-
-    console.log("Fetched rooms with member counts:", roomsWithMembership.map(r => ({
-      name: r.name,
-      memberCount: r.memberCount,
-      isMember: r.isMember
-    })));
-
-    dispatch({ type: "SET_AVAILABLE_ROOMS", payload: roomsWithMembership });
-  } catch (error) {
-    console.error("[RoomContext] Error fetching rooms:", error);
-    dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
-    toast.error("An error occurred while fetching rooms");
-  } finally {
-    dispatch({ type: "SET_LOADING", payload: false });
-  }
-}, [state.user, supabase]);
+  }, [state.user, supabase]);
 
   const fetchAllUsers = useCallback(async () => {
     if (!state.user) return [];
     try {
-      const { data } = await supabase
-        .from("profiles")
-        .select("id, username, display_name, avatar_url, created_at");
+      const { data } = await supabase.from("profiles").select("id, username, display_name, avatar_url, created_at");
       return data || [];
     } catch (error) {
       console.error("[RoomContext] Error fetching profiles:", error);
@@ -621,140 +559,153 @@ const fetchAvailableRooms = useCallback(async () => {
     }
   }, [state.user, supabase]);
 
-  const joinRoom = useCallback(async (roomId: string) => {
-    dispatch({
-      type: "UPDATE_ROOM_MEMBERSHIP",
-      payload: { roomId, isMember: false, participationStatus: "pending" },
-    });
-
-    try {
-      const response = await fetch(`/api/rooms/${roomId}/join`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+  const joinRoom = useCallback(
+    async (roomId: string) => {
+      dispatch({
+        type: "UPDATE_ROOM_MEMBERSHIP",
+        payload: { roomId, isMember: false, participationStatus: "pending" },
       });
-      
-      const data = await response.json();
-      
-      if (!response.ok) {
-        dispatch({
-          type: "UPDATE_ROOM_MEMBERSHIP",
-          payload: { roomId, isMember: false, participationStatus: null },
+
+      try {
+        const response = await fetch(`/api/rooms/${roomId}/join`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
         });
-        throw new Error(data.error || "Failed to join room");
-      }
-      
-      if (data.status === "accepted") {
-        dispatch({
-          type: "UPDATE_ROOM_MEMBERSHIP",
-          payload: { roomId, isMember: true, participationStatus: "accepted" },
-        });
-        toast.success("Joined room successfully!");
-        
-        if (data.roomJoined) {
-          const roomWithMembership: RoomWithMembershipCount = {
-            ...data.roomJoined,
-            isMember: true,
-            participationStatus: "accepted",
-            memberCount: data.memberCount ?? 0,
-          };
-          dispatch({ type: "ADD_ROOM", payload: roomWithMembership });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          dispatch({
+            type: "UPDATE_ROOM_MEMBERSHIP",
+            payload: { roomId, isMember: false, participationStatus: null },
+          });
+          throw new Error(data.error || "Failed to join room");
         }
+
+        if (data.status === "accepted") {
+          dispatch({
+            type: "UPDATE_ROOM_MEMBERSHIP",
+            payload: { roomId, isMember: true, participationStatus: "accepted" },
+          });
+          toast.success("Joined room successfully!");
+
+          if (data.roomJoined) {
+            const roomWithMembership: RoomWithMembershipCount = {
+              ...data.roomJoined,
+              isMember: true,
+              participationStatus: "accepted",
+              memberCount: data.memberCount ?? 0,
+            };
+            dispatch({ type: "ADD_ROOM", payload: roomWithMembership });
+          }
+        }
+
+        return data;
+      } catch (error: any) {
+        console.error("[RoomContext] Join room error:", error);
+        toast.error(error.message || "Failed to join room");
+        throw error;
       }
-      
-      return data;
-    } catch (error: any) {
-      console.error("[RoomContext] Join room error:", error);
-      toast.error(error.message || "Failed to join room");
-      throw error;
-    }
-  }, [dispatch]);
+    },
+    [dispatch]
+  );
 
-  const leaveRoom = useCallback(async (roomId: string) => {
-    if (!state.user) {
-      toast.error("Please log in to leave a room");
-      return;
-    }
-    dispatch({ type: "SET_IS_LEAVING", payload: true });
-    try {
-      const { error: membersError } = await supabase
-        .from("room_members")
-        .delete()
-        .eq("room_id", roomId)
-        .eq("user_id", state.user.id);
-      const { error: participantsError } = await supabase
-        .from("room_participants")
-        .delete()
-        .eq("room_id", roomId)
-        .eq("user_id", state.user.id);
-      if (membersError || participantsError) throw new Error(membersError?.message || participantsError?.message || "Failed to leave room");
-
-      toast.success("Successfully left the room");
-      dispatch({ type: "REMOVE_ROOM", payload: roomId });
-      dispatch({ type: "UPDATE_ROOM_MEMBERSHIP", payload: { roomId, isMember: false, participationStatus: null } });
-      if (state.selectedRoom?.id === roomId) {
-        const remainingRooms = state.availableRooms.filter((room) => room.id !== roomId);
-        dispatch({ type: "SET_SELECTED_ROOM", payload: remainingRooms[0] || null });
+  const leaveRoom = useCallback(
+    async (roomId: string) => {
+      if (!state.user) {
+        toast.error("Please log in to leave a room");
+        return;
       }
-    } catch (error) {
-      console.error("[RoomContext] Leave room error:", error);
-      toast.error(error instanceof Error ? error.message : "Failed to leave room");
-    } finally {
-      dispatch({ type: "SET_IS_LEAVING", payload: false });
-    }
-  }, [state.user, supabase, state.selectedRoom, state.availableRooms, dispatch]);
+      dispatch({ type: "SET_IS_LEAVING", payload: true });
+      try {
+        const { error: membersError } = await supabase
+          .from("room_members")
+          .delete()
+          .eq("room_id", roomId)
+          .eq("user_id", state.user.id);
+        const { error: participantsError } = await supabase
+          .from("room_participants")
+          .delete()
+          .eq("room_id", roomId)
+          .eq("user_id", state.user.id);
+        if (membersError || participantsError)
+          throw new Error(membersError?.message || participantsError?.message || "Failed to leave room");
 
-  const switchRoom = useCallback(async (newRoomId: string) => {
-    if (!state.user) {
-      toast.error("You must be logged in to switch rooms");
-      return;
-    }
-    try {
-      const response = await fetch(`/api/rooms/switch`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roomId: newRoomId }),
-      });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.message || "Failed to switch room");
-      const switchedRoom = state.availableRooms.find((r) => r.id === newRoomId);
-      if (switchedRoom) {
-        dispatch({ type: "SET_SELECTED_ROOM", payload: switchedRoom });
-        toast.success(`Switched to ${switchedRoom.is_private ? "private" : "public"} room: ${switchedRoom.name}`);
+        toast.success("Successfully left the room");
+        dispatch({ type: "REMOVE_ROOM", payload: roomId });
+        dispatch({ type: "UPDATE_ROOM_MEMBERSHIP", payload: { roomId, isMember: false, participationStatus: null } });
+        if (state.selectedRoom?.id === roomId) {
+          const remainingRooms = state.availableRooms.filter((room) => room.id !== roomId);
+          dispatch({ type: "SET_SELECTED_ROOM", payload: remainingRooms[0] || null });
+        }
+      } catch (error) {
+        console.error("[RoomContext] Leave room error:", error);
+        toast.error(error instanceof Error ? error.message : "Failed to leave room");
+      } finally {
+        dispatch({ type: "SET_IS_LEAVING", payload: false });
       }
-    } catch (err) {
-      console.error("[RoomContext] Room switch failed:", err);
-      toast.error("Failed to switch room");
-    }
-  }, [state.user, state.availableRooms, dispatch]);
+    },
+    [state.user, supabase, state.selectedRoom, state.availableRooms, dispatch]
+  );
 
-  const createRoom = useCallback(async (name: string, isPrivate: boolean) => {
-    if (!state.user) {
-      toast.error("You must be logged in to create a room");
-      return;
-    }
-    try {
-      const response = await fetch("/api/rooms", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), isPrivate }),
-      });
-      const newRoomResponse = await response.json();
-      if (!response.ok) throw new Error(newRoomResponse.error || "Failed to create room");
-      
-      toast.success("Room created successfully!");
-      const roomWithMembership: RoomWithMembershipCount = {
-        ...newRoomResponse,
-        isMember: true,
-        participationStatus: "accepted",
-        memberCount: 1,
-      };
-      dispatch({ type: "SET_SELECTED_ROOM", payload: roomWithMembership });
-      dispatch({ type: "ADD_ROOM", payload: roomWithMembership });
-    } catch (error) {
-      console.error("[RoomContext] Create room error:", error);
-      toast.error(error instanceof Error ? error.message : "Failed to create room");
-    }
-  }, [state.user, dispatch]);
+  const switchRoom = useCallback(
+    async (newRoomId: string) => {
+      if (!state.user) {
+        toast.error("You must be logged in to switch rooms");
+        return;
+      }
+      try {
+        const response = await fetch(`/api/rooms/switch`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ roomId: newRoomId }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.message || "Failed to switch room");
+        const switchedRoom = state.availableRooms.find((r) => r.id === newRoomId);
+        if (switchedRoom) {
+          dispatch({ type: "SET_SELECTED_ROOM", payload: switchedRoom });
+          toast.success(`Switched to ${switchedRoom.is_private ? "private" : "public"} room: ${switchedRoom.name}`);
+        }
+      } catch (err) {
+        console.error("[RoomContext] Room switch failed:", err);
+        toast.error("Failed to switch room");
+      }
+    },
+    [state.user, state.availableRooms, dispatch]
+  );
+
+  const createRoom = useCallback(
+    async (name: string, isPrivate: boolean) => {
+      if (!state.user) {
+        toast.error("You must be logged in to create a room");
+        return;
+      }
+      try {
+        const response = await fetch("/api/rooms", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: name.trim(), isPrivate }),
+        });
+        const newRoomResponse = await response.json();
+        if (!response.ok) throw new Error(newRoomResponse.error || "Failed to create room");
+
+        toast.success("Room created successfully!");
+        const roomWithMembership: RoomWithMembershipCount = {
+          ...newRoomResponse,
+          isMember: true,
+          participationStatus: "accepted",
+          memberCount: 1,
+        };
+        dispatch({ type: "SET_SELECTED_ROOM", payload: roomWithMembership });
+        dispatch({ type: "ADD_ROOM", payload: roomWithMembership });
+      } catch (error) {
+        console.error("[RoomContext] Create room error:", error);
+        toast.error(error instanceof Error ? error.message : "Failed to create room");
+      }
+    },
+    [state.user, dispatch]
+  );
 
   const setSelectedRoom = useCallback((room: RoomWithMembershipCount | null) => {
     dispatch({ type: "SET_SELECTED_ROOM", payload: room });
@@ -766,23 +717,24 @@ const fetchAvailableRooms = useCallback(async () => {
 
   const { addMessage: addMessageToStore, messages } = useMessage();
 
-  const addMessage = useCallback((message: Imessage) => {
-    // Avoid duplicate messages
-    if (!messages.some((m) => m.id === message.id)) {
-      addMessageToStore(message);
-    }
-  }, [messages, addMessageToStore]);
+  const addMessage = useCallback(
+    (message: Imessage) => {
+      if (!messages.some((m) => m.id === message.id)) {
+        addMessageToStore(message);
+      }
+    },
+    [messages, addMessageToStore]
+  );
 
   // Auto-fetch rooms when user changes
   useEffect(() => {
     if (state.user?.id) fetchAvailableRooms();
   }, [state.user, fetchAvailableRooms]);
 
-  // subscribe to changes on room_members and room_participants
-  // call handleCountUpdate with the room_id touched so we recompute counts centrally
+  // Subscribe to changes on room_members and room_participants
   useEffect(() => {
     const channel = supabase
-      .channel("room-counts") // friendly name
+      .channel("room-counts")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "room_members" },
@@ -811,7 +763,6 @@ const fetchAvailableRooms = useCallback(async () => {
 
     return () => {
       try {
-        // cleanup
         supabase.removeChannel(channel);
       } catch (err) {
         console.warn("[RoomProvider] error removing room-counts channel:", err);
@@ -819,108 +770,47 @@ const fetchAvailableRooms = useCallback(async () => {
     };
   }, [supabase, handleCountUpdate]);
 
-  // Track presence for all rooms the user is a member of
+  // Optimized presence tracking for all member rooms
   const trackAllRoomsPresence = useCallback(async () => {
     if (!state.user?.id || state.availableRooms.length === 0) return;
 
-    // Create a presence channel for each room the user is a member of
-    const memberRooms = state.availableRooms.filter(room => room.isMember);
-    
+    const memberRooms = state.availableRooms.filter((room) => room.isMember);
+
     memberRooms.forEach(async (room) => {
-      // Skip if already tracking this room
-      if (presenceChannelsRef.current.has(room.id)) {
-        return;
-      }
+      if (presenceChannelsRef.current.has(room.id)) return;
 
       const channel = supabase.channel(`presence:${room.id}`);
-      
+
+      // Unified presence handler
+      const handlePresenceUpdate = () => {
+        try {
+          const presenceState = channel.presenceState();
+          const onlineUsers = new Set<string>();
+
+          Object.values(presenceState).forEach((presences: any) => {
+            if (Array.isArray(presences)) {
+              presences.forEach((presence: any) => {
+                if (presence?.user_id) onlineUsers.add(presence.user_id);
+              });
+            }
+          });
+
+          const onlineCount = onlineUsers.size;
+          
+          // Dispatch both updates atomically
+          dispatch({ type: "UPDATE_ROOM_PRESENCE", payload: { roomId: room.id, onlineUsers: onlineCount } });
+          dispatch({ type: "UPDATE_ROOM_ONLINE_USERS", payload: { roomId: room.id, onlineUsers: onlineCount } });
+        } catch (err) {
+          console.error(`[RoomProvider] Error updating presence for room ${room.id}:`, err);
+        }
+      };
+
       channel
-        .on('presence', { event: 'sync' }, () => {
-          try {
-            const presenceState = channel.presenceState();
-            const onlineUsers = new Set<string>();
-            
-            Object.values(presenceState).forEach((presences: any) => {
-              if (Array.isArray(presences)) {
-                presences.forEach((presence: any) => {
-                  if (presence?.user_id) {
-                    onlineUsers.add(presence.user_id);
-                  }
-                });
-              }
-            });
-
-            const onlineCount = onlineUsers.size;
-            dispatch({
-              type: 'UPDATE_ROOM_PRESENCE',
-              payload: { roomId: room.id, onlineUsers: onlineCount },
-            });
-            dispatch({
-              type: 'UPDATE_ROOM_ONLINE_USERS',
-              payload: { roomId: room.id, onlineUsers: onlineCount },
-            });
-          } catch (err) {
-            console.error(`[RoomProvider] Error updating presence for room ${room.id}:`, err);
-          }
-        })
-        .on('presence', { event: 'join' }, () => {
-          try {
-            const presenceState = channel.presenceState();
-            const onlineUsers = new Set<string>();
-            
-            Object.values(presenceState).forEach((presences: any) => {
-              if (Array.isArray(presences)) {
-                presences.forEach((presence: any) => {
-                  if (presence?.user_id) {
-                    onlineUsers.add(presence.user_id);
-                  }
-                });
-              }
-            });
-
-            const onlineCount = onlineUsers.size;
-            dispatch({
-              type: 'UPDATE_ROOM_PRESENCE',
-              payload: { roomId: room.id, onlineUsers: onlineCount },
-            });
-            dispatch({
-              type: 'UPDATE_ROOM_ONLINE_USERS',
-              payload: { roomId: room.id, onlineUsers: onlineCount },
-            });
-          } catch (err) {
-            console.error(`[RoomProvider] Error handling join for room ${room.id}:`, err);
-          }
-        })
-        .on('presence', { event: 'leave' }, () => {
-          try {
-            const presenceState = channel.presenceState();
-            const onlineUsers = new Set<string>();
-            
-            Object.values(presenceState).forEach((presences: any) => {
-              if (Array.isArray(presences)) {
-                presences.forEach((presence: any) => {
-                  if (presence?.user_id) {
-                    onlineUsers.add(presence.user_id);
-                  }
-                });
-              }
-            });
-
-            const onlineCount = onlineUsers.size;
-            dispatch({
-              type: 'UPDATE_ROOM_PRESENCE',
-              payload: { roomId: room.id, onlineUsers: onlineCount },
-            });
-            dispatch({
-              type: 'UPDATE_ROOM_ONLINE_USERS',
-              payload: { roomId: room.id, onlineUsers: onlineCount },
-            });
-          } catch (err) {
-            console.error(`[RoomProvider] Error handling leave for room ${room.id}:`, err);
-          }
-        })
+        .on("presence", { event: "sync" }, handlePresenceUpdate)
+        .on("presence", { event: "join" }, handlePresenceUpdate)
+        .on("presence", { event: "leave" }, handlePresenceUpdate)
         .subscribe(async (status) => {
-          if (status === 'SUBSCRIBED') {
+          if (status === "SUBSCRIBED") {
             try {
               await channel.track({
                 user_id: state.user?.id,
@@ -933,18 +823,15 @@ const fetchAvailableRooms = useCallback(async () => {
           }
         });
 
-      // Store channel reference for cleanup
       presenceChannelsRef.current.set(room.id, channel);
     });
   }, [state.user?.id, state.availableRooms, supabase, dispatch]);
 
-  // Update your useEffect to track all rooms
   useEffect(() => {
     if (state.user?.id && state.availableRooms.length > 0) {
       trackAllRoomsPresence();
     }
 
-    // Cleanup function
     return () => {
       presenceChannelsRef.current.forEach((channel, roomId) => {
         try {

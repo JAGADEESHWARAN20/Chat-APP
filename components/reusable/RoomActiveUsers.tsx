@@ -1,27 +1,37 @@
-// components/reusable/RoomActiveUsers.tsx
 "use client";
-
 import { useRoomContext } from "@/lib/store/RoomContext";
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
 
 interface RoomActiveUsersProps {
   roomId: string;
 }
 
+/**
+ * Optimized component to display active users count
+ * Reads directly from RoomContext without extra subscriptions
+ */
 export function RoomActiveUsers({ roomId }: RoomActiveUsersProps) {
   const { state } = useRoomContext();
-  const [onlineUsers, setOnlineUsers] = useState(0);
 
-  useEffect(() => {
-    // Get online users from room presence data
-    const roomPresence = state.roomPresence[roomId];
-    if (roomPresence) {
-      setOnlineUsers(roomPresence.onlineUsers);
-    } else {
-      setOnlineUsers(0);
+  const onlineUsers = useMemo(() => {
+    // First check roomPresence map (most reliable)
+    const roomPresenceData = state.roomPresence[roomId];
+    if (roomPresenceData) {
+      return roomPresenceData.onlineUsers;
     }
-  }, [state.roomPresence, roomId]);
 
+    // Fallback to room's onlineUsers field
+    let room = null;
+    if (state.selectedRoom?.id === roomId) {
+      room = state.selectedRoom;
+    } else {
+      room = state.availableRooms.find((r) => r.id === roomId);
+    }
+
+    return room?.onlineUsers ?? 0;
+  }, [roomId, state.roomPresence, state.selectedRoom, state.availableRooms]);
+
+  // Don't render if no online users
   if (onlineUsers === 0) {
     return null;
   }
