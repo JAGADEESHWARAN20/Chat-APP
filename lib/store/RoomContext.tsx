@@ -800,7 +800,15 @@ useEffect(() => {
     updateTypingText,
     getRoomPresence,
   }), [
-    state,
+    state.availableRooms.length,
+    state.selectedRoom?.id,
+    state.selectedDirectChat?.id,
+    state.isLoading,
+    state.isLeaving,
+    state.user?.id,
+    state.typingUsers.length,
+    state.typingDisplayText,
+    Object.keys(state.roomPresence).length,
     fetchAvailableRooms,
     setSelectedRoom,
     setSelectedDirectChat,
@@ -814,7 +822,7 @@ useEffect(() => {
     updateTypingUsers,
     updateTypingText,
     getRoomPresence,
-  ]);
+  ]);  // FIXED: Primitives for stability
 
   return <RoomContext.Provider value={contextValue}>{children}</RoomContext.Provider>;
 }
