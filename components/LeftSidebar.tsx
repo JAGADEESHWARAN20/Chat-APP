@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useMemo, useCallback, memo } from "react";
+import React, { useState, useMemo, useCallback, memo } from "react";
 import { RoomWithMembershipCount, useRoomContext } from "@/lib/store/RoomContext";
 import { Avatar, AvatarImage } from "@/components/ui/avatar";
 import { Loader2, ChevronRight, MessageSquare, Users, Plus } from "lucide-react";
@@ -22,11 +22,9 @@ const LeftSidebar = memo(function LeftSidebar({
   const [newRoomName, setNewRoomName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
 
-  // ✅ FIX: Remove automatic fetch - let RoomContext handle it
-  // Direct chats (empty for now)
   const [directChats] = useState<RoomWithMembershipCount[]>([]);
 
-  // ✅ Optimized room filtering
+  // Filter joined rooms
   const joinedRooms = useMemo(() => {
     return (state.availableRooms || []).filter(room => room.isMember === true);
   }, [state.availableRooms]);
@@ -43,7 +41,6 @@ const LeftSidebar = memo(function LeftSidebar({
     ), [directChats, searchTerm]
   );
 
-  // Create room handler
   const handleCreateRoom = async () => {
     if (!newRoomName.trim()) return;
     
@@ -59,8 +56,11 @@ const LeftSidebar = memo(function LeftSidebar({
     }
   };
 
-  // Optimized room item renderer
+  // ✅ FIXED: Render item with proper member count display
   const renderItem = useCallback((item: RoomWithMembershipCount) => {
+    // Debug log to see actual values
+    console.log(`Room: ${item.name}, memberCount: ${item.memberCount}, onlineUsers: ${item.onlineUsers}`);
+    
     return (
       <div
         key={item.id}
@@ -99,25 +99,29 @@ const LeftSidebar = memo(function LeftSidebar({
             {item.latestMessage || "No messages yet"}
           </div>
 
-          {/* User count and status */}
+          {/* ✅ FIXED: User count display - ensure we use the actual memberCount */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Users className="h-3 w-3" />
               <span>
-                {item.memberCount || 0} {item.memberCount === 1 ? 'user' : 'users'}
+                {/* ✅ Use memberCount directly from item, fallback to 0 */}
+                {item.memberCount ?? 0} {(item.memberCount ?? 0) === 1 ? 'member' : 'members'}
               </span>
-              <RoomActiveUsers roomId={item.id} compact />
             </div>
             
-            {/* Membership status badge */}
+            {/* ✅ Active users badge */}
+            <RoomActiveUsers roomId={item.id} compact />
+          </div>
+
+          {/* Membership status badge */}
+          <div className="flex items-center justify-between mt-2">
             <div className="text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300 rounded-full px-2 py-1">
               Joined
             </div>
-          </div>
-
-          {/* Creation date */}
-          <div className="text-xs text-muted-foreground mt-1">
-            Created: {new Date(item.created_at).toLocaleDateString()}
+            {/* Creation date */}
+            <div className="text-xs text-muted-foreground">
+              {new Date(item.created_at).toLocaleDateString()}
+            </div>
           </div>
         </div>
       </div>

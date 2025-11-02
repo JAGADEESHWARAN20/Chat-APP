@@ -18,5 +18,14 @@
     "http",
     "net"
   ],
-  "css.customData": [".vscode/css-data.json"]
+  "css.customData": [
+    ".vscode/css-data.json"
+  ],
+  "cSpell.words": [
+    "clientinitializer",
+    "fkey",
+    "Postgrest",
+    "supabase",
+    "uuidv"
+  ]
 }

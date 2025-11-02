@@ -338,13 +338,19 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
       // ✅ FIXED: Use ref instead of state
       const currentPresence = roomPresenceRef.current;
 
-      const roomsWithMembership: RoomWithMembershipCount[] = allRooms.map((room) => ({
-        ...room,
-        memberCount: memberCounts.get(room.id) || 0,
-        isMember: (membershipMap.get(room.id) ?? null) === "accepted",
-        participationStatus: membershipMap.get(room.id) ?? null,
-        onlineUsers: currentPresence[room.id]?.onlineUsers ?? 0,
-      }));
+      const roomsWithMembership: RoomWithMembershipCount[] = allRooms.map((room) => {
+        const count = memberCounts.get(room.id) || 0;
+        // ✅ Debug log to verify counts
+        console.log(`[fetchAvailableRooms] Room: ${room.name}, DB Count: ${count}`);
+        
+        return {
+          ...room,
+          memberCount: count,
+          isMember: (membershipMap.get(room.id) ?? null) === "accepted",
+          participationStatus: membershipMap.get(room.id) ?? null,
+          onlineUsers: currentPresence[room.id]?.onlineUsers ?? 0,
+        };
+      });
 
       dispatch({ type: "SET_AVAILABLE_ROOMS", payload: roomsWithMembership });
 
@@ -469,21 +475,20 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
       
       toast.success("Room created successfully!");
       
-      const roomWithMembership: RoomWithMembershipCount = {
-        ...newRoomResponse,
-        isMember: true,
-        participationStatus: "accepted",
-        memberCount: 1,
-        onlineUsers: 1,
-      };
-
-      dispatch({ type: "ADD_ROOM", payload: roomWithMembership });
-      dispatch({ type: "SET_SELECTED_ROOM", payload: roomWithMembership });
+      // ✅ FIXED: Refetch all rooms to get accurate count from database
+      // This ensures the new room has the correct member count
+      await fetchAvailableRooms();
+      
+      // Select the newly created room
+      const createdRoom = state.availableRooms.find(r => r.id === newRoomResponse.id);
+      if (createdRoom) {
+        dispatch({ type: "SET_SELECTED_ROOM", payload: createdRoom });
+      }
     } catch (error: any) {
       console.error("[RoomContext] Create room error:", error);
       toast.error(error.message || "Failed to create room");
     }
-  }, [user?.id, dispatch]);
+  }, [user?.id, fetchAvailableRooms, state.availableRooms]);
 
   const checkRoomMembership = useCallback(async (roomId: string) => {
     if (!user?.id) return false;
