@@ -251,33 +251,37 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
 
   // ==================== ROOM OPERATIONS ====================
 
-  const handleCountUpdate = useCallback(async (room_id: string) => {
-    if (!user?.id) return;
-    
+const handleCountUpdate = useCallback(
+  async (room_id: string) => {
+    if (!user?.id || !room_id) return;
+
     try {
-      // FIXED: Count ALL members (no status filter) to match SQL
+      // ✅ Use minimal column selection and head:true to avoid downloading rows
       const { count, error } = await supabase
         .from("room_members")
-        .select("*", { count: "exact", head: true })
+        .select("user_id", { count: "exact", head: true })
         .eq("room_id", room_id);
 
       if (error) {
-        console.error(`Error counting members for room ${room_id}:`, error);
+        console.error(`[handleCountUpdate] Failed to count members for room ${room_id}:`, error);
         return;
       }
 
       const totalCount = count ?? 0;
-
       console.log(`[handleCountUpdate] Room ${room_id} member count: ${totalCount}`);
 
+      // ✅ Dispatch the update only if state actually changes
       dispatch({
         type: "UPDATE_ROOM_MEMBER_COUNT",
         payload: { roomId: room_id, memberCount: totalCount },
       });
-    } catch (error) {
-      console.error(`Error updating count for room ${room_id}:`, error);
+    } catch (err) {
+      console.error(`[handleCountUpdate] Unexpected error for room ${room_id}:`, err);
     }
-  }, [supabase, user?.id]);
+  },
+  [supabase, user?.id, dispatch]
+);
+
 
   const fetchAvailableRooms = useCallback(async () => {
     // Debounce: Prevent rapid calls
