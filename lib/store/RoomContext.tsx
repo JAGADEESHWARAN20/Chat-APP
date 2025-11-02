@@ -190,7 +190,7 @@ function roomReducer(state: RoomState, action: RoomAction): RoomState {
 // ==================== CONTEXT ====================
 interface RoomContextType {
   state: RoomState;
-  fetchAvailableRooms: () => Promise<void>;
+  fetchAvailableRooms: () => Promise<RoomWithMembershipCount[] | void>;
   setSelectedRoom: (room: RoomWithMembershipCount | null) => void;
   setSelectedDirectChat: (chat: DirectChat | null) => void;
   joinRoom: (roomId: string) => Promise<void>;
@@ -330,11 +330,13 @@ const handleCountUpdate = useCallback(
       }));
 
       dispatch({ type: "SET_AVAILABLE_ROOMS", payload: roomsWithMembership });
+      return roomsWithMembership;
 
     } catch (error) {
       console.error("[Rooms] Error fetching rooms:", error);
       toast.error("Failed to load rooms");
       dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
+      return [];
     } finally {
       dispatch({ type: "SET_LOADING", payload: false });
       isFetchingRef.current = false;
@@ -405,14 +407,14 @@ const handleCountUpdate = useCallback(
       if (error) throw error;
 
       toast.success("Left room successfully");
-      
-      dispatch({ type: "REMOVE_ROOM", payload: roomId });
-      
-      if (state.selectedRoom?.id === roomId) {
-        const remainingRooms = state.availableRooms.filter((room) => room.id !== roomId);
-        dispatch({ type: "SET_SELECTED_ROOM", payload: remainingRooms[0] || null });
-      }
 
+      dispatch({ type: "REMOVE_ROOM", payload: roomId });
+      // Use the latest state snapshot from the ref to compute remaining rooms
+      const currentRooms = stateRef.current.availableRooms.filter((r) => r.id !== roomId);
+      const selected = stateRef.current.selectedRoom?.id === roomId ? currentRooms[0] || null : stateRef.current.selectedRoom;
+      dispatch({ type: "SET_SELECTED_ROOM", payload: selected });
+
+      // Update server-side counts for this room
       handleCountUpdate(roomId);
 
     } catch (error: any) {
@@ -421,14 +423,14 @@ const handleCountUpdate = useCallback(
     } finally {
       dispatch({ type: "SET_IS_LEAVING", payload: false });
     }
-  }, [user?.id, state.selectedRoom?.id, state.availableRooms, supabase, handleCountUpdate]);
+  }, [user?.id, supabase, handleCountUpdate]);
 
   const switchRoom = useCallback((newRoomId: string) => {
-    const switchedRoom = state.availableRooms.find((room) => room.id === newRoomId);
+    const switchedRoom = stateRef.current.availableRooms.find((room) => room.id === newRoomId);
     if (switchedRoom) {
       dispatch({ type: "SET_SELECTED_ROOM", payload: switchedRoom });
     }
-  }, [state.availableRooms]);
+  }, []);
 
   const createRoom = useCallback(async (name: string, isPrivate: boolean) => {
     if (!user?.id) {
@@ -448,20 +450,20 @@ const handleCountUpdate = useCallback(
       if (!response.ok) {
         throw new Error(newRoomResponse.error || "Failed to create room");
       }
-      
+
       toast.success("Room created successfully!");
-      
-      await fetchAvailableRooms();
-      
-      const createdRoom = state.availableRooms.find(r => r.id === newRoomResponse.id);
-      if (createdRoom) {
-        dispatch({ type: "SET_SELECTED_ROOM", payload: createdRoom });
+
+      // Refresh rooms and select the newly created room (fetchAvailableRooms returns the list)
+      const refreshed = await fetchAvailableRooms();
+      if (Array.isArray(refreshed)) {
+        const createdRoom = refreshed.find((r: any) => r.id === newRoomResponse.id);
+        if (createdRoom) dispatch({ type: "SET_SELECTED_ROOM", payload: createdRoom });
       }
     } catch (error: any) {
       console.error("[RoomContext] Create room error:", error);
       toast.error(error.message || "Failed to create room");
     }
-  }, [user?.id, fetchAvailableRooms, state.availableRooms]);
+  }, [user?.id, fetchAvailableRooms]);
 
   const checkRoomMembership = useCallback(async (roomId: string) => {
     if (!user?.id) return false;
@@ -498,6 +500,13 @@ const handleCountUpdate = useCallback(
       addMessageToStore(message);
     }
   }, [messages, addMessageToStore]);
+
+  // Keep a stable ref to the latest state to avoid recreating callbacks that
+  // otherwise depend on state and cause unnecessary re-renders of consumers.
+  const stateRef = useRef<RoomState>(state);
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   // ==================== EFFECTS ====================
   
