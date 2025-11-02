@@ -256,21 +256,21 @@ const handleCountUpdate = useCallback(
     if (!user?.id || !room_id) return;
 
     try {
-      // ✅ Use minimal column selection and head:true to avoid downloading rows
-      const { count, error } = await supabase
-        .from("room_members")
-        .select("user_id", { count: "exact", head: true })
-        .eq("room_id", room_id);
+      // ✅ Call the RPC and get room member details
+      const { data, error } = await supabase.rpc("get_room_members", {
+        room_id_param: room_id,
+      });
 
       if (error) {
-        console.error(`[handleCountUpdate] Failed to count members for room ${room_id}:`, error);
+        console.error(`[handleCountUpdate] Failed to fetch members for room ${room_id}:`, error);
         return;
       }
 
-      const totalCount = count ?? 0;
-      console.log(`[handleCountUpdate] Room ${room_id} member count: ${totalCount}`);
+      const totalCount = data?.[0]?.member_count ?? 0;
+      const userIds = data?.[0]?.user_ids ?? [];
 
-      // ✅ Dispatch the update only if state actually changes
+      console.log(`[handleCountUpdate] Room ${room_id}: ${totalCount} members`, userIds);
+
       dispatch({
         type: "UPDATE_ROOM_MEMBER_COUNT",
         payload: { roomId: room_id, memberCount: totalCount },
@@ -281,6 +281,7 @@ const handleCountUpdate = useCallback(
   },
   [supabase, user?.id, dispatch]
 );
+
 
 
   const fetchAvailableRooms = useCallback(async () => {

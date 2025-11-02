@@ -485,6 +485,14 @@ export type Database = {
           id: string
         }[]
       }
+      get_room_members: {
+        Args: { room_id_param: string }
+        Returns: {
+          member_count: number
+          room_id: string
+          user_ids: string[]
+        }[]
+      }
       get_rooms_with_counts: {
         Args: {
           p_include_participants?: boolean
