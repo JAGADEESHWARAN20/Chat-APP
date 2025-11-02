@@ -30,7 +30,7 @@ export type RoomWithMembershipCount = Room & {
 
 type TypingUser = {
   user_id: string;
-  is_typing: boolean;
+  is_typing: boolean;  // FIXED: boolean, not string
   display_name?: string;
   username?: string;
 };
@@ -195,7 +195,7 @@ interface RoomContextType {
   setSelectedDirectChat: (chat: DirectChat | null) => void;
   joinRoom: (roomId: string) => Promise<void>;
   leaveRoom: (roomId: string) => Promise<void>;
-  switchRoom: (newRoomId: string) => void; // ✅ FIXED: Changed to void
+  switchRoom: (newRoomId: string) => void;
   createRoom: (name: string, isPrivate: boolean) => Promise<void>;
   checkRoomMembership: (roomId: string) => Promise<boolean>;
   addMessage: (message: Imessage) => void;
@@ -207,6 +207,7 @@ interface RoomContextType {
 
 const RoomContext = createContext<RoomContextType | undefined>(undefined);
 
+// ==================== PROVIDER ====================
 export function RoomProvider({ children, user }: { children: React.ReactNode; user: SupabaseUser | undefined }) {
   const [state, dispatch] = useReducer(roomReducer, initialState);
   const supabase = supabaseBrowser();
@@ -219,13 +220,12 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
   const lastFetchRef = useRef<number>(0);
   const roomPresenceRef = useRef<RoomPresence>({});
 
-  // ✅ FIXED: Update ref when state changes
+  // Update presence ref on change (stable snapshot)
   useEffect(() => {
-    roomPresenceRef.current = state.roomPresence;
+    roomPresenceRef.current = { ...state.roomPresence };
   }, [state.roomPresence]);
 
   // ==================== CORE FUNCTIONS ====================
-
   const updateTypingUsers = useCallback((users: TypingUser[]) => {
     dispatch({ type: "SET_TYPING_USERS", payload: users });
   }, []);
@@ -251,12 +251,38 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
 
   // ==================== ROOM OPERATIONS ====================
 
-  // ✅ FIXED: Declare fetchAvailableRooms FIRST
-  const fetchAvailableRooms = useCallback(async () => {
-    const now = Date.now();
-    if (isFetchingRef.current || (now - lastFetchRef.current < 2000)) {
-      return;
+  const handleCountUpdate = useCallback(async (room_id: string) => {
+    if (!user?.id) return;
+    
+    try {
+      // FIXED: Count ALL members (no status filter) to match SQL
+      const { count, error } = await supabase
+        .from("room_members")
+        .select("*", { count: "exact", head: true })
+        .eq("room_id", room_id);
+
+      if (error) {
+        console.error(`Error counting members for room ${room_id}:`, error);
+        return;
+      }
+
+      const totalCount = count ?? 0;
+
+      console.log(`[handleCountUpdate] Room ${room_id} member count: ${totalCount}`);
+
+      dispatch({
+        type: "UPDATE_ROOM_MEMBER_COUNT",
+        payload: { roomId: room_id, memberCount: totalCount },
+      });
+    } catch (error) {
+      console.error(`Error updating count for room ${room_id}:`, error);
     }
+  }, [supabase, user?.id]);
+
+  const fetchAvailableRooms = useCallback(async () => {
+    // Debounce: Prevent rapid calls
+    const now = Date.now();
+    if (isFetchingRef.current || (now - lastFetchRef.current < 2000)) return;
 
     if (!user?.id) {
       dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
@@ -269,6 +295,7 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
     dispatch({ type: "SET_LOADING", payload: true });
 
     try {
+      // Fetch all rooms
       const { data: allRooms, error } = await supabase
         .from("rooms")
         .select("id, name, is_private, created_by, created_at");
@@ -282,7 +309,7 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
 
       const roomIds = allRooms.map((r) => r.id);
 
-      // Get current user's memberships
+      // User's membership status (filter for isMember)
       const { data: memberships } = await supabase
         .from("room_members")
         .select("room_id, status")
@@ -292,56 +319,40 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
       const membershipMap = new Map<string, string | null>();
       (memberships || []).forEach((m) => membershipMap.set(m.room_id, m.status));
 
-      // ✅ COUNT ALL MEMBERS FOR EACH ROOM (regardless of status)
+      // FIXED: Count ALL members (no status filter) to match your SQL/array
       const { data: allMembersData, error: membersError } = await supabase
         .from("room_members")
         .select("room_id")
         .in("room_id", roomIds);
 
       if (membersError) {
-        console.error("Error counting members:", membersError);
+        console.error("Error counting all members:", membersError);
       }
 
-      // Count members per room
+      // Count all memberships per room
       const memberCounts = new Map<string, number>();
       roomIds.forEach((roomId) => memberCounts.set(roomId, 0));
 
       (allMembersData || []).forEach(({ room_id }) => {
         memberCounts.set(room_id, (memberCounts.get(room_id) || 0) + 1);
       });
-      
-      console.log("[fetchAvailableRooms] Total member counts:", 
-        Array.from(memberCounts.entries()).map(([id, count]) => {
-          const room = allRooms.find(r => r.id === id);
-          return { room: room?.name, totalMembers: count };
-        })
+
+      // Log to verify (remove in prod)
+      console.log("[fetchAvailableRooms] Member counts match SQL?", 
+        allRooms.map((room) => ({
+          name: room.name,
+          totalMembers: memberCounts.get(room.id) || 0,
+          userIsMember: membershipMap.get(room.id) === "accepted"
+        }))
       );
 
-      const currentPresence = roomPresenceRef.current;
-
-      const roomsWithMembership: RoomWithMembershipCount[] = allRooms.map((room) => {
-        const totalMembers = memberCounts.get(room.id) || 0;
-        const membershipStatus = membershipMap.get(room.id) ?? null;
-        
-        const isMember = membershipStatus === "accepted" || 
-                        (membershipStatus === null && membershipMap.has(room.id));
-        
-        console.log(`[fetchAvailableRooms] Room: ${room.name}`, {
-          id: room.id.slice(0, 8),
-          totalMembers,
-          userStatus: membershipStatus || 'not joined',
-          isMember,
-          onlineUsers: currentPresence[room.id]?.onlineUsers ?? 0
-        });
-        
-        return {
-          ...room,
-          memberCount: totalMembers,
-          isMember,
-          participationStatus: membershipStatus,
-          onlineUsers: currentPresence[room.id]?.onlineUsers ?? 0,
-        };
-      });
+      const roomsWithMembership: RoomWithMembershipCount[] = allRooms.map((room) => ({
+        ...room,
+        memberCount: memberCounts.get(room.id) || 0,  // FIXED: Total from all rows
+        isMember: (membershipMap.get(room.id) ?? null) === "accepted",
+        participationStatus: membershipMap.get(room.id) ?? null,
+        onlineUsers: roomPresenceRef.current[room.id]?.onlineUsers ?? 0,
+      }));
 
       dispatch({ type: "SET_AVAILABLE_ROOMS", payload: roomsWithMembership });
 
@@ -353,41 +364,7 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
       dispatch({ type: "SET_LOADING", payload: false });
       isFetchingRef.current = false;
     }
-  }, [user?.id, supabase]);
-
-  // ✅ FIXED: Now handleCountUpdate can use fetchAvailableRooms since it's declared above
- // ✅ FIXED: Improved handleCountUpdate
-const handleCountUpdate = useCallback(async (room_id: string) => {
-  if (!user?.id) return;
-  
-  try {
-    console.log(`[Count] Starting count update for room: ${room_id}`);
-    
-    // ✅ COUNT ALL MEMBERS (regardless of status)
-    const { count: membersCount, error: membersError } = await supabase
-      .from("room_members")
-      .select("*", { count: "exact", head: true })
-      .eq("room_id", room_id);
-
-    if (membersError) {
-      console.error(`[Count] Error counting members for ${room_id}:`, membersError);
-      return;
-    }
-
-    const totalCount = membersCount ?? 0;
-    console.log(`[Count] Room ${room_id} now has: ${totalCount} total members`);
-
-    // Update the count in the state
-    dispatch({
-      type: "UPDATE_ROOM_MEMBER_COUNT",
-      payload: { roomId: room_id, memberCount: totalCount },
-    });
-
-  } catch (error) {
-    console.error(`[Count] Error updating count for ${room_id}:`, error);
-  }
-}, [supabase, user?.id]);
-// ✅ REMOVED: fetchAvailableRooms dependency to prevent loops
+  }, [user?.id, supabase]);  
 
   const joinRoom = useCallback(async (roomId: string) => {
     if (!user?.id) {
