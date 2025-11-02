@@ -478,19 +478,25 @@ const handleCountUpdate = useCallback(async (room_id: string | undefined) => {
   if (!room_id) return;
   
   try {
-    // ✅ FIX: Count only accepted members
-    const { count, error } = await supabase
+    // ✅ FIX: Count accepted members from both tables
+    const { count: membersCount, error: membersError } = await supabase
       .from("room_members")
       .select("*", { count: "exact", head: true })
       .eq("room_id", room_id)
-      .eq("status", "accepted"); // ✅ Only count accepted members
+      .eq("status", "accepted");
 
-    if (error) {
-      console.error(`Error updating room count for ${room_id}:`, error);
+    const { count: participantsCount, error: participantsError } = await supabase
+      .from("room_participants")
+      .select("*", { count: "exact", head: true })
+      .eq("room_id", room_id)
+      .eq("status", "accepted");
+
+    if (membersError || participantsError) {
+      console.error(`Error updating room count for ${room_id}:`, membersError || participantsError);
       return;
     }
 
-    const totalCount = count ?? 0;
+    const totalCount = (membersCount ?? 0) + (participantsCount ?? 0);
 
     console.log(`Updated room ${room_id} member count:`, totalCount);
     
@@ -544,15 +550,21 @@ const fetchAvailableRooms = useCallback(async () => {
       if (!membershipMap.has(p.room_id)) membershipMap.set(p.room_id, p.status);
     });
 
-    // ✅ FIX: Count only ACCEPTED members (not all rows)
+    // ✅ FIX: Count ACCEPTED members from both tables
     const { data: acceptedMembersData, error: membersError } = await supabase
       .from("room_members")
       .select("room_id")
       .in("room_id", roomIds)
       .eq("status", "accepted"); // ✅ Only count accepted members
 
-    if (membersError) {
-      console.error("Error counting members:", membersError);
+    const { data: acceptedParticipantsData, error: participantsError } = await supabase
+      .from("room_participants")
+      .select("room_id")
+      .in("room_id", roomIds)
+      .eq("status", "accepted");
+
+    if (membersError || participantsError) {
+      console.error("Error counting members/participants:", membersError || participantsError);
     }
 
     // Create a map to count ACCEPTED members per room
@@ -563,8 +575,13 @@ const fetchAvailableRooms = useCallback(async () => {
       memberCounts.set(roomId, 0);
     });
 
-    // Count only accepted members
+    // Count accepted members
     (acceptedMembersData || []).forEach(({ room_id }) => {
+      memberCounts.set(room_id, (memberCounts.get(room_id) || 0) + 1);
+    });
+
+    // Count accepted participants and add to total
+    (acceptedParticipantsData || []).forEach(({ room_id }) => {
       memberCounts.set(room_id, (memberCounts.get(room_id) || 0) + 1);
     });
 
@@ -838,6 +855,10 @@ const fetchAvailableRooms = useCallback(async () => {
               type: 'UPDATE_ROOM_PRESENCE',
               payload: { roomId: room.id, onlineUsers: onlineCount },
             });
+            dispatch({
+              type: 'UPDATE_ROOM_ONLINE_USERS',
+              payload: { roomId: room.id, onlineUsers: onlineCount },
+            });
           } catch (err) {
             console.error(`[RoomProvider] Error updating presence for room ${room.id}:`, err);
           }
@@ -862,6 +883,10 @@ const fetchAvailableRooms = useCallback(async () => {
               type: 'UPDATE_ROOM_PRESENCE',
               payload: { roomId: room.id, onlineUsers: onlineCount },
             });
+            dispatch({
+              type: 'UPDATE_ROOM_ONLINE_USERS',
+              payload: { roomId: room.id, onlineUsers: onlineCount },
+            });
           } catch (err) {
             console.error(`[RoomProvider] Error handling join for room ${room.id}:`, err);
           }
@@ -884,6 +909,10 @@ const fetchAvailableRooms = useCallback(async () => {
             const onlineCount = onlineUsers.size;
             dispatch({
               type: 'UPDATE_ROOM_PRESENCE',
+              payload: { roomId: room.id, onlineUsers: onlineCount },
+            });
+            dispatch({
+              type: 'UPDATE_ROOM_ONLINE_USERS',
               payload: { roomId: room.id, onlineUsers: onlineCount },
             });
           } catch (err) {
