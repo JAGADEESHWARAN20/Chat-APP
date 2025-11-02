@@ -318,11 +318,13 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
       const membershipMap = new Map<string, string | null>();
       (memberships || []).forEach((m) => membershipMap.set(m.room_id, m.status));
 
-      const { data: acceptedMembersData, error: membersError } = await supabase
+      // ✅ FIXED: Count ALL members, not just "accepted" status
+      // This matches your SQL query that counts all members
+      const { data: allMembersData, error: membersError } = await supabase
         .from("room_members")
         .select("room_id")
-        .in("room_id", roomIds)
-        .eq("status", "accepted");
+        .in("room_id", roomIds);
+        // Removed .eq("status", "accepted") to match your SQL query
 
       if (membersError) {
         console.error("Error counting members:", membersError);
@@ -331,9 +333,17 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
       const memberCounts = new Map<string, number>();
       roomIds.forEach((roomId) => memberCounts.set(roomId, 0));
 
-      (acceptedMembersData || []).forEach(({ room_id }) => {
+      (allMembersData || []).forEach(({ room_id }) => {
         memberCounts.set(room_id, (memberCounts.get(room_id) || 0) + 1);
       });
+      
+      // ✅ Debug log to verify counts match your SQL
+      console.log("[fetchAvailableRooms] Member counts:", 
+        Array.from(memberCounts.entries()).map(([id, count]) => {
+          const room = allRooms.find(r => r.id === id);
+          return { name: room?.name, count };
+        })
+      );
 
       // ✅ FIXED: Use ref instead of state
       const currentPresence = roomPresenceRef.current;
