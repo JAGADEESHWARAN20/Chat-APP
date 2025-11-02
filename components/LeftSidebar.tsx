@@ -22,7 +22,7 @@ const LeftSidebar = memo<LeftSidebarProps>(({ user, isOpen, onClose }) => {
   const [newRoomName, setNewRoomName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
 
-  const directChats: RoomWithMembershipCount[] = [];  // Typed empty
+  const directChats = useMemo<RoomWithMembershipCount[]>(() => [], []);
 
   // Filter joined rooms
   const joinedRooms = useMemo(() => 

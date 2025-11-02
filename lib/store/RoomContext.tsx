@@ -545,12 +545,12 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
   }, [user?.id, fetchAvailableRooms]);
 
   // ✅ FIXED: Presence tracking with stable dependencies
-  const trackAllRoomsPresence = useCallback(async () => {
-    if (!user?.id || state.availableRooms.length === 0) return;
+const trackAllRoomsPresence = useCallback(async () => {
+  if (!user?.id || state.availableRooms.length === 0) return;
 
-    const memberRooms = state.availableRooms.filter((room) => room.isMember);
-    
-    const currentRoomIds = new Set(memberRooms.map((room) => room.id));
+  const memberRooms = state.availableRooms.filter((room) => room.isMember);
+  const currentRoomIds = new Set(memberRooms.map((room) => room.id));
+
     presenceChannelsRef.current.forEach((channel, roomId) => {
       if (!currentRoomIds.has(roomId)) {
         channel.unsubscribe();
@@ -618,25 +618,31 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
 
       presenceChannelsRef.current.set(room.id, channel);
     });
-  }, [user?.id, state.availableRooms.length, supabase]);
+  }, [
+  user?.id,
+  supabase,
+  state.availableRooms.map((r) => r.id).join(","),
+]);
 
-  // ✅ FIXED: Proper cleanup without async function
   useEffect(() => {
-    trackAllRoomsPresence();
+  trackAllRoomsPresence();
 
-    return () => {
-      const channels = new Map(presenceChannelsRef.current);
-      channels.forEach((channel) => {
-        try {
-          channel.unsubscribe();
-          supabase.removeChannel(channel);
-        } catch (err) {
-          console.warn(`[Presence] Cleanup error:`, err);
-        }
-      });
-      presenceChannelsRef.current.clear();
-    };
-  }, [trackAllRoomsPresence, supabase]);
+  // ✅ copy ref snapshot first
+  const channelsSnapshot = new Map(presenceChannelsRef.current);
+
+  return () => {
+    channelsSnapshot.forEach((channel) => {
+      try {
+        channel.unsubscribe();
+        supabase.removeChannel(channel);
+      } catch (err) {
+        console.warn(`[Presence] Cleanup error:`, err);
+      }
+    });
+    presenceChannelsRef.current.clear();
+  };
+}, [trackAllRoomsPresence, supabase]);
+
 
   // Typing status
   useEffect(() => {
@@ -708,22 +714,21 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
     };
   }, [state.selectedRoom?.id, user?.id, supabase, updateTypingUsers]);
 
-  useEffect(() => {
-    const typingNames = state.typingUsers
-      .map((user) => user.display_name || user.username || "User")
-      .filter(Boolean);
+ useEffect(() => {
+  const typingNames = state.typingUsers
+    .map((user) => user.display_name || user.username || "User")
+    .filter(Boolean);
 
-    let text = "";
-    if (typingNames.length === 1) {
-      text = `${typingNames[0]} is typing...`;
-    } else if (typingNames.length === 2) {
-      text = `${typingNames[0]} and ${typingNames[1]} are typing...`;
-    } else if (typingNames.length > 2) {
-      text = "Several people are typing...";
-    }
+  let text = "";
+  if (typingNames.length === 1) text = `${typingNames[0]} is typing...`;
+  else if (typingNames.length === 2) text = `${typingNames[0]} and ${typingNames[1]} are typing...`;
+  else if (typingNames.length > 2) text = "Several people are typing...";
 
-    updateTypingText(text);
-  }, [state.typingUsers.length, updateTypingText]);
+  updateTypingText(text);
+}, [
+  state.typingUsers.map((u) => u.user_id).join(","), // ✅ derived dependency
+  updateTypingText,
+]);
 
   
 useEffect(() => {
@@ -783,8 +788,20 @@ useEffect(() => {
   };
 }, [supabase, user?.id, handleCountUpdate]);
 
-  // ✅ FIXED: Optimized context value with stable dependencies
-  const contextValue = useMemo((): RoomContextType => ({
+  const stateHash = [
+  state.availableRooms.map(r => r.id).join(","),
+  state.selectedRoom?.id,
+  state.selectedDirectChat?.id,
+  state.isLoading,
+  state.isLeaving,
+  state.user?.id,
+  state.typingUsers.map(u => u.user_id).join(","),
+  state.typingDisplayText,
+  Object.keys(state.roomPresence).join(","),
+].join("|");
+
+const contextValue = useMemo(
+  (): RoomContextType => ({
     state,
     fetchAvailableRooms,
     setSelectedRoom,
@@ -799,16 +816,9 @@ useEffect(() => {
     updateTypingUsers,
     updateTypingText,
     getRoomPresence,
-  }), [
-    state.availableRooms.length,
-    state.selectedRoom?.id,
-    state.selectedDirectChat?.id,
-    state.isLoading,
-    state.isLeaving,
-    state.user?.id,
-    state.typingUsers.length,
-    state.typingDisplayText,
-    Object.keys(state.roomPresence).length,
+  }),
+  [
+    stateHash,
     fetchAvailableRooms,
     setSelectedRoom,
     setSelectedDirectChat,
@@ -822,7 +832,9 @@ useEffect(() => {
     updateTypingUsers,
     updateTypingText,
     getRoomPresence,
-  ]);  // FIXED: Primitives for stability
+  ]
+);
+
 
   return <RoomContext.Provider value={contextValue}>{children}</RoomContext.Provider>;
 }

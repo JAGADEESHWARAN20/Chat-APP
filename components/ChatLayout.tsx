@@ -5,7 +5,6 @@ import LeftSidebar from "@/components/LeftSidebar";
 import ClientChatContent from "@/components/ClientChatContent";
 import { User as SupabaseUser } from "@supabase/supabase-js";
 
-// Use memo to prevent unnecessary re-renders
 const ChatLayout = memo(function ChatLayout({
   user,
   isOpen,
@@ -13,13 +12,14 @@ const ChatLayout = memo(function ChatLayout({
 }: {
   user: SupabaseUser | undefined;
   isOpen: boolean;
-  onClose?: () => void; 
+  onClose?: () => void;
 }) {
   console.log("ChatLayout rendering", { isOpen });
-  
+
   return (
     <div className="flex-1 w-full flex transition-all duration-300 h-[100%]">
-      <LeftSidebar user={user} isOpen={isOpen} onClose={onClose} />
+      {/* ✅ normalized prop */}
+      <LeftSidebar user={user ? { id: user.id } : null} isOpen={isOpen} onClose={onClose} />
       <div
         className={`flex-1 w-full lg:max-w-[75vw] mx-auto h-[90vh] flex flex-col ${
           isOpen ? "lg:ml-[25%]" : "lg:ml-0"
