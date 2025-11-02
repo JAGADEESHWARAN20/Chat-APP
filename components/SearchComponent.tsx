@@ -9,12 +9,8 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { toast } from "sonner";
 import { useRoomContext, RoomWithMembershipCount } from "@/lib/store/RoomContext";
 import { useDebounce } from "use-debounce";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { RoomActiveUsers } from "@/components/reusable/RoomActiveUsers";
 
 // Limited type for fetched profiles (matches select fields)
 type PartialProfile = {
@@ -25,10 +21,10 @@ type PartialProfile = {
   created_at: string | null;
 };
 
-// ✅ ADD: UUID regex for frontend validation (matches API)
+// ✅ UUID regex for frontend validation
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export default function SearchComponent({
+const SearchComponent = memo(function SearchComponent({
   user,
 }: {
   user: SupabaseUser | undefined;
@@ -37,44 +33,60 @@ export default function SearchComponent({
   const [searchQuery, setSearchQuery] = useState("");
   const [searchType, setSearchType] = useState<"rooms" | "users">("rooms");
   const [userResults, setUserResults] = useState<PartialProfile[]>([]);
-  const isMounted = useRef(true);
   const [isLoading, setIsLoading] = useState(false);
   const [isFaded, setIsFaded] = useState(false);
+  
+  const isMounted = useRef(true);
+  const [debouncedSearchQuery] = useDebounce(searchQuery, 300);
+  
+  // ✅ Use optimized RoomContext
+  const { state, joinRoom, leaveRoom, fetchAllUsers, getRoomPresence } = useRoomContext();
+  const { availableRooms, isLoading: roomsLoading } = state;
+
+  // Fade effect
   useEffect(() => {
     const timer = setTimeout(() => setIsFaded(true), 2);
     return () => clearTimeout(timer);
   }, []);
-  // debounce the searchQuery for filtering
-  const [debouncedSearchQuery] = useDebounce(searchQuery, 300);
-  // ✅ Use global state from context
-  const { state, joinRoom, leaveRoom, fetchAvailableRooms, fetchAllUsers } = useRoomContext();
-  const { availableRooms, isLoading: roomsLoading } = state;
+
+  // Cleanup
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  // Search input handler
   const handleSearchInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      // update the searchQuery; debouncedSearchQuery will update after 300ms
       setSearchQuery(e.target.value);
     },
     []
   );
+
+  // User search with optimization
   const fetchUserResults = useCallback(async () => {
     if (searchType !== "users" || !user?.id) {
       setIsLoading(false);
       setUserResults([]);
       return;
     }
+    
     setIsLoading(true);
     try {
       const users = await fetchAllUsers();
-      if (debouncedSearchQuery.trim()) {
-        const q = debouncedSearchQuery.toLowerCase();
-        const filteredUsers = users.filter(
-          (u) =>
-            u.username?.toLowerCase().includes(q) ||
-            u.display_name?.toLowerCase().includes(q)
-        );
-        setUserResults(filteredUsers);
-      } else {
-        setUserResults(users);
+      if (isMounted.current) {
+        if (debouncedSearchQuery.trim()) {
+          const q = debouncedSearchQuery.toLowerCase();
+          const filteredUsers = users.filter(
+            (u) =>
+              u.username?.toLowerCase().includes(q) ||
+              u.display_name?.toLowerCase().includes(q)
+          );
+          setUserResults(filteredUsers);
+        } else {
+          setUserResults(users);
+        }
       }
     } catch (error) {
       console.error("User search error:", error);
@@ -88,40 +100,36 @@ export default function SearchComponent({
       if (isMounted.current) setIsLoading(false);
     }
   }, [searchType, user?.id, debouncedSearchQuery, fetchAllUsers]);
-  
-  // FIXED: Only fetch when searchType or debouncedSearchQuery changes, not fetchUserResults
+
+  // User search effect
   useEffect(() => {
     if (searchType === "users") {
       fetchUserResults();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchType, debouncedSearchQuery]); // Removed fetchUserResults from dependencies
-  useEffect(() => {
-    return () => {
-      isMounted.current = false;
-    };
-  }, []);
+  }, [searchType, debouncedSearchQuery, fetchUserResults]);
+
+  // Optimized room results with proper filtering
   const roomResults = useMemo(() => {
-    // Show empty if still loading
     if (roomsLoading && availableRooms.length === 0) {
       return [];
     }
     
     if (!debouncedSearchQuery.trim()) {
-      return availableRooms.filter(room => room.id); // ✅ FIX: Filter out invalid rooms (no id)
+      return availableRooms.filter(room => room.id);
     }
+    
     const q = debouncedSearchQuery.toLowerCase();
-    return availableRooms.filter((room) => room.id && room.name.toLowerCase().includes(q)); // ✅ FIX: Ensure valid id + search
+    return availableRooms.filter((room) => 
+      room.id && room.name.toLowerCase().includes(q)
+    );
   }, [availableRooms, debouncedSearchQuery, roomsLoading]);
- 
-  
- 
+
+  // Optimized join room handler
   const handleJoinRoom = useCallback(
     async (roomId: string) => {
-      console.log("handleJoinRoom called with roomId:", roomId);
-      // Validate room ID with UUID regex
+      // Validate room ID
       if (!roomId || roomId === 'undefined' || !UUID_REGEX.test(roomId)) {
-        console.error("❌ Invalid room ID in handleJoinRoom:", roomId);
+        console.error("❌ Invalid room ID:", roomId);
         toast.error("Invalid room ID. Try refreshing the list.");
         return;
       }
@@ -131,26 +139,28 @@ export default function SearchComponent({
         return;
       }
 
-      console.log("Attempting to join room:", roomId);
       try {
         await joinRoom(roomId);
-        // FIXED: Don't manually fetch - RoomContext will update automatically via realtime subscriptions
-        // await fetchAvailableRooms(); // Removed to prevent infinite loops
       } catch (error) {
         console.error("Join room error:", error);
         const errorMsg = (error as Error).message || "Failed to join room";
-        // Handle API debug info if present
         if (errorMsg.includes('debug')) {
           console.log('API Debug Info:', error);
         }
         toast.error(errorMsg);
       }
     },
-    [user?.id, joinRoom] // FIXED: Only depend on user ID, removed fetchAvailableRooms
+    [user?.id, joinRoom]
   );
-  const renderRoomSearchResult = React.useCallback((result: RoomWithMembershipCount) => (
-    // ✅ FIX: Early guard - skip render if invalid result (prevents bad onClick)
-    !result.id ? null : (
+
+  // Optimized room result renderer
+  const renderRoomSearchResult = useCallback((result: RoomWithMembershipCount) => {
+    if (!result.id) return null;
+
+    // ✅ Get real-time presence data
+    const { onlineUsers } = getRoomPresence(result.id);
+
+    return (
       <div
         key={result.id}
         className="flex flex-col p-4 rounded-lg border border-border bg-card hover:bg-accent/50 transition-all hover:shadow-md"
@@ -164,23 +174,29 @@ export default function SearchComponent({
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1">
-                <span className="font-semibold text-lg text-foreground truncate">#{result.name}</span>
-                {result.is_private && <LockIcon className="h-4 w-4 text-muted-foreground flex-shrink-0" />}
+                <span className="font-semibold text-lg text-foreground truncate">
+                  #{result.name}
+                </span>
+                {result.is_private && (
+                  <LockIcon className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                )}
               </div>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Users className="h-3.5 w-3.5" />
                 <span>
                   {result.memberCount || 0} {result.memberCount === 1 ? "member" : "members"}
                 </span>
-                {result.onlineUsers !== undefined && result.onlineUsers > 0 && (
+                {/* ✅ Use real-time active users */}
+                {onlineUsers > 0 && (
                   <span className="text-green-600 dark:text-green-400 ml-1 font-medium">
-                    • {result.onlineUsers} online
+                    • {onlineUsers} online
                   </span>
                 )}
               </div>
             </div>
           </div>
         </div>
+        
         <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
           {result.isMember ? (
             <>
@@ -220,9 +236,11 @@ export default function SearchComponent({
           )}
         </div>
       </div>
-    )
-  ), [router, user, handleJoinRoom, leaveRoom]);
+    );
+  }, [router, user, handleJoinRoom, leaveRoom, getRoomPresence]);
+
   const showLoading = isLoading || (searchType === "rooms" && roomsLoading);
+
   return (
     <div className="w-full max-w-[400px] mx-auto p-4">
       <div className="flex justify-between items-center mb-4">
@@ -236,21 +254,21 @@ export default function SearchComponent({
           <Settings className="h-4 w-4" />
         </Button>
       </div>
+      
       <Input
         type="text"
         placeholder={
           searchType === "users"
             ? "Search users..."
-            : searchType === "rooms"
-            ? "Search rooms..."
-            : "Search..."
+            : "Search rooms..."
         }
         value={searchQuery}
         onChange={handleSearchInputChange}
         className="mb-4 bg-muted/50 border-border text-foreground placeholder-muted-foreground rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
       />
+      
       <Tabs
-        defaultValue={searchType || "rooms"}
+        defaultValue={searchType}
         onValueChange={(value) => setSearchType(value as "rooms" | "users")}
         className="w-full"
       >
@@ -258,6 +276,7 @@ export default function SearchComponent({
           <TabsTrigger value="rooms">Rooms</TabsTrigger>
           <TabsTrigger value="users">Users</TabsTrigger>
         </TabsList>
+        
         <TabsContent value="rooms">
           <div className="mt-4">
             <h4 className="font-semibold text-[1em] text-muted-foreground mb-3">Rooms</h4>
@@ -285,6 +304,7 @@ export default function SearchComponent({
             </div>
           </div>
         </TabsContent>
+        
         <TabsContent value="users">
           <div className="mt-4">
             <h4 className="font-semibold text-[1em] text-muted-foreground mb-3">User Profiles</h4>
@@ -308,33 +328,39 @@ export default function SearchComponent({
                     <div className="flex items-center gap-3">
                       <Avatar className="h-10 w-10">
                         {result.avatar_url ? (
-                          <AvatarImage src={result.avatar_url} alt={result.username || "Avatar"} className="rounded-full" />
+                          <AvatarImage src={result.avatar_url} alt={result.username || "Avatar"} />
                         ) : (
-                          <AvatarFallback className="bg-indigo-500 text-white rounded-full">
+                          <AvatarFallback className="bg-indigo-500 text-white">
                             {result.username?.charAt(0).toUpperCase() || result.display_name?.charAt(0).toUpperCase() || "?"}
                           </AvatarFallback>
                         )}
                       </Avatar>
                       <div>
                         <div className="text-xs text-muted-foreground">{result.username}</div>
-                        <div className="text-[1em] font-medium text-black dark:text-white">{result.display_name}</div>
+                        <div className="text-[1em] font-medium text-black dark:text-white">
+                          {result.display_name}
+                        </div>
                       </div>
                     </div>
                     <UserIcon className="h-4 w-4 text-muted-foreground" />
                   </li>
                 ))
               ) : (
-                <li className="text-[1em] text-muted-foreground p-2 text-center">{debouncedSearchQuery ? "No users found" : "Search for users to see results"}</li>
+                <li className="text-[1em] text-muted-foreground p-2 text-center">
+                  {debouncedSearchQuery ? "No users found" : "Search for users to see results"}
+                </li>
               )}
             </ul>
           </div>
         </TabsContent>
       </Tabs>
+      
       {searchQuery.length === 0 && searchType && (
         <p className={`text-[1em] text-muted-foreground mt-3 transition-opacity duration-500 ${isFaded ? "opacity-0" : "opacity-100"}`}>
           Showing all {searchType}...
         </p>
       )}
+      
       {showLoading && (
         <p className={`text-[1em] text-muted-foreground mt-3 transition-opacity duration-500 ${isFaded ? "opacity-0" : "opacity-100"}`}>
           Loading...
@@ -342,4 +368,6 @@ export default function SearchComponent({
       )}
     </div>
   );
-}
+});
+
+export default SearchComponent;

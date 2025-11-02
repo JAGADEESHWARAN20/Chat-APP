@@ -8,14 +8,14 @@ export default function ChatPresence() {
   const { selectedRoom } = state;
 
   if (!selectedRoom) {
-    return <div className="h-3 w-1" />;
+    return null;
   }
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2 text-sm text-muted-foreground">
       <div className="flex items-center gap-1">
         <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-        <RoomActiveUsers roomId={selectedRoom.id} />
+        <RoomActiveUsers roomId={selectedRoom.id} showZero compact />
       </div>
     </div>
   );

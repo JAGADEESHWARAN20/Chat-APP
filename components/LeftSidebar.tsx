@@ -1,11 +1,11 @@
 "use client";
-
 import React, { useState, useEffect, useMemo, useCallback, memo } from "react";
 import { RoomWithMembershipCount, useRoomContext } from "@/lib/store/RoomContext";
 import { Avatar, AvatarImage } from "@/components/ui/avatar";
 import { Loader2, ChevronRight, MessageSquare, Users, Plus } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "./ui/button";
+import { RoomActiveUsers } from "@/components/reusable/RoomActiveUsers";
 
 const LeftSidebar = memo(function LeftSidebar({
   user,
@@ -16,29 +16,26 @@ const LeftSidebar = memo(function LeftSidebar({
   isOpen: boolean;
   onClose?: () => void;
 }) {
-  const { state, fetchAvailableRooms, setSelectedRoom, createRoom } = useRoomContext();
+  const { state, fetchAvailableRooms, setSelectedRoom, createRoom, getRoomPresence } = useRoomContext();
   const [searchTerm, setSearchTerm] = useState("");
-  const [directChats] = useState<RoomWithMembershipCount[]>([]);
   const [showCreateRoom, setShowCreateRoom] = useState(false);
   const [newRoomName, setNewRoomName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
 
-  // FIXED: Only fetch when user ID changes, not the entire user object
+  // Direct chats (empty for now)
+  const [directChats] = useState<RoomWithMembershipCount[]>([]);
+
+  // Fetch rooms when user changes
   useEffect(() => {
     if (user?.id) {
       fetchAvailableRooms();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]); // Only depend on user ID, not fetchAvailableRooms to prevent infinite loops
-// REMOVED: Debug useEffect that was causing unnecessary re-renders
-// If needed for debugging, use console.log directly in render or remove in production
+  }, [user?.id, fetchAvailableRooms]);
 
-// FIXED: Only show joined rooms (where isMember === true)
-const joinedRooms = useMemo(() => {
-  const allRooms = state.availableRooms || [];
-  // Only show rooms where user is a member
-  return allRooms.filter(room => room.isMember === true);
-}, [state.availableRooms]);
+  // ✅ Optimized room filtering
+  const joinedRooms = useMemo(() => {
+    return (state.availableRooms || []).filter(room => room.isMember === true);
+  }, [state.availableRooms]);
 
   const filteredRooms = useMemo(() => 
     joinedRooms.filter((item) =>
@@ -52,17 +49,13 @@ const joinedRooms = useMemo(() => {
     ), [directChats, searchTerm]
   );
 
-  const allItems = useMemo(() => 
-    [...filteredRooms, ...filteredChats], 
-    [filteredRooms, filteredChats]
-  );
-
+  // Create room handler
   const handleCreateRoom = async () => {
     if (!newRoomName.trim()) return;
     
     setIsCreating(true);
     try {
-      await createRoom(newRoomName, false); // false for public room
+      await createRoom(newRoomName, false);
       setNewRoomName("");
       setShowCreateRoom(false);
     } catch (error) {
@@ -72,71 +65,74 @@ const joinedRooms = useMemo(() => {
     }
   };
 
-  const renderItem = useCallback((item: RoomWithMembershipCount) => (
-    <div
-      key={item.id}
-      className={`flex items-start p-3 rounded-lg cursor-pointer transition-colors duration-200 ${
-        state.selectedRoom?.id === item.id
-          ? "bg-primary/10 dark:bg-primary/20"
-          : "hover:bg-muted dark:hover:bg-muted/50"
-      }`}
-      onClick={() => setSelectedRoom(item)}
-    >
-      <Avatar className="h-12 w-12 flex-shrink-0">
-        <AvatarImage 
-          src={`/avatars/${item.id}.png`} 
-          alt={item.name} 
-        />
-      </Avatar>
-      
-      <div className="ml-3 flex-1 min-w-0">
-        {/* Room name and notification count */}
-        <div className="flex items-center justify-between mb-1">
-          <div className="font-semibold text-foreground truncate">
-            #{item.name}
-          </div>
-          {(item.unreadCount ?? 0) > 0 && (
-            <div className="flex items-center gap-1 flex-shrink-0">
-              <MessageSquare className="h-3 w-3 text-muted-foreground" />
-              <span className="text-xs bg-primary text-primary-foreground rounded-full px-2 py-1 min-w-5 h-5 flex items-center justify-center">
-                {(item.unreadCount ?? 0) > 99 ? '99+' : item.unreadCount}
-              </span>
+  // Optimized room item renderer
+  const renderItem = useCallback((item: RoomWithMembershipCount) => {
+    // ✅ Get real-time presence data
+    const { onlineUsers } = getRoomPresence(item.id);
+
+    return (
+      <div
+        key={item.id}
+        className={`flex items-start p-3 rounded-lg cursor-pointer transition-colors duration-200 ${
+          state.selectedRoom?.id === item.id
+            ? "bg-primary/10 dark:bg-primary/20"
+            : "hover:bg-muted dark:hover:bg-muted/50"
+        }`}
+        onClick={() => setSelectedRoom(item)}
+      >
+        <Avatar className="h-12 w-12 flex-shrink-0">
+          <AvatarImage 
+            src={`/avatars/${item.id}.png`} 
+            alt={item.name} 
+          />
+        </Avatar>
+        
+        <div className="ml-3 flex-1 min-w-0">
+          {/* Room name and notification count */}
+          <div className="flex items-center justify-between mb-1">
+            <div className="font-semibold text-foreground truncate">
+              #{item.name}
             </div>
-          )}
-        </div>
-
-        {/* Latest message */}
-        <div className="text-sm text-muted-foreground truncate mb-2">
-          {item.latestMessage || "No messages yet"}
-        </div>
-
-        {/* User count and status */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Users className="h-3 w-3" />
-            <span>
-              {item.memberCount || 0} {item.memberCount === 1 ? 'user' : 'users'}
-              {item.onlineUsers !== undefined && item.onlineUsers > 0 && (
-                <span className="text-green-600 dark:text-green-400 ml-1 font-medium">
-                  ({item.onlineUsers} online)
+            {(item.unreadCount ?? 0) > 0 && (
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <MessageSquare className="h-3 w-3 text-muted-foreground" />
+                <span className="text-xs bg-primary text-primary-foreground rounded-full px-2 py-1 min-w-5 h-5 flex items-center justify-center">
+                  {(item.unreadCount ?? 0) > 99 ? '99+' : item.unreadCount}
                 </span>
-              )}
-            </span>
+              </div>
+            )}
           </div>
-          
-          {/* Membership status badge - Only show for joined rooms */}
-          <div className="text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300 rounded-full px-2 py-1">
-            Joined
-          </div>
-        </div>
 
-        {/* Creation date */}
-        <div className="text-xs text-muted-foreground mt-1">
-          Created: {new Date(item.created_at).toLocaleDateString()}
+          {/* Latest message */}
+          <div className="text-sm text-muted-foreground truncate mb-2">
+            {item.latestMessage || "No messages yet"}
+          </div>
+
+          {/* User count and status - ✅ FIXED with real-time data */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Users className="h-3 w-3" />
+              <span>
+                {item.memberCount || 0} {item.memberCount === 1 ? 'user' : 'users'}
+              </span>
+              {/* ✅ Use RoomActiveUsers component for real-time online count */}
+              <RoomActiveUsers roomId={item.id} compact />
+            </div>
+            
+            {/* Membership status badge */}
+            <div className="text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300 rounded-full px-2 py-1">
+              Joined
+            </div>
+          </div>
+
+          {/* Creation date */}
+          <div className="text-xs text-muted-foreground mt-1">
+            Created: {new Date(item.created_at).toLocaleDateString()}
+          </div>
         </div>
       </div>
-    </div>
-  ), [state.selectedRoom?.id, setSelectedRoom]);
+    );
+  }, [state.selectedRoom?.id, setSelectedRoom, getRoomPresence]);
 
   return (
     <div
