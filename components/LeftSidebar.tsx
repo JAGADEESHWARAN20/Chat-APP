@@ -5,7 +5,7 @@ import { Avatar, AvatarImage } from "@/components/ui/avatar";
 import { Loader2, ChevronRight, MessageSquare, Users, Plus } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "./ui/button";
-import { RoomActiveUsers } from "@/components/reusable/RoomActiveUsers";
+// import { RoomActiveUsers } from "@/components/reusable/RoomActiveUsers";
 
 const LeftSidebar = memo(function LeftSidebar({
   user,
