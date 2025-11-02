@@ -1,38 +1,34 @@
 "use client";
+import { usePresence } from "@/hooks/usePresence";
 import { useRoomContext } from "@/lib/store/RoomContext";
 
 /**
- * Unified hook for room presence using RoomContext
+ * Unified hook for room presence using real-time presence
  */
 export function useRoomPresence(roomId: string | null) {
   const { state } = useRoomContext();
   
-  if (!roomId) {
-    return {
-      onlineCount: 0,
-      onlineUsers: [],
-      isLoading: false,
-      error: null,
-      refreshPresence: () => {},
-    };
-  }
-  
-  // Try to get online count from selected room if it matches
+  const presence = usePresence({
+    roomIds: roomId ? [roomId] : [],
+    excludeSelf: false, // Include self in count for total active users
+  });
+
+  const onlineCount = roomId ? presence.onlineCounts.get(roomId) || 0 : 0;
+  const onlineUsers = roomId ? presence.onlineUsers.get(roomId) || [] : [];
+
+  // Also get from room state as fallback
   let room = null;
   if (state.selectedRoom?.id === roomId) {
     room = state.selectedRoom;
   } else {
-    // Try to get from available rooms
     room = state.availableRooms.find(r => r.id === roomId);
   }
-  
-  const onlineCount = room?.onlineUsers ?? 0;
-  
+
   return {
-    onlineCount,
-    onlineUsers: [], // Empty array since we don't have user list in this context
-    isLoading: state.isLoading,
-    error: null,
-    refreshPresence: () => {}, // No-op since we don't have refresh functionality
+    onlineCount: onlineCount || room?.onlineUsers || 0,
+    onlineUsers,
+    isLoading: presence.isLoading || state.isLoading,
+    error: presence.error,
+    refreshPresence: () => {}, // No-op for now
   };
 }
