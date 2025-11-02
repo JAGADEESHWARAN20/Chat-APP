@@ -256,27 +256,29 @@ const handleCountUpdate = useCallback(
     if (!user?.id || !room_id) return;
 
     try {
-      // ✅ Call the RPC and get room member details
-      const { data, error } = await supabase.rpc("get_room_members", {
-        room_id_param: room_id,
-      });
+      // ✅ Get all user_ids for this room
+      const { data, error } = await supabase
+        .from("room_members")
+        .select("user_id")
+        .eq("room_id", room_id);
 
       if (error) {
-        console.error(`[handleCountUpdate] Failed to fetch members for room ${room_id}:`, error);
+        console.error(`[handleCountUpdate] Error fetching members for ${room_id}:`, error);
         return;
       }
 
-      const totalCount = data?.[0]?.member_count ?? 0;
-      const userIds = data?.[0]?.user_ids ?? [];
+      // ✅ Count unique user_ids only
+      const uniqueUserIds = [...new Set((data || []).map((m) => m.user_id))];
+      const totalCount = uniqueUserIds.length;
 
-      console.log(`[handleCountUpdate] Room ${room_id}: ${totalCount} members`, userIds);
+      console.log(`[handleCountUpdate] Room ${room_id}: ${totalCount} members`, uniqueUserIds);
 
       dispatch({
         type: "UPDATE_ROOM_MEMBER_COUNT",
         payload: { roomId: room_id, memberCount: totalCount },
       });
     } catch (err) {
-      console.error(`[handleCountUpdate] Unexpected error for room ${room_id}:`, err);
+      console.error(`[handleCountUpdate] Unexpected error for ${room_id}:`, err);
     }
   },
   [supabase, user?.id, dispatch]
@@ -326,23 +328,31 @@ const handleCountUpdate = useCallback(
       const membershipMap = new Map<string, string | null>();
       (memberships || []).forEach((m) => membershipMap.set(m.room_id, m.status));
 
-      // FIXED: Count ALL members (no status filter) to match your SQL/array
       const { data: allMembersData, error: membersError } = await supabase
-        .from("room_members")
-        .select("room_id")
-        .in("room_id", roomIds);
+            .from("room_members")
+            .select("room_id, user_id")
+            .in("room_id", roomIds);
 
-      if (membersError) {
-        console.error("Error counting all members:", membersError);
-      }
+          if (membersError) {
+            console.error("Error fetching all members:", membersError);
+          }
 
-      // Count all memberships per room
-      const memberCounts = new Map<string, number>();
-      roomIds.forEach((roomId) => memberCounts.set(roomId, 0));
+          const memberCounts = new Map<string, number>();
+          roomIds.forEach((roomId) => memberCounts.set(roomId, 0));
 
-      (allMembersData || []).forEach(({ room_id }) => {
-        memberCounts.set(room_id, (memberCounts.get(room_id) || 0) + 1);
-      });
+          if (allMembersData && allMembersData.length > 0) {
+            const grouped = allMembersData.reduce((acc, curr) => {
+              const { room_id, user_id } = curr;
+              if (!acc[room_id]) acc[room_id] = new Set<string>();
+              acc[room_id].add(user_id);
+              return acc;
+            }, {} as Record<string, Set<string>>);
+
+            for (const roomId of Object.keys(grouped)) {
+              memberCounts.set(roomId, grouped[roomId].size);
+            }
+          }
+
 
       // Log to verify (remove in prod)
       console.log("[fetchAvailableRooms] Member counts match SQL?", 
