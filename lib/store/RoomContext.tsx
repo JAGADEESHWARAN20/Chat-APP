@@ -224,19 +224,25 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
 
   const handleCountUpdate = useCallback(async (room_id: string) => {
     try {
-      // Count only ACCEPTED members from room_members table
+      // Count ACCEPTED members from BOTH tables
       const { count: membersCount, error: membersError } = await supabase
         .from("room_members")
         .select("*", { count: "exact", head: true })
         .eq("room_id", room_id)
         .eq("status", "accepted");
 
-      if (membersError) {
-        console.error(`[Count] Error counting members for ${room_id}:`, membersError);
+      const { count: participantsCount, error: participantsError } = await supabase
+        .from("room_participants")
+        .select("*", { count: "exact", head: true })
+        .eq("room_id", room_id)
+        .eq("status", "accepted");
+
+      if (membersError || participantsError) {
+        console.error(`[Count] Error counting for ${room_id}:`, membersError || participantsError);
         return;
       }
 
-      const totalCount = membersCount ?? 0;
+      const totalCount = (membersCount ?? 0) + (participantsCount ?? 0);
       roomMemberCountsRef.current.set(room_id, totalCount);
 
       dispatch({
@@ -258,47 +264,77 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
     dispatch({ type: "SET_LOADING", payload: true });
 
     try {
-      // Single query to get rooms with membership status and counts
-      const { data: roomsData, error } = await supabase
+      // Fetch all rooms
+      const { data: allRooms, error: roomsError } = await supabase
         .from("rooms")
-        .select(`
-          *,
-          room_members!inner(
-            status,
-            user_id
-          )
-        `);
+        .select("id, name, is_private, created_by, created_at");
 
-      if (error) throw error;
+      if (roomsError) throw roomsError;
 
-      if (!roomsData || roomsData.length === 0) {
+      if (!allRooms || allRooms.length === 0) {
         dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
         return;
       }
 
-      // Process rooms with optimized logic
-      const roomsWithMembership: RoomWithMembershipCount[] = await Promise.all(
-        roomsData.map(async (room) => {
-          const userMembership = room.room_members?.find((m: any) => m.user_id === user.id);
-          const isMember = userMembership?.status === "accepted";
-          const participationStatus = userMembership?.status || null;
+      const roomIds = allRooms.map((r) => r.id);
 
-          // Get member count for this room
-          const { count } = await supabase
-            .from("room_members")
-            .select("*", { count: "exact", head: true })
-            .eq("room_id", room.id)
-            .eq("status", "accepted");
+      // Get current user's membership status from both tables
+      const { data: memberships } = await supabase
+        .from("room_members")
+        .select("room_id, status")
+        .in("room_id", roomIds)
+        .eq("user_id", user.id);
 
-          return {
-            ...room,
-            isMember,
-            participationStatus,
-            memberCount: count ?? 0,
-            onlineUsers: state.roomPresence[room.id]?.onlineUsers ?? 0,
-          };
-        })
-      );
+      const { data: participations } = await supabase
+        .from("room_participants")
+        .select("room_id, status")
+        .in("room_id", roomIds)
+        .eq("user_id", user.id);
+
+      const membershipMap = new Map<string, string | null>();
+      (memberships || []).forEach((m) => membershipMap.set(m.room_id, m.status));
+      (participations || []).forEach((p) => {
+        if (!membershipMap.has(p.room_id)) membershipMap.set(p.room_id, p.status);
+      });
+
+      // Count ACCEPTED members from both tables
+      const { data: acceptedMembersData, error: membersError } = await supabase
+        .from("room_members")
+        .select("room_id")
+        .in("room_id", roomIds)
+        .eq("status", "accepted");
+
+      const { data: acceptedParticipantsData, error: participantsError } = await supabase
+        .from("room_participants")
+        .select("room_id")
+        .in("room_id", roomIds)
+        .eq("status", "accepted");
+
+      if (membersError || participantsError) {
+        console.error("[Rooms] Error counting members:", membersError || participantsError);
+      }
+
+      // Create a map to count members per room
+      const memberCounts = new Map<string, number>();
+      roomIds.forEach((roomId) => memberCounts.set(roomId, 0));
+
+      // Count accepted members
+      (acceptedMembersData || []).forEach(({ room_id }) => {
+        memberCounts.set(room_id, (memberCounts.get(room_id) || 0) + 1);
+      });
+
+      // Count accepted participants and add to total
+      (acceptedParticipantsData || []).forEach(({ room_id }) => {
+        memberCounts.set(room_id, (memberCounts.get(room_id) || 0) + 1);
+      });
+
+      const roomsWithMembership: RoomWithMembershipCount[] = allRooms.map((room) => ({
+        ...room,
+        memberCount: memberCounts.get(room.id) || 0,
+        isMember: (membershipMap.get(room.id) ?? null) === "accepted",
+        participationStatus: membershipMap.get(room.id) ?? null,
+        onlineUsers: state.roomPresence[room.id]?.onlineUsers ?? 0,
+      }));
 
       dispatch({ type: "SET_AVAILABLE_ROOMS", payload: roomsWithMembership });
 
@@ -341,10 +377,10 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
         });
         
         toast.success("Joined room successfully!");
-        
-        // Refresh rooms to get updated counts
-        await fetchAvailableRooms();
       }
+
+      // Update count in background without triggering full fetch
+      await handleCountUpdate(roomId);
 
       return data;
     } catch (error: any) {
@@ -356,7 +392,7 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
       toast.error(error.message || "Failed to join room");
       throw error;
     }
-  }, [user?.id, fetchAvailableRooms]);
+  }, [user?.id, handleCountUpdate]);
 
   const leaveRoom = useCallback(async (roomId: string) => {
     if (!user?.id) {
@@ -367,13 +403,21 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
     dispatch({ type: "SET_IS_LEAVING", payload: true });
 
     try {
-      const { error } = await supabase
+      const { error: membersError } = await supabase
         .from("room_members")
         .delete()
         .eq("room_id", roomId)
         .eq("user_id", user.id);
 
-      if (error) throw error;
+      const { error: participantsError } = await supabase
+        .from("room_participants")
+        .delete()
+        .eq("room_id", roomId)
+        .eq("user_id", user.id);
+
+      if (membersError || participantsError) {
+        throw membersError || participantsError;
+      }
 
       toast.success("Left room successfully");
       
@@ -384,13 +428,16 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
         dispatch({ type: "SET_SELECTED_ROOM", payload: remainingRooms[0] || null });
       }
 
+      // Update count in background
+      await handleCountUpdate(roomId);
+
     } catch (error: any) {
       console.error("[Rooms] Leave error:", error);
       toast.error(error.message || "Failed to leave room");
     } finally {
       dispatch({ type: "SET_IS_LEAVING", payload: false });
     }
-  }, [user?.id, state.selectedRoom, state.availableRooms, supabase]);
+  }, [user?.id, state.selectedRoom, state.availableRooms, supabase, handleCountUpdate]);
 
   const switchRoom = useCallback(async (newRoomId: string) => {
     const switchedRoom = state.availableRooms.find(room => room.id === newRoomId);
@@ -711,13 +758,23 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
 
   // ==================== REAL-TIME SUBSCRIPTIONS ====================
 
-  // Real-time member count updates - FIXED: Proper typing for payload
+  // Real-time member count updates for both tables
   useEffect(() => {
     const channel = supabase
       .channel("room-members-realtime")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "room_members" },
+        (payload: RoomMembersPayload) => {
+          const roomId = payload.new?.room_id ?? payload.old?.room_id;
+          if (roomId) {
+            handleCountUpdate(roomId);
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "room_participants" },
         (payload: RoomMembersPayload) => {
           const roomId = payload.new?.room_id ?? payload.old?.room_id;
           if (roomId) {

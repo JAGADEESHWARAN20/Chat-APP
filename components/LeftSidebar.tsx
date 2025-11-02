@@ -16,7 +16,7 @@ const LeftSidebar = memo(function LeftSidebar({
   isOpen: boolean;
   onClose?: () => void;
 }) {
-  const { state, fetchAvailableRooms, setSelectedRoom, createRoom, getRoomPresence } = useRoomContext();
+  const { state, fetchAvailableRooms, setSelectedRoom, createRoom } = useRoomContext();
   const [searchTerm, setSearchTerm] = useState("");
   const [showCreateRoom, setShowCreateRoom] = useState(false);
   const [newRoomName, setNewRoomName] = useState("");
@@ -67,9 +67,6 @@ const LeftSidebar = memo(function LeftSidebar({
 
   // Optimized room item renderer
   const renderItem = useCallback((item: RoomWithMembershipCount) => {
-    // ✅ Get real-time presence data
-    const { onlineUsers } = getRoomPresence(item.id);
-
     return (
       <div
         key={item.id}
@@ -132,7 +129,7 @@ const LeftSidebar = memo(function LeftSidebar({
         </div>
       </div>
     );
-  }, [state.selectedRoom?.id, setSelectedRoom, getRoomPresence]);
+  }, [state.selectedRoom?.id, setSelectedRoom]);
 
   return (
     <div
