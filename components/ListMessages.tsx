@@ -4,7 +4,7 @@ import { Imessage, useMessage } from "@/lib/store/messages";
 import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import Message from "./Message";
 import { DeleteAlert, EditAlert } from "./MessasgeActions";
-import { supabaseBrowser } from "@/lib/supabase/browser";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { Database } from "@/lib/types/supabase";
 import { useRoomContext } from "@/lib/store/RoomContext";
@@ -34,7 +34,7 @@ export default function ListMessages() {
     optimisticUpdateMessage,
   } = useMessage((state) => state);
 
-  const supabase = supabaseBrowser();
+  const supabase = getSupabaseBrowserClient();
 
   const handleOnScroll = useCallback(() => {
     if (!scrollRef.current) return;

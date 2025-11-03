@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { Button } from "./ui/button";
-import { supabaseBrowser } from "@/lib/supabase/browser";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { LIMIT_MESSAGE } from "@/lib/constant";
 import { getFromAndTo } from "@/lib/utils";
 import { Imessage, useMessage } from "@/lib/store/messages";
@@ -26,7 +26,7 @@ export default function LoadMoreMessages() {
     try {
       setLoading(true);
       const { from, to } = getFromAndTo(page, LIMIT_MESSAGE);
-      const supabase = supabaseBrowser();
+      const supabase = getSupabaseBrowserClient();
 
       console.log("[LoadMoreMessages] Fetching messages for room:", selectedRoom.id, { from, to });
 

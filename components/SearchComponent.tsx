@@ -10,7 +10,6 @@ import { toast } from "sonner";
 import { useRoomContext, RoomWithMembershipCount } from "@/lib/store/RoomContext";
 import { useDebounce } from "use-debounce";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { RoomActiveUsers } from "@/components/reusable/RoomActiveUsers";
 
 type PartialProfile = {
   id: string;

@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { X } from "lucide-react";
 import { useMessage } from "@/lib/store/messages";
-import { supabaseBrowser } from "@/lib/supabase/browser";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { useEffect, useRef } from "react";
 
@@ -47,7 +47,7 @@ export function DeleteAlert() {
     optimisticDeleteMessage(actionMessage.id);
     resetActionMessage();
 
-    const supabase = supabaseBrowser();
+    const supabase = getSupabaseBrowserClient();
     const { error } = await supabase.from("messages").delete().eq("id", actionMessage.id);
 
     if (error) {
@@ -133,7 +133,7 @@ export function EditAlert() {
       optimisticUpdateMessage(actionMessage.id, { text, is_edited: true });
       resetActionMessage();
 
-      const supabase = supabaseBrowser();
+      const supabase = getSupabaseBrowserClient();
       const { error } = await supabase
         .from("messages")
         .update({ text, is_edited: true })

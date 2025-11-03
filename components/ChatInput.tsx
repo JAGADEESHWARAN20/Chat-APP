@@ -16,7 +16,7 @@ export default function ChatInput() {
   const [text, setText] = useState("");
   const [isSending, setIsSending] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const { addMessage, addOptimisticId } = useMessage();
+  const { addMessage, setOptimisticIds } = useMessage();
   const { state } = useRoomContext();
   
   // ✅ FIX: Remove selectedDirectChat since it doesn't exist in RoomState
@@ -48,38 +48,37 @@ export default function ChatInput() {
   }, [stopTyping, hasActiveChat]);
 
   const handleSend = useCallback(async () => {
-    if (!canSend) return;
+  if (!canSend) return;
 
-    setIsSending(true);
-    stopTyping(); // Stop typing when sending
+  setIsSending(true);
+  stopTyping(); // Stop typing when sending
 
-    const optimisticId = uuidv4();
-    const optimisticMessage: Imessage = {
-      id: optimisticId,
-      text: text.trim(),
-      sender_id: user!.id,
-      room_id: selectedRoom?.id || null,
-      // ✅ FIX: Remove direct_chat_id since we don't have selectedDirectChat
-      direct_chat_id: null,
-      dm_thread_id: null,
-      created_at: new Date().toISOString(),
-      is_edited: false,
-      status: "sending",
-      profiles: {
-        id: user!.id,
-        display_name: user!.user_metadata?.display_name || user!.email || "Anonymous",
-        avatar_url: user!.user_metadata?.avatar_url || "",
-        username: user!.user_metadata?.username || "",
-        created_at: user!.created_at,
-        updated_at: null,
-        bio: null,
-      },
-    };
+  const optimisticId = uuidv4();
+  const optimisticMessage: Imessage = {
+    id: optimisticId,
+    text: text.trim(),
+    sender_id: user!.id,
+    room_id: selectedRoom?.id || null,
+    direct_chat_id: null,
+    dm_thread_id: null,
+    created_at: new Date().toISOString(),
+    is_edited: false,
+    status: "sending",
+    profiles: {
+      id: user!.id,
+      display_name: user!.user_metadata?.display_name || user!.email || "Anonymous",
+      avatar_url: user!.user_metadata?.avatar_url || "",
+      username: user!.user_metadata?.username || "",
+      created_at: user!.created_at,
+      updated_at: null,
+      bio: null,
+    },
+  };
 
-    addOptimisticId(optimisticId);
-    addMessage(optimisticMessage);
+  setOptimisticIds(optimisticId); // ✅ FIX: Changed from addOptimisticId to setOptimisticIds
+  addMessage(optimisticMessage);
     setText("");
-
+    
     try {
       const res = await fetch("/api/messages/send", {
         method: "POST",
@@ -103,7 +102,7 @@ export default function ChatInput() {
       setIsSending(false);
       inputRef.current?.focus();
     }
-  }, [canSend, text, user, selectedRoom, addOptimisticId, addMessage, stopTyping]);
+ }, [canSend, text, user, selectedRoom, setOptimisticIds, addMessage, stopTyping]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRoomStore } from "@/lib/store/roomstore";
-import { supabaseBrowser } from "@/lib/supabase/browser";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Button } from "./ui/button";
 import { toast } from "sonner";
 import { useUser } from "@/lib/store/user";
@@ -14,7 +14,7 @@ import { RoomCard } from "./ui/room-card";
 export default function RoomList() {
   const [userParticipations, setUserParticipations] = useState<IRoomParticipant[]>([]);
   const { rooms, setRooms, selectedRoom, setSelectedRoom } = useRoomStore();
-  const supabase = supabaseBrowser();
+  const supabase = getSupabaseBrowserClient();
   const user = useUser((state) => state.user);
 
   const refreshRooms = async () => {

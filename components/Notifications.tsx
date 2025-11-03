@@ -5,13 +5,11 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { useNotification, Inotification } from "@/lib/store/notifications";
 import { useUser } from "@/lib/store/user"; // Your actual user store
 import { useRoomStore } from "@/lib/store/roomstore";
-import { supabaseBrowser } from "@/lib/supabase/browser";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { Button } from "./ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Avatar, AvatarImage, AvatarFallback } from "./ui/avatar";
-import { useRouter } from "next/navigation";
-import { User as SupabaseUser } from "@supabase/supabase-js";
 import {
   Check,
   X,
@@ -26,7 +24,6 @@ import {
   Bell,
 } from "lucide-react";
 import { Database } from "@/lib/types/supabase";
-import { useMediaQuery } from "@/hooks/use-media-query";
 import { Swipeable } from "./ui/swipeable";
 import {
   DropdownMenu,
@@ -50,7 +47,7 @@ type RoomWithMembership = Room & {
 const transformRoom = async (
   room: Room,
   userId: string,
-  supabase: ReturnType<typeof supabaseBrowser>
+  supabase: ReturnType<typeof getSupabaseBrowserClient>
 ): Promise<RoomWithMembership> => {
   const { data: membership } = await supabase
     .from("room_members")
@@ -92,9 +89,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
   
   const { setSelectedRoom } = useRoomStore();
   const { fetchAvailableRooms } = useRoomContext();
-  const router = useRouter();
-  const supabase = supabaseBrowser();
-  const isMobile = useMediaQuery("(max-width: 768px)");
+  const supabase = getSupabaseBrowserClient();
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
 
   // Add comprehensive user logging

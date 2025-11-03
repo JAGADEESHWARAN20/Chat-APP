@@ -1,136 +1,88 @@
-// File: lib/hooks/useMessagePagination.ts
-import { useState, useCallback, useRef, useEffect } from 'react';
-import { supabaseBrowser } from '@/lib/supabase/browser';
-import { Imessage } from '@/lib/store/messages';
-import { toast } from 'sonner';
+"use client";
 
-const PAGE_SIZE = 50;
+import { useState, useEffect, useCallback, useRef } from "react";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import type { Database } from "@/lib/types/supabase";
 
-interface UseMessagePaginationProps {
-  roomId?: string;
-  directChatId?: string;
-  enabled?: boolean;
-}
+type Message = Database["public"]["Tables"]["messages"]["Row"];
 
-export function useMessagePagination({
-  roomId,
-  directChatId,
-  enabled = true
-}: UseMessagePaginationProps) {
-  const [messages, setMessages] = useState<Imessage[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+export function useMessagePagination(roomId: string, limit = 20) {
+  const supabase = getSupabaseBrowserClient();
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [loading, setLoading] = useState(true);
   const [hasMore, setHasMore] = useState(true);
-  const lastMessageRef = useRef<string | null>(null);
-  const messagesCache = useRef<Map<string, Imessage>>(new Map());
-  const supabase = supabaseBrowser();
+  const lastMessageId = useRef<string | null>(null); // Fixed: changed from number to string
 
-  // Function to fetch messages with cursor-based pagination
-  const fetchMessages = useCallback(async (cursor?: string) => {
-    if (!enabled || (!roomId && !directChatId)) return;
+  // 🧩 Fetch messages in pages
+  const fetchMessages = useCallback(
+    async (initial = false) => {
+      if (!roomId || (!initial && !hasMore)) return;
 
-    try {
-      setIsLoading(true);
+      setLoading(true);
+      const query = supabase
+        .from("messages")
+        .select("*")
+        .eq("room_id", roomId)
+        .order("created_at", { ascending: false })
+        .limit(limit);
 
-      let query = supabase
-        .from('messages')
-        .select(`
-          *,
-          profiles:sender_id (
-            id,
-            username,
-            avatar_url,
-            display_name
-          ),
-          read_status:message_read_status(*)
-        `)
-        .order('created_at', { ascending: false })
-        .limit(PAGE_SIZE);
-
-      if (roomId) {
-        query = query.eq('room_id', roomId);
-      } else if (directChatId) {
-        query = query.eq('direct_chat_id', directChatId);
-      }
-
-      if (cursor) {
-        query = query.lt('created_at', cursor);
+      if (!initial && lastMessageId.current) {
+        query.lt("id", lastMessageId.current);
       }
 
       const { data, error } = await query;
 
-      if (error) throw error;
-
-      // cast incoming rows to the store's Imessage type
-      const newMessages = (data ?? []).map((msg: any) => ({
-        ...msg,
-        profiles: msg.profiles ?? null,
-      })) as Imessage[];
-
-      // Update cache
-      newMessages.forEach((msg) => messagesCache.current.set((msg as any).id, msg));
-
-      setMessages(prev => {
-        const combined = [...prev, ...newMessages];
-        return combined.sort((a, b) => 
-          new Date((b as any).created_at).getTime() - new Date((a as any).created_at).getTime()
-        );
-      });
-
-      setHasMore(newMessages.length === PAGE_SIZE);
-      
-      if (newMessages.length > 0) {
-        lastMessageRef.current = (newMessages[newMessages.length - 1] as any).created_at;
+      if (error) {
+        console.error("Error fetching messages:", error.message);
+        setLoading(false);
+        return;
       }
-    } catch (error) {
-      toast.error('Error loading messages');
-      console.error('Error:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [roomId, directChatId, enabled, supabase]);
 
-  // Initial load
+      if (data && data.length > 0) {
+        setMessages((prev) =>
+          initial
+            ? data.reverse()
+            : [...data.reverse(), ...prev] // append older messages
+        );
+        lastMessageId.current = data[data.length - 1].id; // This is a string
+      } else {
+        setHasMore(false);
+      }
+
+      setLoading(false);
+    },
+    [roomId, supabase, limit, hasMore]
+  );
+
+  // 🧠 Initial fetch
   useEffect(() => {
-    setMessages([]);
-    lastMessageRef.current = null;
-    messagesCache.current.clear();
-    fetchMessages();
-  }, [fetchMessages]);
+    fetchMessages(true);
+  }, [fetchMessages]); // Fixed: added fetchMessages to dependencies
 
-  // Function to load more messages
-  const loadMore = useCallback(() => {
-    if (!isLoading && hasMore && lastMessageRef.current) {
-      fetchMessages(lastMessageRef.current);
-    }
-  }, [fetchMessages, isLoading, hasMore]);
+  // ⚡ Real-time updates (new messages)
+  useEffect(() => {
+    if (!roomId) return;
 
-  // Function to add a new message
-  const addMessage = useCallback((message: Imessage) => {
-    messagesCache.current.set(message.id, message);
-    setMessages((prev) => {
-      const newMessages = [message, ...prev];
-      return newMessages.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    });
-  }, []);
+    const channel = supabase
+      .channel(`room-${roomId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+          filter: `room_id=eq.${roomId}`,
+        },
+        (payload) => {
+          setMessages((prev) => [...prev, payload.new as Message]);
+        }
+      )
+      .subscribe();
 
-  // Function to update a message
-  const updateMessage = useCallback((messageId: string, updates: Partial<Imessage>) => {
-    const cached = messagesCache.current.get(messageId);
-    if (cached) {
-      const updated = { ...cached, ...updates };
-      messagesCache.current.set(messageId, updated);
-      setMessages(prev => 
-        prev.map(msg => msg.id === messageId ? updated : msg)
-      );
-    }
-  }, []);
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [roomId, supabase]); // Fixed: added supabase to dependencies
 
-  return {
-    messages,
-    isLoading,
-    hasMore,
-    loadMore,
-    addMessage,
-    updateMessage
-  };
+  return { messages, loading, hasMore, fetchMessages };
 }

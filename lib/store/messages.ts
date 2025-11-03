@@ -1,9 +1,11 @@
-// useMessage.tsx
+"use client";
+
 import { create } from "zustand";
 import { LIMIT_MESSAGE } from "../constant";
 import { Database } from "@/lib/types/supabase";
-import { supabaseBrowser } from "@/lib/supabase/browser";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
+import { RealtimePostgresInsertPayload, RealtimePostgresUpdatePayload, RealtimePostgresDeletePayload } from '@supabase/supabase-js';
 
 export type MessageWithProfile = Database["public"]["Tables"]["messages"]["Row"] & {
   profiles: Database["public"]["Tables"]["profiles"]["Row"];
@@ -12,26 +14,31 @@ export type MessageWithProfile = Database["public"]["Tables"]["messages"]["Row"]
 export type Imessage = MessageWithProfile;
 
 type ActionMessage = Imessage | null;
-type ActionType = "edit" | "delete" | null; // Define a new type for clarity
+type ActionType = "edit" | "delete" | null;
 
 interface MessageState {
   hasMore: boolean;
   page: number;
   messages: Imessage[];
   actionMessage: ActionMessage;
-  actionType: ActionType; // ✅ Add actionType state
+  actionType: ActionType;
   optimisticIds: string[];
-  currentSubscription: any | null;
+  currentSubscription: ReturnType<
+    ReturnType<typeof getSupabaseBrowserClient>["channel"]
+  > | null;
+
   addMessage: (message: Imessage) => void;
-  setActionMessage: (message: Imessage, type: ActionType) => void; // ✅ Modify setter
-  resetActionMessage: () => void; // ✅ Add reset function
-  optimisticDeleteMessage: (messageId: string) => void;
-  optimisticUpdateMessage: (messageId: string, updates: Partial<Imessage>) => void;
-  addOptimisticId: (id: string) => void;
   setMessages: (messages: Imessage[]) => void;
   clearMessages: () => void;
   setOptimisticIds: (id: string) => void;
-  subscribeToRoom: (roomId: string) => void;
+
+  setActionMessage: (message: Imessage, type: ActionType) => void;
+  resetActionMessage: () => void;
+
+  optimisticDeleteMessage: (messageId: string) => void;
+  optimisticUpdateMessage: (messageId: string, updates: Partial<Imessage>) => void;
+
+  subscribeToRoom: (roomId?: string, directChatId?: string) => void;
   unsubscribeFromRoom: () => void;
   searchMessages: (roomId: string, query: string) => Promise<Imessage[]>;
 }
@@ -42,15 +49,15 @@ export const useMessage = create<MessageState>()((set, get) => ({
   messages: [],
   optimisticIds: [],
   actionMessage: null,
-  actionType: null, // ✅ Initialize
+  actionType: null,
   currentSubscription: null,
 
   setMessages: (newMessages) =>
     set((state) => {
       const existingIds = new Set(state.messages.map((msg) => msg.id));
-      const filteredNew = newMessages.filter((msg) => !existingIds.has(msg.id));
+      const filtered = newMessages.filter((msg) => !existingIds.has(msg.id));
       return {
-        messages: [...filteredNew, ...state.messages],
+        messages: [...filtered, ...state.messages],
         page: state.page + 1,
         hasMore: newMessages.length >= LIMIT_MESSAGE,
       };
@@ -58,11 +65,8 @@ export const useMessage = create<MessageState>()((set, get) => ({
 
   addMessage: (message) =>
     set((state) => {
-      const existingMessage = state.messages.find((msg) => msg.id === message.id);
-      if (existingMessage) return state;
-      return {
-        messages: [message, ...state.messages],
-      };
+      if (state.messages.some((msg) => msg.id === message.id)) return state;
+      return { messages: [message, ...state.messages] };
     }),
 
   setOptimisticIds: (id) =>
@@ -70,8 +74,8 @@ export const useMessage = create<MessageState>()((set, get) => ({
       optimisticIds: [...state.optimisticIds, id],
     })),
 
-  setActionMessage: (message, type) => set({ actionMessage: message, actionType: type }), // ✅ Update setter
-  resetActionMessage: () => set({ actionMessage: null, actionType: null }), // ✅ Add reset
+  setActionMessage: (message, type) => set({ actionMessage: message, actionType: type }),
+  resetActionMessage: () => set({ actionMessage: null, actionType: null }),
 
   optimisticDeleteMessage: (messageId) =>
     set((state) => ({
@@ -85,11 +89,6 @@ export const useMessage = create<MessageState>()((set, get) => ({
       ),
     })),
 
-  addOptimisticId: (id) =>
-    set((state) => ({
-      optimisticIds: [...state.optimisticIds, id],
-    })),
-
   clearMessages: () =>
     set(() => ({
       messages: [],
@@ -97,128 +96,111 @@ export const useMessage = create<MessageState>()((set, get) => ({
       hasMore: true,
     })),
 
- // useMessage.tsx
-subscribeToRoom: (roomId?: string, directChatId?: string) =>
-  set((state) => {
-    if (state.currentSubscription) {
-      state.currentSubscription.unsubscribe();
-    }
+  // ✅ Fixed: Proper type handling for real-time subscriptions
+  subscribeToRoom: (roomId?: string, directChatId?: string) =>
+    set((state) => {
+      const supabase = getSupabaseBrowserClient();
 
-    if (!roomId && !directChatId) {
-      return { currentSubscription: null };
-    }
+      // Unsubscribe previous channel
+      if (state.currentSubscription) supabase.removeChannel(state.currentSubscription);
 
-    const filter = roomId
-      ? `room_id=eq.${roomId}`
-      : `direct_chat_id=eq.${directChatId}`;
+      if (!roomId && !directChatId) return { currentSubscription: null };
 
-    const channelName = roomId
-      ? `room:${roomId}`
-      : `direct_chat:${directChatId}`;
+      const filter = roomId
+        ? `room_id=eq.${roomId}`
+        : `direct_chat_id=eq.${directChatId}`;
 
-    const subscription = supabaseBrowser()
-      .channel(channelName)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "messages",
-          filter,
-        },
-        async (payload: { new: Database["public"]["Tables"]["messages"]["Row"] }) => {
-          const { new: newMessage } = payload;
-          const { data: messageWithUser, error } = await supabaseBrowser()
-            .from("messages")
-            .select(`
-              *,
-              profiles:profiles!messages_sender_id_fkey (
-                id, display_name, avatar_url, username, bio, created_at, updated_at
-              )
-            `)
-            .eq("id", newMessage.id)
-            .single<MessageWithProfile>();
+      const channelName = roomId
+        ? `room:${roomId}`
+        : `direct_chat:${directChatId}`;
 
-          if (error) {
-            toast.error("Error fetching message details");
-            return;
+      const channel = supabase
+        .channel(channelName)
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "messages", filter },
+          async (payload: RealtimePostgresInsertPayload<{ [key: string]: any }>) => {
+            const newMessage = payload.new as Database["public"]["Tables"]["messages"]["Row"];
+
+            // ✅ Fixed: Use proper join syntax for the relationship
+            const { data: messageWithUser, error } = await supabase
+              .from("messages")
+              .select(`
+                *,
+                profiles!messages_sender_id_fkey (
+                  id, display_name, avatar_url, username, bio, created_at, updated_at
+                )
+              `)
+              .eq("id", newMessage.id)
+              .single();
+
+            if (error) {
+              console.error(error);
+              toast.error("Failed to load message details");
+              return;
+            }
+
+            if (messageWithUser && !get().optimisticIds.includes(messageWithUser.id)) {
+              get().addMessage(messageWithUser as Imessage);
+            }
           }
-
-          if (messageWithUser && !state.optimisticIds.includes(messageWithUser.id)) {
-            get().addMessage(messageWithUser as Imessage);
+        )
+        .on(
+          "postgres_changes",
+          { event: "UPDATE", schema: "public", table: "messages", filter },
+          (payload: RealtimePostgresUpdatePayload<{ [key: string]: any }>) => {
+            const updatedMessage = payload.new as Database["public"]["Tables"]["messages"]["Row"];
+            get().optimisticUpdateMessage(updatedMessage.id, updatedMessage);
           }
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "messages",
-          filter,
-        },
-        (payload) => {
-          const { new: updatedMessage } = payload;
-          get().optimisticUpdateMessage(updatedMessage.id, updatedMessage);
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "DELETE",
-          schema: "public",
-          table: "messages",
-          filter,
-        },
-        (payload) => {
-          const { old: deletedMessage } = payload;
-          get().optimisticDeleteMessage(deletedMessage.id);
-        }
-      )
-      .subscribe();
+        )
+        .on(
+          "postgres_changes",
+          { event: "DELETE", schema: "public", table: "messages", filter },
+          (payload: RealtimePostgresDeletePayload<{ [key: string]: any }>) => {
+            const deletedMessage = payload.old as Database["public"]["Tables"]["messages"]["Row"];
+            get().optimisticDeleteMessage(deletedMessage.id);
+          }
+        )
+        .subscribe();
 
-    return {
-      currentSubscription: subscription,
-    };
-  }),
+      return { currentSubscription: channel };
+    }),
 
   unsubscribeFromRoom: () =>
     set((state) => {
+      const supabase = getSupabaseBrowserClient();
       if (state.currentSubscription) {
-        state.currentSubscription.unsubscribe();
+        supabase.removeChannel(state.currentSubscription);
       }
-      return {
-        currentSubscription: null,
-      };
+      return { currentSubscription: null };
     }),
-    searchMessages: async (roomId, query) => {
-  if (!query.trim()) return [];
 
-  const { data, error } = await supabaseBrowser()
-    .from("messages")
-    .select(
-      `
-      *,
-      profiles:profiles!messages_sender_id_fkey (
-        id,
-        display_name,
-        avatar_url,
-        username
-      )
-    `
-    )
-    .eq("room_id", roomId)
-    .ilike("text", `%${query}%`)
-    .order("created_at", { ascending: false })
-    .limit(20);
+  // ✅ Fixed: Proper type handling for search results
+  searchMessages: async (roomId, query) => {
+    if (!query.trim()) return [];
 
-  if (error) {
-    toast.error("Failed to search messages");
-    console.error(error);
-    return [];
-  }
+    const supabase = getSupabaseBrowserClient();
 
-  return data as Imessage[];
-},
+    const { data, error } = await supabase
+      .from("messages")
+      .select(`
+        *,
+        profiles!messages_sender_id_fkey (
+          id, display_name, avatar_url, username
+        )
+      `)
+      .eq("room_id", roomId)
+      .ilike("text", `%${query}%`)
+      .order("created_at", { ascending: false })
+      .limit(20);
 
+    if (error) {
+      toast.error("Message search failed");
+      console.error(error);
+      return [];
+    }
+
+    // Proper type assertion
+    return (data || []) as Imessage[];
+  },
 }));

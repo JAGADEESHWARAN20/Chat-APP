@@ -9,8 +9,8 @@ import React, {
   useRef,
   useMemo,
 } from "react";
-import { supabaseBrowser } from "@/lib/supabase/browser";
-import { RealtimePostgresChangesPayload, User as SupabaseUser } from "@supabase/supabase-js";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { User as SupabaseUser } from "@supabase/supabase-js";
 import { toast } from "sonner";
 import { Database } from "@/lib/types/supabase";
 import { useMessage, Imessage } from "./messages";
@@ -43,11 +43,11 @@ type RoomPresence = {
   };
 };
 
-  type RoomMemberRow = {
-    room_id: string;
-    user_id: string;
-    joined_at?: string;
-  };
+type RoomMemberRow = {
+  room_id: string;
+  user_id: string;
+  joined_at?: string;
+};
 
 // ==================== STATE & REDUCER ====================
 interface RoomState {
@@ -214,7 +214,7 @@ const RoomContext = createContext<RoomContextType | undefined>(undefined);
 // ==================== FIXED PROVIDER ====================
 export function RoomProvider({ children, user }: { children: React.ReactNode; user: SupabaseUser | undefined }) {
   const [state, dispatch] = useReducer(roomReducer, initialState);
-  const supabase = supabaseBrowser();
+  const supabase = getSupabaseBrowserClient();
   
   // Refs for optimization
   const presenceChannelsRef = useRef<Map<string, any>>(new Map());
@@ -238,13 +238,12 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
 
   // ==================== FIXED CORE FUNCTIONS ====================
   const updateTypingUsers = useCallback((updater: TypingUser[] | ((prev: TypingUser[]) => TypingUser[])) => {
-  if (typeof updater === "function") {
-    dispatch({ type: "SET_TYPING_USERS", payload: updater(stateRef.current.typingUsers) });
-  } else {
-    dispatch({ type: "SET_TYPING_USERS", payload: updater });
-  }
-}, []);
-
+    if (typeof updater === "function") {
+      dispatch({ type: "SET_TYPING_USERS", payload: updater(stateRef.current.typingUsers) });
+    } else {
+      dispatch({ type: "SET_TYPING_USERS", payload: updater });
+    }
+  }, []);
 
   const updateTypingText = useCallback((text: string) => {
     dispatch({ type: "SET_TYPING_TEXT", payload: text });
@@ -266,51 +265,51 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
   }, []);
 
   // ==================== FIXED MEMBER COUNT LOGIC ====================
- const refreshMemberCount = useCallback(async (roomId: string) => {
-  if (!roomId) return;
-  try {
-    const { count, error } = await supabase
-      .from("room_members")
-      .select("user_id", { count: "exact", head: true })
-      .eq("room_id", roomId)
-      .eq("status", "accepted");
+  const refreshMemberCount = useCallback(async (roomId: string) => {
+    if (!roomId) return;
+    try {
+      const { count, error } = await supabase
+        .from("room_members")
+        .select("user_id", { count: "exact", head: true })
+        .eq("room_id", roomId)
+        .eq("status", "accepted");
 
-    if (error) throw error;
+      if (error) throw error;
 
-    const memberCount = count ?? 0;
+      const memberCount = count ?? 0;
 
-    dispatch({
-      type: "UPDATE_ROOM_MEMBER_COUNT",
-      payload: { roomId, memberCount },
-    });
-
-    // ✅ Keep selectedRoom synced
-    const currentSelected = stateRef.current.selectedRoom;
-    if (currentSelected?.id === roomId) {
       dispatch({
-        type: "SET_SELECTED_ROOM",
-        payload: { ...currentSelected, memberCount },
+        type: "UPDATE_ROOM_MEMBER_COUNT",
+        payload: { roomId, memberCount },
       });
-    }
-  } catch (err) {
-    console.error(`[refreshMemberCount] Error for ${roomId}:`, err);
-  }
-}, [supabase]);
 
-
-  // ==================== REAL-TIME PRESENCE SYSTEM ====================
-  const setupPresenceChannel = useCallback((roomId: string) => {
-    if (!user?.id || presenceChannelsRef.current.has(roomId)) return;
-
-    console.log(`[Presence] Setting up presence for room: ${roomId}`);
-
-    const channel = supabase.channel(`room-presence:${roomId}`, {
-      config: {
-        presence: {
-          key: user.id,
-        }
+      // ✅ Keep selectedRoom synced
+      const currentSelected = stateRef.current.selectedRoom;
+      if (currentSelected?.id === roomId) {
+        dispatch({
+          type: "SET_SELECTED_ROOM",
+          payload: { ...currentSelected, memberCount },
+        });
       }
-    });
+    } catch (err) {
+      console.error(`[refreshMemberCount] Error for ${roomId}:`, err);
+    }
+  }, [supabase]);
+
+  // ==================== IMPROVED REAL-TIME PRESENCE SYSTEM ====================
+  const setupPresenceChannel = useCallback((roomId: string) => {
+  if (!user?.id || presenceChannelsRef.current.has(roomId)) return;
+
+  console.log(`[Presence] Setting up presence for room: ${roomId}`);
+
+  const channel = supabase.channel(`room-presence:${roomId}`, {
+    config: {
+      presence: {
+        key: user.id,
+      },
+      broadcast: { self: true }
+    }
+  });
 
     // Handle presence state changes
     const handlePresenceSync = () => {
@@ -343,49 +342,56 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
     };
 
     // Subscribe to presence events
-   channel
-  .on("presence", { event: "sync" }, handlePresenceSync)
-  .on("presence", { event: "join" }, handlePresenceSync)
-  .on("presence", { event: "leave" }, handlePresenceSync)
-  .subscribe(async (status) => {
-    console.log(`[Presence] Room ${roomId} status:`, status);
+    channel
+      .on("presence", { event: "sync" }, handlePresenceSync)
+      .on("presence", { event: "join" }, handlePresenceSync)
+      .on("presence", { event: "leave" }, handlePresenceSync)
+      .subscribe(async (status: string) => {
+        console.log(`[Presence] Room ${roomId} status:`, status);
 
-    if (status === "SUBSCRIBED" && user?.id) {
-      await channel.track({
+        if (status === "SUBSCRIBED" && user?.id) {
+          await channel.track({
+            user_id: user.id,
+            room_id: roomId,
+            last_seen: new Date().toISOString(),
+            online_at: new Date().toISOString(),
+          });
+        }
+      });
+
+    // ✅ Fix: re-sync on tab visibility changes (multi-tab)
+   const handleVisibility = () => {
+    if (document.visibilityState === "visible" && user?.id) {
+      channel.track({
         user_id: user.id,
         room_id: roomId,
         last_seen: new Date().toISOString(),
+        online_at: new Date().toISOString(),
       });
     }
-  });
+   };
+    
+    document.addEventListener("visibilitychange", handleVisibility);
 
-// ✅ Fix: re-sync on tab visibility changes (multi-tab)
-const handleVisibility = () => {
-  if (document.visibilityState === "visible" && user?.id) {
-    channel.track({
-      user_id: user.id,
-      room_id: roomId,
-      last_seen: new Date().toISOString(),
-    });
-  }
-};
-document.addEventListener("visibilitychange", handleVisibility);
-
-presenceChannelsRef.current.set(roomId, channel);
-return () => {
-  document.removeEventListener("visibilitychange", handleVisibility);
-  channel.unsubscribe();
-};
-
+    presenceChannelsRef.current.set(roomId, channel);
+    
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      channel.unsubscribe();
+    };
   }, [user?.id, supabase]);
 
-  // ==================== TYPING INDICATOR SYSTEM ====================
+  // ==================== IMPROVED TYPING INDICATOR SYSTEM ====================
   const setupTypingChannel = useCallback((roomId: string) => {
     if (!user?.id || typingChannelsRef.current.has(roomId)) return;
 
     console.log(`[Typing] Setting up typing channel for room: ${roomId}`);
 
-    const channel = supabase.channel(`room-typing:${roomId}`);
+    const channel = supabase.channel(`room-typing:${roomId}`, {
+      config: {
+        broadcast: { self: false } // Don't receive our own broadcasts
+      }
+    });
 
     const handleTypingBroadcast = async (event: any) => {
       try {
@@ -404,9 +410,8 @@ return () => {
 
           if (profile) {
             profilesCacheRef.current.set(payload.user_id, {
-              display_name: profile?.display_name ?? undefined,
-              username: profile?.username ?? undefined,
-
+              display_name: profile.display_name || undefined,
+              username: profile.username || undefined,
             });
           }
         }
@@ -416,13 +421,12 @@ return () => {
 
         if (payload.is_typing) {
           const newTypingUser: TypingUser = {
-              user_id: payload.user_id,
-              is_typing: true,
-              display_name: profile?.display_name ?? undefined,
-              username: profile?.username ?? undefined,
-              lastTypingTime: now,
-            };
-
+            user_id: payload.user_id,
+            is_typing: true,
+            display_name: profile?.display_name,
+            username: profile?.username,
+            lastTypingTime: now,
+          };
 
           // Update typing users list
           updateTypingUsers(prev => {
@@ -431,11 +435,10 @@ return () => {
           });
 
           // Auto-remove typing indicator after 3 seconds
-         const timeoutId = setTimeout(() => {
-  updateTypingUsers(prev => prev.filter(u => u.user_id !== payload.user_id));
-  typingTimeoutsRef.current.delete(payload.user_id);
-}, 3500); // small buffer to avoid flicker
-
+          const timeoutId = setTimeout(() => {
+            updateTypingUsers(prev => prev.filter(u => u.user_id !== payload.user_id));
+            typingTimeoutsRef.current.delete(payload.user_id);
+          }, 3500);
 
           // Clear existing timeout for this user
           const existingTimeout = typingTimeoutsRef.current.get(payload.user_id);
@@ -463,7 +466,7 @@ return () => {
 
     channel
       .on("broadcast", { event: "typing" }, handleTypingBroadcast)
-      .subscribe((status) => {
+      .subscribe((status: string) => {
         console.log(`[Typing] Room ${roomId} typing channel status:`, status);
       });
 
@@ -471,48 +474,67 @@ return () => {
     return channel;
   }, [user?.id, supabase, updateTypingUsers]);
 
-  // Typing functions
-  const startTyping = useCallback((roomId: string) => {
-    if (!user?.id || !roomId) return;
+// ==================== IMPROVED TYPING FUNCTIONS ====================
+// Define stopTyping first to avoid circular dependency
+const stopTyping = useCallback((roomId: string) => {
+  if (!user?.id || !roomId) return;
 
-    const channel = typingChannelsRef.current.get(roomId);
-    if (!channel) return;
+  const channel = typingChannelsRef.current.get(roomId);
+  if (!channel) return;
 
-    console.log(`[Typing] User ${user.id} started typing in room ${roomId}`);
-    const timeout = typingTimeoutsRef.current.get(user.id);
-    if (timeout) clearTimeout(timeout);
+  console.log(`[Typing] User ${user.id} stopped typing in room ${roomId}`);
 
-    channel.send({
-      type: "broadcast",
-      event: "typing",
-      payload: {
-        user_id: user.id,
-        room_id: roomId,
-        is_typing: true,
-        display_name: user.user_metadata?.display_name,
-        username: user.user_metadata?.username,
-      },
-    });
-  }, [user]);
+  // Clear timeout
+  const timeout = typingTimeoutsRef.current.get(user.id);
+  if (timeout) {
+    clearTimeout(timeout);
+    typingTimeoutsRef.current.delete(user.id);
+  }
 
-  const stopTyping = useCallback((roomId: string) => {
-    if (!user?.id || !roomId) return;
+  // Send typing stop event
+  channel.send({
+    type: "broadcast",
+    event: "typing",
+    payload: {
+      user_id: user.id,
+      room_id: roomId,
+      is_typing: false,
+      timestamp: new Date().toISOString(),
+    },
+  });
+}, [user]);
 
-    const channel = typingChannelsRef.current.get(roomId);
-    if (!channel) return;
+const startTyping = useCallback((roomId: string) => {
+  if (!user?.id || !roomId) return;
 
-    console.log(`[Typing] User ${user.id} stopped typing in room ${roomId}`);
+  const channel = typingChannelsRef.current.get(roomId);
+  if (!channel) return;
 
-    channel.send({
-      type: "broadcast",
-      event: "typing",
-      payload: {
-        user_id: user.id,
-        room_id: roomId,
-        is_typing: false,
-      },
-    });
-  }, [user]);
+  console.log(`[Typing] User ${user.id} started typing in room ${roomId}`);
+  
+  // Clear existing timeout
+  const timeout = typingTimeoutsRef.current.get(user.id);
+  if (timeout) clearTimeout(timeout);
+
+  // Send typing start event
+  channel.send({
+    type: "broadcast",
+    event: "typing",
+    payload: {
+      user_id: user.id,
+      room_id: roomId,
+      is_typing: true,
+      timestamp: new Date().toISOString(),
+    },
+  });
+
+  // Auto stop typing after 2 seconds if no further activity
+  const newTimeout = setTimeout(() => {
+    stopTyping(roomId);
+  }, 2000);
+
+  typingTimeoutsRef.current.set(user.id, newTimeout);
+}, [user, stopTyping]);
 
   // ==================== ROOM OPERATIONS ====================
   const fetchAvailableRooms = useCallback(async () => {
@@ -747,89 +769,89 @@ return () => {
     }
   }, [messages, addMessageToStore]);
 
-useEffect(() => {
-  if (!user?.id) return;
+  // ==================== REAL-TIME MEMBER COUNT UPDATES ====================
+  useEffect(() => {
+    if (!user?.id) return;
 
-  const roomMembersSubscription = supabase
-    .channel("room-members-changes")
-    .on(
-      "postgres_changes",
-      {
-        event: "*",
-        schema: "public",
-        table: "room_members",
-      },
-      async (payload) => {
-        const newData = payload.new as RoomMemberRow | null;
-        const oldData = payload.old as RoomMemberRow | null;
-        const roomId = newData?.room_id ?? oldData?.room_id;
+    const roomMembersSubscription = supabase
+      .channel("room-members-changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "room_members",
+        },
+        async (payload: any) => {
+          const newData = payload.new as RoomMemberRow | null;
+          const oldData = payload.old as RoomMemberRow | null;
+          const roomId = newData?.room_id ?? oldData?.room_id;
 
-        if (roomId) {
-          console.log(
-            `[Real-time] Room members changed for ${roomId} (${payload.eventType})`,
-            payload
-          );
+          if (roomId) {
+            console.log(
+              `[Real-time] Room members changed for ${roomId} (${payload.eventType})`,
+              payload
+            );
 
-          // Debounce refresh to avoid duplicate triggers
-          setTimeout(() => refreshMemberCount(roomId), 400);
+            // Debounce refresh to avoid duplicate triggers
+            setTimeout(() => refreshMemberCount(roomId), 400);
+          }
         }
-      }
-    )
-    .subscribe((status) => {
-      console.log(`[Real-time] Room members subscription: ${status}`);
-    });
+      )
+      .subscribe((status: string) => {
+        console.log(`[Real-time] Room members subscription: ${status}`);
+      });
 
-  return () => {
-    supabase.removeChannel(roomMembersSubscription);
-  };
-}, [user?.id, supabase, refreshMemberCount]);
+    return () => {
+      supabase.removeChannel(roomMembersSubscription);
+    };
+  }, [user?.id, supabase, refreshMemberCount]);
 
-  // Setup real-time features for member rooms
-// ==================== REAL-TIME FEATURES FOR MEMBER ROOMS ====================
-// ==================== REAL-TIME FEATURES FOR MEMBER ROOMS ====================
+// ==================== OPTIMIZED REAL-TIME FEATURES FOR MEMBER ROOMS ====================
 useEffect(() => {
   if (!user?.id || state.availableRooms.length === 0) return;
 
   const memberRooms = state.availableRooms.filter((room) => room.isMember);
   console.log(`[Real-time] Setting up features for ${memberRooms.length} member rooms`);
 
-  // Local copies to prevent eslint/react-hooks ref warnings
-  const presenceRefs = presenceChannelsRef.current;
-  const typingRefs = typingChannelsRef.current;
-  const timeouts = typingTimeoutsRef.current;
+  // Store cleanup functions
+  const cleanupFunctions: (() => void)[] = [];
 
   // Setup presence and typing for all member rooms
   memberRooms.forEach((room) => {
-    setupPresenceChannel(room.id);
-    setupTypingChannel(room.id);
+    const presenceCleanup = setupPresenceChannel(room.id);
+    const typingChannel = setupTypingChannel(room.id);
+    
+    if (presenceCleanup) cleanupFunctions.push(presenceCleanup);
+    
     refreshMemberCount(room.id);
   });
 
-  // Cleanup function
-  return () => {
+  // ✅ FIX: Store the actual cleanup logic in a variable
+  const cleanup = () => {
     console.log(`[Real-time] Cleaning up real-time features`);
-    presenceRefs.forEach((channel) => channel.unsubscribe());
-    presenceRefs.clear();
+    
+    // Use ref.current directly but store in a named function
+    typingChannelsRef.current.forEach((channel) => channel.unsubscribe());
+    typingChannelsRef.current.clear();
 
-    typingRefs.forEach((channel) => channel.unsubscribe());
-    typingRefs.clear();
-
-    timeouts.forEach((timeout) => clearTimeout(timeout));
-    timeouts.clear();
+    typingTimeoutsRef.current.forEach((timeout) => clearTimeout(timeout));
+    typingTimeoutsRef.current.clear();
+    
+    cleanupFunctions.forEach(cleanupFn => cleanupFn());
   };
-  // ✅ Include stable callbacks to satisfy ESLint
+
+  return cleanup;
 }, [user?.id, state.availableRooms, setupPresenceChannel, setupTypingChannel, refreshMemberCount]);
-
-// ✅ Always restore presence & typing when user switches rooms
-useEffect(() => {
-  if (state.selectedRoom?.id && user?.id) {
-    setupPresenceChannel(state.selectedRoom.id);
-    setupTypingChannel(state.selectedRoom.id);
-    refreshMemberCount(state.selectedRoom.id);
-  }
-  // ✅ Include callbacks in deps for proper linting
-}, [state.selectedRoom?.id, user?.id, setupPresenceChannel, setupTypingChannel, refreshMemberCount]);
-
+  
+  // ✅ Always restore presence & typing when user switches rooms
+  useEffect(() => {
+    if (state.selectedRoom?.id && user?.id) {
+      setupPresenceChannel(state.selectedRoom.id);
+      setupTypingChannel(state.selectedRoom.id);
+      refreshMemberCount(state.selectedRoom.id);
+    }
+  }, [state.selectedRoom?.id, user?.id, setupPresenceChannel, setupTypingChannel, refreshMemberCount]);
 
   // Update typing text when typing users change
   const typingUserIds = useMemo(() => 
@@ -851,10 +873,9 @@ useEffect(() => {
   }, [typingUserIds, state.typingUsers, updateTypingText]);
 
   // Initial user setup
-    useEffect(() => {
-      dispatch({ type: "SET_USER", payload: user ?? null });
-    }, [user, dispatch]);
-
+  useEffect(() => {
+    dispatch({ type: "SET_USER", payload: user ?? null });
+  }, [user]);
 
   // Initial fetch when user changes
   useEffect(() => {
@@ -870,8 +891,6 @@ useEffect(() => {
       }});
     }
   }, [user?.id, fetchAvailableRooms]);
-
-  
 
   // Context value
   const contextValue = useMemo(

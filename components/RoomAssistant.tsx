@@ -52,7 +52,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Separator } from "@/components/ui/separator";
 import ReactMarkdown from "react-markdown";
 // import DOMPurify from "dompurify";
-import { supabaseBrowser } from "@/lib/supabase/browser";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { estimateTokens } from "@/lib/token-utils";
 // import { RoomAssistantDialog } from "./AIchatDialog";
@@ -823,7 +823,7 @@ const callSummarizeApi = useCallback(
   const handleAddMessage = useCallback(async () => {
     if (!prompt.trim() || !roomState.user) return;
     try {
-      await supabaseBrowser()
+      await getSupabaseBrowserClient()
         .from("messages")
         .insert({
           text: `AI Assistant Query: ${prompt}`,
