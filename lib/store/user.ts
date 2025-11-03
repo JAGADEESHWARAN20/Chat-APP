@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { supabaseBrowser } from "@/lib/supabase/browser";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export type ProfileRow = {
   id: string;
@@ -30,7 +30,7 @@ export const useUser = create<UserState>((set, get) => ({
       return;
     }
 
-    const supabase = supabaseBrowser();
+    const supabase = getSupabaseBrowserClient();
 
     const { data: profile, error } = await supabase
       .from("profiles")
