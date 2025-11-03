@@ -2,7 +2,7 @@
 
 import { useRef, useEffect } from "react";
 import { useRoomStore } from "../store/roomstore";
-import { supabaseBrowser } from "@/lib/supabase/browser";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useUser } from "@/lib/store/user";
 import { toast } from "sonner";
 import { Database } from "@/lib/types/supabase";
@@ -19,7 +19,7 @@ interface IRoom extends Room { }
 const transformRooms = async (
      rooms: IRoom[],
      userId: string,
-     supabase: ReturnType<typeof supabaseBrowser>
+     supabase: ReturnType<typeof getSupabaseBrowserClient>
 ): Promise<RoomWithMembership[]> => {
      try {
           const { data: participations, error } = await supabase
@@ -44,7 +44,7 @@ const transformRooms = async (
 function InitRoom({ rooms }: { rooms: IRoom[] }) {
      const initState = useRef(false);
      const user = useUser((state) => state.user);
-     const supabase = supabaseBrowser();
+     const supabase = getSupabaseBrowserClient();
 
      useEffect(() => {
           if (!initState.current && user) {
