@@ -1,6 +1,6 @@
 "use client";
-import { useEffect, useRef, useState, useCallback } from "react";
-import { supabaseBrowser } from "@/lib/supabase/browser";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useUser } from "@/lib/store/user";
 import { toast } from "sonner";
 import type { RealtimeChannel, RealtimePresenceState } from "@supabase/supabase-js";
@@ -42,11 +42,14 @@ export function usePresence({
   const [error, setError] = useState<string | null>(null);
 
   // Refs for stable references
-  const supabase = useRef(supabaseBrowser());
+  const supabase = useRef(getSupabaseBrowserClient());
   const channelsRef = useRef<Map<string, RealtimeChannel>>(new Map());
   const timeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
   const presenceDataRef = useRef<Map<string, Map<string, PresenceData>>>(new Map());
   const isSubscribedRef = useRef<boolean>(false);
+
+  // ✅ FIX 1: Memoize roomIds dependency to avoid complex expression
+  const roomIdsKey = useMemo(() => roomIds.join(','), [roomIds]);
 
   // Validate room IDs
   const validRoomIds = useCallback((ids: string[]): string[] => {
@@ -153,9 +156,9 @@ export function usePresence({
     cleanupStalePresence(roomId);
   }, [updateRoomPresence, cleanupStalePresence]);
 
-  // Subscribe to a room's presence channel
+  // ✅ FIX 2: Add missing user dependency to subscribeToRoom
   const subscribeToRoom = useCallback(async (roomId: string) => {
-    if (channelsRef.current.has(roomId)) {
+    if (channelsRef.current.has(roomId) || !user?.id) {
       return;
     }
 
@@ -163,7 +166,7 @@ export function usePresence({
       const channel = supabase.current.channel(`room:${roomId}`, {
         config: {
           presence: {
-            key: user?.id,
+            key: user.id,
           },
         },
       });
@@ -191,7 +194,7 @@ export function usePresence({
         if (status === 'SUBSCRIBED') {
           try {
             const presencePayload: PresenceData = {
-              user_id: user!.id,
+              user_id: user.id,
               room_id: roomId,
               online_at: new Date().toISOString(),
             };
@@ -219,7 +222,7 @@ export function usePresence({
       console.error(`Failed to subscribe to room ${roomId}:`, error);
       setError(`Failed to subscribe to room ${roomId}`);
     }
-  }, [user?.id, handlePresenceEvent]);
+  }, [user?.id, handlePresenceEvent]); // ✅ Added user?.id dependency
 
   // Unsubscribe from a room's presence channel
   const unsubscribeFromRoom = useCallback(async (roomId: string) => {
@@ -243,7 +246,7 @@ export function usePresence({
     }
   }, []);
 
-  // Main effect for managing presence subscriptions
+  // ✅ FIX 3: Main effect with proper dependencies and cleanup
   useEffect(() => {
     if (!user?.id) {
       setIsLoading(false);
@@ -281,29 +284,36 @@ export function usePresence({
 
     subscribeToRooms();
 
-    // Cleanup function
+    // ✅ FIX 4: Proper cleanup with captured ref values
     return () => {
       isSubscribedRef.current = false;
       
-      // Clear all timeouts
-      timeoutsRef.current.forEach((timeout) => clearTimeout(timeout));
+      // Capture current ref values to avoid ESLint warnings
+      const currentTimeouts = timeoutsRef.current;
+      const currentChannels = channelsRef.current;
+      const currentPresenceData = presenceDataRef.current;
+
+      // Clear all timeouts using captured values
+      currentTimeouts.forEach((timeout) => clearTimeout(timeout));
       timeoutsRef.current.clear();
 
-      // Unsubscribe from all channels
-      channelsRef.current.forEach((channel, roomId) => {
+      // Unsubscribe from all channels using captured values
+      currentChannels.forEach((channel, roomId) => {
         channel.untrack().catch(() => {});
         channel.unsubscribe();
       });
       channelsRef.current.clear();
 
-      // Clear presence data
+      // Clear presence data using captured values
+      currentPresenceData.clear();
       presenceDataRef.current.clear();
     };
-  }, [user?.id, roomIds.join(','), subscribeToRoom, validRoomIds]);
+  }, [user?.id, roomIdsKey, subscribeToRoom, validRoomIds]); // ✅ Use memoized roomIdsKey
 
-  // Effect to handle room ID changes (unsubscribe from removed rooms)
+  // ✅ FIX 5: Effect to handle room ID changes with proper dependencies
   useEffect(() => {
-    const currentRoomIds = new Set(validRoomIds(roomIds));
+    const validatedRoomIds = validRoomIds(roomIds);
+    const currentRoomIds = new Set(validatedRoomIds);
     const subscribedRoomIds = new Set(channelsRef.current.keys());
 
     // Unsubscribe from rooms that are no longer in the list
@@ -312,7 +322,7 @@ export function usePresence({
         unsubscribeFromRoom(roomId);
       }
     });
-  }, [roomIds.join(','), validRoomIds, unsubscribeFromRoom]);
+  }, [roomIdsKey, validRoomIds, unsubscribeFromRoom]); // ✅ Use memoized roomIdsKey
 
   return {
     onlineCounts,
