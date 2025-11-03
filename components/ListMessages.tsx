@@ -36,6 +36,7 @@ export default function ListMessages() {
 
   const supabase = getSupabaseBrowserClient();
   const messagesLoadedRef = useRef<Set<string>>(new Set());
+  const prevRoomIdRef = useRef<string | null>(null); // ✅ FIXED: Track previous room
 
   const handleOnScroll = useCallback(() => {
     if (!scrollRef.current) return;
@@ -56,19 +57,25 @@ export default function ListMessages() {
     });
   }, []);
 
-  // Load initial messages - FIXED VERSION
+  // ✅ FIXED: Load initial messages with proper room change detection
   useEffect(() => {
     if (!selectedRoom?.id) {
       setMessages([]);
       messagesLoadedRef.current.clear();
+      prevRoomIdRef.current = null;
       return;
     }
 
-    // Skip if already loading or already loaded this room
-    if (isLoading || messagesLoadedRef.current.has(selectedRoom.id)) {
+    // Only load if room actually changed
+    const roomChanged = selectedRoom.id !== prevRoomIdRef.current;
+    const alreadyLoaded = messagesLoadedRef.current.has(selectedRoom.id);
+    
+    if (!roomChanged || alreadyLoaded || isLoading) {
       return;
     }
 
+    prevRoomIdRef.current = selectedRoom.id;
+    
     let isMounted = true;
 
     const loadInitialMessages = async () => {
@@ -106,7 +113,7 @@ export default function ListMessages() {
               created_at: msg.profiles.created_at ?? null,
               bio: msg.profiles.bio ?? null,
               updated_at: msg.profiles.updated_at ?? null,
-            } : { // Provide default object instead of null
+            } : {
               id: msg.sender_id,
               avatar_url: null,
               display_name: null,
@@ -129,7 +136,6 @@ export default function ListMessages() {
           toast.error("Failed to load messages");
           setMessages([]);
         }
-        // Remove from loaded set on error to allow retry
         messagesLoadedRef.current.delete(selectedRoom.id);
       } finally {
         if (isMounted) setIsLoading(false);
@@ -141,9 +147,9 @@ export default function ListMessages() {
     return () => {
       isMounted = false;
     };
-  }, [selectedRoom?.id, setMessages]);
+  }, [selectedRoom?.id, setMessages, isLoading]);
 
-  // FIXED: Memoized realtime handler with better error handling
+  // ✅ FIXED: Memoized realtime handler
   const handleRealtimePayload = useCallback(
     (payload: any) => {
       try {
@@ -154,64 +160,57 @@ export default function ListMessages() {
         const messagePayload = payload.new as MessageRow;
 
         if (payload.eventType === "INSERT") {
-          // Skip if this is an optimistic message we already added
           if (optimisticIds.includes(messagePayload.id)) {
             return;
           }
 
-          // Check if message already exists
           if (messages.some(m => m.id === messagePayload.id)) {
             return;
           }
 
-          // Fetch profile and add message
-       // Fetch profile and add message
-supabase
-  .from("profiles")
-  .select("*")
-  .eq("id", messagePayload.sender_id)
-  .single()
-  .then(({ data: profile, error }) => {
-    if (error) {
-      console.error("Error fetching profile:", error);
-      return;
-    }
+          supabase
+            .from("profiles")
+            .select("*")
+            .eq("id", messagePayload.sender_id)
+            .single()
+            .then(({ data: profile, error }) => {
+              if (error) {
+                console.error("Error fetching profile:", error);
+                return;
+              }
 
-    // FIXED: Properly handle the profiles property
-    const newMessage: Imessage = {
-      ...messagePayload,
-      profiles: profile ? {
-        id: profile.id,
-        avatar_url: profile.avatar_url ?? null,
-        display_name: profile.display_name ?? null,
-        username: profile.username ?? null,
-        created_at: profile.created_at ?? null,
-        bio: profile.bio ?? null,
-        updated_at: profile.updated_at ?? null,
-      } : {
-        // Provide default values when profile is null
-        id: messagePayload.sender_id,
-        avatar_url: null,
-        display_name: null,
-        username: null,
-        created_at: null,
-        bio: null,
-        updated_at: null,
-      },
-    };
+              const newMessage: Imessage = {
+                ...messagePayload,
+                profiles: profile ? {
+                  id: profile.id,
+                  avatar_url: profile.avatar_url ?? null,
+                  display_name: profile.display_name ?? null,
+                  username: profile.username ?? null,
+                  created_at: profile.created_at ?? null,
+                  bio: profile.bio ?? null,
+                  updated_at: profile.updated_at ?? null,
+                } : {
+                  id: messagePayload.sender_id,
+                  avatar_url: null,
+                  display_name: null,
+                  username: null,
+                  created_at: null,
+                  bio: null,
+                  updated_at: null,
+                },
+              };
 
-    addMessage(newMessage);
+              addMessage(newMessage);
 
-    // Show notification if user has scrolled up
-    if (scrollRef.current) {
-      const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
-      const isAtBottom = scrollHeight - scrollTop <= clientHeight + 100;
-      
-      if (!isAtBottom) {
-        setNotification(prev => prev + 1);
-      }
-    }
-  });
+              if (scrollRef.current) {
+                const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+                const isAtBottom = scrollHeight - scrollTop <= clientHeight + 100;
+                
+                if (!isAtBottom) {
+                  setNotification(prev => prev + 1);
+                }
+              }
+            });
 
         } else if (payload.eventType === "UPDATE") {
           optimisticUpdateMessage(messagePayload.id, {
@@ -229,7 +228,7 @@ supabase
     [selectedRoom, messages, optimisticIds, addMessage, optimisticUpdateMessage, optimisticDeleteMessage, supabase]
   );
 
-  // FIXED: Real-time subscription with proper cleanup
+  // ✅ FIXED: Real-time subscription with proper cleanup and dependencies
   useEffect(() => {
     if (!selectedRoom?.id) return;
 
@@ -259,22 +258,21 @@ supabase
     return () => {
       console.log(`[ListMessages] Cleaning up realtime for room: ${selectedRoom.id}`);
       supabase.removeChannel(messageChannel);
-      // Clear loaded rooms when component unmounts or room changes
-      messagesLoadedRef.current.delete(selectedRoom.id);
     };
   }, [selectedRoom?.id, supabase, handleRealtimePayload]);
 
-  // FIXED: Auto-scroll with better logic
+  // ✅ FIXED: Auto-scroll with better room change detection
   const prevMessagesLength = useRef(messages.length);
   useEffect(() => {
     if (!scrollRef.current || !selectedRoom?.id) return;
 
     const isNewMessage = prevMessagesLength.current < messages.length;
-    const isRoomChanged = !messages.some(msg => msg.room_id === selectedRoom.id);
+    const isRoomChanged = selectedRoom.id !== prevRoomIdRef.current;
 
     if (isRoomChanged) {
       // Room changed, scroll to top
       scrollRef.current.scrollTop = 0;
+      prevRoomIdRef.current = selectedRoom.id;
     } else if (isNewMessage && !userScrolled) {
       // New messages and user hasn't scrolled up, scroll to bottom
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -283,7 +281,7 @@ supabase
     prevMessagesLength.current = messages.length;
   }, [messages.length, userScrolled, selectedRoom?.id]);
 
-  // Filter messages for current room
+  // ✅ FIXED: Memoized message filtering
   const filteredMessages = useMemo(() => {
     if (!messages.length || !selectedRoom?.id) return [];
     

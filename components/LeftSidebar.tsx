@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useMemo, useCallback, memo } from "react";
+import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import { debounce } from "lodash";
 import { RoomWithMembershipCount, useRoomContext } from "@/lib/store/RoomContext";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Loader2, ChevronRight, MessageSquare, Users, Plus } from "lucide-react";
@@ -15,29 +16,35 @@ interface LeftSidebarProps {
   onClose?: () => void;
 }
 
-const LeftSidebar = memo<LeftSidebarProps>(({ user, isOpen, onClose }) => {
-  const { state, setSelectedRoom, createRoom } = useRoomContext();
+const LeftSidebar = React.memo<LeftSidebarProps>(({ user, isOpen, onClose }) => {
+  const { state, setSelectedRoom, createRoom, fetchAvailableRooms } = useRoomContext();
   const [searchTerm, setSearchTerm] = useState("");
   const [showCreateRoom, setShowCreateRoom] = useState(false);
   const [newRoomName, setNewRoomName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+  
+  // ✅ FIXED: Better debounce implementation
+  const debouncedSearchRef = useRef<NodeJS.Timeout | null>(null);
 
-  // FIXED: Stable filtered rooms
-  const joinedRooms = useMemo(() => 
-    state.availableRooms.filter((room) => room.isMember), 
-    [state.availableRooms]
-  );
+  // ✅ FIXED: Optimized room filtering with stable dependencies
+  const joinedRooms = useMemo(() => {
+    // Only recompute when membership status actually changes
+    return state.availableRooms.filter((room) => 
+      room.isMember && room.participationStatus === "accepted"
+    );
+  }, [state.availableRooms]); // Consider using specific fields if available
 
-  const filteredRooms = useMemo(() => 
-    joinedRooms.filter((room) =>
-      room.name.toLowerCase().includes(searchTerm.toLowerCase())
-    ), 
-    [joinedRooms, searchTerm]
-  );
+  const filteredRooms = useMemo(() => {
+    if (!searchTerm.trim()) return joinedRooms;
+    
+    const searchLower = searchTerm.toLowerCase();
+    return joinedRooms.filter((room) =>
+      room.name.toLowerCase().includes(searchLower)
+    );
+  }, [joinedRooms, searchTerm]);
 
-  // Empty direct chats for now
+  // Empty direct chats (extend later)
   const directChats = useMemo<RoomWithMembershipCount[]>(() => [], []);
-
   const filteredChats = useMemo(() => 
     directChats.filter((chat) =>
       chat.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -45,7 +52,21 @@ const LeftSidebar = memo<LeftSidebarProps>(({ user, isOpen, onClose }) => {
     [directChats, searchTerm]
   );
 
-  // FIXED: Stable create room handler
+  // ✅ FIXED: Proper debounced search implementation
+  const handleSearchChange = useCallback((value: string) => {
+    if (debouncedSearchRef.current) {
+      clearTimeout(debouncedSearchRef.current);
+    }
+    
+    debouncedSearchRef.current = setTimeout(() => {
+      setSearchTerm(value);
+    }, 300);
+  }, []);
+
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    handleSearchChange(e.target.value);
+  }, [handleSearchChange]);
+
   const handleCreateRoom = useCallback(async () => {
     const trimmedName = newRoomName.trim();
     if (!trimmedName) {
@@ -59,15 +80,16 @@ const LeftSidebar = memo<LeftSidebarProps>(({ user, isOpen, onClose }) => {
       setNewRoomName("");
       setShowCreateRoom(false);
       toast.success("Room created!");
+      await fetchAvailableRooms();
     } catch (error) {
       console.error("Failed to create room:", error);
       toast.error("Failed to create room");
     } finally {
       setIsCreating(false);
     }
-  }, [newRoomName, createRoom]);
+  }, [newRoomName, createRoom, fetchAvailableRooms]);
 
-  // FIXED: Stable render function
+  // ✅ FIXED: Stable render function with proper dependencies
   const renderItem = useCallback((item: RoomWithMembershipCount) => {
     const memberCount = item.memberCount ?? 0;
     const onlineCount = item.onlineUsers ?? 0;
@@ -124,6 +146,23 @@ const LeftSidebar = memo<LeftSidebarProps>(({ user, isOpen, onClose }) => {
       </div>
     );
   }, [state.selectedRoom?.id, setSelectedRoom]);
+
+  // ✅ FIXED: Proper cleanup
+  useEffect(() => {
+    return () => {
+      if (debouncedSearchRef.current) {
+        clearTimeout(debouncedSearchRef.current);
+      }
+    };
+  }, []);
+
+  if (!user) {
+    return (
+      <div className="fixed lg:static inset-y-0 left-0 w-full lg:w-1/4 px-4 py-3 bg-card border-r h-screen flex flex-col transition-transform duration-300 z-50">
+        <p className="text-muted-foreground p-4">Please log in to view rooms</p>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -190,8 +229,7 @@ const LeftSidebar = memo<LeftSidebarProps>(({ user, isOpen, onClose }) => {
 
         <Input
           placeholder="Search my rooms..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+          onChange={handleInputChange}
           className="mb-3"
         />
         
