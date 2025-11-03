@@ -1,6 +1,6 @@
 "use client";
 import { User } from "@supabase/supabase-js";
-import React, { useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { useUser } from "../store/user";
 
 export default function InitUser({ user }: { user: User | undefined }) {
