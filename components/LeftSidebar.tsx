@@ -26,13 +26,20 @@ const LeftSidebar = React.memo<LeftSidebarProps>(({ user, isOpen, onClose }) => 
   // ✅ FIXED: Better debounce implementation
   const debouncedSearchRef = useRef<NodeJS.Timeout | null>(null);
 
-  // ✅ FIXED: Optimized room filtering with stable dependencies
-  const joinedRooms = useMemo(() => {
-    // Only recompute when membership status actually changes
-    return state.availableRooms.filter((room) => 
-      room.isMember && room.participationStatus === "accepted"
-    );
-  }, [state.availableRooms]); // Consider using specific fields if available
+  
+const joinedRooms = useMemo(() => {
+  const filtered = state.availableRooms.filter((room) => 
+    room.isMember && room.participationStatus === "accepted"
+  );
+  
+  console.log("[LeftSidebar] Joined rooms:", {
+    totalAvailable: state.availableRooms.length,
+    joinedCount: filtered.length,
+    joinedRooms: filtered.map(r => ({ id: r.id, name: r.name, isMember: r.isMember, status: r.participationStatus }))
+  });
+  
+  return filtered;
+}, [state.availableRooms]);
 
   const filteredRooms = useMemo(() => {
     if (!searchTerm.trim()) return joinedRooms;
@@ -186,6 +193,21 @@ const LeftSidebar = React.memo<LeftSidebarProps>(({ user, isOpen, onClose }) => 
         <div className="mb-3">
           {showCreateRoom ? (
             <div className="space-y-2 p-3 border rounded-lg bg-muted/50">
+              <div className="flex gap-2 mb-3">
+                <Input
+                  placeholder="Search my rooms..."
+                  onChange={handleInputChange}
+                  className="flex-1"
+                />
+                <Button 
+                  variant="outline" 
+                  size="icon"
+                  onClick={() => fetchAvailableRooms()}
+                  title="Refresh rooms"
+                >
+                  <Loader2 className="h-4 w-4" />
+                </Button>
+              </div>
               <Input
                 placeholder="Enter room name..."
                 value={newRoomName}

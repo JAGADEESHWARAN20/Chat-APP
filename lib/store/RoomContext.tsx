@@ -513,32 +513,39 @@ useEffect(() => {
     if (isFetchingRef.current || (now - lastFetchRef.current < 2000)) {
       return;
     }
-
+  
     if (!user?.id) {
       dispatch({ type: "SET_AVAILABLE_ROOMS", payload: [] });
       return;
     }
-
+  
     isFetchingRef.current = true;
     lastFetchRef.current = now;
     
     dispatch({ type: "SET_LOADING", payload: true });
-
+  
     try {
-      console.log("[Rooms] Fetching available rooms...");
+      console.log("[Rooms] Fetching available rooms for user:", user.id);
       
       const res = await fetch(`/api/rooms/all?t=${Date.now()}`);
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}: ${await res.text()}`);
       }
-
+  
       const json = await res.json();
+      console.log("[Rooms] API Response:", json);
+  
       const rooms = json?.rooms || json?.roomsWithMembership || [];
-
-      console.log(`[Rooms] Found ${rooms.length} rooms`);
-
+  
+      console.log(`[Rooms] Found ${rooms.length} rooms from API`);
+  
+      // Debug: Log room membership status
+      rooms.forEach((room: any) => {
+        console.log(`[Rooms] Room ${room.name}: isMember=${room.isMember}, status=${room.participationStatus}`);
+      });
+  
       const currentPresence = { ...stateRef.current.roomPresence };
-
+  
       const roomsWithMembership: RoomWithMembershipCount[] = rooms.map((room: any) => ({
         id: room.id,
         name: room.name,
@@ -552,15 +559,21 @@ useEffect(() => {
         latestMessage: room.latestMessage ?? undefined,
         onlineUsers: currentPresence[room.id]?.onlineUsers ?? 0,
       }));
-
+  
+      // Debug: Log processed rooms
+      console.log(`[Rooms] Processed ${roomsWithMembership.length} rooms`);
+      const joinedRoomsCount = roomsWithMembership.filter(room => room.isMember).length;
+      console.log(`[Rooms] User has joined ${joinedRoomsCount} rooms`);
+  
       dispatch({ type: "SET_AVAILABLE_ROOMS", payload: roomsWithMembership });
       
+      // Refresh member counts for all rooms
       roomsWithMembership.forEach(room => {
         refreshMemberCount(room.id);
       });
-
+  
       return roomsWithMembership;
-
+  
     } catch (error) {
       console.error("[Rooms] Error fetching rooms:", error);
       toast.error("Failed to load rooms");
@@ -571,6 +584,21 @@ useEffect(() => {
       isFetchingRef.current = false;
     }
   }, [user?.id, refreshMemberCount]);
+
+  // Debug effect to monitor room state
+useEffect(() => {
+  console.log("[Rooms] Current room state:", {
+    totalRooms: state.availableRooms.length,
+    joinedRooms: state.availableRooms.filter(room => room.isMember).length,
+    rooms: state.availableRooms.map(room => ({
+      id: room.id,
+      name: room.name,
+      isMember: room.isMember,
+      status: room.participationStatus,
+      memberCount: room.memberCount
+    }))
+  });
+}, [state.availableRooms]);
 
   const joinRoom = useCallback(async (roomId: string) => {
     if (!user?.id) {
