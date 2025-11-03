@@ -1,14 +1,14 @@
 // lib/hooks/useAuthSync.ts
 "use client";
 import { useEffect } from "react";
-import { supabaseBrowser } from "@/lib/supabase/browser";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useUser } from "@/lib/store/user";
 
 export function useAuthSync() {
   const { setUser, clearUser } = useUser();
 
   useEffect(() => {
-    const supabase = supabaseBrowser();
+    const supabase = getSupabaseBrowserClient();
 
     const syncUser = async () => {
       const { data } = await supabase.auth.getUser();
