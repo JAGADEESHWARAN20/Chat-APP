@@ -1,6 +1,6 @@
 // hooks/useNotificationHandler.ts - Updated for your user store
 import { toast } from 'sonner';
-import { supabaseBrowser } from '@/lib/supabase/browser';
+import { getSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useNotification } from '@/lib/store/notifications';
 import { useEffect } from 'react';
 import { useUser } from '@/lib/store/user'; // Your actual user store
@@ -23,7 +23,7 @@ export function useNotificationHandler() {
       email: currentUser?.email || authUser?.email
     });
 
-    const supabase = supabaseBrowser();
+    const supabase = getSupabaseBrowserClient();
     
     // Subscribe to notifications table
     const notificationSubscription = supabase
