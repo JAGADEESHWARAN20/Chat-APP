@@ -232,19 +232,26 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
   }, [state.roomPresence]);
 
   // ==================== MOUNTED REF CLEANUP ====================
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => {
-      isMountedRef.current = false;
-      // Cleanup all timeouts and channels
-      memberCountTimeoutsRef.current.forEach((timeout) => clearTimeout(timeout));
-      memberCountTimeoutsRef.current.clear();
-      presenceChannelsRef.current.forEach((channel) => channel.unsubscribe());
-      presenceChannelsRef.current.clear();
-      typingChannelsRef.current.forEach((channel) => channel.unsubscribe());
-      typingChannelsRef.current.clear();
-    };
-  }, []);
+ // ==================== MOUNTED REF CLEANUP ====================
+useEffect(() => {
+  isMountedRef.current = true;
+  
+  return () => {
+    isMountedRef.current = false;
+    // ✅ FIXED: Copy ref values to variables for cleanup
+    const memberCountTimeouts = memberCountTimeoutsRef.current;
+    const presenceChannels = presenceChannelsRef.current;
+    const typingChannels = typingChannelsRef.current;
+    
+    // Cleanup all timeouts and channels
+    memberCountTimeouts.forEach((timeout) => clearTimeout(timeout));
+    memberCountTimeouts.clear();
+    presenceChannels.forEach((channel) => channel.unsubscribe());
+    presenceChannels.clear();
+    typingChannels.forEach((channel) => channel.unsubscribe());
+    typingChannels.clear();
+  };
+}, []);
 
   // ==================== CORE STATE FUNCTIONS ====================
   const updateTypingUsers = useCallback((updater: TypingUser[] | ((prev: TypingUser[]) => TypingUser[])) => {
@@ -318,7 +325,7 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
       config: { presence: { key: user.id }, broadcast: { self: true } }
     });
 
-    const handlePresenceSync = useCallback(() => {
+    const handlePresenceSync = () => {
       try {
         const presenceState = channel.presenceState();
         const onlineUsers = new Set<string>();
@@ -335,7 +342,7 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
       } catch (err) {
         console.error(`[Presence] Error ${roomId}:`, err);
       }
-    }, [roomId]);
+    };
 
     channel
       .on("presence", { event: "sync" }, handlePresenceSync)
@@ -353,8 +360,10 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
       console.log(`[Presence] Cleanup ${roomId}`);
       channel.unsubscribe();
       presenceChannelsRef.current.delete(roomId);
+      // Remove the channel from presenceChannelsRef on cleanup
+
     };
-  }, [user?.id, supabase]);
+  }, [user?.id, supabase, dispatch]); // Removed 'roomId' from dependencies because it's a parameter
 
   // ==================== TYPING SYSTEM ====================
   const setupTypingChannel = useCallback((roomId: string) => {
@@ -764,43 +773,44 @@ export function RoomProvider({ children, user }: { children: React.ReactNode; us
   }, [user?.id, supabase, refreshMemberCount]);
 
   // Optimized presence setup - only setup for selected and recent rooms
-  useEffect(() => {
-    if (!user?.id) return;
+ // Optimized presence setup - only setup for selected and recent rooms
+useEffect(() => {
+  if (!user?.id) return;
 
-    const roomsToSetup = new Set<string>();
-    
-    // Always setup selected room
-    if (state.selectedRoom?.id) {
-      roomsToSetup.add(state.selectedRoom.id);
+  const roomsToSetup = new Set<string>();
+  
+  // Always setup selected room
+  if (state.selectedRoom?.id) {
+    roomsToSetup.add(state.selectedRoom.id);
+  }
+  
+  // Setup presence for max 3 recently active rooms
+  const recentRooms = state.availableRooms
+    .filter(room => room.isMember)
+    .slice(0, 3)
+    .map(room => room.id);
+  
+  recentRooms.forEach(roomId => roomsToSetup.add(roomId));
+
+  // Cleanup unused channels
+  const currentChannels = Array.from(presenceChannelsRef.current.keys());
+  currentChannels.forEach(roomId => {
+    if (!roomsToSetup.has(roomId)) {
+      const channel = presenceChannelsRef.current.get(roomId);
+      if (channel) {
+        channel.unsubscribe();
+        presenceChannelsRef.current.delete(roomId);
+      }
     }
-    
-    // Setup presence for max 3 recently active rooms
-    const recentRooms = state.availableRooms
-      .filter(room => room.isMember)
-      .slice(0, 3)
-      .map(room => room.id);
-    
-    recentRooms.forEach(roomId => roomsToSetup.add(roomId));
+  });
 
-    // Cleanup unused channels
-    const currentChannels = Array.from(presenceChannelsRef.current.keys());
-    currentChannels.forEach(roomId => {
-      if (!roomsToSetup.has(roomId)) {
-        const channel = presenceChannelsRef.current.get(roomId);
-        if (channel) {
-          channel.unsubscribe();
-          presenceChannelsRef.current.delete(roomId);
-        }
-      }
-    });
-
-    // Setup new channels
-    roomsToSetup.forEach(roomId => {
-      if (!presenceChannelsRef.current.has(roomId)) {
-        setupPresenceChannel(roomId);
-      }
-    });
-  }, [user?.id, state.selectedRoom?.id, state.availableRooms.length, setupPresenceChannel]);
+  // Setup new channels
+  roomsToSetup.forEach(roomId => {
+    if (!presenceChannelsRef.current.has(roomId)) {
+      setupPresenceChannel(roomId);
+    }
+  });
+}, [user?.id, state.selectedRoom?.id, state.availableRooms, setupPresenceChannel]); // ✅ FIXED: Added state.availableRooms
 
   // Real-time features for selected room
   useEffect(() => {
