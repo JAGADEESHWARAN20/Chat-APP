@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { supabaseBrowser } from "@/lib/supabase/browser";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import InitUser from "@/lib/initialization/InitUser";
 import LoginLogoutButton from "@/components/LoginLogoutButton";
 import SearchComponent from "@/components/SearchComponent";
@@ -19,7 +19,7 @@ export default function Page() {
   const [activeTab, setActiveTab] = useState<"home" | "search">("home");
 
   useEffect(() => {
-    const supabase = supabaseBrowser();
+    const supabase = getSupabaseBrowserClient();
     supabase.auth.getSession().then(({ data }) => {
       setUser(data.session?.user ?? null);
     });
