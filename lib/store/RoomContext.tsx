@@ -527,7 +527,8 @@ useEffect(() => {
     try {
       console.log("[Rooms] Fetching available rooms for user:", user.id);
       
-      const res = await fetch(`/api/rooms/all?t=${Date.now()}`);
+      // Use the joined rooms endpoint for LeftSidebar
+      const res = await fetch(`/api/rooms/joined?t=${Date.now()}`);
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}: ${await res.text()}`);
       }
@@ -535,9 +536,9 @@ useEffect(() => {
       const json = await res.json();
       console.log("[Rooms] API Response:", json);
   
-      const rooms = json?.rooms || json?.roomsWithMembership || [];
+      const rooms = json?.rooms || [];
   
-      console.log(`[Rooms] Found ${rooms.length} rooms from API`);
+      console.log(`[Rooms] Found ${rooms.length} joined rooms from API`);
   
       // Debug: Log room membership status
       rooms.forEach((room: any) => {
@@ -584,7 +585,7 @@ useEffect(() => {
       isFetchingRef.current = false;
     }
   }, [user?.id, refreshMemberCount]);
-
+  
   // Debug effect to monitor room state
 useEffect(() => {
   console.log("[Rooms] Current room state:", {
