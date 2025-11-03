@@ -284,24 +284,31 @@ useEffect(() => {
   // ==================== MEMBER COUNT MANAGEMENT ====================
   const refreshMemberCount = useCallback(async (roomId: string) => {
     if (!roomId) return;
-
+  
     const existingTimeout = memberCountTimeoutsRef.current.get(roomId);
     if (existingTimeout) clearTimeout(existingTimeout);
-
+  
     const timeout = setTimeout(async () => {
       try {
         // ✅ FIXED: Use the defined isMountedRef
         if (!isMountedRef.current) return;
+        
+        console.log(`[MemberCount] Refreshing count for room: ${roomId}`);
         
         const { count, error } = await supabase
           .from("room_members")
           .select("user_id", { count: "exact", head: true })
           .eq("room_id", roomId)
           .eq("status", "accepted");
-
-        if (error) throw error;
+  
+        if (error) {
+          console.error(`[MemberCount] Error for room ${roomId}:`, error);
+          throw error;
+        }
+        
         const memberCount = count ?? 0;
-
+        console.log(`[MemberCount] Room ${roomId}: ${memberCount} members`);
+  
         dispatch({
           type: "UPDATE_ROOM_MEMBER_COUNT",
           payload: { roomId, memberCount },
@@ -312,10 +319,24 @@ useEffect(() => {
         memberCountTimeoutsRef.current.delete(roomId);
       }
     }, 500); // Increased debounce
-
+  
     memberCountTimeoutsRef.current.set(roomId, timeout);
   }, [supabase]);
-
+  // Debug effect to monitor room state
+useEffect(() => {
+  console.log("[Rooms] Current room state:", {
+    totalRooms: state.availableRooms.length,
+    joinedRooms: state.availableRooms.filter(room => room.isMember).length,
+    rooms: state.availableRooms.map(room => ({
+      id: room.id,
+      name: room.name,
+      isMember: room.isMember,
+      status: room.participationStatus,
+      memberCount: room.memberCount,
+      apiMemberCount: room.memberCount // This shows what came from API
+    }))
+  });
+}, [state.availableRooms]);
   // ==================== PRESENCE SYSTEM ====================
   const setupPresenceChannel = useCallback((roomId: string) => {
     if (!user?.id || presenceChannelsRef.current.has(roomId)) return () => {};
@@ -585,7 +606,7 @@ useEffect(() => {
       isFetchingRef.current = false;
     }
   }, [user?.id, refreshMemberCount]);
-  
+
   // Debug effect to monitor room state
 useEffect(() => {
   console.log("[Rooms] Current room state:", {

@@ -26,13 +26,15 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const searchQuery = searchParams.get("q")?.toLowerCase() || "";
 
-    // First, get all rooms where user is an accepted member
+    console.log(`[Rooms Joined] Fetching joined rooms for user: ${userId}`);
+
+    // Get all rooms where user is an accepted member with proper room data
     const { data: memberships, error: membershipError } = await supabase
       .from("room_members")
       .select(`
         room_id,
         status,
-        rooms:room_id (
+        rooms!inner (
           id, name, is_private, created_by, created_at
         )
       `)
@@ -45,43 +47,61 @@ export async function GET(req: Request) {
     }
 
     if (!memberships || memberships.length === 0) {
+      console.log("[Rooms Joined] No joined rooms found for user");
       return NextResponse.json({ success: true, rooms: [] });
     }
 
     // Extract rooms from memberships
-    const rooms = memberships
-      .map(m => m.rooms)
-      .filter(Boolean) as Database["public"]["Tables"]["rooms"]["Row"][];
+    const rooms = memberships.map(m => m.rooms);
 
     // Filter by search query if provided
     const filteredRooms = searchQuery 
       ? rooms.filter(room => room.name.toLowerCase().includes(searchQuery))
       : rooms;
 
+    console.log(`[Rooms Joined] Found ${filteredRooms.length} joined rooms after filtering`);
+
     const roomIds = filteredRooms.map(room => room.id);
 
-    // Fetch member counts for these rooms
-    const { data: membersData, error: membersError } = await supabase
-      .from("room_members")
-      .select("room_id")
-      .in("room_id", roomIds)
-      .eq("status", "accepted");
+    // Fetch member counts for these rooms using count API for better performance
+    const memberCountPromises = roomIds.map(async (roomId) => {
+      const { count, error } = await supabase
+        .from("room_members")
+        .select("user_id", { count: 'exact', head: true })
+        .eq("room_id", roomId)
+        .eq("status", "accepted");
 
-    // Calculate member counts
-    const countsMap = new Map<string, number>();
-    membersData?.forEach((m) => {
-      countsMap.set(m.room_id, (countsMap.get(m.room_id) ?? 0) + 1);
+      if (error) {
+        console.error(`[Rooms Joined] Error counting members for room ${roomId}:`, error);
+        return { roomId, count: 0 };
+      }
+
+      return { roomId, count: count || 0 };
     });
 
-    // Format the response
-    const joinedRooms = filteredRooms.map((room) => ({
-      ...room,
-      isMember: true,
-      participationStatus: "accepted" as const,
-      memberCount: countsMap.get(room.id) ?? 0,
-    }));
+    const memberCounts = await Promise.all(memberCountPromises);
+    
+    // Create a map of room_id to member count
+    const countsMap = new Map<string, number>();
+    memberCounts.forEach(({ roomId, count }) => {
+      countsMap.set(roomId, count);
+    });
 
-    console.log(`[Rooms Joined] Returning ${joinedRooms.length} joined rooms for user ${userId}`);
+    // Format the response with proper member counts
+    const joinedRooms = filteredRooms.map((room) => {
+      const memberCount = countsMap.get(room.id) || 0;
+      
+      console.log(`[Rooms Joined] Room ${room.name} (${room.id}): ${memberCount} members`);
+      
+      return {
+        ...room,
+        isMember: true,
+        participationStatus: "accepted" as const,
+        memberCount: memberCount,
+      };
+    });
+
+    console.log(`[Rooms Joined] Returning ${joinedRooms.length} joined rooms with member counts`);
 
     return NextResponse.json({ success: true, rooms: joinedRooms });
   } catch (err) {
