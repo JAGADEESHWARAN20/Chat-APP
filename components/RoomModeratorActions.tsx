@@ -18,7 +18,7 @@ import {
 import { Crown, MoreVertical, Shield, UserX } from 'lucide-react';
 import { useUser } from '@/lib/store/user';
 import { toast } from 'sonner';
-import { supabaseBrowser } from '@/lib/supabase/browser';
+import { getSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useRoomContext } from '@/lib/store/RoomContext';
 
 interface RoomMember {
@@ -49,7 +49,7 @@ export default function RoomModeratorActions({
     if (!selectedMember) return;
 
     try {
-      const supabase = supabaseBrowser();
+      const supabase = getSupabaseBrowserClient();
       const { error } = await supabase.rpc('transfer_room_ownership', {
         p_room_id: roomId,
         p_new_owner_id: selectedMember.id,
@@ -69,7 +69,7 @@ export default function RoomModeratorActions({
 
   const handleRemoveMember = async (memberId: string) => {
     try {
-      const supabase = supabaseBrowser();
+      const supabase = getSupabaseBrowserClient(); // ✅ FIX: Changed from supabaseBrowser()
       const { error } = await supabase.rpc('leave_room', {
         p_room_id: roomId,
         p_user_id: memberId
