@@ -1,5 +1,5 @@
 // lib/utils/roomMembership.ts
-import { supabaseBrowser } from "@/lib/supabase/browser";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export interface RoomMembershipStatus {
   isMember: boolean;
@@ -12,7 +12,7 @@ export async function checkUserRoomMembership(
   userId: string, 
   roomId: string
 ): Promise<RoomMembershipStatus> {
-  const supabase = supabaseBrowser();
+  const supabase = getSupabaseBrowserClient();
   
   try {
     // Check both tables simultaneously
@@ -59,7 +59,7 @@ export async function checkUserRoomMembership(
 }
 
 export async function getRoomMemberCount(roomId: string): Promise<number> {
-  const supabase = supabaseBrowser();
+  const supabase = getSupabaseBrowserClient();
   
   try {
     // Count unique users who are accepted members in either table
