@@ -408,7 +408,8 @@ function RoomAssistantComponent({
 
   // Context
   const { messages: allMessages } = useMessage();
-  const { state: roomState } = useRoomContext();
+  const roomContext = useRoomContext();
+  const roomState = { user: roomContext.user };
   const { theme: systemTheme, setTheme } = useTheme();
   const theme = systemTheme === "dark" ? "dark" : "light";
 

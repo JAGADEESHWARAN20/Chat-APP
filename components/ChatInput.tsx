@@ -1,9 +1,9 @@
-// components/ChatInput.tsx - FIXED VERSION
 "use client";
 
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import { useMessage } from "@/lib/store/messages";
-import { useRoomContext } from "@/lib/store/RoomContext";
+import { useSelectedRoom, useRoomActions } from "@/lib/store/RoomContext";
+import { useUser } from "@/lib/store/user";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -17,15 +17,16 @@ export default function ChatInput() {
   const [isSending, setIsSending] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const { addMessage, setOptimisticIds } = useMessage();
-  const { state } = useRoomContext();
   
-  // ✅ FIX: Remove selectedDirectChat since it doesn't exist in RoomState
-  const { selectedRoom, user } = state;
+  // ✅ FIXED: Use Zustand selectors
+  const selectedRoom = useSelectedRoom();
+  const { sendMessage } = useRoomActions();
+  const user = useUser((state) => state.user);
 
   // FIXED: Use handleTyping instead of start/stop directly
   const { handleTyping, stopTyping } = useTypingStatus();
 
-  // ✅ FIX: Update canSend and hasActiveChat to only check selectedRoom
+  // ✅ FIXED: Update canSend and hasActiveChat to only check selectedRoom
   const canSend = Boolean(text.trim()) && !isSending && selectedRoom && user;
   const hasActiveChat = Boolean(selectedRoom);
 
@@ -48,53 +49,46 @@ export default function ChatInput() {
   }, [stopTyping, hasActiveChat]);
 
   const handleSend = useCallback(async () => {
-  if (!canSend) return;
+    if (!canSend || !selectedRoom?.id) return;
 
-  setIsSending(true);
-  stopTyping(); // Stop typing when sending
+    setIsSending(true);
+    stopTyping(); // Stop typing when sending
 
-  const optimisticId = uuidv4();
-  const optimisticMessage: Imessage = {
-    id: optimisticId,
-    text: text.trim(),
-    sender_id: user!.id,
-    room_id: selectedRoom?.id || null,
-    direct_chat_id: null,
-    dm_thread_id: null,
-    created_at: new Date().toISOString(),
-    is_edited: false,
-    status: "sending",
-    profiles: {
-      id: user!.id,
-      display_name: user!.user_metadata?.display_name || user!.email || "Anonymous",
-      avatar_url: user!.user_metadata?.avatar_url || "",
-      username: user!.user_metadata?.username || "",
-      created_at: user!.created_at,
-      updated_at: null,
-      bio: null,
-    },
-  };
+    const optimisticId = uuidv4();
+    const optimisticMessage: Imessage = {
+      id: optimisticId,
+      text: text.trim(),
+      sender_id: user!.id,
+      room_id: selectedRoom.id,
+      direct_chat_id: null,
+      dm_thread_id: null,
+      created_at: new Date().toISOString(),
+      is_edited: false,
+      status: "sending",
+      profiles: {
+        id: user!.id,
+        display_name: user!.user_metadata?.display_name || user!.email || "Anonymous",
+        avatar_url: user!.user_metadata?.avatar_url || "",
+        username: user!.user_metadata?.username || "",
+        created_at: user!.created_at,
+        updated_at: null,
+        bio: null,
+      },
+    };
 
-  setOptimisticIds(optimisticId); // ✅ FIX: Changed from addOptimisticId to setOptimisticIds
-  addMessage(optimisticMessage);
+    setOptimisticIds(optimisticId);
+    addMessage(optimisticMessage);
     setText("");
     
     try {
-      const res = await fetch("/api/messages/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          roomId: selectedRoom?.id,
-          // ✅ FIX: Remove directChatId from the request body
-          text: text.trim(),
-        }),
-      });
-
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.error || "Failed to send message");
-
-      addMessage({ ...optimisticMessage, id: result.messageId || optimisticId, status: "sent" });
-      toast.success("Message sent");
+      // ✅ FIXED: Use the room store's sendMessage action
+      const success = await sendMessage(selectedRoom.id, text.trim());
+      
+      if (success) {
+        toast.success("Message sent");
+      } else {
+        throw new Error("Failed to send message");
+      }
     } catch (error) {
       console.error("[ChatInput] Send error:", error);
       toast.error("Failed to send message");
@@ -102,7 +96,7 @@ export default function ChatInput() {
       setIsSending(false);
       inputRef.current?.focus();
     }
- }, [canSend, text, user, selectedRoom, setOptimisticIds, addMessage, stopTyping]);
+  }, [canSend, text, user, selectedRoom, setOptimisticIds, addMessage, sendMessage, stopTyping]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {

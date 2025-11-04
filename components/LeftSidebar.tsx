@@ -2,7 +2,13 @@
 
 import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { debounce } from "lodash";
-import { RoomWithMembershipCount, useRoomContext } from "@/lib/store/RoomContext";
+import { 
+  useSelectedRoom, 
+  useAvailableRooms, 
+  useRoomActions,
+  useRoomLoading,
+  type Room 
+} from "@/lib/store/RoomContext";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Loader2, ChevronRight, MessageSquare, Users, Plus } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -16,8 +22,23 @@ interface LeftSidebarProps {
   onClose?: () => void;
 }
 
+// ✅ FIXED: Define the extended room type locally
+type RoomWithMembershipCount = Room & {
+  isMember?: boolean;
+  memberCount?: number;
+  onlineUsers?: number;
+  participationStatus?: 'pending' | 'accepted';
+  unreadCount?: number;
+  latestMessage?: string;
+};
+
 const LeftSidebar = React.memo<LeftSidebarProps>(({ user, isOpen, onClose }) => {
-  const { state, setSelectedRoom, createRoom, fetchAvailableRooms } = useRoomContext();
+  // ✅ FIXED: Use Zustand selectors
+  const selectedRoom = useSelectedRoom();
+  const availableRooms = useAvailableRooms();
+  const isLoading = useRoomLoading();
+  const { setSelectedRoom, createRoom, fetchRooms } = useRoomActions();
+  
   const [searchTerm, setSearchTerm] = useState("");
   const [showCreateRoom, setShowCreateRoom] = useState(false);
   const [newRoomName, setNewRoomName] = useState("");
@@ -26,20 +47,19 @@ const LeftSidebar = React.memo<LeftSidebarProps>(({ user, isOpen, onClose }) => 
   // ✅ FIXED: Better debounce implementation
   const debouncedSearchRef = useRef<NodeJS.Timeout | null>(null);
 
-  
-const joinedRooms = useMemo(() => {
-  const filtered = state.availableRooms.filter((room) => 
-    room.isMember && room.participationStatus === "accepted"
-  );
-  
-  console.log("[LeftSidebar] Joined rooms:", {
-    totalAvailable: state.availableRooms.length,
-    joinedCount: filtered.length,
-    joinedRooms: filtered.map(r => ({ id: r.id, name: r.name, isMember: r.isMember, status: r.participationStatus }))
-  });
-  
-  return filtered;
-}, [state.availableRooms]);
+  const joinedRooms = useMemo(() => {
+    const filtered = availableRooms.filter((room) => 
+      room.isMember && room.participationStatus === "accepted"
+    );
+    
+    console.log("[LeftSidebar] Joined rooms:", {
+      totalAvailable: availableRooms.length,
+      joinedCount: filtered.length,
+      joinedRooms: filtered.map(r => ({ id: r.id, name: r.name, isMember: r.isMember, status: r.participationStatus }))
+    });
+    
+    return filtered;
+  }, [availableRooms]);
 
   const filteredRooms = useMemo(() => {
     if (!searchTerm.trim()) return joinedRooms;
@@ -87,14 +107,14 @@ const joinedRooms = useMemo(() => {
       setNewRoomName("");
       setShowCreateRoom(false);
       toast.success("Room created!");
-      await fetchAvailableRooms();
+      await fetchRooms();
     } catch (error) {
       console.error("Failed to create room:", error);
       toast.error("Failed to create room");
     } finally {
       setIsCreating(false);
     }
-  }, [newRoomName, createRoom, fetchAvailableRooms]);
+  }, [newRoomName, createRoom, fetchRooms]);
 
   // ✅ FIXED: Stable render function with proper dependencies
   const renderItem = useCallback((item: RoomWithMembershipCount) => {
@@ -105,7 +125,7 @@ const joinedRooms = useMemo(() => {
       <div
         key={item.id}
         className={`flex items-start p-3 rounded-lg cursor-pointer transition-colors duration-200 ${
-          state.selectedRoom?.id === item.id
+          selectedRoom?.id === item.id
             ? "bg-primary/10 dark:bg-primary/20"
             : "hover:bg-muted"
         }`}
@@ -152,7 +172,7 @@ const joinedRooms = useMemo(() => {
         </div>
       </div>
     );
-  }, [state.selectedRoom?.id, setSelectedRoom]);
+  }, [selectedRoom?.id, setSelectedRoom]);
 
   // ✅ FIXED: Proper cleanup
   useEffect(() => {
@@ -202,7 +222,7 @@ const joinedRooms = useMemo(() => {
                 <Button 
                   variant="outline" 
                   size="icon"
-                  onClick={() => fetchAvailableRooms()}
+                  onClick={() => fetchRooms()}
                   title="Refresh rooms"
                 >
                   <Loader2 className="h-4 w-4" />
@@ -257,7 +277,7 @@ const joinedRooms = useMemo(() => {
         
         <TabsContent value="rooms" className="flex-1 overflow-hidden">
           <div className="space-y-2 overflow-y-auto max-h-[calc(100vh-200px)]">
-            {state.isLoading ? (
+            {isLoading ? (
               <div className="flex justify-center items-center h-32">
                 <Loader2 className="h-8 w-8 animate-spin" />
               </div>

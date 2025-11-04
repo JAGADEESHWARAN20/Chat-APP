@@ -1,39 +1,48 @@
 "use client";
-import { useRoomContext } from "@/lib/store/RoomContext";
-import { useMemo } from "react";
+import { useRoomStore } from '@/lib/store/RoomContext';
+import { useMemo } from 'react';
 
 /**
  * Optimized hook for room presence that uses RoomContext state
  * No duplication - just reads from the centralized state
  */
 export function useRoomPresence(roomId: string | null) {
-  const { state } = useRoomContext();
+  const roomPresence = useRoomStore((state) => state.roomPresence);
+  const availableRooms = useRoomStore((state) => state.availableRooms);
+  const selectedRoom = useRoomStore((state) => state.selectedRoom);
+  const isLoading = useRoomStore((state) => state.isLoading);
 
   const presenceData = useMemo(() => {
     if (!roomId) return { onlineCount: 0, onlineUsers: [] };
 
     // First check roomPresence map (most reliable)
-    const roomPresenceData = state.roomPresence[roomId];
+    const roomPresenceData = roomPresence[roomId];
     if (roomPresenceData) {
-      return { onlineCount: roomPresenceData.onlineUsers, onlineUsers: [] };
+      return { 
+        onlineCount: roomPresenceData.onlineUsers, 
+        onlineUsers: roomPresenceData.userIds || [] 
+      };
     }
 
     // Fallback to room's onlineUsers field
     let room = null;
-    if (state.selectedRoom?.id === roomId) {
-      room = state.selectedRoom;
+    if (selectedRoom?.id === roomId) {
+      room = selectedRoom;
     } else {
-      room = state.availableRooms.find((r) => r.id === roomId);
+      room = availableRooms.find((r: any) => r.id === roomId);
     }
 
-    return { onlineCount: room?.onlineUsers || 0, onlineUsers: [] };
-  }, [roomId, state.roomPresence, state.selectedRoom, state.availableRooms]);
+    return { 
+      onlineCount: room?.onlineUsers || 0, 
+      onlineUsers: [] 
+    };
+  }, [roomId, roomPresence, selectedRoom, availableRooms]);
 
   return {
     onlineCount: presenceData.onlineCount,
     onlineUsers: presenceData.onlineUsers,
-    isLoading: state.isLoading,
+    isLoading: isLoading,
     error: null,
-    refreshPresence: () => {}, // No-op
+    refreshPresence: () => {}, // No-op - handled by context
   };
 }

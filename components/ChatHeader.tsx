@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { useRoomContext } from "@/lib/store/RoomContext";
+import { useSelectedRoom, useAvailableRooms, useRoomActions } from "@/lib/store/RoomContext";
 import { useMessage, Imessage } from "@/lib/store/messages";
 import { useSearchHighlight } from "@/lib/store/SearchHighlightContext";
 import { RoomActiveUsers } from "@/components/reusable/RoomActiveUsers";
@@ -28,8 +28,12 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const [isSwitchRoomPopoverOpen, setIsSwitchRoomPopoverOpen] = useState(false);
   const [isMessageSearchOpen, setIsMessageSearchOpen] = useState(false);
   const [messageSearchQuery, setMessageSearchQuery] = useState("");
-  const { state, switchRoom } = useRoomContext();
-  const { selectedRoom, availableRooms } = state;
+  
+  // ✅ FIXED: Use Zustand selectors instead of context
+  const selectedRoom = useSelectedRoom();
+  const availableRooms = useAvailableRooms();
+  const { setSelectedRoom } = useRoomActions();
+
   const { setHighlightedMessageId, setSearchQuery } = useSearchHighlight();
 
   // FIXED: Stable member rooms filter
@@ -64,10 +68,13 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   // FIXED: Stable room switch handler
   const handleRoomSwitch = useCallback(
     async (newRoomId: string) => {
-      await switchRoom(newRoomId);
+      const roomToSwitch = availableRooms.find(room => room.id === newRoomId);
+      if (roomToSwitch) {
+        setSelectedRoom(roomToSwitch);
+      }
       setIsSwitchRoomPopoverOpen(false);
     },
-    [switchRoom]
+    [availableRooms, setSelectedRoom]
   );
 
   return (

@@ -1,5 +1,5 @@
+// components/ChatMessages.tsx
 "use client";
-
 import { Suspense, useEffect, useCallback } from "react";
 import ListMessages from "./ListMessages";
 import { useRoomContext } from "@/lib/store/RoomContext";
@@ -9,8 +9,7 @@ import { toast } from "sonner";
 import { Imessage } from "@/lib/store/messages";
 
 export default function ChatMessages() {
-  const { state } = useRoomContext();
-  const { selectedRoom } = state;
+  const { selectedRoom } = useRoomContext();
   const selectedDirectChat = useDirectChatStore((state) => state.selectedChat);
   const { setMessages, clearMessages, subscribeToRoom, unsubscribeFromRoom } = useMessage((state) => ({
     setMessages: state.setMessages,
@@ -18,17 +17,15 @@ export default function ChatMessages() {
     subscribeToRoom: state.subscribeToRoom,
     unsubscribeFromRoom: state.unsubscribeFromRoom,
   }));
-
+  
   const fetchMessages = useCallback(async () => {
     try {
       // Clear existing messages before fetching new ones
       clearMessages();
-
       if (selectedRoom) {
         const response = await fetch(`/api/messages/${selectedRoom.id}`);
         if (!response.ok) throw new Error("Failed to fetch messages");
         const { messages } = await response.json();
-
         const formattedMessages: Imessage[] = (messages && Array.isArray(messages) ? messages.map((msg: any) => ({
           id: msg.id,
           created_at: msg.created_at,
@@ -42,16 +39,13 @@ export default function ChatMessages() {
           users: msg.users || null,
           profiles: msg.profiles || null,
         })) : []) || [];
-
         setMessages(formattedMessages.reverse());
-
         // Subscribe to real-time updates for the room
         subscribeToRoom(selectedRoom.id);
       } else if (selectedDirectChat) {
         const response = await fetch(`/api/direct-messages/${selectedDirectChat.id}`);
         if (!response.ok) throw new Error("Failed to fetch direct messages");
         const { messages } = await response.json();
-
         const formattedMessages: Imessage[] = (messages && Array.isArray(messages) ? messages.map((msg: any) => ({
           id: msg.id,
           created_at: msg.created_at,
@@ -65,7 +59,6 @@ export default function ChatMessages() {
           users: msg.users || null,
           profiles: msg.profiles || null,
         })) : []) || [];
-
         setMessages(formattedMessages.reverse());
       }
     } catch (error) {
@@ -73,16 +66,15 @@ export default function ChatMessages() {
       toast.error("Failed to load messages");
     }
   }, [selectedRoom, selectedDirectChat, setMessages, clearMessages, subscribeToRoom]);
-
+  
   useEffect(() => {
     fetchMessages();
-
     // Cleanup subscription when component unmounts or room changes
     return () => {
       unsubscribeFromRoom();
     };
   }, [selectedRoom?.id, selectedDirectChat?.id, unsubscribeFromRoom,fetchMessages]);
-
+  
   return (
     <Suspense fallback={<div>Loading messages...</div>}>
       <ListMessages />

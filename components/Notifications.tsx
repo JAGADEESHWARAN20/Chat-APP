@@ -1,6 +1,5 @@
-// components/Notifications.tsx - Updated for your user store
+// components/Notifications.tsx
 "use client";
-
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useNotification, Inotification } from "@/lib/store/notifications";
 import { useUser } from "@/lib/store/user"; // Your actual user store
@@ -39,6 +38,7 @@ interface NotificationsProps {
 }
 
 type Room = Database["public"]["Tables"]["rooms"]["Row"];
+
 type RoomWithMembership = Room & {
   isMember: boolean;
   participationStatus: string | null;
@@ -55,18 +55,15 @@ const transformRoom = async (
     .eq("room_id", room.id)
     .eq("user_id", userId)
     .single();
-
   const { data: participation } = await supabase
     .from("room_participants")
     .select("status")
     .eq("room_id", room.id)
     .eq("user_id", userId)
     .single();
-
   let participationStatus: string | null = null;
   if (membership) participationStatus = membership.status;
   else if (participation) participationStatus = participation.status;
-
   return {
     ...room,
     isMember: membership?.status === "accepted" || participation?.status === "accepted",
@@ -86,47 +83,45 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
     removeNotification,
     isLoading,
   } = useNotification();
-  
+ 
   const { setSelectedRoom } = useRoomStore();
-  const { fetchAvailableRooms } = useRoomContext();
+  const { fetchRooms } = useRoomContext();
   const supabase = getSupabaseBrowserClient();
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
-
+  
   // Add comprehensive user logging
   useEffect(() => {
     console.log("👤 Notifications - Current user state:", {
-      currentUser: currentUser ? { 
-        id: currentUser.id, 
+      currentUser: currentUser ? {
+        id: currentUser.id,
         email: currentUser.email,
-        hasProfile: !!currentUser.profile 
+        hasProfile: !!currentUser.profile
       } : null,
       authUser: authUser ? { id: authUser.id, email: authUser.email } : null,
       profile: profile ? { id: profile.id, username: profile.username } : null,
       isOpen
     });
   }, [currentUser, authUser, profile, isOpen]);
-
+  
   // Get the actual user ID from your store structure
   const userId = currentUser?.id || authUser?.id;
-
+  
   // Initialize notifications only when user is available
   useEffect(() => {
     if (!userId) {
       console.log("❌ No user ID available, skipping notification init");
       return;
     }
-
     console.log("🔔 Initializing notifications for user:", userId);
-    
+   
     fetchNotifications(userId);
     subscribeToNotifications(userId);
-
     return () => {
       console.log("🧹 Cleaning up notifications");
       unsubscribeFromNotifications();
     };
   }, [userId, fetchNotifications, subscribeToNotifications, unsubscribeFromNotifications]);
-
+  
   // Refresh when panel opens and user is available
   useEffect(() => {
     if (isOpen && userId) {
@@ -134,7 +129,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
       fetchNotifications(userId);
     }
   }, [isOpen, userId, fetchNotifications]);
-
+  
   const handleAccept = async (id: string, roomId: string | null, type: string) => {
     if (!userId || !roomId) {
       console.log("❌ Missing data for accept:", { userId, roomId });
@@ -142,38 +137,38 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
       return;
     }
     if (loadingIds.has(id)) return;
-  
+ 
     setLoadingIds((prev) => new Set([...prev, id]));
-  
+ 
     try {
       removeNotification(id);
-  
+ 
       console.log("✅ Accepting notification:", { id, roomId, type, userId });
-  
+ 
       const res = await fetch(`/api/notifications/${id}/accept`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
-  
+ 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to accept notification");
-  
+ 
       await markAsRead(id);
-      await fetchAvailableRooms();
+      await fetchRooms();
       await fetchNotifications(userId);
-  
+ 
       if (["room_invite", "join_request"].includes(type)) {
         const { data: fetchedRoom, error } = await supabase
           .from("rooms")
           .select("*")
           .eq("id", roomId)
           .single();
-  
+ 
         if (!error && fetchedRoom) {
           const enrichedRoom = await transformRoom(fetchedRoom, userId, supabase);
           setSelectedRoom(enrichedRoom);
           toast.success(`Joined ${fetchedRoom.name} successfully!`);
-         
+        
         } else {
           toast.success("Request accepted successfully!");
         }
@@ -192,7 +187,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
       });
     }
   };
-  
+ 
   const handleReject = async (id: string, senderId: string | null, roomId: string | null) => {
     if (!userId || !senderId || !roomId) {
       console.log("❌ Missing data for reject:", { userId, senderId, roomId });
@@ -200,28 +195,26 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
       return;
     }
     if (loadingIds.has(id)) return;
-
     setLoadingIds((prev) => new Set([...prev, id]));
-
     try {
-      
+     
       console.log("❌ Rejecting notification:", { id, senderId, roomId, userId });
-      
+     
       const res = await fetch(`/api/notifications/reject`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          notification_id: id, 
-          sender_id: senderId, 
+        body: JSON.stringify({
+          notification_id: id,
+          sender_id: senderId,
           room_id: roomId,
           userId // Send userId for verification
         }),
       });
-      
+     
       if (!res.ok) {
         throw new Error((await res.json()).error || "Reject failed");
       }
-      
+     
       removeNotification(id);
       await markAsRead(id);
       await fetchNotifications(userId);
@@ -238,26 +231,21 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
       });
     }
   };
-
+  
   const handleDeleteNotification = useCallback(
     async (id: string) => {
       if (!userId || loadingIds.has(id)) return;
-
       setLoadingIds((prev) => new Set([...prev, id]));
-
       try {
         console.log("🗑️ Deleting notification:", { id, userId });
-
-        const res = await fetch(`/api/notifications/${id}`, { 
+        const res = await fetch(`/api/notifications/${id}`, {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ userId }) // Send userId for verification
         });
-
         if (!res.ok) {
           throw new Error((await res.json()).error || "Delete failed");
         }
-
         removeNotification(id);
         toast.success("Notification deleted.");
       } catch (err: any) {
@@ -273,7 +261,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
     },
     [userId, loadingIds, removeNotification]
   );
-
+  
   // Add click handler for notifications
   const handleNotificationClick = (notification: Inotification) => {
     console.log("🔔 Notification clicked by user:", {
@@ -283,60 +271,59 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
       notificationType: notification.type
     });
   };
-
+  
   const getNotificationDisplay = useCallback((n: Inotification) => {
     const sender = n.users?.display_name || n.users?.username || "Someone";
     const room = n.rooms?.name || "a room";
-
     switch (n.type) {
       case "room_invite":
-        return { 
-          icon: <UserPlus className="h-4 w-4 text-blue-500" />, 
-          text: `${sender} invited you to join ${room}` 
+        return {
+          icon: <UserPlus className="h-4 w-4 text-blue-500" />,
+          text: `${sender} invited you to join ${room}`
         };
       case "join_request":
-        return { 
-          icon: <Mail className="h-4 w-4 text-purple-500" />, 
-          text: `${sender} requested to join ${room}` 
+        return {
+          icon: <Mail className="h-4 w-4 text-purple-500" />,
+          text: `${sender} requested to join ${room}`
         };
       case "user_joined":
-        return { 
-          icon: <UserCheck className="h-4 w-4 text-green-500" />, 
-          text: n.message || `${sender} joined ${room}` 
+        return {
+          icon: <UserCheck className="h-4 w-4 text-green-500" />,
+          text: n.message || `${sender} joined ${room}`
         };
       case "message":
-        return { 
-          icon: <Mail className="h-4 w-4 text-green-500" />, 
-          text: n.message || `New message from ${sender} in ${room}` 
+        return {
+          icon: <Mail className="h-4 w-4 text-green-500" />,
+          text: n.message || `New message from ${sender} in ${room}`
         };
       case "join_request_accepted":
-        return { 
-          icon: <UserCheck className="h-4 w-4 text-green-600" />, 
-          text: n.message || `Your request to join ${room} was accepted` 
+        return {
+          icon: <UserCheck className="h-4 w-4 text-green-600" />,
+          text: n.message || `Your request to join ${room} was accepted`
         };
       case "join_request_rejected":
-        return { 
-          icon: <UserX className="h-4 w-4 text-red-600" />, 
-          text: n.message || `Your request to join ${room} was rejected` 
+        return {
+          icon: <UserX className="h-4 w-4 text-red-600" />,
+          text: n.message || `Your request to join ${room} was rejected`
         };
       case "room_left":
-        return { 
-          icon: <LogOut className="h-4 w-4 text-gray-500" />, 
-          text: n.message || `${sender} left ${room}` 
+        return {
+          icon: <LogOut className="h-4 w-4 text-gray-500" />,
+          text: n.message || `${sender} left ${room}`
         };
       default:
-        return { 
-          icon: <Mail className="h-4 w-4 text-gray-400" />, 
-          text: n.message || "New notification" 
+        return {
+          icon: <Mail className="h-4 w-4 text-gray-400" />,
+          text: n.message || "New notification"
         };
     }
   }, []);
-
+  
   const shouldShowActions = useCallback((n: Inotification) => {
     const actionableTypes = ['join_request', 'room_invite'];
     return actionableTypes.includes(n.type) && n.status !== "read";
   }, []);
-
+  
   // Memoize sorted notifications
   const sortedNotifications = useMemo(() => {
     return [...notifications].sort((a, b) => {
@@ -345,14 +332,14 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
       return dateB - dateA;
     });
   }, [notifications]);
-
+  
   // Show sign in prompt if no user
   if (!userId) {
     return (
       <Sheet open={isOpen} onOpenChange={(open) => {
         if (!open) onClose();
       }}>
-      
+     
         <SheetContent side="right" className="p-0 flex flex-col h-full w-full sm:max-w-sm">
           <SheetHeader className="p-4 border-b">
             <div className="flex items-center justify-between">
@@ -381,14 +368,14 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
       </Sheet>
     );
   }
-
+  
   console.log("🎨 Rendering Notifications:", {
     count: notifications.length,
     isOpen,
     userId,
     isLoading
   });
-
+  
   return (
     <Sheet open={isOpen} onOpenChange={onClose}>
       <SheetContent
@@ -405,7 +392,6 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
             </div>
           </div>
         </SheetHeader>
-
         <div className="flex-1 overflow-y-auto py-2">
           {isLoading && notifications.length === 0 ? (
             <div className="flex items-center justify-center h-full">
@@ -433,7 +419,6 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
               {sortedNotifications.map((n) => {
                 const { icon, text } = getNotificationDisplay(n);
                 const isLoadingItem = loadingIds.has(n.id);
-
                 return (
                   <Swipeable
                     key={n.id}
@@ -452,7 +437,6 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
                           {(n.users?.username || "U")[0]?.toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
-
                       <div className="flex-1 space-y-1 min-w-0">
                         <div className="flex items-center gap-2 text-sm">
                           {icon}
@@ -462,7 +446,6 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
                           {new Date(n.created_at || "").toLocaleString()}
                         </p>
                       </div>
-
                       {shouldShowActions(n) ? (
                         <div className="flex space-x-2 flex-shrink-0">
                           <Button
@@ -502,7 +485,7 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
                           </DropdownMenuContent>
                         </DropdownMenu>
                       )}
-                      
+                     
                       {isLoadingItem && (
                         <div className="absolute inset-0 bg-black/20 rounded flex items-center justify-center">
                           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>

@@ -1,15 +1,14 @@
-// components/TypingIndicator.tsx
 "use client";
 
 import React from "react";
-import { useRoomContext } from "@/lib/store/RoomContext";
+import { useSelectedRoom, useTypingUsers, useTypingDisplayText } from "@/lib/store/RoomContext";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function TypingIndicator() {
-  const { state } = useRoomContext();
-  const { typingDisplayText, typingUsers, selectedRoom } = state;
+  const selectedRoom = useSelectedRoom();
+  const typingUsers = useTypingUsers();
+  const typingDisplayText = useTypingDisplayText();
 
-  // Only show if we have an active room and typing users
   const shouldShow = selectedRoom?.id && typingUsers.length > 0 && typingDisplayText;
 
   return (

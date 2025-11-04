@@ -1,4 +1,4 @@
-// lib/hooks/useAuthSync.ts
+// hooks/useAuthSync.tsx
 "use client";
 import { useEffect } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -9,20 +9,49 @@ export function useAuthSync() {
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
+    let mounted = true;
 
     const syncUser = async () => {
-      const { data } = await supabase.auth.getUser();
-      if (data?.user) await setUser(data.user);
-      else clearUser();
+      try {
+        const { data, error } = await supabase.auth.getUser();
+        if (error) {
+          console.error("Auth sync error:", error);
+          return;
+        }
+        
+        if (mounted) {
+          if (data?.user) {
+            await setUser(data.user);
+          } else {
+            clearUser();
+          }
+        }
+      } catch (error) {
+        console.error("Auth sync failed:", error);
+        if (mounted) clearUser();
+      }
     };
 
     syncUser();
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) setUser(session.user);
-      else clearUser();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!mounted) return;
+      
+      try {
+        if (session?.user) {
+          await setUser(session.user);
+        } else {
+          clearUser();
+        }
+      } catch (error) {
+        console.error("Auth state change error:", error);
+        clearUser();
+      }
     });
 
-    return () => sub.subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, [setUser, clearUser]);
 }

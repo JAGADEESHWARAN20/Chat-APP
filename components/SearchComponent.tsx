@@ -7,7 +7,7 @@ import { Settings, UserIcon, LockIcon, LogOut, Users } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { toast } from "sonner";
-import { useRoomContext, RoomWithMembershipCount } from "@/lib/store/RoomContext";
+import { useAvailableRooms, useRoomActions, useRoomPresence, type Room, fetchAllUsers } from "@/lib/store/RoomContext";
 import { useDebounce } from "use-debounce";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -17,6 +17,14 @@ type PartialProfile = {
   display_name: string | null;
   avatar_url: string | null;
   created_at: string | null;
+};
+
+// ✅ FIXED: Define the extended room type locally
+type RoomWithMembershipCount = Room & {
+  isMember?: boolean;
+  memberCount?: number;
+  onlineUsers?: number;
+  participationStatus?: 'pending' | 'accepted';
 };
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -36,8 +44,10 @@ const SearchComponent = memo(function SearchComponent({
   const isMounted = useRef(true);
   const [debouncedSearchQuery] = useDebounce(searchQuery, 500);
   
-  const { state, joinRoom, leaveRoom, fetchAllUsers, getRoomPresence } = useRoomContext();
-  const { availableRooms, isLoading: roomsLoading } = state;
+  // ✅ FIXED: Use Zustand selectors
+  const availableRooms = useAvailableRooms();
+  const { joinRoom, leaveRoom } = useRoomActions();
+  const roomPresence = useRoomPresence(); // ✅ FIXED: This is an object, not a function
 
   // ✅ FIXED: Stable mount state management
   useEffect(() => {
@@ -65,13 +75,13 @@ const SearchComponent = memo(function SearchComponent({
     
     setIsLoading(true);
     try {
-      const users = await fetchAllUsers();
+      const users = await fetchAllUsers(); // ✅ FIXED: Now imported directly
       if (!isMounted.current) return;
 
       if (debouncedSearchQuery.trim()) {
         const q = debouncedSearchQuery.toLowerCase();
         const filteredUsers = users.filter(
-          (u) =>
+          (u: PartialProfile) =>
             u.username?.toLowerCase().includes(q) ||
             u.display_name?.toLowerCase().includes(q)
         );
@@ -89,7 +99,7 @@ const SearchComponent = memo(function SearchComponent({
     } finally {
       if (isMounted.current) setIsLoading(false);
     }
-  }, [searchType, user?.id, debouncedSearchQuery, fetchAllUsers]);
+  }, [searchType, user?.id, debouncedSearchQuery]); // ✅ FIXED: Removed fetchAllUsers from deps
 
   // ✅ FIXED: Optimized effect for user search
   useEffect(() => {
@@ -102,7 +112,7 @@ const SearchComponent = memo(function SearchComponent({
 
   // ✅ FIXED: Stable room results with proper filtering
   const roomResults = useMemo(() => {
-    if (roomsLoading && availableRooms.length === 0) {
+    if (availableRooms.length === 0) {
       return [];
     }
     
@@ -114,7 +124,7 @@ const SearchComponent = memo(function SearchComponent({
     return availableRooms.filter((room) => 
       room.id && room.name.toLowerCase().includes(q)
     );
-  }, [availableRooms, debouncedSearchQuery, roomsLoading]);
+  }, [availableRooms, debouncedSearchQuery]);
 
   // ✅ FIXED: Stable join room handler with proper validation
   const handleJoinRoom = useCallback(
@@ -145,7 +155,9 @@ const SearchComponent = memo(function SearchComponent({
   const renderRoomSearchResult = useCallback((result: RoomWithMembershipCount) => {
     if (!result.id) return null;
 
-    const { onlineUsers } = getRoomPresence(result.id);
+    // ✅ FIXED: Access presence directly from the object
+    const presence = roomPresence[result.id];
+    const onlineCount = presence?.onlineUsers ?? 0;
     const memberCount = result.memberCount ?? 0;
     
     return (
@@ -184,11 +196,11 @@ const SearchComponent = memo(function SearchComponent({
                 </div>
                 
                 {/* Online Users Badge */}
-                {onlineUsers > 0 && (
+                {onlineCount > 0 && (
                   <div className="flex items-center gap-1 text-xs px-2.5 py-1.5 bg-green-500/10 border border-green-500/30 rounded-full">
                     <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
                     <span className="font-semibold text-green-600 dark:text-green-400">
-                      {onlineUsers}
+                      {onlineCount}
                     </span>
                     <span className="text-green-600/70 dark:text-green-400/70">
                       online
@@ -249,12 +261,12 @@ const SearchComponent = memo(function SearchComponent({
         </div>
       </div>
     );
-  }, [router, user, handleJoinRoom, leaveRoom, getRoomPresence]);
+  }, [router, user, handleJoinRoom, leaveRoom, roomPresence]); // ✅ FIXED: Changed getRoomPresence to roomPresence
 
   // ✅ FIXED: Optimized loading state calculation
   const showLoading = useMemo(() => 
-    isLoading || (searchType === "rooms" && roomsLoading),
-    [isLoading, searchType, roomsLoading]
+    isLoading,
+    [isLoading]
   );
 
   // ✅ FIXED: Memoized tab change handler

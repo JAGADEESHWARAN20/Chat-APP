@@ -1,111 +1,74 @@
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
-import { cookies } from "next/headers";
-import { NextResponse } from "next/server";
-import { Database } from "@/lib/types/supabase";
+import { NextRequest } from "next/server";
+import { withAuth, successResponse, errorResponse } from "@/lib/api-utils";
 
-export const dynamic = 'force-dynamic';
+export async function GET(req: NextRequest) {
+  return withAuth(async ({ supabase, user }) => {
+    try {
+      const { searchParams } = new URL(req.url);
+      const searchQuery = searchParams.get("q")?.toLowerCase() || "";
 
-export async function GET(req: Request) {
-  try {
-    const supabase = createRouteHandlerClient<Database>({ cookies });
-
-    // Get session
-    const {
-      data: { session },
-      error: sessionError,
-    } = await supabase.auth.getSession();
-
-    if (sessionError || !session?.user) {
-      console.error("[Rooms Joined] Auth failed:", sessionError?.message);
-      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
-    }
-
-    const userId = session.user.id;
-
-    // Get search query from URL
-    const { searchParams } = new URL(req.url);
-    const searchQuery = searchParams.get("q")?.toLowerCase() || "";
-
-    console.log(`[Rooms Joined] Fetching joined rooms for user: ${userId}`);
-
-    // Get all rooms where user is an accepted member with proper room data
-    const { data: memberships, error: membershipError } = await supabase
-      .from("room_members")
-      .select(`
-        room_id,
-        status,
-        rooms!inner (
-          id, name, is_private, created_by, created_at
-        )
-      `)
-      .eq("user_id", userId)
-      .eq("status", "accepted");
-
-    if (membershipError) {
-      console.error("[Rooms Joined] Memberships fetch error:", membershipError.message);
-      return NextResponse.json({ error: "Failed to fetch memberships" }, { status: 500 });
-    }
-
-    if (!memberships || memberships.length === 0) {
-      console.log("[Rooms Joined] No joined rooms found for user");
-      return NextResponse.json({ success: true, rooms: [] });
-    }
-
-    // Extract rooms from memberships
-    const rooms = memberships.map(m => m.rooms);
-
-    // Filter by search query if provided
-    const filteredRooms = searchQuery 
-      ? rooms.filter(room => room.name.toLowerCase().includes(searchQuery))
-      : rooms;
-
-    console.log(`[Rooms Joined] Found ${filteredRooms.length} joined rooms after filtering`);
-
-    const roomIds = filteredRooms.map(room => room.id);
-
-    // Fetch member counts for these rooms using count API for better performance
-    const memberCountPromises = roomIds.map(async (roomId) => {
-      const { count, error } = await supabase
+      // Get all rooms where user is an accepted member
+      const { data: memberships, error: membershipError } = await supabase
         .from("room_members")
-        .select("user_id", { count: 'exact', head: true })
-        .eq("room_id", roomId)
+        .select(`
+          room_id,
+          status,
+          rooms!inner (
+            id, name, is_private, created_by, created_at
+          )
+        `)
+        .eq("user_id", user.id)
         .eq("status", "accepted");
 
-      if (error) {
-        console.error(`[Rooms Joined] Error counting members for room ${roomId}:`, error);
-        return { roomId, count: 0 };
+      if (membershipError) {
+        console.error("[Rooms Joined] Memberships fetch error:", membershipError);
+        return errorResponse("Failed to fetch memberships", "FETCH_ERROR", 500);
       }
 
-      return { roomId, count: count || 0 };
-    });
+      if (!memberships || memberships.length === 0) {
+        return successResponse({ rooms: [] });
+      }
 
-    const memberCounts = await Promise.all(memberCountPromises);
-    
-    // Create a map of room_id to member count
-    const countsMap = new Map<string, number>();
-    memberCounts.forEach(({ roomId, count }) => {
-      countsMap.set(roomId, count);
-    });
+      // Extract rooms from memberships
+      const rooms = memberships.map(m => m.rooms);
 
-    // Format the response with proper member counts
-    const joinedRooms = filteredRooms.map((room) => {
-      const memberCount = countsMap.get(room.id) || 0;
-      
-      console.log(`[Rooms Joined] Room ${room.name} (${room.id}): ${memberCount} members`);
-      
-      return {
+      // Filter by search query if provided
+      const filteredRooms = searchQuery 
+        ? rooms.filter(room => room.name.toLowerCase().includes(searchQuery))
+        : rooms;
+
+      const roomIds = filteredRooms.map(room => room.id);
+
+      // Fetch member counts efficiently
+      const { data: memberCounts, error: countError } = await supabase
+        .from("room_members")
+        .select("room_id")
+        .in("room_id", roomIds)
+        .eq("status", "accepted");
+
+      if (countError) {
+        console.error("[Rooms Joined] Member counts error:", countError);
+        // Continue with zero counts
+      }
+
+      // Create count map
+      const countsMap = new Map<string, number>();
+      memberCounts?.forEach(({ room_id }) => {
+        countsMap.set(room_id, (countsMap.get(room_id) || 0) + 1);
+      });
+
+      // Format response
+      const joinedRooms = filteredRooms.map((room) => ({
         ...room,
         isMember: true,
         participationStatus: "accepted" as const,
-        memberCount: memberCount,
-      };
-    });
+        memberCount: countsMap.get(room.id) || 0,
+      }));
 
-    console.log(`[Rooms Joined] Returning ${joinedRooms.length} joined rooms with member counts`);
-
-    return NextResponse.json({ success: true, rooms: joinedRooms });
-  } catch (err) {
-    console.error("[Rooms Joined] Unexpected error:", err);
-    return NextResponse.json({ error: "Unexpected error occurred" }, { status: 500 });
-  }
+      return successResponse({ rooms: joinedRooms });
+    } catch (error) {
+      console.error("[Rooms Joined] Unexpected error:", error);
+      return errorResponse("Unexpected error occurred", "INTERNAL_ERROR", 500);
+    }
+  });
 }

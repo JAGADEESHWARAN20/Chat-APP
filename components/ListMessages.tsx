@@ -7,7 +7,7 @@ import { DeleteAlert, EditAlert } from "./MessasgeActions";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { Database } from "@/lib/types/supabase";
-import { useRoomContext } from "@/lib/store/RoomContext";
+import { useSelectedRoom } from "@/lib/store/RoomContext";
 import TypingIndicator from "./TypingIndicator";
 import { useUser } from "@/lib/store/user";
 
@@ -20,10 +20,9 @@ export default function ListMessages() {
   const [notification, setNotification] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
 
-  const { state } = useRoomContext();
-  const { selectedRoom, user: contextUser } = state;
-  const storeUser = useUser((state) => state.user);
-  const user = contextUser ?? storeUser;
+  // ✅ FIXED: Use Zustand selector
+  const selectedRoom = useSelectedRoom();
+  const user = useUser((state) => state.user);
 
   const {
     messages,

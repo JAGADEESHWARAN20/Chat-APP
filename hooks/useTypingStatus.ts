@@ -2,23 +2,30 @@
 import { useEffect, useCallback, useRef } from "react";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import type { Database } from "@/lib/types/supabase";
-import { useRoomContext } from "@/lib/store/RoomContext";
+import { useRoomActions, useSelectedRoom, useTypingUsers, useTypingDisplayText } from "@/lib/store/RoomContext";
+
+// Add missing import for useRoomStore
+import { useRoomStore } from '@/lib/store/RoomContext';
+interface TypingUser {
+  user_id: string;
+  is_typing: boolean;
+  display_name?: string;
+}
 
 export function useTypingStatus() {
   const supabase = createClientComponentClient<Database>();
-  const { 
-    state, 
-    updateTypingUsers, 
-    updateTypingText // ✅ NOW AVAILABLE
-  } = useRoomContext();
+  const { updateTypingUsers, updateTypingText } = useRoomActions();
+  const selectedRoom = useSelectedRoom();
+  const typingUsers = useTypingUsers();
+  const typingDisplayText = useTypingDisplayText();
   
-  const { selectedRoom, typingUsers, user } = state;
   const roomId = selectedRoom?.id ?? null;
+  const user = useRoomStore((state) => state.user);
   const currentUserId = user?.id ?? null;
 
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const typingUsersRef = useRef(typingUsers);
+  const typingUsersRef = useRef<TypingUser[]>(typingUsers);
 
   // Keep ref updated
   useEffect(() => {
@@ -30,14 +37,17 @@ export function useTypingStatus() {
   const handleTyping = useCallback(() => {
     if (!canOperate || !channelRef.current) return;
 
+    // Send typing start event
     channelRef.current.send({
       type: "broadcast",
       event: "typing_start",
       payload: { user_id: currentUserId!, is_typing: true },
     });
 
+    // Clear existing timeout
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
+    // Set timeout to stop typing
     timeoutRef.current = setTimeout(() => {
       if (channelRef.current) {
         channelRef.current.send({
@@ -64,6 +74,29 @@ export function useTypingStatus() {
     }
   }, [canOperate, currentUserId]);
 
+  // Generate typing display text
+  useEffect(() => {
+    const otherTypingUsers = typingUsers.filter(u => u.user_id !== currentUserId);
+    
+    if (otherTypingUsers.length === 0) {
+      updateTypingText("");
+      return;
+    }
+
+    const names = otherTypingUsers.map(u => u.display_name || `User ${u.user_id.slice(-4)}`);
+    
+    let displayText = "";
+    if (names.length === 1) {
+      displayText = `${names[0]} is typing...`;
+    } else if (names.length === 2) {
+      displayText = `${names[0]} and ${names[1]} are typing...`;
+    } else {
+      displayText = `${names.length} people are typing...`;
+    }
+    
+    updateTypingText(displayText);
+  }, [typingUsers, currentUserId, updateTypingText]);
+
   // Real-time typing subscription
   useEffect(() => {
     if (!canOperate) {
@@ -71,7 +104,11 @@ export function useTypingStatus() {
       return;
     }
 
-    const channel = supabase.channel(`room-typing-${roomId}`);
+    const channel = supabase.channel(`room-typing-${roomId}`, {
+      config: {
+        broadcast: { self: false } // Don't receive our own events
+      }
+    });
 
     channel
       .on("broadcast", { event: "typing_start" }, ({ payload }) => {
@@ -81,12 +118,15 @@ export function useTypingStatus() {
         const existingIndex = updatedUsers.findIndex(u => u.user_id === payload.user_id);
 
         if (existingIndex >= 0) {
-          updatedUsers[existingIndex] = { ...updatedUsers[existingIndex], is_typing: true };
+          updatedUsers[existingIndex] = { 
+            ...updatedUsers[existingIndex], 
+            is_typing: true 
+          };
         } else {
           updatedUsers.push({
             user_id: payload.user_id,
             is_typing: true,
-            display_name: `User ${payload.user_id?.slice(-4)}`, // Fallback name
+            display_name: `User ${payload.user_id?.slice(-4)}`,
           });
         }
 
@@ -97,7 +137,11 @@ export function useTypingStatus() {
           typingUsersRef.current.filter(u => u.user_id !== payload.user_id)
         );
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log(`✅ Typing status subscribed to room ${roomId}`);
+        }
+      });
 
     channelRef.current = channel;
 
@@ -105,6 +149,7 @@ export function useTypingStatus() {
       stopTyping();
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
       }
       updateTypingUsers([]);
     };
@@ -112,7 +157,7 @@ export function useTypingStatus() {
 
   return {
     typingUsers,
-    typingDisplayText: state.typingDisplayText,
+    typingDisplayText,
     handleTyping,
     stopTyping,
     canOperate,
