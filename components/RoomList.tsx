@@ -134,10 +134,10 @@ export default function RoomList() {
     }
   };
 
-  const canJoinRoom = (room: IRoom) => {
-    const participation = userParticipations.find((p) => p.room_id === room.id);
-    return !participation || participation.status === "rejected";
-  };
+  // const canJoinRoom = (room: IRoom) => {
+  //   const participation = userParticipations.find((p) => p.room_id === room.id);
+  //   return !participation || participation.status === "rejected";
+  // };
 
   const fetchParticipations = useCallback(async () => {
     if (!user) return;

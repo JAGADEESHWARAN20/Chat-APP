@@ -2,7 +2,7 @@
 
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { Button } from "./ui/button";
-import { LogOut, Menu, ChevronsUpDown, User, Settings } from "lucide-react";
+import { LogOut, Menu,  User, Settings } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { User as SupabaseUser } from "@supabase/supabase-js";
 import { Database } from "@/database.types";

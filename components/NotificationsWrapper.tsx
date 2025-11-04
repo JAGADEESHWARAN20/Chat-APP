@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 export default function NotificationsWrapper() {
     const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
     const { user: currentUser, authUser } = useUser(); // Use your store structure
-    const { unreadCount, fetchNotifications, hasError, notifications } = useNotification();
+    const { unreadCount, fetchNotifications, hasError } = useNotification();
     
     // Initialize notification handler
     useNotificationHandler();

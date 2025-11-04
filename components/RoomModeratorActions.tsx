@@ -15,7 +15,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger 
 } from '@/components/ui/dropdown-menu';
-import { Crown, MoreVertical, Shield, UserX } from 'lucide-react';
+import { Crown, MoreVertical, Shield } from 'lucide-react';
 import { useUser } from '@/lib/store/user';
 import { toast } from 'sonner';
 import { getSupabaseBrowserClient } from '@/lib/supabase/client';
@@ -67,22 +67,22 @@ export default function RoomModeratorActions({
     }
   };
 
-  const handleRemoveMember = async (memberId: string) => {
-    try {
-      const supabase = getSupabaseBrowserClient();
-      const { error } = await supabase.rpc('leave_room', {
-        p_room_id: roomId,
-        p_user_id: memberId
-      });
+  // const handleRemoveMember = async (memberId: string) => {
+  //   try {
+  //     const supabase = getSupabaseBrowserClient();
+  //     const { error } = await supabase.rpc('leave_room', {
+  //       p_room_id: roomId,
+  //       p_user_id: memberId
+  //     });
 
-      if (error) throw error;
+  //     if (error) throw error;
 
-      toast.success('Member removed from room');
-    } catch (error) {
-      toast.error('Failed to remove member');
-      console.error('Error:', error);
-    }
-  };
+  //     toast.success('Member removed from room');
+  //   } catch (error) {
+  //     toast.error('Failed to remove member');
+  //     console.error('Error:', error);
+  //   }
+  // };
 
   if (!isOwner) return null;
 

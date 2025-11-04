@@ -76,7 +76,7 @@ export default function ThemeTransitionWrapper({
 
   const triggerTransition = (x: number, y: number, nextTheme: string) => {
     setTransitionState({ active: true, nextTheme });
-
+console.log(x,y)
     setTimeout(() => {
       setTransitionState(prev => ({ ...prev, active: false }));
       setTheme(nextTheme);

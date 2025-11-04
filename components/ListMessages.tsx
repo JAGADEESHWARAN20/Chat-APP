@@ -12,7 +12,7 @@ import TypingIndicator from "./TypingIndicator";
 import { useUser } from "@/lib/store/user";
 
 type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
-type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
+// type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 
 export default function ListMessages() {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -23,7 +23,7 @@ export default function ListMessages() {
   // ✅ FIXED: Use Zustand selector
   const selectedRoom = useSelectedRoom();
   const user = useUser((state) => state.user);
-
+  console.log(user);
   const {
     messages,
     setMessages,

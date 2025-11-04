@@ -2,7 +2,7 @@
 "use client";
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useNotification, Inotification } from "@/lib/store/notifications";
-import { useUser } from "@/lib/store/user"; // Your actual user store
+import { useUser } from "@/lib/store/user";
 import { useRoomStore } from "@/lib/store/roomstore";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
@@ -32,17 +32,17 @@ import {
 } from "./ui/dropdown-menu";
 import { useRoomContext } from "@/lib/store/RoomContext";
 
-interface NotificationsProps {
-  isOpen: boolean;
-  onClose: () => void;
-}
-
 type Room = Database["public"]["Tables"]["rooms"]["Row"];
 
 type RoomWithMembership = Room & {
   isMember: boolean;
   participationStatus: string | null;
 };
+
+interface NotificationsProps {
+  isOpen?: boolean;
+  onClose?: () => void;
+}
 
 const transformRoom = async (
   room: Room,
@@ -71,8 +71,25 @@ const transformRoom = async (
   };
 };
 
-export default function Notifications({ isOpen, onClose }: NotificationsProps) {
-  // Use your actual user store structure
+// ✅ FIXED: Properly handle internal and external state
+export default function Notifications({ 
+  isOpen: externalIsOpen, 
+  onClose: externalOnClose 
+}: NotificationsProps = {}) {
+  const [internalIsOpen, setInternalIsOpen] = useState(false);
+  
+  // Use external props if provided, otherwise use internal state
+  const isOpen = externalIsOpen ?? internalIsOpen;
+  
+  // ✅ FIXED: Create proper close handler
+  const handleClose = useCallback(() => {
+    if (externalOnClose) {
+      externalOnClose();
+    } else {
+      setInternalIsOpen(false);
+    }
+  }, [externalOnClose]);
+
   const { user: currentUser, authUser, profile } = useUser();
   const {
     notifications,
@@ -336,15 +353,14 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
   // Show sign in prompt if no user
   if (!userId) {
     return (
-      <Sheet open={isOpen} onOpenChange={(open) => {
-        if (!open) onClose();
-      }}>
-     
+      // ✅ FIXED: Use handleClose instead of undefined setIsOpen
+      <Sheet open={isOpen} onOpenChange={handleClose}>
         <SheetContent side="right" className="p-0 flex flex-col h-full w-full sm:max-w-sm">
           <SheetHeader className="p-4 border-b">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Button variant="ghost" size="icon" onClick={onClose}>
+                {/* ✅ FIXED: Use handleClose */}
+                <Button variant="ghost" size="icon" onClick={handleClose}>
                   <ArrowRight className="h-5 w-5" />
                 </Button>
                 <SheetTitle>Notifications</SheetTitle>
@@ -377,7 +393,8 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
   });
   
   return (
-    <Sheet open={isOpen} onOpenChange={onClose}>
+    // ✅ FIXED: Use handleClose for onOpenChange
+    <Sheet open={isOpen} onOpenChange={handleClose}>
       <SheetContent
         side="right"
         className="p-0 flex flex-col h-full w-full sm:max-w-sm"
@@ -385,7 +402,8 @@ export default function Notifications({ isOpen, onClose }: NotificationsProps) {
         <SheetHeader className="p-4 border-b">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Button variant="ghost" size="icon" onClick={onClose}>
+              {/* ✅ FIXED: Use handleClose */}
+              <Button variant="ghost" size="icon" onClick={handleClose}>
                 <ArrowRight className="h-5 w-5" />
               </Button>
               <SheetTitle>Notifications ({notifications.length})</SheetTitle>
