@@ -4,6 +4,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useUser } from "@/lib/store/user";
 import { toast } from "sonner";
 import type { RealtimeChannel, RealtimePresenceState } from "@supabase/supabase-js";
+import { useRoomStore } from "@/lib/store/RoomContext";
 
 // Enhanced Type Definitions
 interface PresenceData {
@@ -154,7 +155,17 @@ export function usePresence({
   const handlePresenceEvent = useCallback((roomId: string) => {
     updateRoomPresence(roomId);
     cleanupStalePresence(roomId);
-  }, [updateRoomPresence, cleanupStalePresence]);
+  
+    // ✅ Push presence info to Zustand store for UI
+    const count = onlineCounts.get(roomId) || 0;
+    const users = onlineUsers.get(roomId) || [];
+  
+    useRoomStore.getState().updateRoomPresence(roomId, {
+      onlineUsers: count,
+      userIds: users.map(u => u.user_id),
+      lastUpdated: new Date().toISOString(),
+    });
+  }, [updateRoomPresence, cleanupStalePresence, onlineCounts, onlineUsers]);
 
   // ✅ FIX 2: Add missing user dependency to subscribeToRoom
   const subscribeToRoom = useCallback(async (roomId: string) => {

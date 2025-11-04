@@ -22,16 +22,19 @@ export async function GET(
       }
 
       // Check if user has access to the room
-      const { data: roomAccess, error: accessError } = await supabase
-        .from("room_participants")
-        .select("user_id")
-        .eq("room_id", roomId)
-        .eq("user_id", user.id)
-        .single();
+    // Check membership (public + private)
+const { data: member, error: memberErr } = await supabase
+.from("room_members")
+.select("user_id, status")
+.eq("room_id", roomId)
+.eq("user_id", user.id)
+.eq("status", "accepted")
+.single();
 
-      if (accessError || !roomAccess) {
-        return errorResponse("Access denied", "ACCESS_DENIED", 403);
-      }
+if (memberErr || !member) {
+return errorResponse("Access denied", "ACCESS_DENIED", 403);
+}
+
 
       // Fetch messages with related profiles
       const { data: messages, error: fetchError } = await supabase

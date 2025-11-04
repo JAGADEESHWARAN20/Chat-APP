@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import { useUser } from "@/lib/store/user"; // add at top
 // import { debounce } from "lodash";
 import { 
   useSelectedRoom, 
@@ -26,6 +27,7 @@ interface LeftSidebarProps {
 type RoomWithMembershipCount = Room;
 
 const LeftSidebar = React.memo<LeftSidebarProps>(({ user, isOpen, onClose }) => {
+  const authUser = useUser((s) => s.user);
   // ✅ FIXED: Use Zustand selectors
   const selectedRoom = useSelectedRoom();
   const availableRooms = useAvailableRooms();
@@ -175,8 +177,10 @@ const LeftSidebar = React.memo<LeftSidebarProps>(({ user, isOpen, onClose }) => 
       }
     };
   }, []);
+  
+  if (authUser === undefined) return null;
 
-  if (!user) {
+  if (!authUser) {
     return (
       <div className="fixed lg:static inset-y-0 left-0 w-full lg:w-1/4 px-4 py-3 bg-card border-r h-screen flex flex-col transition-transform duration-300 z-50">
         <p className="text-muted-foreground p-4">Please log in to view rooms</p>
