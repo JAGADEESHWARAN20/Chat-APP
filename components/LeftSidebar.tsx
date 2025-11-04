@@ -23,14 +23,7 @@ interface LeftSidebarProps {
 }
 
 // ✅ FIXED: Define the extended room type locally
-type RoomWithMembershipCount = Room & {
-  isMember?: boolean;
-  memberCount?: number;
-  onlineUsers?: number;
-  participationStatus?: 'pending' | 'accepted';
-  unreadCount?: number;
-  latestMessage?: string;
-};
+type RoomWithMembershipCount = Room;
 
 const LeftSidebar = React.memo<LeftSidebarProps>(({ user, isOpen, onClose }) => {
   // ✅ FIXED: Use Zustand selectors

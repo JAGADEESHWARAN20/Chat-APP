@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { useAvailableRooms, useRoomActions, useRoomPresence, type Room, fetchAllUsers } from "@/lib/store/RoomContext";
 import { useDebounce } from "use-debounce";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+type RoomWithMembershipCount = Room;
 
 type PartialProfile = {
   id: string;
@@ -19,13 +20,8 @@ type PartialProfile = {
   created_at: string | null;
 };
 
-// ✅ FIXED: Define the extended room type locally
-type RoomWithMembershipCount = Room & {
-  isMember?: boolean;
-  memberCount?: number;
-  onlineUsers?: number;
-  participationStatus?: 'pending' | 'accepted';
-};
+// 🚀 Just use Room — no extended type required
+
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

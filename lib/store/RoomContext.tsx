@@ -1,21 +1,23 @@
 "use client";
 import { create } from 'zustand';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
-import { createContext, useContext } from 'react';
+// import { createContext, useContext } from 'react';
 import { getSupabaseBrowserClient } from '../supabase/client';
 
-// Types
 export interface Room {
   id: string;
   name: string;
   is_private: boolean;
-  created_by: string;
+  created_by: string | null; // <--- CHANGE THIS
   created_at: string;
-  isMember?: boolean;
-  memberCount?: number;
+  isMember: boolean;
+  participationStatus: "pending" | "accepted" | null;
+  memberCount: number;
   onlineUsers?: number;
-  participationStatus?: 'pending' | 'accepted';
+  unreadCount?: number;
+  latestMessage?: string;
 }
+
 
 export interface Message {
   id: string;
@@ -168,28 +170,42 @@ export const useRoomStore = create<RoomState>()(
 
       // Async actions
       fetchRooms: async () => {
-        const { setLoading, setError, setAvailableRooms } = get();
-        
+        const { user, setAvailableRooms, setLoading, setError } = get();
+        const supabase = getSupabaseBrowserClient();
+      
+        if (!user) return;
+      
         try {
           setLoading(true);
-          const response = await fetch('/api/rooms/joined');
-          const result = await response.json();
-          
-          if (!response.ok) {
-            throw new Error(result.error || 'Failed to fetch rooms');
-          }
-          
-          if (result.success) {
-            setAvailableRooms(result.rooms || []);
-          }
-        } catch (error) {
-          console.error('Failed to fetch rooms:', error);
-          setError(error instanceof Error ? error.message : 'Failed to fetch rooms');
+      
+          const { data, error } = await supabase.rpc("get_rooms_with_counts", {
+            p_user_id: user.id,
+            p_query: undefined,
+            p_include_participants: true
+          });
+
+          if (error) throw error;
+      
+          const formattedRooms: Room[] = (data || []).map((room: any) => ({
+            id: room.id,
+            name: room.name,
+            is_private: room.is_private,
+            created_by: room.created_by,
+            created_at: room.created_at,
+            isMember: room.is_member,
+            participationStatus: room.participation_status as 'accepted' | 'pending' | null,
+            memberCount: room.member_count,
+          }));
+      
+          setAvailableRooms(formattedRooms);
+        } catch (err: any) {
+          console.error("fetchRooms error:", err);
+          setError(err.message ?? "Failed to fetch rooms");
         } finally {
           setLoading(false);
         }
       },
-
+      
       fetchMessages: async (roomId: string) => {
         const { setLoading, setError, setMessages } = get();
         
@@ -269,43 +285,51 @@ export const useRoomStore = create<RoomState>()(
       },
 
       joinRoom: async (roomId: string): Promise<boolean> => {
+        const supabase = getSupabaseBrowserClient();
+        const { fetchRooms } = get();
+      
         try {
-          const response = await fetch(`/api/rooms/${roomId}/join`, {
-            method: 'POST'
+          const { error } = await supabase.rpc("join_room", {
+            p_room_id: roomId,
+            p_user_id: get().user.id,
+            p_status: "pending" // Supabase will auto-approve public rooms
           });
-          
-          const result = await response.json();
-          return result.success === true;
-        } catch (error) {
-          console.error('Failed to join room:', error);
+      
+          if (error) throw error;
+      
+          await fetchRooms();
+          return true;
+        } catch (err) {
+          console.error("joinRoom failed:", err);
           return false;
         }
       },
+      
 
       leaveRoom: async (roomId: string): Promise<boolean> => {
-        const { removeRoom, setSelectedRoom } = get();
-        
+        const supabase = getSupabaseBrowserClient();
+        const { fetchRooms, setSelectedRoom } = get();
+      
         try {
-          const response = await fetch(`/api/rooms/${roomId}/leave`, {
-            method: 'PATCH'
+          const { error } = await supabase.rpc("leave_room", {
+            p_room_id: roomId,
+            p_user_id: get().user.id
           });
-          
-          const result = await response.json();
-          
-          if (result.success) {
-            removeRoom(roomId);
-            if (get().selectedRoom?.id === roomId) {
-              setSelectedRoom(null);
-            }
-            return true;
+      
+          if (error) throw error;
+      
+          if (get().selectedRoom?.id === roomId) {
+            setSelectedRoom(null);
           }
-          
-          return false;
-        } catch (error) {
-          console.error('Failed to leave room:', error);
+      
+          await fetchRooms();
+          return true;
+        } catch (err) {
+          console.error("leaveRoom error:", err);
           return false;
         }
       },
+      
 
       createRoom: async (name: string, isPrivate: boolean): Promise<Room | null> => {
         try {
