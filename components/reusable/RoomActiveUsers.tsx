@@ -1,6 +1,6 @@
 "use client";
 
-import { useRoomContext } from "@/lib/store/RoomContext";
+import { useRoomContext, getRoomPresence } from "@/lib/store/RoomContext";
 import { Users } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
 
@@ -15,18 +15,18 @@ export function RoomActiveUsers({
   showZero = false, 
   compact = false 
 }: RoomActiveUsersProps) {
-  const { getRoomPresence, state } = useRoomContext();
+  const { availableRooms } = useRoomContext(); // ✅ Direct access
   const [onlineUsers, setOnlineUsers] = useState(0);
   
   // Get member count from room data
-  const room = state.availableRooms.find(r => r.id === roomId);
+  const room = availableRooms.find(r => r.id === roomId);
   const memberCount = room?.memberCount ?? 0;
 
-  // FIXED: Stable presence update
+  // FIXED: Stable presence update using the utility function
   const updatePresence = useCallback(() => {
-    const { onlineUsers: count } = getRoomPresence(roomId);
-    setOnlineUsers(count);
-  }, [roomId, getRoomPresence]);
+    const { onlineCount } = getRoomPresence(roomId);
+    setOnlineUsers(onlineCount);
+  }, [roomId]);
 
   useEffect(() => {
     updatePresence();
