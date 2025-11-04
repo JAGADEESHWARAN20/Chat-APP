@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { withAuth, validateUUID, errorResponse, successResponse } from "@/lib/api-utils";
 
 export async function PATCH(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ roomId?: string; roomid?: string }> }
 ) {
   return withAuth(async ({ supabase, user }) => {

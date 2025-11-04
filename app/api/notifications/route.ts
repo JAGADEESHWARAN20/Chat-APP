@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Database } from "@/lib/types/supabase";
 
 // DELETE /api/notifications
-export async function DELETE(req: NextRequest) {
+export async function DELETE(_req: NextRequest) {
   const supabase = createRouteHandlerClient<Database>({ cookies });
 
   // Auth check

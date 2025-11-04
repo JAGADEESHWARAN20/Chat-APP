@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 
-export async function DELETE(req: NextRequest) {
+export async function DELETE(_req: NextRequest) {
      const supabase = await supabaseServer();
 
      // Get the authenticated user

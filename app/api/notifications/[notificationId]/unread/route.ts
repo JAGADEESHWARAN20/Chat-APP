@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 
-export async function POST(req: NextRequest, { params }: { params: { notificationId: string } }) {
+export async function POST(_req: NextRequest, { params }: { params: { notificationId: string } }) {
   const supabase = await supabaseServer();
   const { notificationId } = params;
 

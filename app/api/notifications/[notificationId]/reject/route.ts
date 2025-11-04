@@ -19,7 +19,7 @@ export async function POST(
 
   const { room_id, sender_id } = await req.json();
   const notificationId = params.notificationId;
-  const userId = session.user.id;
+  // const userId = session.user.id;
 
   if (!room_id || !sender_id) {
     return NextResponse.json(

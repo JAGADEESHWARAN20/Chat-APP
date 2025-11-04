@@ -5,7 +5,7 @@ import { Database } from "@/lib/types/supabase";
 
 // DELETE /api/notifications/[notificationId]
 export async function DELETE(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: { notificationId: string } }
 ) {
   const supabase = createRouteHandlerClient<Database>({ cookies });
