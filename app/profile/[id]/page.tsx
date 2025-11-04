@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { createBrowserClient } from "@supabase/ssr";
 import type { Database } from "@/lib/types/supabase"
 import Image from "next/image"
 import { ChevronLeft } from "lucide-react"
@@ -13,7 +13,11 @@ import { Skeleton } from "@/components/ui/skeleton"
 type Profile = Database["public"]["Tables"]["profiles"]["Row"]
 
 export default function ProfilePage() {
-  const supabase = createClientComponentClient<Database>()
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+  
   const [profile, setProfile] = useState<Profile | null>(null)
   const router = useRouter()
 
