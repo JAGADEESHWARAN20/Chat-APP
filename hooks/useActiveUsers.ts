@@ -2,27 +2,19 @@
 import { useRoomStore } from '@/lib/store/RoomContext';
 import { useMemo } from 'react';
 
-/**
- * Optimized hook to get active (online) users count for a room
- * Uses centralized RoomContext state for consistency
- */
 export function useActiveUsers(roomId: string | null): number {
   const roomPresence = useRoomStore((state) => state.roomPresence);
   const availableRooms = useRoomStore((state) => state.availableRooms);
-  const selectedRoom = useRoomStore((state) => state.selectedRoomId);
 
   return useMemo(() => {
     if (!roomId) return 0;
 
-    // First check roomPresence map (most reliable)
-    const roomPresenceData = roomPresence[roomId];
-    if (roomPresenceData) {
-      return roomPresenceData.onlineUsers;
-    }
+    // If real-time presence exists — use it first (most accurate)
+    const livePresence = roomPresence[roomId];
+    if (livePresence) return livePresence.onlineUsers;
 
-    // Fallback to room's onlineUsers field
-    const room = availableRooms.find((r: any) => r.id === roomId);
-return room?.onlineUsers ?? 0;
-
-  }, [roomId, roomPresence, selectedRoom, availableRooms]);
+    // Otherwise fallback to stored room data
+    const room = availableRooms.find((r) => r.id === roomId);
+    return room?.onlineUsers ?? 0;
+  }, [roomId, roomPresence, availableRooms]);
 }
