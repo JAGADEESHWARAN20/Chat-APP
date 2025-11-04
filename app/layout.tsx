@@ -4,7 +4,7 @@ import { ResponsiveToaster } from "@/components/ResponsiveToaster";
 import { RoomProvider } from "@/lib/store/RoomContext";
 import { SearchHighlightProvider } from "@/lib/store/SearchHighlightContext";
 import RoomInitializer from "@/lib/initialization/RoomInitializer";
-import { supabaseServer } from "@/lib/supabase/server";
+// import { supabaseServer } from "@/lib/supabase/server";
 import ThemeTransitionWrapper from "@/components/ThemeTransitionWrapper";
 import "@/app/globals.css";
 import ClientInitializer from "@/lib/initialization/clientinitializer";
@@ -16,8 +16,8 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await supabaseServer();
-  const { data } = await supabase.auth.getSession();
+  // const supabase = await supabaseServer();
+  // const { data } = await supabase.auth.getSession();
 
   return (
     <html lang="en" suppressHydrationWarning>
