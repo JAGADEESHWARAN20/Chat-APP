@@ -30,9 +30,9 @@ export default async function RootLayout({
             disableTransitionOnChange
           >
             <ThemeTransitionWrapper>
-              <RoomProvider user={data.session?.user}>
+              <RoomProvider>
                 <SearchHighlightProvider>
-                <ClientInitializer /> {/* ✅ ensures Zustand store stays synced */}
+                  <ClientInitializer /> {/* ✅ ensures Zustand store stays synced */}
                   <RoomInitializer />
                   {children}
                   <ResponsiveToaster />
@@ -40,7 +40,6 @@ export default async function RootLayout({
               </RoomProvider>
             </ThemeTransitionWrapper>
           </ThemeProvider>
-
       </body>
     </html>
   );

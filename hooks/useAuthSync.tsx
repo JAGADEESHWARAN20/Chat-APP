@@ -1,57 +1,66 @@
-// hooks/useAuthSync.tsx
 "use client";
+
 import { useEffect } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useUser } from "@/lib/store/user";
+import { useRoomStore } from "@/lib/store/RoomContext";
 
+/**
+ * Hook to sync authentication state with both user store and room store
+ * This ensures all stores stay in sync when user logs in/out
+ */
 export function useAuthSync() {
-  const { setUser, clearUser } = useUser();
+  const supabase = getSupabaseBrowserClient();
+  const { user: userStoreUser, setUser: setUserStoreUser } = useUser();
+  const setRoomUser = useRoomStore((state) => state.setUser);
 
   useEffect(() => {
-    const supabase = getSupabaseBrowserClient();
-    let mounted = true;
-
-    const syncUser = async () => {
-      try {
-        const { data, error } = await supabase.auth.getUser();
-        if (error) {
-          console.error("Auth sync error:", error);
-          return;
-        }
+    // Get initial session
+    const initializeAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session?.user) {
+        // Sync to both stores
+        setUserStoreUser(session.user);
+        setRoomUser(session.user);
         
-        if (mounted) {
-          if (data?.user) {
-            await setUser(data.user);
-          } else {
-            clearUser();
-          }
-        }
-      } catch (error) {
-        console.error("Auth sync failed:", error);
-        if (mounted) clearUser();
+        console.log("✅ Auth synced to stores:", session.user.email);
+      } else {
+        // Clear both stores on logout
+        setUserStoreUser(null);
+        setRoomUser(null);
+        
+        console.log("🔓 User logged out, stores cleared");
       }
     };
 
-    syncUser();
+    initializeAuth();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!mounted) return;
-      
-      try {
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log("🔄 Auth state changed:", event);
+        
         if (session?.user) {
-          await setUser(session.user);
+          // Sync to both stores
+          setUserStoreUser(session.user);
+          setRoomUser(session.user);
+          
+          console.log("✅ Auth synced to stores:", session.user.email);
         } else {
-          clearUser();
+          // Clear both stores
+          setUserStoreUser(null);
+          setRoomUser(null);
+          
+          console.log("🔓 Stores cleared");
         }
-      } catch (error) {
-        console.error("Auth state change error:", error);
-        clearUser();
       }
-    });
+    );
 
     return () => {
-      mounted = false;
       subscription.unsubscribe();
     };
-  }, [setUser, clearUser]);
+  }, [supabase, setUserStoreUser, setRoomUser]);
+
+  return { user: userStoreUser };
 }

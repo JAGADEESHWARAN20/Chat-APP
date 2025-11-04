@@ -332,16 +332,11 @@ export const useRoomStore = create<RoomState>()(
   )
 );
 
-// React Context - FIXED to properly expose the entire store
-const RoomContext = createContext<RoomState | null>(null);
-
+// React Context - Since we're using Zustand, we don't actually need React Context
+// The RoomProvider is just a wrapper component now
 export function RoomProvider({ children }: { children: React.ReactNode }) {
-  // We don't need to call useRoomStore here - just provide the context
-  return (
-    <RoomContext.Provider value={null}>
-      {children}
-    </RoomContext.Provider>
-  );
+  // No need for context provider - Zustand handles global state
+  return <>{children}</>;
 }
 
 // FIXED: useRoomContext now returns the full store state
