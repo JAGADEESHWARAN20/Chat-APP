@@ -9,7 +9,7 @@ import { useMemo } from 'react';
 export function useActiveUsers(roomId: string | null): number {
   const roomPresence = useRoomStore((state) => state.roomPresence);
   const availableRooms = useRoomStore((state) => state.availableRooms);
-  const selectedRoom = useRoomStore((state) => state.selectedRoom);
+  const selectedRoom = useRoomStore((state) => state.selectedRoomId);
 
   return useMemo(() => {
     if (!roomId) return 0;
@@ -21,13 +21,8 @@ export function useActiveUsers(roomId: string | null): number {
     }
 
     // Fallback to room's onlineUsers field
-    let room = null;
-    if (selectedRoom?.id === roomId) {
-      room = selectedRoom;
-    } else {
-      room = availableRooms.find((r: any) => r.id === roomId);
-    }
+    const room = availableRooms.find((r: any) => r.id === roomId);
+return room?.onlineUsers ?? 0;
 
-    return room?.onlineUsers ?? 0;
   }, [roomId, roomPresence, selectedRoom, availableRooms]);
 }
