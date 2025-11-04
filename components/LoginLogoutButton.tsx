@@ -1,6 +1,6 @@
 "use client";
 
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { createBrowserClient } from "@supabase/ssr";
 import { Button } from "./ui/button";
 import { LogOut, Menu,  User, Settings } from "lucide-react";
 import { useRouter } from "next/navigation";

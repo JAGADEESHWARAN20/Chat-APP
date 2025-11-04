@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 // api/notifications/[notificationId]/read/route.ts
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";

@@ -1,19 +1,29 @@
 "use client";
 import { useEffect, useCallback, useRef } from "react";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { createBrowserClient } from "@supabase/ssr";
 import type { Database } from "@/lib/types/supabase";
 import { useRoomActions, useSelectedRoom, useTypingUsers, useTypingDisplayText } from "@/lib/store/RoomContext";
 
 // Add missing import for useRoomStore
 import { useRoomStore } from '@/lib/store/RoomContext';
+
 interface TypingUser {
   user_id: string;
   is_typing: boolean;
   display_name?: string;
 }
 
+interface TypingPayload {
+  user_id: string;
+  is_typing: boolean;
+}
+
 export function useTypingStatus() {
-  const supabase = createClientComponentClient<Database>();
+  const supabase = createBrowserClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+  
   const { updateTypingUsers, updateTypingText } = useRoomActions();
   const selectedRoom = useSelectedRoom();
   const typingUsers = useTypingUsers();
@@ -111,7 +121,7 @@ export function useTypingStatus() {
     });
 
     channel
-      .on("broadcast", { event: "typing_start" }, ({ payload }) => {
+      .on("broadcast", { event: "typing_start" }, ({ payload }: { payload: TypingPayload }) => {
         if (payload.user_id === currentUserId) return;
 
         const updatedUsers = [...typingUsersRef.current];
@@ -132,12 +142,12 @@ export function useTypingStatus() {
 
         updateTypingUsers(updatedUsers);
       })
-      .on("broadcast", { event: "typing_stop" }, ({ payload }) => {
+      .on("broadcast", { event: "typing_stop" }, ({ payload }: { payload: TypingPayload }) => {
         updateTypingUsers(
           typingUsersRef.current.filter(u => u.user_id !== payload.user_id)
         );
       })
-      .subscribe((status) => {
+      .subscribe((status: string) => {
         if (status === 'SUBSCRIBED') {
           console.log(`✅ Typing status subscribed to room ${roomId}`);
         }
