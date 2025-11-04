@@ -344,3 +344,14 @@ export const getRoomPresence = (roomId: string) => {
     onlineUsers: presence?.userIds ?? []
   };
 };
+
+export const useRoomPresence = () => useRoomStore((state) => state.roomPresence);
+
+export const fetchAllUsers = async () => {
+  const supabase = getSupabaseBrowserClient();
+  const { data } = await supabase
+    .from("profiles")
+    .select("id, username, display_name, avatar_url, created_at");
+  return data || [];
+};
+

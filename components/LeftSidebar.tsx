@@ -32,7 +32,7 @@ const LeftSidebar = React.memo<LeftSidebarProps>(({ user, isOpen, onClose }) => 
   const selectedRoom = useSelectedRoom();
   const availableRooms = useAvailableRooms();
   const isLoading = useRoomLoading();
-  const { setSelectedRoom, createRoom, fetchRooms } = useRoomActions();
+  const { setSelectedRoomId, createRoom, fetchRooms } = useRoomActions();
   
   const [searchTerm, setSearchTerm] = useState("");
   const [showCreateRoom, setShowCreateRoom] = useState(false);
@@ -124,7 +124,7 @@ const LeftSidebar = React.memo<LeftSidebarProps>(({ user, isOpen, onClose }) => 
             ? "bg-primary/10 dark:bg-primary/20"
             : "hover:bg-muted"
         }`}
-        onClick={() => setSelectedRoom(item)}
+        onClick={() => setSelectedRoomId(item.id)} // ✅ FIXED
       >
         <Avatar className="h-12 w-12 flex-shrink-0">
           <AvatarFallback className="bg-muted">
@@ -167,7 +167,7 @@ const LeftSidebar = React.memo<LeftSidebarProps>(({ user, isOpen, onClose }) => 
         </div>
       </div>
     );
-  }, [selectedRoom?.id, setSelectedRoom]);
+  }, [selectedRoom?.id, setSelectedRoomId]);
 
   // ✅ FIXED: Proper cleanup
   useEffect(() => {
@@ -177,7 +177,7 @@ const LeftSidebar = React.memo<LeftSidebarProps>(({ user, isOpen, onClose }) => 
       }
     };
   }, []);
-  
+
   if (authUser === undefined) return null;
 
   if (!authUser) {

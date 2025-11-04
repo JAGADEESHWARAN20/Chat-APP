@@ -7,7 +7,7 @@ import { Settings, UserIcon, LockIcon, LogOut, Users } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { toast } from "sonner";
-import { useAvailableRooms, useRoomActions, useRoomPresence, type Room, fetchAllUsers } from "@/lib/store/RoomContext";
+import { useAvailableRooms, useRoomActions, useRoomPresence, fetchAllUsers, type Room } from "@/lib/store/RoomContext";
 import { useDebounce } from "use-debounce";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 type RoomWithMembershipCount = Room;
