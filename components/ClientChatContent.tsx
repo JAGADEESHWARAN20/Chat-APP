@@ -10,8 +10,7 @@ import { User as SupabaseUser } from "@supabase/supabase-js";
 import ChatHeader from "@/components/ChatHeader";
 
 export default function ClientChatContent({ user }: { user: SupabaseUser | undefined }) {
-  const { state } = useRoomContext();
-  const { selectedRoom } = state;
+  const { selectedRoom } = useRoomContext(); // Direct access, no .state needed
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
