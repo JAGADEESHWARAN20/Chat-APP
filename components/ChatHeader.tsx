@@ -21,6 +21,7 @@ import { useMessage, Imessage } from "@/lib/store/messages";
 import { useSearchHighlight } from "@/lib/store/SearchHighlightContext";
 import { RoomActiveUsers } from "@/components/reusable/RoomActiveUsers";
 
+
 export default function ChatHeader({ user }: { user: SupabaseUser | undefined }) {
   const { searchMessages } = useMessage();
   const [searchResults, setSearchResults] = useState<Imessage[]>([]);
@@ -28,7 +29,8 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
   const [isSwitchRoomPopoverOpen, setIsSwitchRoomPopoverOpen] = useState(false);
   const [isMessageSearchOpen, setIsMessageSearchOpen] = useState(false);
   const [messageSearchQuery, setMessageSearchQuery] = useState("");
-  
+  // Add this line somewhere in the component if you plan to use user later
+console.log(user); // Temporary usage to satisfy TypeScript
   // ✅ FIXED: Use Zustand selectors instead of context
   const selectedRoom = useSelectedRoom();
   const availableRooms = useAvailableRooms();
