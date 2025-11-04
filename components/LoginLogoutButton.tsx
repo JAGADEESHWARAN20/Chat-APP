@@ -15,11 +15,7 @@ import {
 } from "@/components/ui/sheet";
 import { useState } from "react";
 import ThemeToggleButton from "./ThemeToggle";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+
 import { useRoomContext } from "@/lib/store/RoomContext";
 
 interface LoginLogoutButtonProps {
@@ -32,8 +28,8 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   
   // Get user data from RoomContext - no need to refetch!
-  const { state } = useRoomContext();
-  const { user: contextUser } = state;
+ 
+  const { user: contextUser } = useRoomContext();
 
   // Use the user from props or context (context is more reliable)
   const currentUser = user || contextUser;
