@@ -2,8 +2,7 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse } from "next/server";
 
-// Add this line to force dynamic rendering for this route
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   try {
@@ -21,98 +20,83 @@ export async function GET(req: Request) {
               cookiesToSet.forEach(({ name, value, options }) =>
                 cookieStore.set(name, value, options)
               );
-            } catch {
-              // Ignore if called from Server Component
-            }
+            } catch {}
           },
         },
       }
     );
-    
 
-    // Get session
     const {
-      data: { session },
-      error: sessionError,
-    } = await supabase.auth.getSession();
+      data: { user },
+    } = await supabase.auth.getUser();
 
-    if (sessionError || !session?.user) {
-      console.error("[Rooms All] Auth failed:", sessionError?.message);
-      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    if (!user) {
+      return NextResponse.json({ success: true, rooms: [] });
     }
 
-    const userId = session.user.id;
+    const userId = user.id;
 
-    // Get search query from URL
     const { searchParams } = new URL(req.url);
-    const searchQuery = searchParams.get("q")?.toLowerCase() || "";
+    const searchQuery = searchParams.get("q")?.toLowerCase() ?? "";
 
-    // Fetch all rooms (filter by name if query present)
-    let query = supabase
+    // ✅ Fetch all rooms
+    let roomQuery = supabase
       .from("rooms")
       .select("id, name, is_private, created_by, created_at")
       .order("created_at", { ascending: false });
 
-    if (searchQuery) {
-      query = query.ilike("name", `%${searchQuery}%`);
+    if (searchQuery.trim()) {
+      roomQuery = roomQuery.ilike("name", `%${searchQuery}%`);
     }
 
-    const { data: rooms, error: roomsError } = await query;
+    const { data: rooms, error: roomsError } = await roomQuery;
+    if (roomsError) throw roomsError;
 
-    if (roomsError) {
-      console.error("[Rooms All] Rooms fetch error:", roomsError.message);
-      return NextResponse.json({ error: "Failed to fetch rooms" }, { status: 500 });
-    }
+    if (!rooms?.length) return NextResponse.json({ success: true, rooms: [] });
 
-    if (!rooms || rooms.length === 0) {
-      return NextResponse.json({ success: true, rooms: [] });
-    }
+    const roomIds = rooms.map((r) => r.id);
 
-    const roomIds = rooms.map((room) => room.id);
-
-    // Fetch memberships where user is accepted
-    const { data: memberships, error: membershipError } = await supabase
+    // ✅ Get user membership statuses (accepted or pending)
+    const { data: membershipList } = await supabase
       .from("room_members")
-      .select("room_id")
+      .select("room_id, status")
       .in("room_id", roomIds)
-      .eq("user_id", userId)
-      .eq("status", "accepted");
+      .eq("user_id", userId);
 
-    if (membershipError) {
-      console.error("[Rooms All] Membership fetch error:", membershipError.message);
-      return NextResponse.json({ error: "Failed to fetch memberships" }, { status: 500 });
-    }
+    const membershipMap = new Map(
+      membershipList?.map((m) => [m.room_id, m.status]) ?? []
+    );
 
-    const joinedRoomIds = new Set(memberships?.map((m) => m.room_id));
-
-    // Fetch all accepted members for rooms to count them client-side
-    const { data: membersData, error: membersError } = await supabase
+    // ✅ Count members for each room
+    const { data: memberCountList } = await supabase
       .from("room_members")
-      .select("room_id")
+      .select("room_id, status")
       .in("room_id", roomIds)
       .eq("status", "accepted");
 
-    if (membersError) {
-      console.error("[Rooms All] Member counts fetch error:", membersError.message);
-      // Optionally you can continue with zero counts here
-    }
+    const memberCountMap = new Map<string, number>();
+    memberCountList?.forEach((m) =>
+      memberCountMap.set(m.room_id, (memberCountMap.get(m.room_id) ?? 0) + 1)
+    );
 
-    // Calculate member counts
-    const countsMap = new Map<string, number>();
-    membersData?.forEach((m) => {
-      countsMap.set(m.room_id, (countsMap.get(m.room_id) ?? 0) + 1);
-    });
+    // ✅ Format response
+    const formatted = rooms.map((room) => {
+      const status = membershipMap.get(room.id) ?? null;
 
-    // Attach membership flag and member count to each room
-    const roomsWithMembership = rooms.map((room) => ({
-      ...room,
-      isMember: joinedRoomIds.has(room.id),
-      memberCount: countsMap.get(room.id) ?? 0,
-    }));
+      // 🔐 Hide private rooms unless user is involved
+      if (room.is_private && !status) return null;
 
-    return NextResponse.json({ success: true, rooms: roomsWithMembership });
-  } catch (err) {
-    console.error("[Rooms All] Unexpected error:", err);
-    return NextResponse.json({ error: "Unexpected error occurred" }, { status: 500 });
+      return {
+        ...room,
+        isMember: status === "accepted",
+        participationStatus: status,
+        memberCount: memberCountMap.get(room.id) ?? 0,
+      };
+    }).filter(Boolean);
+
+    return NextResponse.json({ success: true, rooms: formatted });
+  } catch (error) {
+    console.error("[Rooms All] Error:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

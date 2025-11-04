@@ -1,23 +1,19 @@
 // app/api/rooms/joined/route.ts
 import { NextRequest } from "next/server";
 import { withAuth, successResponse, errorResponse } from "@/lib/api-utils";
+import type { Database } from "@/lib/types/supabase";
 
-interface Room {
-  id: string;
-  name: string;
-  is_private: boolean;
-  created_by: string;
-  created_at: string;
-}
+type Room = Database["public"]["Tables"]["rooms"]["Row"];
+type RoomMember = Database["public"]["Tables"]["room_members"]["Row"];
 
-interface Membership {
-  room_id: string;
-  status: string;
-  rooms: Room;
+interface MembershipRow {
+  room_id: RoomMember["room_id"];
+  status: RoomMember["status"];
+  rooms: Room; // ✅ Single room object (NOT array)
 }
 
 interface RoomWithCount extends Room {
-  isMember: boolean;
+  isMember: true;
   participationStatus: "accepted";
   memberCount: number;
 }
@@ -28,90 +24,88 @@ export async function GET(req: NextRequest) {
       const { searchParams } = new URL(req.url);
       const searchQuery = searchParams.get("q")?.toLowerCase() || "";
 
-      // Get all rooms where user is an accepted member
+      // ✅ Fetch rooms where the user is an accepted member
       const { data: memberships, error: membershipError } = await supabase
         .from("room_members")
         .select(`
           room_id,
           status,
           rooms!inner (
-            id, name, is_private, created_by, created_at
+            id,
+            name,
+            is_private,
+            created_by,
+            created_at
           )
         `)
         .eq("user_id", user.id)
-        .eq("status", "accepted") as { data: Membership[] | null; error: any };
+        .eq("status", "accepted") as { data: MembershipRow[] | null; error: any };
 
       if (membershipError) {
-        console.error("[Rooms Joined] Memberships fetch error:", membershipError);
-        return errorResponse("Failed to fetch memberships", "FETCH_ERROR", 500);
+        console.error("[Rooms Joined] Membership query error:", membershipError);
+        return errorResponse("Failed to fetch rooms", "FETCH_ERROR", 500);
       }
 
-      if (!memberships || memberships.length === 0) {
+      if (!memberships?.length) {
         return successResponse({ rooms: [] });
       }
 
-      // Extract rooms from memberships
-      const rooms: Room[] = memberships.map((m: Membership) => m.rooms);
+      // ✅ Extract rooms
+      let rooms = memberships.map((m) => m.rooms);
 
-      // Filter by search query if provided
-      const filteredRooms = searchQuery 
-        ? rooms.filter((room: Room) => room.name.toLowerCase().includes(searchQuery))
-        : rooms;
-
-      const roomIds = filteredRooms.map((room: Room) => room.id);
-
-      if (roomIds.length === 0) {
-        return successResponse({ rooms: [] });
+      // ✅ Apply search filtering
+      if (searchQuery) {
+        rooms = rooms.filter((room) =>
+          room.name.toLowerCase().includes(searchQuery)
+        );
       }
 
-      // Fetch member counts efficiently using count API
-      const memberCountPromises = roomIds.map(async (roomId: string) => {
-        const { count, error } = await supabase
-          .from("room_members")
-          .select("*", { count: 'exact', head: true })
-          .eq("room_id", roomId)
-          .eq("status", "accepted");
+      if (!rooms.length) return successResponse({ rooms: [] });
 
-        return { roomId, count: error ? 0 : (count || 0) };
-      });
+      const roomIds = rooms.map((r) => r.id);
 
-      const memberCounts = await Promise.all(memberCountPromises);
-      
-      // Create count map
-      const countsMap = new Map<string, number>();
-      memberCounts.forEach(({ roomId, count }) => {
-        countsMap.set(roomId, count);
-      });
+      // ✅ Fetch member counts per room efficiently
+      const countResults = await Promise.all(
+        roomIds.map(async (roomId) => {
+          const { count } = await supabase
+            .from("room_members")
+            .select("*", { count: "exact", head: true })
+            .eq("room_id", roomId)
+            .eq("status", "accepted");
 
-      // Format response
-      const joinedRooms: RoomWithCount[] = filteredRooms.map((room: Room) => ({
+          return { roomId, count: count ?? 0 };
+        })
+      );
+
+      // ✅ Convert to lookup map
+      const countMap = new Map<string, number>();
+      countResults.forEach(({ roomId, count }) => countMap.set(roomId, count));
+
+      // ✅ Construct response format
+      const result: RoomWithCount[] = rooms.map((room) => ({
         ...room,
         isMember: true,
-        participationStatus: "accepted" as const,
-        memberCount: countsMap.get(room.id) || 0,
+        participationStatus: "accepted",
+        memberCount: countMap.get(room.id) ?? 0,
       }));
 
-      return successResponse({ rooms: joinedRooms });
+      return successResponse({ rooms: result });
     } catch (error) {
-      console.error("[Rooms Joined] Unexpected error:", error);
-      return errorResponse("Unexpected error occurred", "INTERNAL_ERROR", 500);
+      console.error("[Rooms Joined] Unexpected Error:", error);
+      return errorResponse("Unexpected server error", "INTERNAL_ERROR", 500);
     }
   });
 }
 
-// Add other HTTP methods for completeness
 export async function POST() {
   return errorResponse("Method not allowed", "METHOD_NOT_ALLOWED", 405);
 }
-
 export async function PUT() {
   return errorResponse("Method not allowed", "METHOD_NOT_ALLOWED", 405);
 }
-
 export async function DELETE() {
   return errorResponse("Method not allowed", "METHOD_NOT_ALLOWED", 405);
 }
-
 export async function PATCH() {
   return errorResponse("Method not allowed", "METHOD_NOT_ALLOWED", 405);
 }
