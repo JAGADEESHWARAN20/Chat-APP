@@ -1,7 +1,8 @@
-
+import { NextRequest } from "next/server";
 import { withAuth, validateUUID, errorResponse, successResponse } from "@/lib/api-utils";
 
 export async function GET(
+  _req: NextRequest,
   { params }: { params: Promise<{ roomId: string }> }
 ) {
   return withAuth(async ({ supabase, user }) => {

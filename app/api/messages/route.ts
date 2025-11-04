@@ -28,17 +28,18 @@ export async function POST(req: NextRequest) {
           }
 
           // Insert the message into the messages table
-          const { data: message, error: messageError } = await supabase
-               .from("messages")
-               .insert({
+          const { data: _message, error: messageError } = await supabase
+                    .from("messages")
+                    .insert({
                     content,
                     room_id: roomId,
                     user_id: userId,
                     created_at: new Date().toISOString(),
                     status: "sent",
-               })
-               .select()
-               .single();
+                    })
+                    .select()
+                    .single();
+
           if (messageError) {
                console.error("Error sending message:", messageError);
                return NextResponse.json({ error: "Failed to send message" }, { status: 500 });

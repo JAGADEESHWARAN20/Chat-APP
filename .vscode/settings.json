@@ -1,4 +1,5 @@
 {
+  // 🦕 Deno (for Supabase Edge Functions only)
   "deno.enablePaths": [
     "supabase/functions"
   ],
@@ -18,14 +19,31 @@
     "http",
     "net"
   ],
-  "css.customData": [
-    ".vscode/css-data.json"
+
+  // 🎨 CSS custom data (keep your autocomplete)
+  "css.customData": [".vscode/css-data.json"],
+
+  // 🪶 Spelling whitelist
+  "cSpell.words": ["clientinitializer", "fkey", "Postgrest", "supabase", "uuidv"],
+
+  // ⚙️ TypeScript + Next.js setup
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+
+  // 🧹 ESLint integration
+  "eslint.validate": [
+    "javascript",
+    "javascriptreact",
+    "typescript",
+    "typescriptreact"
   ],
-  "cSpell.words": [
-    "clientinitializer",
-    "fkey",
-    "Postgrest",
-    "supabase",
-    "uuidv"
-  ]
+  "editor.codeActionsOnSave": {
+  "source.fixAll": "explicit"
+},
+
+  "editor.formatOnSave": true,
+
+  // 💡 Optional: show type & lint problems more visibly
+  "problems.decorations.enabled": true,
+  "problems.autoReveal": true
 }
