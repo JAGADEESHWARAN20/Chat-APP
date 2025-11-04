@@ -4,6 +4,9 @@ import { OpenAI } from "openai";
 import { createClient } from "@supabase/supabase-js";
 import { v4 as uuidv4 } from "uuid";
 import { estimateTokens } from '@/lib/token-utils';
+import type { Database } from "@/lib/types/supabase";
+
+
 
 // Enhanced Schema
 const SummarizeSchema = z.object({
@@ -42,7 +45,7 @@ if (!supabaseUrl || !supabaseKey) {
   throw new Error('Supabase environment variables are not configured');
 }
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabase = createClient<Database>(supabaseUrl, supabaseKey);
 
 // Model context window limits
 const modelLimits = {
@@ -268,22 +271,23 @@ export async function POST(req: NextRequest) {
     console.log("[API] Saving to ai_chat_history:", { room_id: roomId, user_id: userId });
 
     const { data: dbData, error } = await supabase
-      .from("ai_chat_history")
-      .insert({
-        id: responseId,
-        room_id: roomId,
-        user_id: userId,
-        user_query: userQuery,
-        ai_response: content,
-        model_used: model,
-        token_count: estimatedOutputTokens,
-        message_count: estimateTokens(finalPrompt),
-        created_at: timestamp,
-        analysis_type: analysisType,
-        structured_data: structuredData
-      })
-      .select()
-      .single();
+    .from("ai_chat_history")
+    .insert({
+      id: responseId,
+      room_id: roomId,
+      user_id: userId,
+      user_query: userQuery,
+      ai_response: content,
+      model_used: model,
+      token_count: estimatedOutputTokens,
+      message_count: estimateTokens(finalPrompt),
+      created_at: timestamp,
+      analysis_type: analysisType,
+      structured_data: structuredData ? JSON.parse(JSON.stringify(structuredData)) : null, // ✅ FIX HERE
+    })
+    .select()
+    .single();
+  
 
     if (error) {
       console.error("[API] DB Insert Error:", error);

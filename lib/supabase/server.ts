@@ -1,23 +1,28 @@
 // lib/supabase/server.ts
-"use server";
-import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { Database } from "../types/supabase";
+import { createServerClient } from "@supabase/ssr";
+import type { Database } from "@/lib/types/supabase";
 
-let serverClient: ReturnType<typeof createServerClient<Database>> | null = null;
-
-export const supabaseServer = async () => {
-  if (serverClient) return serverClient;
-  const cookieStore = await cookies();
-
-  serverClient = createServerClient<Database>(
+export function supabaseServer() {
+  return createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    process.env.SUPABASE_ANON_KEY!, // ✅ NOT SERVICE ROLE KEY here
     {
       cookies: {
-        get: (name: string) => cookieStore.get(name)?.value,
-      },
+        get(name) {
+          return cookies().get(name)?.value;
+        },
+        set(name, value, options) {
+          try {
+            cookies().set(name, value, options);
+          } catch {}
+        },
+        remove(name, options) {
+          try {
+            cookies().set(name, "", options);
+          } catch {}
+        }
+      }
     }
   );
-  return serverClient;
-};
+}

@@ -16,9 +16,23 @@ export class AIChatService {
   /** Create new AI chat entry */
   static async createChatEntry(entry: CreateAIChatHistory): Promise<AIChatHistory | null> {
     const supabase = this.getClient();
+    
+    // Ensure we're only passing valid fields
+    const insertData: CreateAIChatHistory = {
+      room_id: entry.room_id,
+      user_id: entry.user_id,
+      user_query: entry.user_query,
+      ai_response: entry.ai_response,
+      model_used: entry.model_used ?? null,
+      token_count: entry.token_count ?? null,
+      message_count: entry.message_count ?? null,
+      analysis_type: entry.analysis_type ?? null,
+      structured_data: entry.structured_data ?? null,
+    };
+
     const { data, error } = await supabase
       .from("ai_chat_history")
-      .insert([entry])
+      .insert([insertData])
       .select()
       .single();
 
@@ -27,7 +41,7 @@ export class AIChatService {
       return null;
     }
 
-    return data as AIChatHistory;
+    return data;
   }
 
   /** Get AI chat history for a room */
@@ -45,7 +59,7 @@ export class AIChatService {
       return [];
     }
 
-    return (data as AIChatHistory[]) || [];
+    return data || [];
   }
 
   /** Get AI chat history for a user */
@@ -63,7 +77,7 @@ export class AIChatService {
       return [];
     }
 
-    return (data as AIChatHistory[]) || [];
+    return data || [];
   }
 
   /** Delete AI chat entry by ID */
