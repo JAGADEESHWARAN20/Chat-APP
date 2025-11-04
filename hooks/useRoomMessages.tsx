@@ -4,14 +4,14 @@ import { useMemo } from 'react';
 
 export function useRoomMessages(roomId?: string) {
   const messages = useRoomStore((state) => state.messages);
-  const selectedRoom = useRoomStore((state) => state.selectedRoom);
-  
+  const selectedRoomId = useRoomStore((state) => state.selectedRoomId);
+
   const roomMessages = useMemo(() => {
-    if (!roomId && !selectedRoom) return [];
-    
-    const targetRoomId = roomId || selectedRoom?.id;
-    return messages.filter((msg: any) => msg.room_id === targetRoomId);
-  }, [messages, roomId, selectedRoom]);
+    const targetRoomId = roomId || selectedRoomId;
+    if (!targetRoomId) return [];
+
+    return messages.filter((msg) => msg.room_id === targetRoomId);
+  }, [messages, roomId, selectedRoomId]);
 
   return roomMessages;
 }

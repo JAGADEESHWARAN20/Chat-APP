@@ -2,47 +2,35 @@
 import { useRoomStore } from '@/lib/store/RoomContext';
 import { useMemo } from 'react';
 
-/**
- * Optimized hook for room presence that uses RoomContext state
- * No duplication - just reads from the centralized state
- */
 export function useRoomPresence(roomId: string | null) {
   const roomPresence = useRoomStore((state) => state.roomPresence);
   const availableRooms = useRoomStore((state) => state.availableRooms);
-  const selectedRoom = useRoomStore((state) => state.selectedRoom);
   const isLoading = useRoomStore((state) => state.isLoading);
 
   const presenceData = useMemo(() => {
     if (!roomId) return { onlineCount: 0, onlineUsers: [] };
 
-    // First check roomPresence map (most reliable)
-    const roomPresenceData = roomPresence[roomId];
-    if (roomPresenceData) {
-      return { 
-        onlineCount: roomPresenceData.onlineUsers, 
-        onlineUsers: roomPresenceData.userIds || [] 
+    // 1) Check real-time presence map first (most reliable)
+    const livePresence = roomPresence[roomId];
+    if (livePresence) {
+      return {
+        onlineCount: livePresence.onlineUsers,
+        onlineUsers: livePresence.userIds || [],
       };
     }
 
-    // Fallback to room's onlineUsers field
-    let room = null;
-    if (selectedRoom?.id === roomId) {
-      room = selectedRoom;
-    } else {
-      room = availableRooms.find((r: any) => r.id === roomId);
-    }
-
-    return { 
-      onlineCount: room?.onlineUsers || 0, 
-      onlineUsers: [] 
+    // 2) Fallback: check if we stored onlineUsers on room object
+    const room = availableRooms.find((r) => r.id === roomId);
+    return {
+      onlineCount: room?.onlineUsers ?? 0,
+      onlineUsers: [],
     };
-  }, [roomId, roomPresence, selectedRoom, availableRooms]);
+  }, [roomId, roomPresence, availableRooms]);
 
   return {
-    onlineCount: presenceData.onlineCount,
-    onlineUsers: presenceData.onlineUsers,
-    isLoading: isLoading,
+    ...presenceData,
+    isLoading,
     error: null,
-    refreshPresence: () => {}, // No-op - handled by context
+    refreshPresence: () => {}, // (Presence is handled centrally)
   };
 }
