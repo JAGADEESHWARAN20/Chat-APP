@@ -1,59 +1,82 @@
+// app/api/messages/send/route.ts
 import { NextRequest } from "next/server";
-import { z } from "zod";
-import { withAuth, validateUUID, errorResponse, successResponse } from "@/lib/api-utils";
-
-const sendMessageSchema = z.object({
-  roomId: z.string().uuid().optional(),
-  directChatId: z.string().uuid().optional(),
-  text: z.string().min(1).max(2000),
-});
+import { withAuth, successResponse, errorResponse, validateUUID, validateMessageText, withRateLimit } from "@/lib/api-utils";
 
 export async function POST(req: NextRequest) {
   return withAuth(async ({ supabase, user }) => {
     try {
-      const body = sendMessageSchema.parse(await req.json());
-      const { roomId, directChatId, text } = body;
+      const { roomId, directChatId, text } = await req.json();
+      
+      // Rate limiting
+      const ip = req.headers.get('x-forwarded-for') || 'unknown';
+      await withRateLimit(`send-message-${ip}`);
 
-      // Validate that either roomId or directChatId is provided
+      // Validate input
+      try {
+        validateMessageText(text);
+      } catch (error) {
+        return errorResponse(
+          error instanceof Error ? error.message : "Invalid message text",
+          "INVALID_TEXT",
+          400
+        );
+      }
+      
       if (!roomId && !directChatId) {
         return errorResponse("Room ID or Direct Chat ID required", "INVALID_TARGET", 400);
       }
+      
+      if (roomId) {
+        try {
+          validateUUID(roomId, "roomId");
+        } catch (error) {
+          return errorResponse("Invalid room ID format", "INVALID_ROOM_ID", 400);
+        }
+      }
+      
+      if (directChatId) {
+        try {
+          validateUUID(directChatId, "directChatId");
+        } catch (error) {
+          return errorResponse("Invalid direct chat ID format", "INVALID_DIRECT_CHAT_ID", 400);
+        }
+      }
+
+      const userId = user.id;
 
       // Verify membership/participation
       if (roomId) {
-        validateUUID(roomId, "roomId");
         const { data: member } = await supabase
           .from("room_members")
           .select("status")
           .eq("room_id", roomId)
-          .eq("user_id", user.id)
+          .eq("user_id", userId)
           .eq("status", "accepted")
           .single();
-
+        
         if (!member) {
           return errorResponse("Not a member of this room", "NOT_A_MEMBER", 403);
         }
       } else if (directChatId) {
-        validateUUID(directChatId, "directChatId");
         const { data: chat } = await supabase
           .from("direct_chats")
           .select("user_id_1, user_id_2")
           .eq("id", directChatId)
           .single();
-
-        if (!chat || (chat.user_id_1 !== user.id && chat.user_id_2 !== user.id)) {
+        
+        if (!chat || (chat.user_id_1 !== userId && chat.user_id_2 !== userId)) {
           return errorResponse("Not a participant in this direct chat", "NOT_A_PARTICIPANT", 403);
         }
       }
 
-      // Insert message using RPC for better consistency
+      // Insert message
       const { data: message, error } = await supabase
         .from("messages")
         .insert({
           text: text.trim(),
           room_id: roomId || null,
           direct_chat_id: directChatId || null,
-          sender_id: user.id,
+          sender_id: userId,
           created_at: new Date().toISOString(),
           status: "sent",
           is_edited: false,
@@ -84,11 +107,8 @@ export async function POST(req: NextRequest) {
         return errorResponse("Failed to send message", "INSERT_FAILED", 500);
       }
 
-      return successResponse({ message });
+      return successResponse({ success: true, message });
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        return errorResponse("Invalid input data", "VALIDATION_ERROR", 400);
-      }
       console.error("[messages] Server error:", error);
       return errorResponse("Internal server error", "INTERNAL_ERROR", 500);
     }

@@ -1,8 +1,12 @@
+// app/api/notifications/[notificationId]/route.ts
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { withAuth, validateUUID, errorResponse, successResponse } from "@/lib/api-utils";
+import { withAuth, successResponse, errorResponse, validateUUID, withRateLimit } from "@/lib/api-utils";
 
-const paramsSchema = z.object({ notificationId: z.string().uuid() });
+const paramsSchema = z.object({ 
+  notificationId: z.string().uuid() 
+});
+
 const actionSchema = z.object({
   action: z.enum(["read", "unread", "accept", "reject"]),
   roomId: z.string().uuid().optional(),
@@ -10,15 +14,17 @@ const actionSchema = z.object({
 });
 
 export async function PATCH(
-  req: NextRequest,
+  req: NextRequest, 
   { params }: { params: Promise<{ notificationId: string }> }
 ) {
   return withAuth(async ({ supabase, user }) => {
     try {
       const { notificationId } = paramsSchema.parse(await params);
       const body = actionSchema.parse(await req.json());
-
-      validateUUID(notificationId, "notificationId");
+      
+      // Rate limiting
+      const ip = req.headers.get('x-forwarded-for') || 'unknown';
+      await withRateLimit(`notification-action-${ip}`);
 
       const { error } = await supabase.rpc("handle_notification_action", {
         p_notification_id: notificationId,
@@ -27,33 +33,36 @@ export async function PATCH(
         p_room_id: body.roomId,
         p_sender_id: body.senderId,
       });
-
+      
       if (error) {
-        return errorResponse(error.message, "RPC_ERROR", 400);
+        return errorResponse(error.message, "ACTION_FAILED", 400);
       }
 
-      return successResponse();
+      return successResponse({ success: true });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        const details = error.issues.map(issue =>
+        const details = error.issues.map(issue => 
           `${issue.path.join('.')}: ${issue.message}`
         ).join(', ');
-        return errorResponse(`Validation failed: ${details}`, "VALIDATION_ERROR", 400);
+        return errorResponse("Validation failed", "VALIDATION_ERROR", 400, details);
       }
-      console.error("[Notification Action] Error:", error);
+      console.error("[Notifications] Error:", error);
       return errorResponse("Internal error", "INTERNAL_ERROR", 500);
     }
   });
 }
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest, 
   { params }: { params: Promise<{ notificationId: string }> }
 ) {
   return withAuth(async ({ supabase, user }) => {
     try {
       const { notificationId } = paramsSchema.parse(await params);
-      validateUUID(notificationId, "notificationId");
+      
+      // Rate limiting
+      const ip = req.headers.get('x-forwarded-for') || 'unknown';
+      await withRateLimit(`notification-delete-${ip}`);
 
       const { error } = await supabase
         .from("notifications")
@@ -62,15 +71,15 @@ export async function DELETE(
         .eq("user_id", user.id);
 
       if (error) {
-        return errorResponse(error.message, "DELETE_ERROR", 500);
+        return errorResponse(error.message, "DELETE_FAILED", 500);
       }
 
-      return successResponse();
+      return successResponse({ success: true });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return errorResponse("Invalid notification ID", "VALIDATION_ERROR", 400);
+        return errorResponse("Invalid notification ID", "INVALID_ID", 400);
       }
-      console.error("[Notification Delete] Error:", error);
+      console.error("[Notifications] Delete error:", error);
       return errorResponse("Internal error", "INTERNAL_ERROR", 500);
     }
   });

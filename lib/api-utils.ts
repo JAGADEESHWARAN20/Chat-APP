@@ -1,59 +1,152 @@
+// lib/api-utils.ts
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { Database } from "@/lib/types/supabase";
+
+// Environment detection
+export const isProduction = process.env.NODE_ENV === 'production';
+export const isDevelopment = process.env.NODE_ENV === 'development';
+
+// Rate limiting
+const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+const RATE_LIMIT_WINDOW = 60000;
+const RATE_LIMIT_MAX_REQUESTS = 100;
 
 export class APIError extends Error {
   constructor(
     message: string,
-    public status: number = 500,
-    public code?: string
+    public statusCode: number = 500,
+    public code?: string,
+    public details?: any
   ) {
     super(message);
-    this.name = "APIError";
+    this.name = 'APIError';
   }
 }
 
-export async function withAuth<T = any>(
-  handler: (props: {
-    supabase: ReturnType<typeof createRouteHandlerClient<Database>>;
-    user: { id: string };
-    session: any;
-  }) => Promise<NextResponse<T>>
-) {
+// Enhanced withAuth that returns NextResponse
+export async function withAuth(
+  handler: (params: { user: any; supabase: any }) => Promise<NextResponse>
+): Promise<NextResponse> {
   try {
     const supabase = createRouteHandlerClient<Database>({ cookies });
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-
+    
     if (sessionError || !session?.user) {
-      return NextResponse.json(
-        { success: false, error: "Authentication required", code: "AUTH_REQUIRED" },
-        { status: 401 }
-      );
+      return errorResponse('Authentication required', 'AUTH_REQUIRED', 401);
     }
-
-    return await handler({ supabase, user: session.user, session });
+    
+    return await handler({ user: session.user, supabase });
   } catch (error) {
-    console.error("Auth middleware error:", error);
-    return NextResponse.json(
-      { success: false, error: "Authentication failed", code: "AUTH_FAILED" },
-      { status: 401 }
+    console.error('Auth error:', error);
+    return errorResponse('Authentication failed', 'AUTH_FAILED', 401);
+  }
+}
+
+export async function withRateLimit(identifier: string): Promise<void> {
+  const now = Date.now();
+  const windowStart = now - RATE_LIMIT_WINDOW;
+  
+  for (const [key, value] of rateLimitMap.entries()) {
+    if (value.resetTime < windowStart) {
+      rateLimitMap.delete(key);
+    }
+  }
+  
+  const current = rateLimitMap.get(identifier) || { count: 0, resetTime: now };
+  
+  if (current.resetTime < windowStart) {
+    current.count = 0;
+    current.resetTime = now;
+  }
+  
+  current.count++;
+  
+  if (current.count > RATE_LIMIT_MAX_REQUESTS) {
+    throw new APIError('Rate limit exceeded', 429, 'RATE_LIMIT_EXCEEDED');
+  }
+  
+  rateLimitMap.set(identifier, current);
+}
+
+// Response helpers
+export function successResponse<T = any>(
+  data: T,
+  status: number = 200,
+  headers: Record<string, string> = {}
+): NextResponse {
+  return NextResponse.json(
+    { success: true, ...data },
+    { status, headers }
+  );
+}
+
+export function errorResponse(
+  message: string,
+  code: string = 'INTERNAL_ERROR',
+  status: number = 500,
+  details?: any
+): NextResponse {
+  return NextResponse.json(
+    { 
+      success: false,
+      error: message, 
+      code,
+      ...(isDevelopment && details && { details })
+    },
+    { status }
+  );
+}
+
+// Alias for createAPIResponse to maintain compatibility
+export const createAPIResponse = successResponse;
+
+export function createAPIError(error: APIError | Error): NextResponse {
+  if (error instanceof APIError) {
+    return errorResponse(
+      error.message, 
+      error.code || 'API_ERROR', 
+      error.statusCode, 
+      error.details
     );
   }
+  
+  console.error('Unhandled API error:', error);
+  return errorResponse(
+    'Internal server error',
+    'INTERNAL_ERROR',
+    500,
+    isDevelopment ? error.message : undefined
+  );
 }
 
-export function validateUUID(id: string, fieldName: string = "ID") {
-  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  if (!UUID_REGEX.test(id)) {
-    throw new APIError(`Invalid ${fieldName} format`, 400, `INVALID_${fieldName.toUpperCase()}`);
+// Validation functions
+export function validateUUID(value: string, fieldName: string = 'ID'): void {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) {
+    throw new APIError(`Invalid ${fieldName} format`, 400, 'INVALID_UUID');
   }
 }
 
-export function successResponse(data: any = { success: true }) {
-  return NextResponse.json({ success: true, ...data });
+export function validateRequired(value: any, fieldName: string): void {
+  if (value === undefined || value === null || value === '') {
+    throw new APIError(`${fieldName} is required`, 400, 'MISSING_REQUIRED_FIELD');
+  }
 }
 
-export function errorResponse(error: string, code?: string, status: number = 500) {
-  return NextResponse.json({ success: false, error, code }, { status });
+export function validateMessageText(text: string): void {
+  if (!text || text.trim().length === 0) {
+    throw new APIError('Message text is required', 400, 'EMPTY_MESSAGE');
+  }
+  if (text.length > 2000) {
+    throw new APIError('Message text too long', 400, 'MESSAGE_TOO_LONG');
+  }
 }
+
+// Validation schemas
+export const validationSchemas = {
+  uuid: (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value),
+  roomId: (value: string) => validationSchemas.uuid(value),
+  userId: (value: string) => validationSchemas.uuid(value),
+  messageText: (text: string) => text && text.trim().length > 0 && text.length <= 2000,
+};

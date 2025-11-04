@@ -1,27 +1,32 @@
+// app/api/messages/[roomId]/route.ts
 import { NextRequest } from "next/server";
-import { withAuth, validateUUID, errorResponse, successResponse } from "@/lib/api-utils";
+import { withAuth, validateUUID, errorResponse, successResponse, withRateLimit } from "@/lib/api-utils";
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ roomId: string }> }
 ) {
   return withAuth(async ({ supabase, user }) => {
     try {
       const { roomId } = await params;
-
+      
+      // Rate limiting
+      const ip = req.headers.get('x-forwarded-for') || 'unknown';
+      await withRateLimit(`messages-${roomId}-${ip}`);
+      
       // Validate roomId
-      if (!roomId) {
+      try {
+        validateUUID(roomId, "roomId");
+      } catch (error) {
         return errorResponse("Valid roomId is required", "INVALID_ROOM_ID", 400);
       }
-      validateUUID(roomId, "roomId");
 
       // Check if user has access to the room
       const { data: roomAccess, error: accessError } = await supabase
-        .from("room_members") // Fixed: using room_members instead of room_participants
+        .from("room_participants")
         .select("user_id")
         .eq("room_id", roomId)
         .eq("user_id", user.id)
-        .eq("status", "accepted")
         .single();
 
       if (accessError || !roomAccess) {
@@ -59,7 +64,9 @@ export async function GET(
         return errorResponse("Failed to fetch messages", "FETCH_ERROR", 500);
       }
 
-      return successResponse({ messages: messages || [] });
+      return successResponse({
+        messages: Array.isArray(messages) ? messages : []
+      });
     } catch (error) {
       console.error("Server error in message fetch route:", error);
       return errorResponse("Internal server error", "INTERNAL_ERROR", 500);

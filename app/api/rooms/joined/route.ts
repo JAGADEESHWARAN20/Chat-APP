@@ -1,5 +1,26 @@
+// app/api/rooms/joined/route.ts
 import { NextRequest } from "next/server";
 import { withAuth, successResponse, errorResponse } from "@/lib/api-utils";
+
+interface Room {
+  id: string;
+  name: string;
+  is_private: boolean;
+  created_by: string;
+  created_at: string;
+}
+
+interface Membership {
+  room_id: string;
+  status: string;
+  rooms: Room;
+}
+
+interface RoomWithCount extends Room {
+  isMember: boolean;
+  participationStatus: "accepted";
+  memberCount: number;
+}
 
 export async function GET(req: NextRequest) {
   return withAuth(async ({ supabase, user }) => {
@@ -18,7 +39,7 @@ export async function GET(req: NextRequest) {
           )
         `)
         .eq("user_id", user.id)
-        .eq("status", "accepted");
+        .eq("status", "accepted") as { data: Membership[] | null; error: any };
 
       if (membershipError) {
         console.error("[Rooms Joined] Memberships fetch error:", membershipError);
@@ -30,35 +51,40 @@ export async function GET(req: NextRequest) {
       }
 
       // Extract rooms from memberships
-      const rooms = memberships.map(m => m.rooms);
+      const rooms: Room[] = memberships.map((m: Membership) => m.rooms);
 
       // Filter by search query if provided
       const filteredRooms = searchQuery 
-        ? rooms.filter(room => room.name.toLowerCase().includes(searchQuery))
+        ? rooms.filter((room: Room) => room.name.toLowerCase().includes(searchQuery))
         : rooms;
 
-      const roomIds = filteredRooms.map(room => room.id);
+      const roomIds = filteredRooms.map((room: Room) => room.id);
 
-      // Fetch member counts efficiently
-      const { data: memberCounts, error: countError } = await supabase
-        .from("room_members")
-        .select("room_id")
-        .in("room_id", roomIds)
-        .eq("status", "accepted");
-
-      if (countError) {
-        console.error("[Rooms Joined] Member counts error:", countError);
-        // Continue with zero counts
+      if (roomIds.length === 0) {
+        return successResponse({ rooms: [] });
       }
 
+      // Fetch member counts efficiently using count API
+      const memberCountPromises = roomIds.map(async (roomId: string) => {
+        const { count, error } = await supabase
+          .from("room_members")
+          .select("*", { count: 'exact', head: true })
+          .eq("room_id", roomId)
+          .eq("status", "accepted");
+
+        return { roomId, count: error ? 0 : (count || 0) };
+      });
+
+      const memberCounts = await Promise.all(memberCountPromises);
+      
       // Create count map
       const countsMap = new Map<string, number>();
-      memberCounts?.forEach(({ room_id }) => {
-        countsMap.set(room_id, (countsMap.get(room_id) || 0) + 1);
+      memberCounts.forEach(({ roomId, count }) => {
+        countsMap.set(roomId, count);
       });
 
       // Format response
-      const joinedRooms = filteredRooms.map((room) => ({
+      const joinedRooms: RoomWithCount[] = filteredRooms.map((room: Room) => ({
         ...room,
         isMember: true,
         participationStatus: "accepted" as const,
@@ -71,4 +97,21 @@ export async function GET(req: NextRequest) {
       return errorResponse("Unexpected error occurred", "INTERNAL_ERROR", 500);
     }
   });
+}
+
+// Add other HTTP methods for completeness
+export async function POST() {
+  return errorResponse("Method not allowed", "METHOD_NOT_ALLOWED", 405);
+}
+
+export async function PUT() {
+  return errorResponse("Method not allowed", "METHOD_NOT_ALLOWED", 405);
+}
+
+export async function DELETE() {
+  return errorResponse("Method not allowed", "METHOD_NOT_ALLOWED", 405);
+}
+
+export async function PATCH() {
+  return errorResponse("Method not allowed", "METHOD_NOT_ALLOWED", 405);
 }
