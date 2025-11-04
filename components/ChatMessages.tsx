@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { Imessage } from "@/lib/store/messages";
 
 export default function ChatMessages() {
-  const { selectedRoom } = useRoomContext();
+  const { selectedRoomId } = useRoomContext();
   const selectedDirectChat = useDirectChatStore((state) => state.selectedChat);
   const { setMessages, clearMessages, subscribeToRoom, unsubscribeFromRoom } = useMessage((state) => ({
     setMessages: state.setMessages,
@@ -22,8 +22,8 @@ export default function ChatMessages() {
     try {
       // Clear existing messages before fetching new ones
       clearMessages();
-      if (selectedRoom) {
-        const response = await fetch(`/api/messages/${selectedRoom.id}`);
+      if (selectedRoomId) {
+        const response = await fetch(`/api/messages/${selectedRoomId}`);
         if (!response.ok) throw new Error("Failed to fetch messages");
         const { messages } = await response.json();
         const formattedMessages: Imessage[] = (messages && Array.isArray(messages) ? messages.map((msg: any) => ({
@@ -41,7 +41,7 @@ export default function ChatMessages() {
         })) : []) || [];
         setMessages(formattedMessages.reverse());
         // Subscribe to real-time updates for the room
-        subscribeToRoom(selectedRoom.id);
+        subscribeToRoom(selectedRoomId);
       } else if (selectedDirectChat) {
         const response = await fetch(`/api/direct-messages/${selectedDirectChat.id}`);
         if (!response.ok) throw new Error("Failed to fetch direct messages");
@@ -65,7 +65,7 @@ export default function ChatMessages() {
       console.error("Error fetching messages:", error);
       toast.error("Failed to load messages");
     }
-  }, [selectedRoom, selectedDirectChat, setMessages, clearMessages, subscribeToRoom]);
+  }, [selectedRoomId, selectedDirectChat, setMessages, clearMessages, subscribeToRoom]);
   
   useEffect(() => {
     fetchMessages();
@@ -73,7 +73,7 @@ export default function ChatMessages() {
     return () => {
       unsubscribeFromRoom();
     };
-  }, [selectedRoom?.id, selectedDirectChat?.id, unsubscribeFromRoom,fetchMessages]);
+  }, [selectedRoomId, selectedDirectChat?.id, unsubscribeFromRoom,fetchMessages]);
   
   return (
     <Suspense fallback={<div>Loading messages...</div>}>
