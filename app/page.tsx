@@ -26,7 +26,7 @@ export default function Page() {
   }, []);
 
   return (
-    <RoomProvider user={user}>
+    <RoomProvider>
       <div className="min-h-screen flex flex-col overflow-hidden bg-background">
         {/* Header */}
         <header className="
