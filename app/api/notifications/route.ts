@@ -1,13 +1,32 @@
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
-import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
-import { Database } from "@/lib/types/supabase";
+
 
 // DELETE /api/notifications
 export async function DELETE(_req: NextRequest) {
-  const supabase = createRouteHandlerClient<Database>({ cookies });
+  const cookieStore = cookies();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll(cookiesToSet) {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options)
+            );
+          } catch {
+            // Ignore if called from Server Component
+          }
+        },
+      },
+    }
+  );
+  
 
   // Auth check
   const { data: { session }, error: sessionError } = await supabase.auth.getSession();

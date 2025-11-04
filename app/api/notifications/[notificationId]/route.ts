@@ -1,7 +1,7 @@
 // app/api/notifications/[notificationId]/route.ts
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { withAuth, successResponse, errorResponse, validateUUID, withRateLimit } from "@/lib/api-utils";
+import { withAuth, successResponse, errorResponse,  withRateLimit } from "@/lib/api-utils";
 
 const paramsSchema = z.object({ 
   notificationId: z.string().uuid() 

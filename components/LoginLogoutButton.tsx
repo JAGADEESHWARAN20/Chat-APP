@@ -24,7 +24,10 @@ interface LoginLogoutButtonProps {
 
 export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
   const router = useRouter();
-  const supabase = createClientComponentClient<Database>();
+  const supabase = createBrowserClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   
   // Get user data from RoomContext - no need to refetch!
