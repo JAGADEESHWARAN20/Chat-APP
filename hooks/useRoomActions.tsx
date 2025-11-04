@@ -4,7 +4,7 @@ import { getSupabaseBrowserClient } from '@/lib/supabase/client';
 
 export function useRoomActions() {
   return useRoomStore((state) => ({
-    setSelectedRoom: state.setSelectedRoom,
+    setSelectedRoom: state.setSelectedRoomId,
     sendMessage: state.sendMessage,
     fetchRooms: state.fetchRooms,
     createRoom: state.createRoom,
