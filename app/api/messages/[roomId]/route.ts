@@ -21,20 +21,31 @@ export async function GET(
         return errorResponse("Valid roomId is required", "INVALID_ROOM_ID", 400);
       }
 
-      // Check if user has access to the room
-    // Check membership (public + private)
-const { data: member, error: memberErr } = await supabase
-.from("room_members")
-.select("user_id, status")
-.eq("room_id", roomId)
-.eq("user_id", user.id)
-.eq("status", "accepted")
-.single();
+      // Check if room exists and user has access
+      const { data: room, error: roomError } = await supabase
+        .from("rooms")
+        .select("id, is_private, created_by")
+        .eq("id", roomId)
+        .single();
 
-if (memberErr || !member) {
-return errorResponse("Access denied", "ACCESS_DENIED", 403);
-}
+      if (roomError || !room) {
+        return errorResponse("Room not found", "ROOM_NOT_FOUND", 404);
+      }
 
+      // For private rooms, check membership
+      if (room.is_private) {
+        const { data: member } = await supabase
+          .from("room_members")
+          .select("user_id")
+          .eq("room_id", roomId)
+          .eq("user_id", user.id)
+          .eq("status", "accepted")
+          .single();
+
+        if (!member) {
+          return errorResponse("Access denied to private room", "ACCESS_DENIED", 403);
+        }
+      }
 
       // Fetch messages with related profiles
       const { data: messages, error: fetchError } = await supabase
