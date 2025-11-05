@@ -242,17 +242,27 @@ export const useRoomStore = create<RoomState>()(
 
       joinRoom: async (roomId) => {
         const supabase = getSupabaseBrowserClient();
-        const { fetchRooms } = get();
+        const { fetchRooms, availableRooms } = get();
+        
         try {
-          const { error } = await supabase.rpc("join_room", {
-            p_room_id: roomId,
-            p_user_id: get().user.id,
-            p_status: "pending"
-          });
+          // Get room info to determine if it's private
+          const room = availableRooms.find(r => r.id === roomId);
+          const isPrivateRoom = room?.is_private;
+          
+          // For public rooms, don't pass status (let RPC handle it)
+          // For private rooms, explicitly pass 'pending'
+          const rpcParams = isPrivateRoom 
+            ? { p_room_id: roomId, p_user_id: get().user.id, p_status: 'pending' }
+            : { p_room_id: roomId, p_user_id: get().user.id };
+          
+          const { error } = await supabase.rpc("join_room", rpcParams);
+          
           if (error) throw error;
           await fetchRooms();
           return true;
-        } catch {
+        } catch (err: any) {
+          console.error("joinRoom error:", err);
+          get().setError(err.message ?? "Failed to join room");
           return false;
         }
       },
