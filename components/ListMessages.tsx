@@ -56,8 +56,73 @@ export default function ListMessages() {
     });
   }, []);
 
+  // ✅ FIXED: Load initial messages with proper room change detection
+  useEffect(() => {
+    if (!selectedRoom?.id) {
+      setMessages([]);
+      messagesLoadedRef.current.clear();
+      prevRoomIdRef.current = null;
+      return;
+    }
 
+    // Only load if room actually changed
+    const roomChanged = selectedRoom.id !== prevRoomIdRef.current;
+    const alreadyLoaded = messagesLoadedRef.current.has(selectedRoom.id);
+    
+    if (!roomChanged || alreadyLoaded || isLoading) {
+      return;
+    }
+
+    prevRoomIdRef.current = selectedRoom.id;
+    
+    let isMounted = true;
+
+  // In your loadInitialMessages function, add detailed logging:
+  const loadInitialMessages = async () => {
+    setIsLoading(true);
+    messagesLoadedRef.current.add(selectedRoom.id);
+    prevRoomIdRef.current = selectedRoom.id;
   
+    try {
+      console.log(`📡 Making API call to: /api/messages/${selectedRoom.id}`);
+      
+      const res = await fetch(`/api/messages/${selectedRoom.id}?t=${Date.now()}`);
+      console.log("📨 API Response status:", res.status);
+      
+      const data = await res.json();
+      console.log("📦 FULL API Response:", data);
+      
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}: ${JSON.stringify(data)}`);
+      }
+  
+      const fetchedMessages = data.messages || data;
+      console.log(`✅ Fetched ${fetchedMessages?.length || 0} messages`);
+  
+      if (Array.isArray(fetchedMessages)) {
+        // Use the transform function instead of manual mapping
+        const formattedMessages = fetchedMessages.map(transformApiMessage);
+        console.log("🎯 Setting formatted messages:", formattedMessages);
+        setMessages(formattedMessages);
+      } else {
+        console.warn("❌ API response is not an array:", fetchedMessages);
+        setMessages([]);
+      }
+    } catch (error) {
+      console.error("❌ Error loading messages:", error);
+      setMessages([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+    loadInitialMessages();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedRoom?.id, setMessages, isLoading]);
+
   // ✅ FIXED: Memoized realtime handler
   const handleRealtimePayload = useCallback(
     (payload: any) => {
@@ -137,39 +202,6 @@ export default function ListMessages() {
     [selectedRoom, messages, optimisticIds, addMessage, optimisticUpdateMessage, optimisticDeleteMessage, supabase]
   );
 
-
-    // ✅ FIXED: Load initial messages with proper room change detection
-    useEffect(() => {
-      if (!selectedRoom?.id) return;
-    
-      console.log(`[ListMessages] Setting up realtime for room: ${selectedRoom.id}`);
-    
-      const messageChannel = supabase.channel(`room_messages_${selectedRoom.id}`, {
-        config: { broadcast: { self: false } }
-      });
-    
-      messageChannel
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'messages',
-            filter: `room_id=eq.${selectedRoom.id}`
-          },
-          handleRealtimePayload
-        )
-        .subscribe((status) => {
-          console.log(`[ListMessages] Realtime status for room ${selectedRoom.id}:`, status);
-        });
-    
-      return () => {
-        console.log(`[ListMessages] Cleaning up realtime for room: ${selectedRoom.id}`);
-        supabase.removeChannel(messageChannel);
-      };
-    }, [selectedRoom?.id, supabase, handleRealtimePayload]);
-    
-    
   // ✅ FIXED: Real-time subscription with proper cleanup and dependencies
   useEffect(() => {
     if (!selectedRoom?.id) return;
