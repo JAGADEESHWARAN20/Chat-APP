@@ -72,7 +72,7 @@ interface RoomState {
   addRoom: (room: Room) => void;
   updateRoom: (roomId: string, updates: Partial<Room>) => void;
   removeRoom: (roomId: string) => void;
-
+  mergeRoomMembership: (roomId: string, updates: Partial<Room>) => void;
   setMessages: (messages: Message[]) => void;
   addMessage: (message: Message) => void;
   updateMessage: (messageId: string, updates: Partial<Message>) => void;
@@ -121,6 +121,14 @@ export const useRoomStore = create<RoomState>()(
             room.id === roomId ? { ...room, ...updates } : room
           )
         })),
+      
+      mergeRoomMembership: (roomId, updates) =>
+        set((state) => ({
+          availableRooms: state.availableRooms.map((room) =>
+            room.id === roomId ? { ...room, ...updates } : room
+          ),
+        })),
+      
 
       removeRoom: (roomId) =>
         set((state) => ({
@@ -367,6 +375,7 @@ export const useRoomActions = () => useRoomStore((state) => ({
   joinRoom: state.joinRoom,
   updateTypingUsers: state.updateTypingUsers,
   updateTypingText: state.updateTypingText,
+  mergeRoomMembership: state.mergeRoomMembership, // ✅ Add Here
   setUser: state.setUser,
   setAvailableRooms: state.setAvailableRooms,
   addRoom: state.addRoom,
@@ -381,6 +390,7 @@ export const useRoomActions = () => useRoomStore((state) => ({
   setError: state.setError,
   clearError: state.clearError,
 }));
+
 
 export const getRoomPresence = (roomId: string) => {
   const presence = useRoomStore.getState().roomPresence[roomId];

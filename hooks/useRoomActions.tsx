@@ -11,6 +11,7 @@ export function useRoomActions() {
     leaveRoom: state.leaveRoom,
     joinRoom: state.joinRoom,
     updateTypingUsers: state.updateTypingUsers,
+    mergeRoomMembership: state.mergeRoomMembership,
     updateTypingText: state.updateTypingText,
     fetchAllUsers: async () => {
         const supabase = getSupabaseBrowserClient();
