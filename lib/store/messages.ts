@@ -5,7 +5,7 @@ import { LIMIT_MESSAGE } from "../constant";
 import { Database } from "@/lib/types/supabase";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { RealtimePostgresInsertPayload, RealtimePostgresUpdatePayload, RealtimePostgresDeletePayload } from '@supabase/supabase-js';
+import {  RealtimePostgresUpdatePayload, RealtimePostgresDeletePayload } from '@supabase/supabase-js';
 
 // Add this helper function at the top of your store
 export const transformApiMessage = (msg: any): Imessage => {

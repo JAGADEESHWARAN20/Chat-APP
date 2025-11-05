@@ -64,64 +64,39 @@ export default function ListMessages() {
       prevRoomIdRef.current = null;
       return;
     }
-
-    // Only load if room actually changed
+  
     const roomChanged = selectedRoom.id !== prevRoomIdRef.current;
-    const alreadyLoaded = messagesLoadedRef.current.has(selectedRoom.id);
-    
-    if (!roomChanged || alreadyLoaded || isLoading) {
-      return;
-    }
-
-    prevRoomIdRef.current = selectedRoom.id;
-    
-    let isMounted = true;
-
-  // In your loadInitialMessages function, add detailed logging:
-  const loadInitialMessages = async () => {
-    setIsLoading(true);
-    messagesLoadedRef.current.add(selectedRoom.id);
-    prevRoomIdRef.current = selectedRoom.id;
   
-    try {
-      console.log(`📡 Making API call to: /api/messages/${selectedRoom.id}`);
-      
-      const res = await fetch(`/api/messages/${selectedRoom.id}?t=${Date.now()}`);
-      console.log("📨 API Response status:", res.status);
-      
-      const data = await res.json();
-      console.log("📦 FULL API Response:", data);
-      
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}: ${JSON.stringify(data)}`);
-      }
-  
-      const fetchedMessages = data.messages || data;
-      console.log(`✅ Fetched ${fetchedMessages?.length || 0} messages`);
-  
-      if (Array.isArray(fetchedMessages)) {
-        // Use the transform function instead of manual mapping
-        const formattedMessages = fetchedMessages.map(transformApiMessage);
-        console.log("🎯 Setting formatted messages:", formattedMessages);
-        setMessages(formattedMessages);
-      } else {
-        console.warn("❌ API response is not an array:", fetchedMessages);
-        setMessages([]);
-      }
-    } catch (error) {
-      console.error("❌ Error loading messages:", error);
+    // ✅ Clear old room messages when switching
+    if (roomChanged) {
       setMessages([]);
-    } finally {
-      setIsLoading(false);
+      messagesLoadedRef.current.delete(prevRoomIdRef.current || "");
     }
-  };
-
-    loadInitialMessages();
-
-    return () => {
-      isMounted = false;
+  
+    const alreadyLoaded = messagesLoadedRef.current.has(selectedRoom.id);
+    if (alreadyLoaded || isLoading) return;
+  
+    prevRoomIdRef.current = selectedRoom.id;
+  
+    const loadInitialMessages = async () => {
+      setIsLoading(true);
+      try {
+        const res = await fetch(`/api/messages/${selectedRoom.id}?t=${Date.now()}`);
+        const data = await res.json();
+        const fetchedMessages = Array.isArray(data.messages) ? data.messages : [];
+        setMessages(fetchedMessages.map(transformApiMessage));
+        messagesLoadedRef.current.add(selectedRoom.id);
+      } catch (error) {
+        console.error("Load messages error:", error);
+        setMessages([]);
+      } finally {
+        setIsLoading(false);
+      }
     };
+  
+    loadInitialMessages();
   }, [selectedRoom?.id, setMessages, isLoading]);
+  
 
   // ✅ FIXED: Memoized realtime handler
   const handleRealtimePayload = useCallback(
