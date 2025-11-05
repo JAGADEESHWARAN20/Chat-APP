@@ -255,59 +255,43 @@ export const useRoomStore = create<RoomState>()(
 
       joinRoom: async (roomId) => {
         const supabase = getSupabaseBrowserClient();
-        const { fetchRooms } = get();
-        
+        const { fetchRooms, setSelectedRoomId } = get();
+      
         try {
-          console.log("🚀 Joining room:", roomId);
-          
           const { data, error } = await supabase.rpc("join_room", {
             p_room_id: roomId,
             p_user_id: get().user.id
-          }) as { data: JoinRoomResponse | null; error: any };
-          
-          console.log("📨 Join room response:", data);
-          
+          }) as any;
+      
           if (error) throw error;
-          
-          if (!data) {
-            toast.error("No response from server");
-            return false;
+          if (!data) return false;
+      
+          switch (data.action) {
+            case "joined_public_room":
+              toast.success("Joined room!");
+              await fetchRooms();
+              setSelectedRoomId(roomId); // ✅ auto-open
+              return true;
+      
+            case "join_request_sent":
+              toast.info("Join request sent to room owner");
+              await fetchRooms();
+              return true;
+      
+            case "owner_joined_private_room":
+              toast.success("Welcome to your private room!");
+              await fetchRooms();
+              setSelectedRoomId(roomId);
+              return true;
           }
-          
-          if (data.success) {
-            // Show appropriate message based on action
-            const messages: Record<string, string> = {
-              'owner_joined_private_room': 'Welcome to your private room!',
-              'joined_public_room': 'Successfully joined room!',
-              'join_request_sent': 'Join request sent to room owner'
-            };
-            
-            const message = messages[data.action] || 'Room joined successfully';
-            toast.success(message);
-            
-            // Refresh rooms list
-            await fetchRooms();
-            return true;
-          } else {
-            // Handle specific errors
-            const errorMessages: Record<string, string> = {
-              'ALREADY_MEMBER': 'You are already a member of this room',
-              'ROOM_NOT_FOUND': 'Room not found',
-              'INTERNAL_ERROR': data.message || 'Failed to join room'
-            };
-            
-            const errorMessage = errorMessages[data.error] || data.message || 'Failed to join room';
-            toast.error(errorMessage);
-            return false;
-          }
+      
+          return true;
         } catch (err: any) {
-          console.error("❌ joinRoom error:", err);
-          const errorMessage = err.message ?? "Failed to join room";
-          get().setError(errorMessage);
-          toast.error(errorMessage);
+          toast.error(err.message ?? "Failed to join room");
           return false;
         }
       },
+      
 
 
       leaveRoom: async (roomId) => {
