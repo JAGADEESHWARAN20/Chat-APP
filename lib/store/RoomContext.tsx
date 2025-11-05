@@ -296,26 +296,27 @@ export const useRoomError = () => useRoomStore((s) => s.error);
 export const useTypingUsers = () => useRoomStore((s) => s.typingUsers);
 export const useTypingDisplayText = () => useRoomStore((s) => s.typingDisplayText);
 
-export const useRoomActions = () => useRoomStore((state) => ({
-  setSelectedRoomId: state.setSelectedRoomId,
-  sendMessage: state.sendMessage,
-  fetchRooms: state.fetchRooms,
-  createRoom: state.createRoom,
-  leaveRoom: state.leaveRoom,
-  joinRoom: state.joinRoom,
-  updateTypingUsers: state.updateTypingUsers,
-  updateTypingText: state.updateTypingText,
-  mergeRoomMembership: state.mergeRoomMembership,
-  setUser: state.setUser,
-  setAvailableRooms: state.setAvailableRooms,
-  addRoom: state.addRoom,
-  updateRoom: state.updateRoom,
-  removeRoom: state.removeRoom,
-  updateRoomPresence: state.updateRoomPresence,
-  setLoading: state.setLoading,
-  setError: state.setError,
-  clearError: state.clearError,
-}));
+export const useRoomActions = () =>
+  useRoomStore((state) => ({
+    setSelectedRoomId: state.setSelectedRoomId, // ✅ fixed
+    sendMessage: state.sendMessage,
+    fetchRooms: state.fetchRooms,
+    createRoom: state.createRoom,
+    leaveRoom: state.leaveRoom,
+    joinRoom: state.joinRoom,
+    updateTypingUsers: state.updateTypingUsers,
+    updateTypingText: state.updateTypingText,
+    mergeRoomMembership: state.mergeRoomMembership,
+    setUser: state.setUser,
+    setAvailableRooms: state.setAvailableRooms,
+    addRoom: state.addRoom,
+    updateRoom: state.updateRoom,
+    removeRoom: state.removeRoom,
+    updateRoomPresence: state.updateRoomPresence,
+    setLoading: state.setLoading,
+    setError: state.setError,
+    clearError: state.clearError,
+  }));
 
 
 

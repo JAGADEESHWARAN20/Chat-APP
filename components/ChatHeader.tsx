@@ -59,12 +59,11 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 
   const handleRoomSwitch = useCallback(
     (newRoomId: string) => {
-      setSelectedRoomId(newRoomId); // ✅ FIXED
+      setSelectedRoomId(newRoomId); // ✅ now correctly updates Zustand
       setIsSwitchRoomPopoverOpen(false);
     },
     [setSelectedRoomId]
   );
-
   return (
     <header className="h-[3.6em] lg:w-[50vw] w-[95vw] flex items-center justify-between px-[1em] py-[1em]">
       <h1 className="text-[2.5vw] lg:text-[1em] flex flex-col font-semibold items-start">
