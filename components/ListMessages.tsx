@@ -5,7 +5,7 @@ import React, { useEffect, useRef, useState, useCallback, useMemo } from "react"
 import Message from "./Message";
 import { DeleteAlert, EditAlert } from "./MessasgeActions";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { toast } from "sonner";
+// import { toast } from "sonner";
 import { Database } from "@/lib/types/supabase";
 import { useSelectedRoom } from "@/lib/store/RoomContext";
 import TypingIndicator from "./TypingIndicator";

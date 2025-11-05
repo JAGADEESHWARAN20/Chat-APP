@@ -69,7 +69,7 @@ export default function NotificationsWrapper() {
                 <Bell className={cn(
                     "h-5 w-5 transition-all duration-200",
                     unreadCount > 0 
-                        ? "text-blue-600 fill-blue-600 animate-pulse" 
+                        ? "text-gray-600 fill-gray-600 animate-pulse" 
                         : userId 
                             ? "hover:fill-slate-800 dark:hover:fill-slate-50" 
                             : "text-gray-400",
@@ -80,7 +80,7 @@ export default function NotificationsWrapper() {
                     <span className={cn(
                         "absolute -top-1 -right-1 min-w-[1.25rem] h-5 text-xs",
                         "bg-red-500 text-white rounded-full flex items-center justify-center",
-                        "font-semibold animate-bounce transition-all duration-300",
+                        "font-semibold  transition-all duration-300",
                         "px-1 transform scale-100"
                     )}>
                         {unreadCount > 99 ? '99+' : unreadCount}

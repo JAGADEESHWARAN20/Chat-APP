@@ -36,7 +36,27 @@ export type MessageWithProfile = Database["public"]["Tables"]["messages"]["Row"]
 };
 
 
-export type Imessage = MessageWithProfile;
+export type Imessage = {
+  id: string;
+  text: string;
+  sender_id: string;
+  created_at: string;
+  is_edited: boolean;
+  room_id: string | null;
+  direct_chat_id: string | null;
+  dm_thread_id: string | null;
+  status: string | null;
+  profiles: {
+    id: string;
+    username: string | null;
+    display_name: string | null;
+    avatar_url: string | null;
+    bio: string | null;
+    created_at: string | null;
+    updated_at: string | null;
+  } | null; // ✅ allow null so optimistic messages don't fallback to email
+};
+
 
 type ActionMessage = Imessage | null;
 type ActionType = "edit" | "delete" | null;
@@ -77,20 +97,27 @@ export const useMessage = create<MessageState>()((set, get) => ({
   actionType: null,
   currentSubscription: null,
 
-  setMessages: (newMessages) =>
-    set((state) => {
-      // Transform API messages to ensure all fields are present
-      const transformedMessages = newMessages.map(transformApiMessage);
+  // setMessages: (newMessages) =>
+  //   set((state) => {
+  //     // Transform API messages to ensure all fields are present
+  //     const transformedMessages = newMessages.map(transformApiMessage);
       
-      const existingIds = new Set(state.messages.map((msg) => msg.id));
-      const filtered = transformedMessages.filter((msg) => !existingIds.has(msg.id));
+  //     const existingIds = new Set(state.messages.map((msg) => msg.id));
+  //     const filtered = transformedMessages.filter((msg) => !existingIds.has(msg.id));
       
-      return {
-        messages: [...filtered, ...state.messages],
-        page: state.page + 1,
-        hasMore: newMessages.length >= LIMIT_MESSAGE,
-      };
-    }),
+  //     return {
+  //       messages: [...filtered, ...state.messages],
+  //       page: state.page + 1,
+  //       hasMore: newMessages.length >= LIMIT_MESSAGE,
+  //     };
+  //   }),
+  setMessages: (incoming) =>
+    set(() => ({
+      messages: incoming.map(transformApiMessage), // ✅ replace, don’t merge
+      page: 1,
+      hasMore: incoming.length >= LIMIT_MESSAGE,
+    })),
+  
   addMessage: (message) =>
     set((state) => {
       if (state.messages.some((msg) => msg.id === message.id)) return state;
@@ -147,32 +174,26 @@ export const useMessage = create<MessageState>()((set, get) => ({
         .on(
           "postgres_changes",
           { event: "INSERT", schema: "public", table: "messages", filter },
-          async (payload: RealtimePostgresInsertPayload<{ [key: string]: any }>) => {
-            const newMessage = payload.new as Database["public"]["Tables"]["messages"]["Row"];
-
-            // ✅ Fixed: Use proper join syntax for the relationship
-            const { data: messageWithUser, error } = await supabase
+          async (payload) => {
+            const msg = payload.new;
+        
+            const { data, error } = await supabase
               .from("messages")
               .select(`
-                *,
-                profiles!messages_sender_id_fkey (
-                  id, display_name, avatar_url, username, bio, created_at, updated_at
+                id, text, sender_id, created_at, is_edited, room_id, direct_chat_id, dm_thread_id, status,
+                profiles:profiles!messages_sender_id_fkey (
+                  id, display_name, username, avatar_url, bio, created_at, updated_at
                 )
               `)
-              .eq("id", newMessage.id)
+              .eq("id", msg.id)
               .single();
-
-            if (error) {
-              console.error(error);
-              toast.error("Failed to load message details");
-              return;
-            }
-
-            if (messageWithUser && !get().optimisticIds.includes(messageWithUser.id)) {
-              get().addMessage(messageWithUser as Imessage);
-            }
+        
+            if (error || !data) return;
+        
+            get().addMessage(transformApiMessage(data));
           }
         )
+        
         .on(
           "postgres_changes",
           { event: "UPDATE", schema: "public", table: "messages", filter },
