@@ -2,6 +2,29 @@
 import { create } from "zustand";
 import { devtools, subscribeWithSelector } from "zustand/middleware";
 import { getSupabaseBrowserClient } from "../supabase/client";
+import { toast } from "sonner";
+
+interface JoinRoomSuccessResponse {
+  success: true;
+  action: 'owner_joined_private_room' | 'joined_public_room' | 'join_request_sent';
+  room_name: string;
+  room_id: string;
+  is_private: boolean;
+  status: string;
+  is_member_now: boolean;
+  needs_approval: boolean;
+  notification_sent: boolean;
+  is_own_room: boolean;
+  debug: any;
+}
+
+interface JoinRoomErrorResponse {
+  success: false;
+  error: 'ALREADY_MEMBER' | 'ROOM_NOT_FOUND' | 'INTERNAL_ERROR';
+  message: string;
+  debug: any;
+}
+
 
 export interface Room {
   id: string;
@@ -16,6 +39,7 @@ export interface Room {
   unreadCount?: number;
   latestMessage?: string;
 }
+type JoinRoomResponse = JoinRoomSuccessResponse | JoinRoomErrorResponse;
 
 export interface Message {
   id: string;
@@ -242,36 +266,60 @@ export const useRoomStore = create<RoomState>()(
 
       joinRoom: async (roomId) => {
         const supabase = getSupabaseBrowserClient();
-        const { fetchRooms, availableRooms } = get();
+        const { fetchRooms } = get();
         
         try {
-          // Get room info to determine if it's private
-          const room = availableRooms.find(r => r.id === roomId);
-          const isPrivateRoom = room?.is_private;
+          console.log("🚀 Joining room:", roomId);
           
-          console.log("🚀 joinRoom called:", {
-            roomId,
-            roomName: room?.name,
-            isPrivate: isPrivateRoom,
-            userId: get().user?.id
-          });
-          
-          const { error, data } = await supabase.rpc("join_room", {
+          const { data, error } = await supabase.rpc("join_room", {
             p_room_id: roomId,
             p_user_id: get().user.id
-          });
+          }) as { data: JoinRoomResponse | null; error: any };
           
-          console.log("📨 RPC Response:", { error, data });
+          console.log("📨 Join room response:", data);
           
           if (error) throw error;
-          await fetchRooms();
-          return true;
+          
+          if (!data) {
+            toast.error("No response from server");
+            return false;
+          }
+          
+          if (data.success) {
+            // Show appropriate message based on action
+            const messages: Record<string, string> = {
+              'owner_joined_private_room': 'Welcome to your private room!',
+              'joined_public_room': 'Successfully joined room!',
+              'join_request_sent': 'Join request sent to room owner'
+            };
+            
+            const message = messages[data.action] || 'Room joined successfully';
+            toast.success(message);
+            
+            // Refresh rooms list
+            await fetchRooms();
+            return true;
+          } else {
+            // Handle specific errors
+            const errorMessages: Record<string, string> = {
+              'ALREADY_MEMBER': 'You are already a member of this room',
+              'ROOM_NOT_FOUND': 'Room not found',
+              'INTERNAL_ERROR': data.message || 'Failed to join room'
+            };
+            
+            const errorMessage = errorMessages[data.error] || data.message || 'Failed to join room';
+            toast.error(errorMessage);
+            return false;
+          }
         } catch (err: any) {
           console.error("❌ joinRoom error:", err);
-          get().setError(err.message ?? "Failed to join room");
+          const errorMessage = err.message ?? "Failed to join room";
+          get().setError(errorMessage);
+          toast.error(errorMessage);
           return false;
         }
       },
+
 
       leaveRoom: async (roomId) => {
         const supabase = getSupabaseBrowserClient();
