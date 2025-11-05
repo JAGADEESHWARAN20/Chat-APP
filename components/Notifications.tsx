@@ -440,7 +440,7 @@ export default function Notifications({
             <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-8 text-center">
               <Bell className="h-12 w-12 text-muted-foreground/50 mb-4" />
               <p className="text-lg font-medium mb-2">No notifications yet</p>
-              <p className="text-sm text-muted-foreground mb-4">When you get notifications, they'll appear here.</p>
+              <p className="text-sm text-muted-foreground mb-4">When you get notifications, they&apos;ll appear here.</p>
               <Button onClick={() => userId && fetchNotifications(userId)} disabled={isLoading} variant="outline" size="sm">
                 {isLoading ? (
                   <>
