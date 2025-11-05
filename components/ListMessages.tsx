@@ -1,6 +1,6 @@
 "use client";
 
-import { Imessage, useMessage } from "@/lib/store/messages";
+import { Imessage, transformApiMessage, useMessage } from "@/lib/store/messages";
 import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import Message from "./Message";
 import { DeleteAlert, EditAlert } from "./MessasgeActions";
@@ -77,69 +77,44 @@ export default function ListMessages() {
     
     let isMounted = true;
 
-    const loadInitialMessages = async () => {
-      setIsLoading(true);
-      messagesLoadedRef.current.add(selectedRoom.id);
-
-      try {
-        console.log(`[ListMessages] Loading messages for room: ${selectedRoom.id}`);
-        
-        const res = await fetch(`/api/messages/${selectedRoom.id}?t=${Date.now()}`);
-        if (!res.ok) {
-          const errorText = await res.text();
-          throw new Error(`HTTP ${res.status}: ${errorText}`);
-        }
-
-        const data = await res.json();
-        const fetchedMessages = data.messages || data;
-
-        if (fetchedMessages && Array.isArray(fetchedMessages)) {
-         const formattedMessages = fetchedMessages.map((msg: any) => ({
-            id: msg.id,
-            created_at: msg.created_at,
-            is_edited: msg.is_edited,
-            sender_id: msg.sender_id,
-            room_id: msg.room_id,
-            direct_chat_id: msg.direct_chat_id,
-            dm_thread_id: msg.dm_thread_id,
-            status: msg.status,
-            text: msg.text,
-            profiles: msg.profiles ? {
-              id: msg.profiles.id,
-              avatar_url: msg.profiles.avatar_url ?? null,
-              display_name: msg.profiles.display_name ?? null,
-              username: msg.profiles.username ?? null,
-              created_at: msg.profiles.created_at ?? null,
-              bio: msg.profiles.bio ?? null,
-              updated_at: msg.profiles.updated_at ?? null,
-            } : {
-              id: msg.sender_id,
-              avatar_url: null,
-              display_name: null,
-              username: null,
-              created_at: null,
-              bio: null,
-              updated_at: null,
-            },
-          }));
-          if (isMounted) {
-            setMessages(formattedMessages);
-            console.log(`[ListMessages] Loaded ${formattedMessages.length} messages`);
-          }
-        } else if (isMounted) {
-          setMessages([]);
-        }
-      } catch (error) {
-        console.error("[ListMessages] Error loading messages:", error);
-        if (isMounted) {
-          toast.error("Failed to load messages");
-          setMessages([]);
-        }
-        messagesLoadedRef.current.delete(selectedRoom.id);
-      } finally {
-        if (isMounted) setIsLoading(false);
+  // In your loadInitialMessages function, add detailed logging:
+  const loadInitialMessages = async () => {
+    setIsLoading(true);
+    messagesLoadedRef.current.add(selectedRoom.id);
+    prevRoomIdRef.current = selectedRoom.id;
+  
+    try {
+      console.log(`📡 Making API call to: /api/messages/${selectedRoom.id}`);
+      
+      const res = await fetch(`/api/messages/${selectedRoom.id}?t=${Date.now()}`);
+      console.log("📨 API Response status:", res.status);
+      
+      const data = await res.json();
+      console.log("📦 FULL API Response:", data);
+      
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}: ${JSON.stringify(data)}`);
       }
-    };
+  
+      const fetchedMessages = data.messages || data;
+      console.log(`✅ Fetched ${fetchedMessages?.length || 0} messages`);
+  
+      if (Array.isArray(fetchedMessages)) {
+        // Use the transform function instead of manual mapping
+        const formattedMessages = fetchedMessages.map(transformApiMessage);
+        console.log("🎯 Setting formatted messages:", formattedMessages);
+        setMessages(formattedMessages);
+      } else {
+        console.warn("❌ API response is not an array:", fetchedMessages);
+        setMessages([]);
+      }
+    } catch (error) {
+      console.error("❌ Error loading messages:", error);
+      setMessages([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
     loadInitialMessages();
 

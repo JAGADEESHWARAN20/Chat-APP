@@ -7,9 +7,34 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { RealtimePostgresInsertPayload, RealtimePostgresUpdatePayload, RealtimePostgresDeletePayload } from '@supabase/supabase-js';
 
+// Add this helper function at the top of your store
+export const transformApiMessage = (msg: any): Imessage => {
+  return {
+    id: msg.id,
+    text: msg.text,
+    sender_id: msg.sender_id,
+    created_at: msg.created_at,
+    is_edited: msg.is_edited ?? false,
+    room_id: msg.room_id,
+    direct_chat_id: msg.direct_chat_id ?? null,
+    dm_thread_id: msg.dm_thread_id ?? null,
+    status: msg.status ?? null,
+    profiles: {
+      id: msg.profiles?.id || msg.sender_id,
+      username: msg.profiles?.username ?? null,
+      display_name: msg.profiles?.display_name ?? null,
+      avatar_url: msg.profiles?.avatar_url ?? null,
+      bio: msg.profiles?.bio ?? null,
+      created_at: msg.profiles?.created_at ?? null,
+      updated_at: msg.profiles?.updated_at ?? null,
+    }
+  };
+};
+
 export type MessageWithProfile = Database["public"]["Tables"]["messages"]["Row"] & {
   profiles: Database["public"]["Tables"]["profiles"]["Row"];
 };
+
 
 export type Imessage = MessageWithProfile;
 
@@ -54,15 +79,18 @@ export const useMessage = create<MessageState>()((set, get) => ({
 
   setMessages: (newMessages) =>
     set((state) => {
+      // Transform API messages to ensure all fields are present
+      const transformedMessages = newMessages.map(transformApiMessage);
+      
       const existingIds = new Set(state.messages.map((msg) => msg.id));
-      const filtered = newMessages.filter((msg) => !existingIds.has(msg.id));
+      const filtered = transformedMessages.filter((msg) => !existingIds.has(msg.id));
+      
       return {
         messages: [...filtered, ...state.messages],
         page: state.page + 1,
         hasMore: newMessages.length >= LIMIT_MESSAGE,
       };
     }),
-
   addMessage: (message) =>
     set((state) => {
       if (state.messages.some((msg) => msg.id === message.id)) return state;
