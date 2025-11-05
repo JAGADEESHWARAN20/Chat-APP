@@ -59,7 +59,7 @@ interface RoomState {
   selectedRoomId: string | null;
 
   availableRooms: Room[];
-  messages: Message[];
+
   typingUsers: TypingUser[];
   typingDisplayText: string;
   roomPresence: Record<string, RoomPresence>;
@@ -73,11 +73,6 @@ interface RoomState {
   updateRoom: (roomId: string, updates: Partial<Room>) => void;
   removeRoom: (roomId: string) => void;
   mergeRoomMembership: (roomId: string, updates: Partial<Room>) => void;
-  setMessages: (messages: Message[]) => void;
-  addMessage: (message: Message) => void;
-  updateMessage: (messageId: string, updates: Partial<Message>) => void;
-  deleteMessage: (messageId: string) => void;
-
   updateTypingUsers: (users: TypingUser[]) => void;
   updateTypingText: (text: string) => void;
   updateRoomPresence: (roomId: string, presence: RoomPresence) => void;
@@ -87,7 +82,6 @@ interface RoomState {
   clearError: () => void;
 
   fetchRooms: () => Promise<void>;
-  fetchMessages: (roomId: string) => Promise<void>;
   sendMessage: (roomId: string, text: string) => Promise<boolean>;
   joinRoom: (roomId: string) => Promise<boolean>;
   leaveRoom: (roomId: string) => Promise<boolean>;
@@ -100,7 +94,7 @@ export const useRoomStore = create<RoomState>()(
       user: null,
       selectedRoomId: null,
       availableRooms: [],
-      messages: [],
+      
       typingUsers: [],
       typingDisplayText: "",
       roomPresence: {},
@@ -136,22 +130,7 @@ export const useRoomStore = create<RoomState>()(
           selectedRoomId: state.selectedRoomId === roomId ? null : state.selectedRoomId
         })),
 
-      setMessages: (messages) => set({ messages }),
-      addMessage: (message) => set((state) => ({
-        messages: [message, ...state.messages]
-      })),
-
-      updateMessage: (messageId, updates) =>
-        set((state) => ({
-          messages: state.messages.map((msg) =>
-            msg.id === messageId ? { ...msg, ...updates } : msg
-          )
-        })),
-
-      deleteMessage: (messageId) =>
-        set((state) => ({
-          messages: state.messages.filter((msg) => msg.id !== messageId)
-        })),
+    
 
       updateTypingUsers: (users) => set({ typingUsers: users }),
       updateTypingText: (text) => set({ typingDisplayText: text }),
@@ -204,55 +183,23 @@ export const useRoomStore = create<RoomState>()(
         }
       },
 
-      fetchMessages: async (roomId) => {
-        const { setLoading, setError, setMessages } = get();
-        try {
-          setLoading(true);
-          const res = await fetch(`/api/messages/${roomId}`);
-          const json = await res.json();
-          if (!res.ok) throw new Error(json.error);
-          setMessages(json.messages || []);
-        } catch (err: any) {
-          setError(err.message ?? "Failed to load messages");
-        } finally {
-          setLoading(false);
-        }
-      },
-
+   
       sendMessage: async (roomId, text) => {
-        const { addMessage, user } = get();
-        if (!user) return false;
-
-        const optimisticMessage: Message = {
-          id: `temp-${Date.now()}`,
-          text,
-          sender_id: user.id,
-          created_at: new Date().toISOString(),
-          is_edited: false,
-          room_id: roomId,
-          direct_chat_id: null,
-          status: "sending",
-        };
-
-        addMessage(optimisticMessage);
-
         try {
           const res = await fetch("/api/messages/send", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ roomId, text })
           });
-          const json = await res.json();
-          if (!res.ok) throw new Error(json.error);
-          get().deleteMessage(optimisticMessage.id);
-          addMessage(json.message);
-          return true;
+      
+          return res.ok;
         } catch {
-          get().updateMessage(optimisticMessage.id, { status: "failed" });
           return false;
         }
       },
-
+      
+      
+      
       joinRoom: async (roomId) => {
         const supabase = getSupabaseBrowserClient();
         const { fetchRooms, setSelectedRoomId } = get();
@@ -344,7 +291,6 @@ export const useSelectedRoom = () =>
   );
 
 export const useAvailableRooms = () => useRoomStore((s) => s.availableRooms);
-export const useRoomMessages = () => useRoomStore((s) => s.messages);
 export const useRoomLoading = () => useRoomStore((s) => s.isLoading);
 export const useRoomError = () => useRoomStore((s) => s.error);
 export const useTypingUsers = () => useRoomStore((s) => s.typingUsers);
@@ -359,21 +305,18 @@ export const useRoomActions = () => useRoomStore((state) => ({
   joinRoom: state.joinRoom,
   updateTypingUsers: state.updateTypingUsers,
   updateTypingText: state.updateTypingText,
-  mergeRoomMembership: state.mergeRoomMembership, // ✅ Add Here
+  mergeRoomMembership: state.mergeRoomMembership,
   setUser: state.setUser,
   setAvailableRooms: state.setAvailableRooms,
   addRoom: state.addRoom,
   updateRoom: state.updateRoom,
   removeRoom: state.removeRoom,
-  setMessages: state.setMessages,
-  addMessage: state.addMessage,
-  updateMessage: state.updateMessage,
-  deleteMessage: state.deleteMessage,
   updateRoomPresence: state.updateRoomPresence,
   setLoading: state.setLoading,
   setError: state.setError,
   clearError: state.clearError,
 }));
+
 
 
 export const getRoomPresence = (roomId: string) => {
