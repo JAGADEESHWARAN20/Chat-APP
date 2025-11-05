@@ -220,14 +220,12 @@ export const useNotification = create<NotificationState>((set, get) => {
     addNotification: (notification) => {
       const current = get().notifications;
       if (!current.some((n) => n.id === notification.id)) {
-        console.log("➕ Adding new notification:", notification.id);
         const newNotifications = [notification, ...current];
         const unreadCount = newNotifications.filter(n => n.status === 'unread').length;
-        set({ notifications: newNotifications, unreadCount });
+        set({ notifications: newNotifications, unreadCount }); // 🏪 Update store
         
-        // Show toast only for important notification types
-        const importantTypes = ['join_request', 'room_invite', 'user_joined'];
-        if (importantTypes.includes(notification.type)) {
+        // 🔔 Show toast for important notifications
+        if (['join_request', 'room_invite'].includes(notification.type)) {
           toast.success("🔔 New notification!");
         }
       }
