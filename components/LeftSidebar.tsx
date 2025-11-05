@@ -182,11 +182,31 @@ const LeftSidebar = React.memo<LeftSidebarProps>(({ user, isOpen, onClose }) => 
 
   if (!authUser) {
     return (
-      <div className="fixed lg:static inset-y-0 left-0 w-full lg:w-1/4 px-4 py-3 bg-card border-r h-screen flex flex-col transition-transform duration-300 z-50">
-        <p className="text-muted-foreground p-4">Please log in to view rooms</p>
+      <div
+        className={`fixed lg:static inset-y-0 left-0 w-full lg:w-64 px-4 py-3 bg-card border-r h-screen flex flex-col transition-transform duration-300 ${
+          isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        } z-50`}
+      >
+        <div className="flex flex-col items-center justify-center h-full text-center px-4 text-muted-foreground">
+          <Avatar className="h-14 w-14 mb-3 opacity-60">
+            <AvatarFallback>?</AvatarFallback>
+          </Avatar>
+  
+          <p className="text-sm mb-2">You are not logged in</p>
+  
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => (window.location.href = "/auth/login")}
+            className="mt-1"
+          >
+            Sign In
+          </Button>
+        </div>
       </div>
     );
   }
+  
 
   return (
     <div
