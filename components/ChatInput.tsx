@@ -16,7 +16,8 @@ export default function ChatInput() {
   const [text, setText] = useState("");
   const [isSending, setIsSending] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const { addMessage, setOptimisticIds } = useMessage();
+  const { addMessage, setOptimisticIds, optimisticDeleteMessage } = useMessage();
+
   
   // ✅ FIXED: Use Zustand selectors
   const selectedRoom = useSelectedRoom();
@@ -67,13 +68,19 @@ export default function ChatInput() {
       status: "sending",
       profiles: {
         id: user!.id,
-        display_name: user!.user_metadata?.display_name || user!.email || "Anonymous",
+        display_name:
+          user!.user_metadata?.display_name ||
+          user!.user_metadata?.full_name ||
+          user!.user_metadata?.name ||
+          user!.user_metadata?.username ||
+          null,
         avatar_url: user!.user_metadata?.avatar_url || "",
-        username: user!.user_metadata?.username || "",
+        username: user!.user_metadata?.username || null,
         created_at: user!.created_at,
         updated_at: null,
         bio: null,
       },
+      
     };
 
     setOptimisticIds(optimisticId);
@@ -83,12 +90,15 @@ export default function ChatInput() {
     try {
       // ✅ FIXED: Use the room store's sendMessage action
       const success = await sendMessage(selectedRoom.id, text.trim());
-      
+
       if (success) {
+        // remove the optimistic; the realtime INSERT will add the final message
+        optimisticDeleteMessage(optimisticId);
         toast.success("Message sent");
       } else {
         throw new Error("Failed to send message");
       }
+
     } catch (error) {
       console.error("[ChatInput] Send error:", error);
       toast.error("Failed to send message");
