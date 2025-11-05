@@ -16,6 +16,7 @@ import { useSelectedRoom, useAvailableRooms, useRoomActions } from "@/lib/store/
 import { useMessage, Imessage } from "@/lib/store/messages";
 import { useSearchHighlight } from "@/lib/store/SearchHighlightContext";
 import { RoomActiveUsers } from "@/components/reusable/RoomActiveUsers";
+import { RoomAssistantDialog } from "./AIchatDialog";
 
 export default function ChatHeader({ user }: { user: SupabaseUser | undefined }) {
   const { searchMessages } = useMessage();
@@ -112,6 +113,13 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
             </div>
           </PopoverContent>
         </Popover>
+        {selectedRoom && (
+  <RoomAssistantDialog 
+    roomId={selectedRoom.id} 
+    roomName={selectedRoom.name}
+  />
+)}
+
 
         {/* Switch Room */}
         <Popover open={isSwitchRoomPopoverOpen} onOpenChange={setIsSwitchRoomPopoverOpen}>
