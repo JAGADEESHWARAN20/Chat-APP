@@ -16,6 +16,7 @@ import { useUser } from "@/lib/store/user";
 
 export default function Message({ message }: { message: Imessage }) {
   const user = useUser((state) => state.user);
+  console.log("message from Message component and", user)
   const { highlightedMessageId } = useSearchHighlight();
 
   // Add safety check for message
