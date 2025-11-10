@@ -2,7 +2,7 @@
 
 import { createBrowserClient } from "@supabase/ssr";
 import { Button } from "./ui/button";
-import { LogOut, Menu,  User, Settings } from "lucide-react";
+import { LogOut, Menu, User, Settings } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { User as SupabaseUser } from "@supabase/supabase-js";
 import { Database } from "@/database.types";
@@ -15,7 +15,6 @@ import {
 } from "@/components/ui/sheet";
 import { useState } from "react";
 import ThemeToggleButton from "./ThemeToggle";
-
 import { useRoomContext } from "@/lib/store/RoomContext";
 
 interface LoginLogoutButtonProps {
@@ -29,12 +28,7 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
   const [isSheetOpen, setIsSheetOpen] = useState(false);
-  
-  // Get user data from RoomContext - no need to refetch!
- 
   const { user: contextUser } = useRoomContext();
-
-  // Use the user from props or context (context is more reliable)
   const currentUser = user || contextUser;
 
   const handleLogout = async () => {
@@ -43,53 +37,67 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
     router.push("/");
   };
 
-  // Navigation handlers
   const handleProfileNavigation = () => {
     setIsSheetOpen(false);
-    if (currentUser?.id) {
-      router.push(`/profile/${currentUser.id}`);
-    }
+    if (currentUser?.id) router.push(`/profile/${currentUser.id}`);
   };
 
   const handleEditProfileNavigation = () => {
     setIsSheetOpen(false);
-    if (currentUser?.id) {
-      router.push(`/profile/${currentUser.id}/edit`);
-    }
+    if (currentUser?.id) router.push(`/profile/${currentUser.id}/edit`);
   };
 
   const getDisplayName = () => {
-    return currentUser?.user_metadata?.display_name || 
-           currentUser?.user_metadata?.username || 
-           currentUser?.email || 
-           "User";
+    return (
+      currentUser?.user_metadata?.display_name ||
+      currentUser?.user_metadata?.username ||
+      currentUser?.email ||
+      "User"
+    );
   };
 
   if (currentUser) {
     return (
       <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
         <SheetTrigger asChild>
-          <button 
-            title="menu" 
-            className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-accent/50 transition-colors"
+          <button
+            title="menu"
+            className={`
+              relative w-9 h-9 flex items-center justify-center rounded-lg
+              border border-transparent
+              transition-all duration-300 ease-out
+              group
+              bg-[hsl(var(--primary)/0.15)] hover:bg-transparent
+              hover:border-[hsl(var(--primary))]
+              shadow-sm
+            `}
           >
-            <Menu className="h-5 w-5" />
+            <Menu
+              className={`
+                h-5 w-5 transition-all duration-300 ease-in-out
+                fill-[hsl(var(--primary))] stroke-[hsl(var(--primary))]
+                group-hover:fill-transparent
+                group-hover:stroke-[hsl(var(--primary))]
+              `}
+            />
           </button>
         </SheetTrigger>
-        <SheetContent side="right" className="w-[320px] sm:w-[380px]">
-          <SheetHeader className="mb-6">
-            <SheetTitle className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-green-500 flex items-center justify-center">
-                <User className="w-4 h-4 text-white" />
-              </div>
+
+        <SheetContent
+          side="right"
+          className="w-[320px] sm:w-[380px] p-5 bg-background border-l border-border/30"
+        >
+          <SheetHeader className="mb-5">
+            <SheetTitle className="flex justify-between items-center gap-3 text-lg font-semibold">
               Menu
+              <ThemeToggleButton />
             </SheetTitle>
           </SheetHeader>
 
-          <div className="flex flex-col h-[calc(100vh-120px)] justify-between">
+          <div className="flex flex-col h-[calc(100vh-140px)] justify-between">
             <div className="space-y-6">
-              {/* User Info Section */}
-              <div className="p-4 rounded-xl bg-card border">
+              {/* User Info Card */}
+              <div className="p-4 rounded-xl bg-card border border-border/30 shadow-sm transition-all duration-200">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-12 h-12 rounded-full bg-gradient-to-r from-blue-500 to-green-500 flex items-center justify-center text-white font-semibold text-lg">
                     {getDisplayName().charAt(0).toUpperCase()}
@@ -104,34 +112,25 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
                   </div>
                 </div>
 
-                {/* Profile Actions */}
-                <div className="grid grid-cols-2 gap-2">
-                  <Button 
+                <div className="grid grid-cols-2 gap-3">
+                  <Button
                     onClick={handleProfileNavigation}
-                    variant="secondary" 
-                    size="sm" 
-                    className="w-full h-9 text-xs"
+                    variant="secondary"
+                    size="sm"
+                    className="w-full h-9 text-xs font-medium shadow-sm"
                   >
                     <User className="w-3 h-3 mr-1" />
                     Profile
                   </Button>
-                  <Button 
+                  <Button
                     onClick={handleEditProfileNavigation}
-                    variant="secondary" 
-                    size="sm" 
-                    className="w-full h-9 text-xs"
+                    variant="secondary"
+                    size="sm"
+                    className="w-full h-9 text-xs font-medium shadow-sm"
                   >
                     <Settings className="w-3 h-3 mr-1" />
                     Settings
                   </Button>
-                </div>
-              </div>
-
-              {/* Theme Toggle */}
-              <div className="p-4 rounded-lg bg-card/50 border">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Theme</span>
-                  <ThemeToggleButton />
                 </div>
               </div>
             </div>
@@ -141,7 +140,7 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
               onClick={handleLogout}
               variant="ghost"
               size="lg"
-              className="w-full h-12 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50/50 dark:hover:bg-red-950/20 border border-red-200/50 dark:border-red-800/50 font-medium"
+              className="w-full h-12 mt-6 text-red-600 dark:text-red-400 font-semibold border border-red-200/50 dark:border-red-800/40 hover:bg-red-100/30 dark:hover:bg-red-900/20 transition-all duration-300"
             >
               <LogOut className="w-4 h-4 mr-3" />
               Sign Out
@@ -152,13 +151,14 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
     );
   }
 
+  // Non-logged-in state
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-3">
       <Button
         onClick={() => router.push("/auth/login")}
-        variant="ghost"
+        variant="outline"
         size="sm"
-        className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 border border-blue-200/50 dark:border-blue-800/50"
+        className="text-blue-600 dark:text-blue-400 border border-blue-300/50 dark:border-blue-700/50 hover:bg-blue-100/50 dark:hover:bg-blue-900/20 transition-all"
       >
         Sign In
       </Button>
@@ -166,7 +166,7 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
         onClick={() => router.push("/auth/register")}
         variant="default"
         size="sm"
-        className="bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white shadow-lg hover:shadow-xl"
+        className="bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white shadow-md hover:shadow-lg transition-all"
       >
         Sign Up
       </Button>

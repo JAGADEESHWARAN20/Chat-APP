@@ -386,7 +386,7 @@ export default function Notifications({
     return (
       <Sheet open={isOpen} onOpenChange={handleClose}>
         <SheetContent side="right" className="p-0 flex flex-col h-full w-full sm:max-w-sm">
-          <SheetHeader className="p-4 border-b">
+          <SheetHeader className="p-1 border-b">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Button variant="ghost" size="icon" onClick={handleClose}>
@@ -411,8 +411,8 @@ export default function Notifications({
 
   return (
     <Sheet open={isOpen} onOpenChange={handleClose}>
-      <SheetContent side="right" className="p-0 flex flex-col h-full w-full sm:max-w-sm">
-        <SheetHeader className="p-4 border-b">
+      <SheetContent side="right" className=" flex flex-col h-full p-0 w-full sm:max-w-sm">
+        <SheetHeader className="p-2 border-b">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Button variant="ghost" size="icon" onClick={handleClose}>
@@ -437,7 +437,7 @@ export default function Notifications({
               <span className="ml-2 text-sm text-muted-foreground">Loading notifications...</span>
             </div>
           ) : notifications.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-8 text-center">
+            <div className="flex flex-col items-center justify-start h-full text-muted-foreground text-center">
               <Bell className="h-12 w-12 text-muted-foreground/50 mb-4" />
               <p className="text-lg font-medium mb-2">No notifications yet</p>
               <p className="text-sm text-muted-foreground mb-4">When you get notifications, they&apos;ll appear here.</p>

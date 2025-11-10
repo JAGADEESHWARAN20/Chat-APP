@@ -37,7 +37,7 @@ export default function HomePage() {
         border-b border-border/40 
         bg-background/95 backdrop-blur-xl
         supports-[backdrop-filter]:bg-background/60
-        sticky top-0 z-50
+        sticky top-0 z-0
         shadow-sm
       ">
         <div className="flex items-center justify-between max-w-7xl mx-auto w-full">
@@ -83,31 +83,26 @@ export default function HomePage() {
 
             {/* Desktop Navigation Tabs */}
             <div className="hidden md:flex items-center gap-1 p-1 rounded-2xl bg-muted/50 border border-border/30">
-              <button
-                onClick={() => setActiveTab("home")}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200",
-                  activeTab === "home" 
-                    ? "bg-background shadow-sm text-foreground border border-border/50" 
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <Home className="w-4 h-4" />
-                Home
-              </button>
-              <button
-                onClick={() => setActiveTab("search")}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200",
-                  activeTab === "search" 
-                    ? "bg-background shadow-sm text-foreground border border-border/50" 
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <Search className="w-4 h-4" />
-                Search
-              </button>
-            </div>
+  {[
+    { key: "home", label: "Home", icon: Home },
+    { key: "search", label: "Search", icon: Search },
+  ].map(({ key, label, icon: Icon }) => (
+    <button
+      key={key}
+      onClick={() => setActiveTab(key as "home" | "search")}
+      className={cn(
+        "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 border border-transparent",
+        activeTab === key
+          ? "bg-background shadow-sm text-foreground border-border/50"
+          : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+      )}
+    >
+      <Icon className="w-4 h-4" />
+      {label}
+    </button>
+  ))}
+</div>
+
           </div>
 
           {/* Right section */}

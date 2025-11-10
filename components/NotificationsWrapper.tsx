@@ -69,7 +69,7 @@ export default function NotificationsWrapper() {
                 <Bell className={cn(
                     "h-5 w-5 transition-all duration-200",
                     unreadCount > 0 
-                        ? "text-gray-600 fill-gray-600 animate-pulse" 
+                        ? "text-gray-600 fill-gray-600 group-hover:fill-transparent group-hover:stroke-black" 
                         : userId 
                             ? "hover:fill-slate-800 dark:hover:fill-slate-50" 
                             : "text-gray-400",

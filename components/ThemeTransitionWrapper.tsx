@@ -9,11 +9,13 @@ interface ThemeTransitionContextValue {
   isDark: boolean;
 }
 
-const ThemeTransitionContext = createContext<ThemeTransitionContextValue | null>(null);
+const ThemeTransitionContext =
+  createContext<ThemeTransitionContextValue | null>(null);
 
 export function useThemeTransition() {
   const ctx = useContext(ThemeTransitionContext);
-  if (!ctx) throw new Error("useThemeTransition must be used inside ThemeTransitionWrapper");
+  if (!ctx)
+    throw new Error("useThemeTransition must be used inside ThemeTransitionWrapper");
   return ctx;
 }
 
@@ -22,70 +24,133 @@ export default function ThemeTransitionWrapper({
 }: {
   children: React.ReactNode;
 }) {
-  const { theme, setTheme } = useTheme();
-  const isDark = theme === "dark";
+  const { theme: currentTheme, setTheme, systemTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  const isDark = (currentTheme || "light") === "dark";
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  const [transitionState, setTransitionState] = useState<{
-    active: boolean;
-    nextTheme: string;
-  }>({
+  // Safe SSR defaults
+  const [transitionState, setTransitionState] = useState({
     active: false,
     nextTheme: "light",
+    cx: 0,
+    cy: 0,
   });
 
   useEffect(() => {
-    if (!transitionState.active || !canvasRef.current) return;
+    setMounted(true);
+    if (typeof window !== "undefined") {
+      setTransitionState((prev) => ({
+        ...prev,
+        cx: window.innerWidth / 2,
+        cy: window.innerHeight / 2,
+      }));
+    }
+  }, []);
+
+  const getHSL = (name: string): string => {
+    if (typeof window === "undefined") return "0 0% 100%";
+    const root = document.documentElement;
+    const value = getComputedStyle(root).getPropertyValue(name).trim();
+    return value || "0 0% 100%";
+  };
+
+  const bgColor = mounted ? `hsl(${getHSL("--background")})` : "hsl(0 0% 100%)";
+
+  // Detect target color tone to match ThemeToggleButton
+  const getTransitionColor = (nextTheme: string) => {
+    if (nextTheme === "dark") {
+      // Light → Dark transition (match yellowish glow)
+      return "260 80% 60%";
+    } else {
+      // Dark → Light transition (match violet-blue tone)
+      return "45 95% 55%";
+    }
+  };
+
+  // Animate the circular theme reveal
+  useEffect(() => {
+    if (!transitionState.active || !canvasRef.current || typeof window === "undefined") return;
 
     const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
-    const chars = "010101010101";
-    const fontSize = 14;
-    const columns = canvas.width / fontSize;
-    const drops: number[] = Array(Math.floor(columns)).fill(1);
+    const chars = "01";
+    const fontSize = 16;
+    const startTime = performance.now();
+    const maxRadius = Math.sqrt(canvas.width ** 2 + canvas.height ** 2);
+    const { nextTheme, cx, cy } = transitionState;
 
-    const draw = () => {
-      ctx.fillStyle = transitionState.nextTheme === "dark" 
-        ? "rgba(0, 0, 0, 0.05)" 
-        : "rgba(255, 255, 255, 0.05)";
+    const themeColor = getTransitionColor(nextTheme);
+
+    const draw = (time: number) => {
+      const elapsed = time - startTime;
+      const duration = 1200;
+      const progress = Math.min(elapsed / duration, 1);
+      const radius = Math.max(0, progress * maxRadius);
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.save();
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      ctx.closePath();
+      ctx.clip();
+
+      // Draw animated digits
+      const digits = 60;
+      for (let i = 0; i < digits; i++) {
+        const angle = (i / digits) * Math.PI * 2;
+        const x = cx + Math.cos(angle) * (radius - 10);
+        const y = cy + Math.sin(angle) * (radius - 10);
+        const char = chars[Math.floor(Math.random() * chars.length)];
+        ctx.fillStyle = `hsla(${themeColor} / ${1 - progress * 0.6})`;
+        ctx.font = `${fontSize}px monospace`;
+        ctx.fillText(char, x, y);
+      }
+
+      // Radial glow based on target theme color
+      const gradient = ctx.createRadialGradient(cx, cy, radius * 0.2, cx, cy, radius);
+      gradient.addColorStop(0, `hsla(${themeColor} / 0.25)`);
+      gradient.addColorStop(1, `hsla(${themeColor} / 0)`);
+      ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      ctx.fillStyle = transitionState.nextTheme === "dark" ? "#0F0" : "#00F";
-      ctx.font = `${fontSize}px monospace`;
+      // Rim edge glow
+      ctx.strokeStyle = `hsl(${themeColor})`;
+      ctx.lineWidth = 3;
+      ctx.shadowBlur = 25;
+      ctx.shadowColor = `hsl(${themeColor})`;
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      ctx.stroke();
 
-      for (let i = 0; i < drops.length; i++) {
-        const text = chars[Math.floor(Math.random() * chars.length)];
-        ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+      ctx.restore();
 
-        if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
-          drops[i] = 0;
-        }
-        drops[i]++;
-      }
+      if (progress < 1) requestAnimationFrame(draw);
+      else ctx.clearRect(0, 0, canvas.width, canvas.height);
     };
 
-    const interval = setInterval(draw, 33);
-
-    return () => clearInterval(interval);
+    requestAnimationFrame(draw);
   }, [transitionState]);
 
   const triggerTransition = (x: number, y: number, nextTheme: string) => {
-    setTransitionState({ active: true, nextTheme });
-console.log(x,y)
+    setTransitionState({ active: true, nextTheme, cx: x, cy: y });
     setTimeout(() => {
-      setTransitionState(prev => ({ ...prev, active: false }));
       setTheme(nextTheme);
+      setTransitionState((prev) => ({ ...prev, active: false }));
     }, 1200);
   };
 
+  const themeToApply = mounted ? currentTheme || systemTheme || "light" : "light";
+
   return (
     <ThemeTransitionContext.Provider value={{ triggerTransition, isDark }}>
-      <div className={`transition-colors duration-500 ${theme}`}>
+      <div className={`transition-colors duration-500 ${themeToApply}`}>
         {children}
       </div>
 
@@ -96,153 +161,24 @@ console.log(x,y)
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.5 }}
+            transition={{ duration: 0.3 }}
           >
-            {/* Matrix Rain Canvas */}
-            <canvas
-              ref={canvasRef}
-              className="w-full h-full"
-            />
-            
-            {/* Center portal effect */}
+            {/* Transparent Canvas */}
+            <canvas ref={canvasRef} className="absolute inset-0 w-full h-full bg-transparent" />
+
+            {/* Expanding Circle synced with background */}
             <motion.div
-              className="absolute rounded-full"
+              className="absolute rounded-full mix-blend-normal"
               style={{
-                background: transitionState.nextTheme === "dark" 
-                  ? "radial-gradient(circle, transparent 30%, hsl(224 71.4% 4.1%) 70%)"
-                  : "radial-gradient(circle, transparent 30%, hsl(0 0% 100%) 70%)",
-                left: '50%',
-                top: '50%',
+                background: `radial-gradient(circle, ${bgColor} 45%, transparent 80%)`,
+                left: transitionState.cx,
+                top: transitionState.cy,
+                transform: "translate(-50%, -50%)",
               }}
-              initial={{
-                width: 0,
-                height: 0,
-                x: "-50%",
-                y: "-50%",
-                scale: 0,
-              }}
-              animate={{
-                width: "100vmax",
-                height: "100vmax",
-                scale: 1,
-              }}
-              transition={{
-                duration: 1.2,
-                ease: "easeOut",
-              }}
+              initial={{ width: 0, height: 0, scale: 0 }}
+              animate={{ width: "200vmax", height: "200vmax", scale: 1 }}
+              transition={{ duration: 1.2, ease: "easeOut" }}
             />
-
-            {/* Mode Label - Centered */}
-            <motion.div
-              className="absolute inset-0 flex items-center justify-center"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ delay: 0.3, duration: 0.6 }}
-            >
-              <div className="text-center">
-                <motion.div
-                  initial={{ scale: 0.8, y: 20 }}
-                  animate={{ scale: 1, y: 0 }}
-                  transition={{ 
-                    type: "spring", 
-                    stiffness: 200, 
-                    damping: 15,
-                    delay: 0.4 
-                  }}
-                  className={`
-                    text-6xl md:text-8xl lg:text-9xl font-bold
-                    bg-gradient-to-r 
-                    ${transitionState.nextTheme === "dark" 
-                      ? "from-green-400 via-emerald-300 to-teal-400" 
-                      : "from-blue-400 via-sky-300 to-cyan-400"
-                    }
-                    bg-clip-text text-transparent
-                    drop-shadow-2xl
-                    mb-4
-                  `}
-                >
-                  MODE
-                </motion.div>
-                
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.6, duration: 0.4 }}
-                  className={`
-                    text-2xl md:text-4xl font-semibold
-                    ${transitionState.nextTheme === "dark" 
-                      ? "text-green-300" 
-                      : "text-blue-300"
-                    }
-                    drop-shadow-lg
-                    tracking-wider
-                  `}
-                >
-                  {transitionState.nextTheme === "dark" ? "DARK" : "LIGHT"}
-                </motion.div>
-
-                {/* Animated dots */}
-                <motion.div 
-                  className="flex justify-center gap-2 mt-6"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.8 }}
-                >
-                  {[0, 1, 2].map((i) => (
-                    <motion.div
-                      key={i}
-                      className={`
-                        w-2 h-2 rounded-full
-                        ${transitionState.nextTheme === "dark" 
-                          ? "bg-green-400" 
-                          : "bg-blue-400"
-                        }
-                      `}
-                      animate={{ 
-                        scale: [1, 1.5, 1],
-                        opacity: [0.7, 1, 0.7]
-                      }}
-                      transition={{
-                        duration: 1.5,
-                        repeat: Infinity,
-                        delay: i * 0.2,
-                        ease: "easeInOut"
-                      }}
-                    />
-                  ))}
-                </motion.div>
-              </div>
-            </motion.div>
-
-            {/* Corner accents */}
-            <motion.div
-              className="absolute top-4 left-4 text-sm font-mono opacity-60"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.5 }}
-            >
-              <div className={transitionState.nextTheme === "dark" ? "text-green-400" : "text-blue-400"}>
-                SYSTEM_TRANSITION
-              </div>
-              <div className={transitionState.nextTheme === "dark" ? "text-green-300" : "text-blue-300"}>
-                {transitionState.nextTheme.toUpperCase()}_MODE_ACTIVE
-              </div>
-            </motion.div>
-
-            <motion.div
-              className="absolute bottom-4 right-4 text-sm font-mono opacity-60"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.5 }}
-            >
-              <div className={transitionState.nextTheme === "dark" ? "text-green-400" : "text-blue-400"}>
-                THEME_SWITCH_v2.0
-              </div>
-              <div className={transitionState.nextTheme === "dark" ? "text-green-300" : "text-blue-300"}>
-                {transitionState.nextTheme === "dark" ? "NIGHT_VISION" : "DAY_MODE"}
-              </div>
-            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
