@@ -6,10 +6,10 @@ import { v4 as uuidv4 } from "uuid";
 import { estimateTokens } from "@/lib/token-utils";
 import type { Database } from "@/lib/types/supabase";
 
-// ====================== SCHEMA VALIDATION ======================
+// ---------- Validation ----------
 const SummarizeSchema = z.object({
-  prompt: z.string().min(1, "Prompt cannot be empty").max(15000, "Prompt too long"),
-  roomId: z.string().min(1, "Room ID required"),
+  prompt: z.string().min(1).max(15000),
+  roomId: z.string().min(1),
   userId: z.string().optional(),
   model: z
     .enum([
@@ -31,7 +31,7 @@ const SummarizeSchema = z.object({
   temperature: z.number().min(0).max(1).default(0.2),
 });
 
-// ====================== MODEL TOKEN LIMITS ======================
+// ---------- Token Limits ----------
 const modelLimits = {
   "gpt-3.5-turbo": 4096,
   "gpt-4o-mini": 128000,
@@ -47,31 +47,23 @@ const modelLimits = {
   "moonshot/kimi-k2-0711": 33000,
 } as const;
 
-// ====================== CLIENT INITIALIZATION ======================
+// ---------- Clients ----------
 const openai = new OpenAI({
   apiKey: process.env.OPENROUTER_API_KEY!,
   baseURL: process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1",
+  defaultHeaders: {
+    "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+    "X-Title": "FlyCode Chat AI Assistant", // your app name
+  },
 });
+
 
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// ====================== UTILITIES ======================
-async function callWithRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
-  for (let i = 0; i < maxRetries; i++) {
-    try {
-      return await fn();
-    } catch (err) {
-      if (i === maxRetries - 1) throw err;
-      console.warn(`[Retry ${i + 1}/${maxRetries}] Retrying after error:`, err);
-      await new Promise((r) => setTimeout(r, 500 * Math.pow(2, i)));
-    }
-  }
-  throw new Error("Retry limit exceeded");
-}
-
+// ---------- Types ----------
 interface StructuredAnalysis {
   type: string;
   title: string;
@@ -82,31 +74,43 @@ interface StructuredAnalysis {
   metadata: { participantCount: number; messageCount: number; timeRange: string; sentiment: string };
 }
 
-// ====================== MAIN HANDLER ======================
+async function callWithRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      // stop retrying for unauthorized errors
+      if (err?.code === 401 || err?.error?.code === 401) {
+        console.error("[OpenRouter Auth Error] API key invalid or missing headers.");
+        throw new Error("Unauthorized OpenRouter request");
+      }
+      if (i === maxRetries - 1) throw err;
+      await new Promise((r) => setTimeout(r, 500 * Math.pow(2, i)));
+    }
+  }
+  throw new Error("Retry limit exceeded");
+}
+
+
+// ---------- Handler ----------
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    let { prompt, roomId, userId, model, maxTokens, temperature } =
+    const { prompt, roomId, userId = "system", model, maxTokens, temperature } =
       SummarizeSchema.parse(body);
 
-    userId = userId || "system";
+    console.log("[AI Summarize] Request:", { roomId, userId, model });
 
-    console.log("[API:Summarize] Start:", { roomId, userId, model });
-
-    // -------- Token optimization --------
     const promptTokens = estimateTokens(prompt);
-    const maxInputTokens =
-      modelLimits[model as keyof typeof modelLimits] - maxTokens - 200;
+    const maxInputTokens = modelLimits[model] - maxTokens - 200;
 
     let finalPrompt = prompt;
     if (promptTokens > maxInputTokens) {
-      const lines = prompt.split("\n");
       finalPrompt =
-        lines.slice(-Math.floor(lines.length * 0.6)).join("\n") +
+        prompt.split("\n").slice(-Math.floor(prompt.split("\n").length * 0.6)).join("\n") +
         "\n[Context trimmed for token optimization]";
     }
 
-    // -------- AI Call --------
     const completion = await callWithRetry(() =>
       openai.chat.completions.create({
         model,
@@ -121,19 +125,11 @@ export async function POST(req: NextRequest) {
 
     const content = completion.choices?.[0]?.message?.content?.trim() || "No output";
 
-    // -------- Structured response --------
     const structuredData: StructuredAnalysis = {
       type: "analysis",
       title: "AI Summary",
-      summary: content.slice(0, 160),
-      sections: [
-        {
-          title: "Generated Output",
-          content,
-          metrics: [],
-          highlights: [],
-        },
-      ],
+      summary: content.slice(0, 180),
+      sections: [{ title: "Generated Output", content }],
       keyFindings: [],
       recommendations: [],
       metadata: {
@@ -144,7 +140,6 @@ export async function POST(req: NextRequest) {
       },
     };
 
-    // -------- Save to Supabase (Safe JSON) --------
     const { error } = await supabase.from("ai_chat_history").insert({
       id: uuidv4(),
       room_id: roomId,
@@ -152,13 +147,11 @@ export async function POST(req: NextRequest) {
       user_query: prompt,
       ai_response: content,
       model_used: model,
-      structured_data: JSON.parse(JSON.stringify(structuredData)), // ✅ Fix for Supabase JSON typing
+      structured_data: JSON.parse(JSON.stringify(structuredData)), // Supabase JSON-safe
       created_at: new Date().toISOString(),
     });
 
-    if (error) {
-      console.error("[Supabase Insert Error]", error);
-    }
+    if (error) console.error("[Supabase Error]", error);
 
     return NextResponse.json({
       success: true,
@@ -169,17 +162,12 @@ export async function POST(req: NextRequest) {
       fullContent: content,
     });
   } catch (err: any) {
-    console.error("[API:Summarize] ERROR:", err);
-
+    console.error("[Summarize API Error]", err);
     if (err instanceof ZodError) {
-      return NextResponse.json(
-        { error: "Invalid input", details: err.issues },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Invalid input", details: err.issues }, { status: 400 });
     }
-
     return NextResponse.json(
-      { error: "Internal Server Error", message: err.message },
+      { error: "Internal Server Error", message: err.message || "Unexpected error" },
       { status: 500 }
     );
   }

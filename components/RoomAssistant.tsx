@@ -14,6 +14,9 @@ import {
   Loader2,
   Trash2,
   MoreVertical,
+  Maximize2,
+  Minimize2,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -61,26 +64,29 @@ function RoomAssistantComponent({
   roomName,
   className,
   dialogMode = false,
-  isExpanded = false,
+  isExpanded: externalExpand,
   onToggleExpand,
   onCloseDialog,
 }: RoomAssistantProps) {
   const { theme, setTheme } = useTheme();
   const { user } = useRoomContext();
-
   const [prompt, setPrompt] = useState("");
   const [model, setModel] = useState("gpt-4o-mini");
   const [messages, setMessages] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
-
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // local expansion state for standalone use
+  const [localExpand, setLocalExpand] = useState(false);
+  const isExpanded = externalExpand ?? localExpand;
 
   useEffect(() => {
     const scroll = scrollRef.current;
-    if (scroll && !loading)
+    if (scroll && !loading) {
       scroll.scrollTo({ top: scroll.scrollHeight, behavior: "smooth" });
+    }
   }, [messages, loading]);
 
   const handleSubmit = async (e?: React.FormEvent) => {
@@ -133,6 +139,11 @@ function RoomAssistantComponent({
     }
   };
 
+  const toggleExpand = () => {
+    if (onToggleExpand) onToggleExpand();
+    else setLocalExpand((prev) => !prev);
+  };
+
   return (
     <div className={cn("relative w-full", className)}>
       <Card
@@ -144,41 +155,68 @@ function RoomAssistantComponent({
         {/* Header */}
         <CardHeader className="flex items-center justify-between px-5 py-3 border-b border-border/30">
           <div className="flex items-center gap-3">
-            <motion.div
-              className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center"
-            >
+            <motion.div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center">
               <Bot className="h-5 w-5 text-white" />
             </motion.div>
             <CardTitle className="text-lg font-bold">AI Assistant</CardTitle>
           </div>
 
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="ghost" size="icon" className="rounded-full">
-                <MoreVertical className="h-4 w-4" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-56 p-3">
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between items-center">
-                  <span>Dark Mode</span>
-                  <Switch
-                    checked={theme === "dark"}
-                    onCheckedChange={(v) => setTheme(v ? "dark" : "light")}
-                  />
-                </div>
-                <Separator className="my-2" />
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setMessages([])}
-                  className="w-full justify-start text-red-500"
-                >
-                  <Trash2 className="mr-2 h-3.5 w-3.5" /> Clear Chat
+          <div className="flex items-center gap-2">
+            {/* Expand/Collapse */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleExpand}
+              title={isExpanded ? "Minimize" : "Expand"}
+              className="rounded-full"
+            >
+              {isExpanded ? (
+                <Minimize2 className="h-4 w-4" />
+              ) : (
+                <Maximize2 className="h-4 w-4" />
+              )}
+            </Button>
+
+            {/* Options */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="icon" className="rounded-full">
+                  <MoreVertical className="h-4 w-4" />
                 </Button>
-              </div>
-            </PopoverContent>
-          </Popover>
+              </PopoverTrigger>
+              <PopoverContent className="w-56 p-3">
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between items-center">
+                    <span>Dark Mode</span>
+                    <Switch
+                      checked={theme === "dark"}
+                      onCheckedChange={(v) => setTheme(v ? "dark" : "light")}
+                    />
+                  </div>
+                  <Separator className="my-2" />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setMessages([])}
+                    className="w-full justify-start text-red-500"
+                  >
+                    <Trash2 className="mr-2 h-3.5 w-3.5" /> Clear Chat
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
+
+            {dialogMode && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onCloseDialog}
+                className="rounded-full"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
         </CardHeader>
 
         {/* Chat Area */}
