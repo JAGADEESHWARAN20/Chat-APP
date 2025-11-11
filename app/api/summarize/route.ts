@@ -5,7 +5,7 @@ import { createClient } from "@supabase/supabase-js";
 import { v4 as uuidv4 } from "uuid";
 import type { Database } from "@/lib/types/supabase";
 
-// -------------------- Schema --------------------
+// ================= Schema =================
 const SummarizeSchema = z.object({
   prompt: z.string().min(1).max(15000),
   roomId: z.string().min(1),
@@ -15,94 +15,68 @@ const SummarizeSchema = z.object({
   temperature: z.number().min(0).max(1).default(0.2),
 });
 
-// -------------------- Env / constants --------------------
+// ================= Env / constants =================
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY ?? "";
-const OPENROUTER_BASE = process.env.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1";
-const REFERRER = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1";
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 const APP_TITLE = "FlyCode Chat AI Assistant";
 
+// Validate key
 if (!OPENROUTER_API_KEY) {
-  console.error("Missing OPENROUTER_API_KEY. Add it to environment variables.");
+  console.error("Missing OPENROUTER_API_KEY in environment.");
 }
 
-// Supabase server client (service role key)
+// Supabase server-side client
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-// -------------------- Helpers --------------------
-async function fetchOpenRouter(payload: any, timeoutMs = 20000) {
-  // Abort controller for timeout
+// ================= Helper function =================
+async function callOpenRouter(payload: any, timeoutMs = 20000) {
   const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), timeoutMs);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const res = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
+    const res = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+        "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
         "Content-Type": "application/json",
-        // Use correct header names; OpenRouter enforces referer/origin if configured
-        Referer: REFERRER,
-        Origin: REFERRER,
+        "Referer": SITE_URL,
+        "Origin": SITE_URL,
         "X-Title": APP_TITLE,
       },
       body: JSON.stringify(payload),
       signal: controller.signal,
     });
 
-    // Read body text (we may need JSON or plain text)
     const text = await res.text();
+
     if (!res.ok) {
-      // Try parse JSON error, otherwise show raw text
       let parsed;
       try {
         parsed = JSON.parse(text);
       } catch {
-        parsed = { error: text || `status ${res.status}` };
+        parsed = { error: text };
       }
-      // Log the OpenRouter returned error for debugging
       console.error("[OpenRouter Error Response]", parsed);
-      const msg = parsed?.error?.message || parsed?.message || text || `OpenRouter ${res.status}`;
+      const msg = parsed?.error?.message || parsed?.message || `OpenRouter failed status ${res.status}`;
       const err = new Error(msg);
-      // Attach status so call site can decide
       (err as any).status = res.status;
       throw err;
     }
 
-    // Parse the JSON result
     try {
       return JSON.parse(text);
     } catch (e) {
-      // If parse fails return raw text inside an object
       return { raw: text };
     }
   } finally {
-    clearTimeout(id);
+    clearTimeout(timeout);
   }
 }
 
-async function callWithRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
-  let lastErr: any;
-  for (let i = 0; i <= retries; i++) {
-    try {
-      return await fn();
-    } catch (err: any) {
-      lastErr = err;
-      // if auth error — break early
-      if (err?.status === 401 || err?.message?.toLowerCase()?.includes("401") || err?.message?.toLowerCase()?.includes("user not found")) {
-        console.error("[OpenRouter Auth Error] 401 detected - aborting retries.");
-        throw err;
-      }
-      if (i === retries) break;
-      console.warn(`[Retry ${i + 1}/${retries}] Retrying after error:`, err?.message ?? err);
-      await new Promise((r) => setTimeout(r, 500 * Math.pow(2, i)));
-    }
-  }
-  throw lastErr ?? new Error("Retries exhausted");
-}
-
-// -------------------- Handler --------------------
+// ================= Handler =================
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -114,7 +88,7 @@ export async function POST(req: NextRequest) {
     const payload = {
       model,
       messages: [
-        { role: "system", content: "You are an AI summarizer. Respond concisely and in JSON/text." },
+        { role: "system", content: "You are an AI summarizer. Respond concisely and clearly." },
         { role: "user", content: prompt },
       ],
       max_tokens: maxTokens,
@@ -122,14 +96,13 @@ export async function POST(req: NextRequest) {
       stream: false,
     };
 
-    const completion = await callWithRetry(() => fetchOpenRouter(payload), 2);
+    const completion = await callOpenRouter(payload);
 
-    // OpenRouter returns structure similar to: { choices: [{ message: { content: "..." } }] }
     const content =
       (completion?.choices?.[0]?.message?.content as string) ??
       (typeof completion?.raw === "string" ? completion.raw : JSON.stringify(completion));
 
-    // Save attempt to DB; log errors but still return AI output where possible
+    // Save to DB
     try {
       const { error } = await supabase.from("ai_chat_history").insert({
         id: uuidv4(),
@@ -146,21 +119,16 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ success: true, fullContent: content });
+
   } catch (err: any) {
     console.error("[Summarize API Error]", err);
-
-    // If validation error
     if (err instanceof ZodError) {
       return NextResponse.json({ error: "Invalid input", details: err.issues }, { status: 400 });
     }
-
-    // Specific handling for OpenRouter 401 / user-not-found
     const msg = err?.message || "Internal Server Error";
     if (msg.toLowerCase().includes("401") || msg.toLowerCase().includes("user not found") || msg.toLowerCase().includes("unauthorized")) {
-      // Helpful error returned to client and logged for us
       return NextResponse.json({ error: "OpenRouter unauthorized", message: msg }, { status: 401 });
     }
-
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
