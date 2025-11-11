@@ -40,12 +40,13 @@ export default function HomePage() {
     <div className="min-h-screen flex flex-col overflow-hidden bg-background">
       {/* Header */}
       <header
-        className="
-          w-full px-4 py-3 border-b border-border/40 
-          bg-background/90 backdrop-blur-2xl supports-[backdrop-filter]:bg-background/60
-          sticky top-0 z-10 shadow-md transition-all duration-300
-        "
-      >
+  className="
+    w-full px-4 py-3 border-b border-border/40
+    bg-background/80 backdrop-blur-md supports-[backdrop-filter]:bg-background/60
+    sticky top-0 z-20 shadow-sm transition-colors duration-200
+  "
+>
+
         <div className="flex items-center justify-between max-w-7xl mx-auto w-full">
           
           {/* Left Section */}
@@ -176,7 +177,8 @@ export default function HomePage() {
 
       {/* Main Content */}
       <main className="flex-1 flex w-full overflow-hidden">
-        <AnimatePresence mode="wait">
+      <AnimatePresence mode="sync" initial={false}>
+
           {activeTab === "home" && (
             <motion.div
               key="home"

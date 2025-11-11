@@ -22,7 +22,10 @@ export default async function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head />
-      <body className={space_Grotesk.className}>
+      <body
+  className={`${space_Grotesk.className} min-h-screen overflow-x-hidden overflow-y-scroll bg-background text-foreground antialiased`}
+>
+
         <ThemeProvider
             attribute="class"
             defaultTheme="system"
