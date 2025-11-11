@@ -32,14 +32,17 @@ export default function HomePage() {
   return (
     <div className="min-h-screen flex flex-col overflow-hidden bg-background">
       {/* Header */}
-      <header className="
-        w-full px-4 py-3 
-        border-b border-border/40 
-        bg-background/95 backdrop-blur-xl
-        supports-[backdrop-filter]:bg-background/60
-        sticky top-0 z-0
-        shadow-sm
-      ">
+      <header
+  className="
+    w-full px-4 py-3 
+    border-b border-border/40 
+    bg-background/95 backdrop-blur-xl
+    supports-[backdrop-filter]:bg-background/60
+    sticky top-0 z-0
+    shadow-sm
+  "
+>
+
         <div className="flex items-center justify-between max-w-7xl mx-auto w-full">
           
           {/* Left section */}

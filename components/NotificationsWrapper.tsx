@@ -1,102 +1,116 @@
-// components/NotificationsWrapper.tsx - Updated for your user store
 "use client";
 
 import { useState, useEffect } from "react";
 import { Bell } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import Notifications from "./Notifications";
 import { useNotificationHandler } from "@/hooks/useNotificationHandler";
-import { useUser } from "@/lib/store/user"; // Your actual user store
+import { useUser } from "@/lib/store/user";
 import { useNotification } from "@/lib/store/notifications";
 import { cn } from "@/lib/utils";
 
 export default function NotificationsWrapper() {
-    const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-    const { user: currentUser, authUser } = useUser(); // Use your store structure
-    const { unreadCount, fetchNotifications, hasError } = useNotification();
-    
-    // Initialize notification handler
-    useNotificationHandler();
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const { user: currentUser, authUser } = useUser();
+  const { unreadCount, fetchNotifications, hasError } = useNotification();
 
-    // Get the actual user ID
-    const userId = currentUser?.id || authUser?.id;
+  useNotificationHandler();
+  const userId = currentUser?.id || authUser?.id;
 
-    // Add comprehensive logging
-    useEffect(() => {
-        console.log("🔔 NotificationsWrapper - User state:", {
-            userId,
-            currentUser: currentUser ? { id: currentUser.id, email: currentUser.email } : null,
-            authUser: authUser ? { id: authUser.id, email: authUser.email } : null,
-            unreadCount
-        });
-    }, [userId, currentUser, authUser, unreadCount]);
+  useEffect(() => {
+    if (isNotificationsOpen && userId) {
+      fetchNotifications(userId);
+    }
+  }, [isNotificationsOpen, userId, fetchNotifications]);
 
-    // Auto-refresh notifications when sheet opens
-    useEffect(() => {
-        if (isNotificationsOpen && userId) {
-            console.log("🔄 Refreshing notifications on open");
-            fetchNotifications(userId);
-        }
-    }, [isNotificationsOpen, userId, fetchNotifications]);
+  const handleBellClick = () => {
+    if (!userId) {
+      window.location.href = "/auth/signin";
+      return;
+    }
+    setIsNotificationsOpen(true);
+  };
 
-    const handleBellClick = () => {
-        console.log("🔔 Bell icon clicked - User:", {
-            userId,
-            userEmail: currentUser?.email || authUser?.email
-        });
-        
-        if (!userId) {
-            console.log("🚫 No user - redirecting to sign in");
-            // Redirect to sign in
-            window.location.href = '/auth/signin';
-            return;
-        }
-        
-        setIsNotificationsOpen(true);
-    };
+  return (
+    <div className="relative">
+      {/* Bell Button */}
+      <motion.button
+        title="notification"
+        onClick={handleBellClick}
+        disabled={!userId}
+        className={cn(
+          "relative w-[2.5em] h-[2.5em] group flex items-center justify-center rounded-full transition-all duration-300",
+          "bg-white dark:bg-transparent backdrop-blur-sm border border-border/30 shadow-sm",
+          "hover:bg-red-800 dark:hover:bg-red-600",
+          !userId && "opacity-50 cursor-not-allowed group"
+        )}
+        aria-label={`Notifications ${unreadCount > 0 ? `${unreadCount} unread` : ""}`}
+      >
+        {/* Subtle glow when unread */}
+        {unreadCount > 0 && (
+          <motion.div
+            className="absolute inset-0 rounded-full bg-red-500/20  blur-md"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: [0.2, 0.5, 0.2] }}
+            transition={{ repeat: Infinity, duration: 1.8 }}
+          />
+        )}
 
-    return (
-        <div className="relative">
-            <button
-                title="notification"
-                onClick={handleBellClick}
-                className={cn(
-                    "w-[2em] h-[2em] flex items-center justify-center p-[.35em] relative group transition-all duration-200",
-                    !userId && "opacity-50 cursor-not-allowed"
-                )}
-                aria-label={`Notifications ${unreadCount > 0 ? `${unreadCount} unread` : ''}`}
-                disabled={!userId}
+        {/* Bell Icon */}
+        <Bell
+          className={cn(
+            "h-5 w-5 relative z-10 transition-all duration-300",
+            hasError
+              ? "text-red-500"
+              : unreadCount > 0
+              ? "stroke-red-600 group-hover:stroke-white/70 dark:stroke-red-400 dark:stroke-white text-red-600 dark:text-red-400"
+              : "stroke-gray-700 group-hover:stroke-white/70 dark:group-hover:stroke-white dark:stroke-gray-200",
+            "group-hover:fill-white "
+          )}
+        />
+
+        {/* Badge */}
+        <AnimatePresence>
+          {unreadCount > 0 && userId && (
+            <motion.span
+              key="badge"
+              initial={{ opacity: 0, y: -5 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -5 }}
+              transition={{ duration: 0.2 }}
+              className="absolute -top-1.5 -right-1.5 min-w-[1.25rem] h-5 text-xs
+                         bg-red-500 dark:bg-red-600 text-white rounded-full 
+                         flex items-center justify-center font-semibold px-1 shadow-md"
             >
-                <Bell className={cn(
-                    "h-5 w-5 transition-all duration-200",
-                    unreadCount > 0 
-                        ? "text-gray-600 fill-gray-600 group-hover:fill-transparent group-hover:stroke-black" 
-                        : userId 
-                            ? "hover:fill-slate-800 dark:hover:fill-slate-50" 
-                            : "text-gray-400",
-                    hasError && "text-red-500"
-                )} />
-                
-                {unreadCount > 0 && userId && (
-                    <span className={cn(
-                        "absolute -top-1 -right-1 min-w-[1.25rem] h-5 text-xs",
-                        "bg-red-500 text-white rounded-full flex items-center justify-center",
-                        "font-semibold  transition-all duration-300",
-                        "px-1 transform scale-100"
-                    )}>
-                        {unreadCount > 99 ? '99+' : unreadCount}
-                    </span>
-                )}
-                
-                {hasError && userId && (
-                    <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-ping" />
-                )}
-            </button>
-            
-            <Notifications
-                isOpen={isNotificationsOpen}
-                onClose={() => setIsNotificationsOpen(false)}  // ✅ FIXED
-                />
+              {unreadCount > 99 ? "99+" : unreadCount}
+            </motion.span>
+          )}
+        </AnimatePresence>
 
-        </div>
-    );
+        {/* Error Ping */}
+        {hasError && userId && (
+          <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-ping" />
+        )}
+      </motion.button>
+
+      {/* Notifications Dropdown */}
+      <AnimatePresence>
+        {isNotificationsOpen && (
+          <motion.div
+            key="notification-panel"
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.25, ease: "easeInOut" }}
+            className="absolute right-0 mt-3 z-50 w-[22rem] sm:w-[24rem]"
+          >
+            <Notifications
+              isOpen={isNotificationsOpen}
+              onClose={() => setIsNotificationsOpen(false)}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
 }
