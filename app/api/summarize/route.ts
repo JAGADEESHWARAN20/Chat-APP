@@ -42,13 +42,12 @@ async function callOpenRouter(payload: any, timeoutMs = 20000) {
       headers: {
         "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
         "Content-Type": "application/json",
-        "Referer": SITE_URL,
-        "Origin": SITE_URL,
+        "HTTP-Referer": SITE_URL,
         "X-Title": APP_TITLE,
       },
       body: JSON.stringify(payload),
-      signal: controller.signal,
     });
+    
 
     const text = await res.text();
 
