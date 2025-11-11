@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
+import { z, ZodError } from "zod";
 import { OpenAI } from "openai";
 import { createClient } from "@supabase/supabase-js";
 import { v4 as uuidv4 } from "uuid";
 import { estimateTokens } from "@/lib/token-utils";
 import type { Database } from "@/lib/types/supabase";
 
-// 🧩 Input schema validation
+// ====================== SCHEMA VALIDATION ======================
 const SummarizeSchema = z.object({
   prompt: z.string().min(1, "Prompt cannot be empty").max(15000, "Prompt too long"),
-  roomId: z.string().min(1, "Room ID required for persistence"),
-  userId: z.string().optional(), // ✅ make userId optional but handled internally
+  roomId: z.string().min(1, "Room ID required"),
+  userId: z.string().optional(),
   model: z
     .enum([
       "gpt-3.5-turbo",
@@ -27,11 +27,11 @@ const SummarizeSchema = z.object({
       "moonshot/kimi-k2-0711",
     ])
     .default("gpt-4o-mini"),
-  maxTokens: z.number().min(100).max(3000).optional().default(1500),
-  temperature: z.number().min(0).max(1).optional().default(0.2),
+  maxTokens: z.number().min(100).max(3000).default(1500),
+  temperature: z.number().min(0).max(1).default(0.2),
 });
 
-// 🧠 Model limits
+// ====================== MODEL TOKEN LIMITS ======================
 const modelLimits = {
   "gpt-3.5-turbo": 4096,
   "gpt-4o-mini": 128000,
@@ -45,11 +45,11 @@ const modelLimits = {
   "z-ai/glm-4-5-air": 131000,
   "qwen/qwen3-coder-480b-a35b": 262000,
   "moonshot/kimi-k2-0711": 33000,
-};
+} as const;
 
-// 🧩 Initialize clients
+// ====================== CLIENT INITIALIZATION ======================
 const openai = new OpenAI({
-  apiKey: process.env.OPENROUTER_API_KEY,
+  apiKey: process.env.OPENROUTER_API_KEY!,
   baseURL: process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1",
 });
 
@@ -58,51 +58,42 @@ const supabase = createClient<Database>(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// 🧠 Helper: retry wrapper
+// ====================== UTILITIES ======================
 async function callWithRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
   for (let i = 0; i < maxRetries; i++) {
     try {
       return await fn();
     } catch (err) {
       if (i === maxRetries - 1) throw err;
+      console.warn(`[Retry ${i + 1}/${maxRetries}] Retrying after error:`, err);
       await new Promise((r) => setTimeout(r, 500 * Math.pow(2, i)));
     }
   }
-  throw new Error("Retry limit reached");
+  throw new Error("Retry limit exceeded");
 }
 
-// 🧩 Structured Analysis Type
 interface StructuredAnalysis {
   type: string;
   title: string;
   summary: string;
-  sections: {
-    title: string;
-    content: string;
-    metrics?: string[];
-    highlights?: string[];
-  }[];
+  sections: { title: string; content: string; metrics?: string[]; highlights?: string[] }[];
   keyFindings: string[];
   recommendations: string[];
-  metadata: {
-    participantCount: number;
-    messageCount: number;
-    timeRange: string;
-    sentiment: string;
-  };
+  metadata: { participantCount: number; messageCount: number; timeRange: string; sentiment: string };
 }
 
-// 🧩 API Handler
+// ====================== MAIN HANDLER ======================
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     let { prompt, roomId, userId, model, maxTokens, temperature } =
       SummarizeSchema.parse(body);
 
-    userId = userId || "system"; // ✅ fallback userId
+    userId = userId || "system";
 
-    console.log("[API] Received request:", { roomId, userId, model });
+    console.log("[API:Summarize] Start:", { roomId, userId, model });
 
+    // -------- Token optimization --------
     const promptTokens = estimateTokens(prompt);
     const maxInputTokens =
       modelLimits[model as keyof typeof modelLimits] - maxTokens - 200;
@@ -115,31 +106,33 @@ export async function POST(req: NextRequest) {
         "\n[Context trimmed for token optimization]";
     }
 
-    const response = await callWithRetry(async () => {
-      return openai.chat.completions.create({
+    // -------- AI Call --------
+    const completion = await callWithRetry(() =>
+      openai.chat.completions.create({
         model,
         messages: [
-          {
-            role: "system",
-            content:
-              "You are an AI analyst. Summarize, structure, and respond concisely.",
-          },
+          { role: "system", content: "You are an AI summarizer. Respond concisely and in JSON." },
           { role: "user", content: finalPrompt },
         ],
         max_tokens: maxTokens,
         temperature,
-      });
-    });
+      })
+    );
 
-    const content =
-      response.choices?.[0]?.message?.content?.trim() || "No output";
+    const content = completion.choices?.[0]?.message?.content?.trim() || "No output";
 
+    // -------- Structured response --------
     const structuredData: StructuredAnalysis = {
       type: "analysis",
       title: "AI Summary",
-      summary: content.slice(0, 180),
+      summary: content.slice(0, 160),
       sections: [
-        { title: "Generated Output", content: content, metrics: [], highlights: [] },
+        {
+          title: "Generated Output",
+          content,
+          metrics: [],
+          highlights: [],
+        },
       ],
       keyFindings: [],
       recommendations: [],
@@ -151,39 +144,46 @@ export async function POST(req: NextRequest) {
       },
     };
 
-    // 🧠 Save to Supabase
+    // -------- Save to Supabase (Safe JSON) --------
     const { error } = await supabase.from("ai_chat_history").insert({
       id: uuidv4(),
       room_id: roomId,
       user_id: userId,
+      user_query: prompt,
       ai_response: content,
       model_used: model,
-      structured_data: structuredData,
+      structured_data: JSON.parse(JSON.stringify(structuredData)), // ✅ Fix for Supabase JSON typing
       created_at: new Date().toISOString(),
     });
 
-    if (error) console.error("[Supabase Error]", error);
+    if (error) {
+      console.error("[Supabase Insert Error]", error);
+    }
 
     return NextResponse.json({
       success: true,
       model,
       userId,
       roomId,
-      fullContent: content,
       structuredData,
+      fullContent: content,
     });
   } catch (err: any) {
-    console.error("[API ERROR]", err);
-    if (err instanceof z.ZodError) {
+    console.error("[API:Summarize] ERROR:", err);
+
+    if (err instanceof ZodError) {
       return NextResponse.json(
-        { error: "Invalid input", details: err.errors },
+        { error: "Invalid input", details: err.issues },
         { status: 400 }
       );
     }
-    return NextResponse.json({ error: err.message }, { status: 500 });
+
+    return NextResponse.json(
+      { error: "Internal Server Error", message: err.message },
+      { status: 500 }
+    );
   }
 }
-
 
 
 

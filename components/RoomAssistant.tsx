@@ -48,13 +48,21 @@ import { PairedMessageRenderer } from "./RoomAssistantParts/PairedMessageRendere
 import { MessageSkeleton } from "./RoomAssistantParts/MessageSkeleton";
 import { MODELS } from "./RoomAssistantParts/constants";
 
+// ✅ Recommended: add dependency
+const handleDelete = useCallback(() => {
+  optimisticDeleteMessage();
+}, [optimisticDeleteMessage]);
+
+
 function RoomAssistantComponent({
   roomId,
   roomName,
-}: {
-  roomId: string;
-  roomName: string;
-}) {
+  className,
+  dialogMode = false,
+  isExpanded = false,
+  onToggleExpand,
+  onCloseDialog,
+}: RoomAssistantProps) {
   const { theme, setTheme } = useTheme();
   const { messages: allMessages } = useMessage();
   const { user } = useRoomContext(); // ✅ user from context
