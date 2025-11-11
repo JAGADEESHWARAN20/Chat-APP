@@ -184,8 +184,8 @@ const LeftSidebar = React.memo<LeftSidebarProps>(({ user, isOpen, onClose }) => 
     return (
       <div
         className={`fixed lg:static inset-y-0 left-0 w-full lg:w-64 px-4 py-3 bg-card  h-screen flex flex-col transition-transform duration-300 ${
-          isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-        } z-0`}
+          isOpen ? "translate-x-0 z-50 md:z-50 lg:z-0" : "-translate-x-full lg:translate-x-0"
+        } z-50 md:z-50 lg:z-0`}
       >
         <div className="flex flex-col items-center justify-center h-full text-center px-4 text-muted-foreground">
           <Avatar className="h-14 w-14 mb-3 opacity-60">
@@ -211,11 +211,11 @@ const LeftSidebar = React.memo<LeftSidebarProps>(({ user, isOpen, onClose }) => 
   return (
     <div
       className={`fixed lg:static inset-y-0 left-0 w-full lg:w-1/4 px-4 py-3 bg-card border-r border-white/10 h-screen flex flex-col transition-transform duration-300 ${
-        isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-      } z-0`}
+        isOpen ? "translate-x-0 z-50 md:z-50 lg:z-0" : "-translate-x-full lg:translate-x-0"
+      } z-50 md:z-50 lg:z-0`}
     >
       <Tabs defaultValue="rooms" className="flex flex-col gap-1">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-5">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="rooms">My Rooms</TabsTrigger>
             <TabsTrigger value="chats">Chats</TabsTrigger>
@@ -286,12 +286,7 @@ const LeftSidebar = React.memo<LeftSidebarProps>(({ user, isOpen, onClose }) => 
           )}
         </div>
 
-        <Input
-          placeholder="Search my rooms..."
-          onChange={handleInputChange}
-          className="mb-3"
-        />
-        
+     
         <TabsContent value="rooms" className="flex-1 overflow-hidden">
           <div className="space-y-2 overflow-y-auto max-h-[calc(100vh-200px)]">
             {isLoading ? (

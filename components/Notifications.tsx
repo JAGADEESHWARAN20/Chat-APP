@@ -156,7 +156,7 @@ const NotificationItem = memo(function NotificationItem({
       onSwipeRight={() => !isLoading && onReject(notification.id, notification.sender_id, notification.room_id)}
     >
       <div
-        className={`p-4 flex items-start space-x-4 hover:bg-muted/50 transition-colors relative ${
+        className={`p-4 flex items-start space-x-4 hover:bg-muted/50 border-b border-slate-800/20  transition-colors relative ${
           notification.status === "read" ? "opacity-60" : "bg-muted/30"
         } ${isLoading ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
         onClick={handleClick}
@@ -453,7 +453,7 @@ export default function Notifications({
               </Button>
             </div>
           ) : (
-            <div className="divide-y">{notificationList}</div>
+            <div className="">{notificationList}</div>
           )}
         </div>
 

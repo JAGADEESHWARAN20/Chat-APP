@@ -25,6 +25,11 @@
     --input: 220 13% 91%;
     --ring: 262.1 83.3% 57.8%;
     --radius: 0.5rem;
+    --action-bg: hsl(240 80% 95%);
+    --action-hover: hsl(240 100% 88%);
+    --action-active: hsl(240 70% 60%);
+    --action-ring: hsl(240 80% 70%);
+    --action-text: hsl(240 30% 25%);
   }
 
   .dark {
@@ -48,6 +53,11 @@
     --border: 215 27.9% 16.9%;
     --input: 215 27.9% 16.9%;
     --ring: 263.4 70% 50.4%;
+    --action-bg: hsl(240 35% 20%);
+  --action-hover: hsl(240 50% 25%);
+  --action-active: hsl(240 90% 70%);
+  --action-ring: hsl(240 100% 80%);
+  --action-text: hsl(0 0% 98%);
   }
 
   /* Base typography and responsive font sizes */

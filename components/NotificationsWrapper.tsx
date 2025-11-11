@@ -9,67 +9,81 @@ import { useUser } from "@/lib/store/user";
 import { useNotification } from "@/lib/store/notifications";
 import { cn } from "@/lib/utils";
 
+/**
+ * NotificationsWrapper
+ * ----------------------------------------------------------
+ * - Displays the bell icon for notifications.
+ * - Syncs with Supabase user state.
+ * - Fetches notifications when opened.
+ * - Shows unread count badge and subtle animated glow.
+ * - Fully theme-aware with --action-* color variables.
+ */
 export default function NotificationsWrapper() {
-  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
   const { user: currentUser, authUser } = useUser();
   const { unreadCount, fetchNotifications, hasError } = useNotification();
-
-  useNotificationHandler();
   const userId = currentUser?.id || authUser?.id;
 
-  useEffect(() => {
-    if (isNotificationsOpen && userId) {
-      fetchNotifications(userId);
-    }
-  }, [isNotificationsOpen, userId, fetchNotifications]);
+  useNotificationHandler();
 
-  const handleBellClick = () => {
+  /** 🔁 Fetch notifications when opened */
+  useEffect(() => {
+    if (isOpen && userId) fetchNotifications(userId);
+  }, [isOpen, userId, fetchNotifications]);
+
+  /** 🔔 Handle bell click */
+  const handleClick = () => {
     if (!userId) {
       window.location.href = "/auth/signin";
       return;
     }
-    setIsNotificationsOpen(true);
+    setIsOpen(true);
   };
 
   return (
     <div className="relative">
-      {/* Bell Button */}
+      {/* ======================================
+       * 🔔 Notification Trigger Button
+       * ====================================== */}
       <motion.button
-        title="notification"
-        onClick={handleBellClick}
-        disabled={!userId}
-        className={cn(
-          "relative w-[2.5em] h-[2.5em] group flex items-center justify-center rounded-full transition-all duration-300",
-          "bg-white dark:bg-transparent backdrop-blur-sm border border-border/30 shadow-sm",
-          "hover:bg-red-800 dark:hover:bg-red-600",
-          !userId && "opacity-50 cursor-not-allowed group"
-        )}
+        title="Notifications"
         aria-label={`Notifications ${unreadCount > 0 ? `${unreadCount} unread` : ""}`}
-      >
-        {/* Subtle glow when unread */}
-        {unreadCount > 0 && (
-          <motion.div
-            className="absolute inset-0 rounded-full bg-red-500/20  blur-md"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: [0.2, 0.5, 0.2] }}
-            transition={{ repeat: Infinity, duration: 1.8 }}
-          />
+        onClick={handleClick}
+        disabled={!userId}
+        whileTap={{ scale: 1 }}
+        whileHover={{ scale: 1 }}
+        className={cn(
+          "relative flex items-center justify-center rounded-full",
+          "w-[2.6em] h-[2.6em] transition-all duration-300 shadow-sm",
+          "bg-[var(--action-bg)] border border-[var(--action-ring)] hover:bg-[var(--action-hover)] hover:shadow-lg",
+          !userId && "opacity-50 cursor-not-allowed"
         )}
+      >
+        {/* 🔴 Animated glow when unread */}
+        <AnimatePresence>
+          {unreadCount > 0 && (
+            <motion.div
+              key="glow"
+              className="absolute inset-0 rounded-full bg-[var(--action-active)]/20 blur-md"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: [0.2, 0.5, 0.2] }}
+              exit={{ opacity: 0 }}
+              transition={{ repeat: Infinity, duration: 1.8 }}
+            />
+          )}
+        </AnimatePresence>
 
-        {/* Bell Icon */}
+        {/* 🔔 Bell Icon */}
         <Bell
           className={cn(
-            "h-5 w-5 relative z-10 transition-all duration-300",
-            hasError
-              ? "text-red-500"
-              : unreadCount > 0
-              ? "stroke-red-600 group-hover:stroke-white/70 dark:stroke-red-400 dark:stroke-white text-red-600 dark:text-red-400"
-              : "stroke-gray-700 group-hover:stroke-white/70 dark:group-hover:stroke-white dark:stroke-gray-200",
-            "group-hover:fill-white "
+            "relative z-10 h-5 w-5 transition-colors duration-200",
+            unreadCount > 0
+              ? "stroke-[var(--action-active)] fill-[var(--action-active)]"
+              : "stroke-[var(--action-text)] group-hover:stroke-[var(--action-active)]"
           )}
         />
 
-        {/* Badge */}
+        {/* 🔴 Unread Badge */}
         <AnimatePresence>
           {unreadCount > 0 && userId && (
             <motion.span
@@ -78,24 +92,27 @@ export default function NotificationsWrapper() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -5 }}
               transition={{ duration: 0.2 }}
-              className="absolute -top-1.5 -right-1.5 min-w-[1.25rem] h-5 text-xs
-                         bg-red-500 dark:bg-red-600 text-white rounded-full 
-                         flex items-center justify-center font-semibold px-1 shadow-md"
+              className={cn(
+                "absolute -top-1.5 -right-1.5 min-w-[1.25rem] h-5 px-1 flex items-center justify-center",
+                "rounded-full bg-[var(--action-active)] text-white text-xs font-semibold shadow-md"
+              )}
             >
               {unreadCount > 99 ? "99+" : unreadCount}
             </motion.span>
           )}
         </AnimatePresence>
 
-        {/* Error Ping */}
+        {/* ⚠️ Error Ping Indicator */}
         {hasError && userId && (
           <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-ping" />
         )}
       </motion.button>
 
-      {/* Notifications Dropdown */}
+      {/* ======================================
+       * 📜 Notifications Dropdown Panel
+       * ====================================== */}
       <AnimatePresence>
-        {isNotificationsOpen && (
+        {isOpen && (
           <motion.div
             key="notification-panel"
             initial={{ opacity: 0, y: -10 }}
@@ -104,10 +121,7 @@ export default function NotificationsWrapper() {
             transition={{ duration: 0.25, ease: "easeInOut" }}
             className="absolute right-0 mt-3 z-50 w-[22rem] sm:w-[24rem]"
           >
-            <Notifications
-              isOpen={isNotificationsOpen}
-              onClose={() => setIsNotificationsOpen(false)}
-            />
+            <Notifications isOpen={isOpen} onClose={() => setIsOpen(false)} />
           </motion.div>
         )}
       </AnimatePresence>

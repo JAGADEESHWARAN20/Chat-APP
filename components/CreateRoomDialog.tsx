@@ -17,6 +17,8 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { useRoomContext } from "@/lib/store/RoomContext";
+import { motion } from "framer-motion";
+import { cn } from "@/lib/utils";
 
 export default function CreateRoomDialog({ user }: { user: SupabaseUser | undefined }) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -40,6 +42,7 @@ export default function CreateRoomDialog({ user }: { user: SupabaseUser | undefi
       setNewRoomName("");
       setIsPrivate(false);
       setIsDialogOpen(false);
+      toast.success("Room created successfully!");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to create room");
     } finally {
@@ -50,90 +53,100 @@ export default function CreateRoomDialog({ user }: { user: SupabaseUser | undefi
   return (
     <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
       <DialogTrigger asChild>
-        <button title="create Room" className={`w-[2em] h-[2em] p-[.35em]  flex items-center `}>
-          <PlusCircle className="h-[3em] w-[em] text-black dark:text-gray-300 hover:fill-gray-700 dark:hover:fill-slate-50 duration-100 transition-colors" />
-        </button>
+        <motion.button
+          whileHover={{ scale: 1 }}
+          whileTap={{ scale: 1 }}
+          title="Create Room"
+          className={cn(
+            "flex items-center justify-center rounded-full w-[2.6em] h-[2.6em]",
+            "bg-[var(--action-bg)] border border-[var(--action-ring)] shadow-sm",
+            "transition-all duration-200 hover:bg-[var(--action-hover)] hover:shadow-lg"
+          )}
+        >
+          <PlusCircle
+            className="h-[1.6em] w-[1.6em] text-[var(--action-active)] transition-colors duration-200 group-hover:fill-[var(--action-active)]"
+          />
+        </motion.button>
       </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle className="text-[2em] font-bold">Create New Room</DialogTitle>
-        </DialogHeader>
 
-        <div className="grid gap-[1.2em] py-[1em]">
-          <div className="space-y-[0.6em]">
-            <Label htmlFor="roomName" className="text-[1em] font-medium text-foreground">
-              Room Name
-            </Label>
-            <Input
-              id="roomName"
-              placeholder="Enter room name"
-              value={newRoomName}
-              onChange={(e) => setNewRoomName(e.target.value)}
-              disabled={isCreating}
-              className="
-                bg-background
-                border
-                border-border
-                text-foreground
-                placeholder:text-muted-foreground
-                rounded-lg
-                focus-visible:ring-1
-                focus-visible:ring-indigo-500
-                focus-visible:border-indigo-500
-                transition-all
-              "
-            />
-          </div>
+      <DialogContent
+  className={cn(
+    // ✅ Core layout
+    "relative flex flex-col items-center justify-center",
+    "bg-[hsl(var(--background))] border border-[hsl(var(--border))] rounded-2xl shadow-xl backdrop-blur-md",
+    "p-6 sm:p-8",
+    // ✅ Centering on all devices
+    "fixed inset-0 m-auto",
+    "w-[90vw] max-w-md sm:max-w-lg md:max-w-xl lg:max-w-2xl",
+    "min-h-[50vh] sm:min-h-[40vh] md:min-h-[35vh]",
+    "top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2",
+    "transition-all duration-300 ease-in-out"
+  )}
+>
+  {/* Header */}
+  <DialogHeader className="w-full mb-4 text-center">
+    <DialogTitle className="text-xl sm:text-2xl font-semibold text-foreground">
+      Create New Room
+    </DialogTitle>
+  </DialogHeader>
 
-          <div className="flex items-center space-x-[1em]">
-            <Switch
-              id="private"
-              checked={isPrivate}
-              onCheckedChange={setIsPrivate}
-              disabled={isCreating}
-              className="
-                data-[state=checked]:bg-indigo-600
-                data-[state=unchecked]:bg-muted
-              "
-            />
-            <Label htmlFor="private" className="text-[1em] font-medium text-foreground">
-              Private Room
-            </Label>
-          </div>
-        </div>
+  {/* Body */}
+  <div className="grid w-full gap-4 py-2">
+    <div className="space-y-2">
+      <Label htmlFor="roomName" className="text-foreground font-medium">
+        Room Name
+      </Label>
+      <Input
+        id="roomName"
+        placeholder="Enter room name"
+        value={newRoomName}
+        onChange={(e) => setNewRoomName(e.target.value)}
+        disabled={isCreating}
+        className={cn(
+          "w-full border border-border bg-background",
+          "rounded-lg focus:ring-2 focus:ring-[var(--action-ring)]",
+          "transition-all duration-200"
+        )}
+      />
+    </div>
 
-        <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={() => setIsDialogOpen(false)}
-            disabled={isCreating}
-            className="
-              bg-transparent
-              border-border
-              text-foreground
-              hover:bg-muted
-              hover:text-foreground
-              rounded-lg
-              transition-colors
-            "
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleCreateRoom}
-            disabled={isCreating}
-            className="
-              bg-indigo-600
-              hover:bg-indigo-700
-              text-white
-              rounded-lg
-              transition-colors
-            "
-          >
-            {isCreating ? "Creating..." : "Create Room"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
+    <div className="flex items-center gap-3">
+      <Switch
+        id="private"
+        checked={isPrivate}
+        onCheckedChange={setIsPrivate}
+        disabled={isCreating}
+        className="data-[state=checked]:bg-[var(--action-active)]"
+      />
+      <Label htmlFor="private" className="text-foreground font-medium">
+        Private Room
+      </Label>
+    </div>
+  </div>
+
+  {/* Footer */}
+  <DialogFooter className="flex justify-end gap-3 w-full mt-4">
+    <Button
+      variant="ghost"
+      onClick={() => setIsDialogOpen(false)}
+      disabled={isCreating}
+      className="text-[var(--action-text)] hover:bg-[var(--action-hover)] transition-all duration-200"
+    >
+      Cancel
+    </Button>
+    <Button
+      onClick={handleCreateRoom}
+      disabled={isCreating}
+      className={cn(
+        "bg-[var(--action-active)] hover:bg-[var(--action-ring)] text-white",
+        "shadow-md px-4 sm:px-6 py-2 rounded-lg font-medium transition-all duration-200"
+      )}
+    >
+      {isCreating ? "Creating..." : "Create"}
+    </Button>
+  </DialogFooter>
+</DialogContent>
+
     </Dialog>
   );
 }

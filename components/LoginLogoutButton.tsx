@@ -23,6 +23,14 @@ interface LoginLogoutButtonProps {
   user?: SupabaseUser | null;
 }
 
+/**
+ * LoginLogoutButton
+ * ------------------------------------------------------
+ * - Unified design system for menu trigger
+ * - Same theme as CreateRoomDialog & NotificationsWrapper
+ * - Full light/dark adaptive
+ * - Motion, blur, glow consistency
+ */
 export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
   const router = useRouter();
   const supabase = useMemo(
@@ -59,18 +67,23 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
     router.push(path);
   };
 
+  // ========================================================
+  // ✅ AUTHENTICATED VIEW
+  // ========================================================
   if (currentUser) {
     return (
       <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
+        {/* ========== MENU TRIGGER BUTTON ========== */}
         <SheetTrigger asChild>
           <motion.button
             title="Menu"
-            whileHover={{ y: -1 }}
-            whileTap={{ scale: 0.96 }}
+            aria-label="Open user menu"
+            whileHover={{ scale: 1 }}
+            whileTap={{ scale: 1 }}
             className={cn(
-              "relative w-9 h-9 flex items-center justify-center rounded-full group",
-              "bg-gradient-to-b from-background/60 to-background/40 backdrop-blur-md",
-              "border border-border/40 shadow-sm transition-all duration-300"
+              "relative flex items-center justify-center rounded-full group",
+              "w-[2.6em] h-[2.6em] transition-all duration-300 shadow-sm",
+              "bg-[var(--action-bg)] border border-[var(--action-ring)] hover:bg-[var(--action-hover)] hover:shadow-lg"
             )}
           >
             <motion.div
@@ -79,23 +92,24 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
             >
               <MenuSquare
                 className={cn(
-                  "h-5 w-5 transition-colors duration-300",
+                  "h-[1.4em] w-[1.4em] stroke-[var(--action-active)]  transition-colors  duration-300",
                   isSheetOpen
-                    ? "stroke-blue-600 dark:stroke-blue-400"
-                    : "stroke-muted-foreground group-hover:stroke-foreground"
+                    ? "stroke-[var(--action-active)] fill-[var(--action-active)]"
+                    : " group-hover:stroke-[var(--action-active)]"
                 )}
               />
             </motion.div>
           </motion.button>
         </SheetTrigger>
 
+        {/* ========== SHEET PANEL ========== */}
         <AnimatePresence>
           {isSheetOpen && (
             <motion.div
-              initial={{ opacity: 0, x: 100 }}
+              initial={{ opacity: 0, x: 80 }}
               animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 100 }}
-              transition={{ duration: 0.25, ease: "easeInOut" }}
+              exit={{ opacity: 0, x: 80 }}
+              transition={{ duration: 0.3, ease: "easeInOut" }}
             >
               <SheetContent
                 side="right"
@@ -105,7 +119,7 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
                   "transition-colors duration-500 shadow-2xl"
                 )}
               >
-                {/* 🔥 Live-synced theme transition overlay */}
+                {/* 🔮 Smooth Theme Transition Glow */}
                 <div
                   aria-hidden="true"
                   className="absolute inset-0 pointer-events-none will-change-[background,box-shadow,opacity]"
@@ -135,9 +149,10 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
                   </SheetTitle>
                 </SheetHeader>
 
-                <section className="p-4 rounded-2xl bg-card/70 border border-border/30 shadow-md transition-all duration-300 relative z-10">
+                {/* 👤 Profile section */}
+                <section className="p-4 rounded-2xl bg-card/70 border border-border/30 shadow-md relative z-10 transition-all duration-300">
                   <div className="flex items-center gap-4 mb-4">
-                    <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-blue-500 to-green-500 flex items-center justify-center text-white font-semibold text-lg shadow-inner">
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-indigo-500 to-green-500 flex items-center justify-center text-white font-semibold text-lg shadow-inner">
                       {getDisplayName.charAt(0).toUpperCase()}
                     </div>
                     <div className="flex flex-col truncate">
@@ -155,18 +170,16 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
                       onClick={() => navigate(`/profile/${currentUser.id}`)}
                       variant="secondary"
                       size="sm"
-                      className="w-full h-9 text-xs font-medium"
+                      className="w-full h-9 text-xs font-medium hover:bg-[var(--action-hover)]"
                     >
                       <User className="w-3 h-3 mr-1" />
                       Profile
                     </Button>
                     <Button
-                      onClick={() =>
-                        navigate(`/profile/${currentUser.id}/edit`)
-                      }
+                      onClick={() => navigate(`/profile/${currentUser.id}/edit`)}
                       variant="secondary"
                       size="sm"
-                      className="w-full h-9 text-xs font-medium"
+                      className="w-full h-9 text-xs font-medium hover:bg-[var(--action-hover)]"
                     >
                       <Settings className="w-3 h-3 mr-1" />
                       Settings
@@ -174,6 +187,7 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
                   </div>
                 </section>
 
+                {/* 🚪 Logout */}
                 <div className="mt-8 relative z-10">
                   <Button
                     onClick={handleLogout}
@@ -193,6 +207,9 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
     );
   }
 
+  // ========================================================
+  // ✅ UNAUTHENTICATED VIEW
+  // ========================================================
   return (
     <motion.div
       className="flex items-center gap-3"
@@ -205,19 +222,20 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
         variant="outline"
         size="sm"
         className={cn(
-          "text-blue-600 dark:text-blue-400 border border-blue-300/50 dark:border-blue-700/50",
-          "hover:bg-blue-100/50 dark:hover:bg-blue-900/20 transition-colors duration-300"
+          "border border-[var(--action-ring)] text-[var(--action-active)] font-medium",
+          "hover:bg-[var(--action-hover)] hover:text-[var(--action-text)] transition-all duration-300"
         )}
       >
         Sign In
       </Button>
+
       <Button
         onClick={() => router.push("/auth/register")}
         variant="default"
         size="sm"
         className={cn(
-          "bg-gradient-to-r from-blue-500 to-green-500 text-white shadow-md",
-          "hover:from-blue-600 hover:to-green-600 hover:shadow-lg transition-all duration-300"
+          "bg-[var(--action-active)] text-white font-medium shadow-md",
+          "hover:bg-[var(--action-ring)] hover:shadow-lg transition-all duration-300"
         )}
       >
         Sign Up
