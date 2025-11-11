@@ -106,7 +106,8 @@ export default function ChatInput() {
       setIsSending(false);
       inputRef.current?.focus();
     }
-  }, [canSend, text, user, selectedRoom, setOptimisticIds, addMessage, sendMessage, stopTyping]);
+  }, [canSend, text, user, selectedRoom, setOptimisticIds, addMessage, sendMessage, stopTyping, optimisticDeleteMessage]);
+
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {

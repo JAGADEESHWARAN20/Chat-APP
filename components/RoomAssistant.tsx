@@ -4,7 +4,6 @@ import React, {
   useState,
   useEffect,
   useRef,
-  useCallback,
   useTransition,
   memo,
 } from "react";
@@ -13,14 +12,8 @@ import {
   Bot,
   Send,
   Loader2,
-  Mic,
-  Download,
   Trash2,
-  Maximize2,
-  Minimize2,
   MoreVertical,
-  X,
-  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -31,28 +24,37 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Card, CardHeader, CardContent, CardTitle } from "@/components/ui/card";
-import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import {
+  Card,
+  CardHeader,
+  CardContent,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Tooltip, TooltipTrigger, TooltipProvider, TooltipContent } from "@/components/ui/tooltip";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { useTheme } from "next-themes";
-import { useMessage } from "@/lib/store/messages";
 import { useRoomContext } from "@/lib/store/RoomContext";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { estimateTokens } from "@/lib/token-utils";
 import { cn } from "@/lib/utils";
 import { PairedMessageRenderer } from "./RoomAssistantParts/PairedMessageRenderer";
 import { MessageSkeleton } from "./RoomAssistantParts/MessageSkeleton";
 import { MODELS } from "./RoomAssistantParts/constants";
 
-// ✅ Recommended: add dependency
-const handleDelete = useCallback(() => {
-  optimisticDeleteMessage();
-}, [optimisticDeleteMessage]);
-
+interface RoomAssistantProps {
+  roomId: string;
+  roomName: string;
+  className?: string;
+  dialogMode?: boolean;
+  isExpanded?: boolean;
+  onToggleExpand?: () => void;
+  onCloseDialog?: () => void;
+}
 
 function RoomAssistantComponent({
   roomId,
@@ -64,8 +66,7 @@ function RoomAssistantComponent({
   onCloseDialog,
 }: RoomAssistantProps) {
   const { theme, setTheme } = useTheme();
-  const { messages: allMessages } = useMessage();
-  const { user } = useRoomContext(); // ✅ user from context
+  const { user } = useRoomContext();
 
   const [prompt, setPrompt] = useState("");
   const [model, setModel] = useState("gpt-4o-mini");
@@ -112,7 +113,7 @@ function RoomAssistantComponent({
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "API failed");
+      if (!res.ok) throw new Error(data.error || "AI request failed");
 
       const aiMsg = {
         id: Date.now().toString() + "-ai",
@@ -124,24 +125,28 @@ function RoomAssistantComponent({
 
       startTransition(() => setMessages((prev) => [...prev, aiMsg]));
     } catch (err: any) {
+      console.error("[AI Assistant Error]", err);
       setError(err.message || "Something went wrong");
+      toast.error(err.message || "Failed to fetch AI response");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="relative w-full">
+    <div className={cn("relative w-full", className)}>
       <Card
         className={cn(
-          "flex flex-col rounded-2xl overflow-hidden shadow-xl border-border/20",
-          "bg-[hsl(var(--background))]/80 backdrop-blur-md transition-all duration-300"
+          "flex flex-col rounded-2xl overflow-hidden border border-border/20 shadow-lg",
+          "bg-[hsl(var(--background))]/80 backdrop-blur-xl transition-all duration-300"
         )}
       >
         {/* Header */}
         <CardHeader className="flex items-center justify-between px-5 py-3 border-b border-border/30">
           <div className="flex items-center gap-3">
-            <motion.div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center shadow">
+            <motion.div
+              className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center"
+            >
               <Bot className="h-5 w-5 text-white" />
             </motion.div>
             <CardTitle className="text-lg font-bold">AI Assistant</CardTitle>
@@ -149,7 +154,7 @@ function RoomAssistantComponent({
 
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="ghost" size="icon">
+              <Button variant="ghost" size="icon" className="rounded-full">
                 <MoreVertical className="h-4 w-4" />
               </Button>
             </PopoverTrigger>
@@ -169,7 +174,7 @@ function RoomAssistantComponent({
                   onClick={() => setMessages([])}
                   className="w-full justify-start text-red-500"
                 >
-                  <Trash2 className="mr-2 h-3.5 w-3.5" /> Clear
+                  <Trash2 className="mr-2 h-3.5 w-3.5" /> Clear Chat
                 </Button>
               </div>
             </PopoverContent>
@@ -181,7 +186,6 @@ function RoomAssistantComponent({
           <AnimatePresence mode="popLayout">
             {messages.length > 0 ? (
               messages.map((msg, i) => {
-                if (msg.role === "assistant") return null;
                 const next = messages[i + 1];
                 const pair =
                   next && next.role === "assistant"
@@ -219,7 +223,7 @@ function RoomAssistantComponent({
               placeholder={`Ask about #${roomName}...`}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              className="min-h-[70px] pr-16 resize-none rounded-xl focus-visible:ring-primary/50"
+              className="min-h-[70px] resize-none rounded-xl focus-visible:ring-primary/50"
             />
             <div className="flex gap-2">
               <Select value={model} onValueChange={setModel}>
@@ -237,7 +241,7 @@ function RoomAssistantComponent({
               <Button
                 type="submit"
                 disabled={loading || !prompt.trim()}
-                className="px-5 rounded-xl hover:shadow-md"
+                className="px-5 rounded-xl"
               >
                 {loading ? (
                   <>
