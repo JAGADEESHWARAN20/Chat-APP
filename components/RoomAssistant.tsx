@@ -913,65 +913,119 @@ const callSummarizeApi = useCallback(
   []);
 
   const popoverContent = useMemo(() => (
-    <PopoverContent align="end" className="w-56 p-2 rounded-xl shadow-lg">
-      <div className="space-y-1.5">
-        <div className="flex items-center justify-between py-1.5 px-2 text-xs rounded-md hover:bg-accent/50 cursor-pointer">
-          <span>Dark Mode</span>
-          <Switch 
-            checked={theme === "dark"} 
-            onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")} 
-          />
-        </div>
-        <Button 
-          variant="ghost" 
-          size="sm" 
-          onClick={clearHistory} 
-          disabled={loading || !messages.length} 
-          className="justify-start h-9 w-full rounded-md hover:bg-destructive/10"
-        >
-          <Trash2 className="h-3.5 w-3.5 mr-2" /> Clear History
-        </Button>
-        {messages.length > 1 && (
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={regenerate} 
-            disabled={loading} 
-            className="justify-start h-9 w-full rounded-md hover:bg-accent/50"
-          >
-            <RefreshCw className="h-3.5 w-3.5 mr-2" /> Regenerate
-          </Button>
-        )}
-        {messages.length > 0 && (
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={exportChat} 
-            className="justify-start h-9 w-full rounded-md hover:bg-accent/50"
-          >
-            <Download className="h-3.5 w-3.5 mr-2" /> Export Chat
-          </Button>
-        )}
-        <Button 
-          variant="ghost" 
-          size="sm" 
-          onClick={startVoiceInput} 
-          disabled={loading} 
-          className="justify-start h-9 w-full rounded-md hover:bg-accent/50"
-        >
-          <Mic className="h-3.5 w-3.5 mr-2" /> Voice Input
-        </Button>
+    <PopoverContent
+    align="end"
+    sideOffset={8}
+    className="
+      w-[240px] sm:w-[260px] p-2 rounded-2xl
+      bg-[hsl(var(--background))]/80 
+      backdrop-blur-xl
+      border border-[hsl(var(--border))/40]
+      shadow-none
+      transition-all duration-300
+      text-[hsl(var(--foreground))]
+    "
+  >
+    <div className="space-y-1.5">
+      {/* Theme toggle */}
+      <div
+        className="
+          flex items-center justify-between py-1.5 px-3 text-xs
+          rounded-md hover:bg-[hsl(var(--muted))]/50
+          transition-colors
+        "
+      >
+        <span>Dark Mode</span>
+        <Switch
+          checked={theme === "dark"}
+          onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")}
+        />
+      </div>
+
+      <Separator className="my-2 bg-[hsl(var(--border))/30]" />
+
+      {/* Popover actions */}
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={clearHistory}
+        disabled={loading || !messages.length}
+        className="
+          justify-start h-9 w-full rounded-md
+          text-[hsl(var(--foreground))]/90
+          hover:bg-[hsl(var(--destructive))]/15
+          hover:text-[hsl(var(--destructive))]
+          transition-colors
+        "
+      >
+        <Trash2 className="h-3.5 w-3.5 mr-2" /> Clear History
+      </Button>
+
+      {messages.length > 1 && (
         <Button
           variant="ghost"
           size="sm"
-          onClick={handleAddMessage}
-          disabled={!prompt.trim() || !roomState.user}
-          className="justify-start h-9 w-full rounded-md hover:bg-primary/10"
+          onClick={regenerate}
+          disabled={loading}
+          className="
+            justify-start h-9 w-full rounded-md
+            text-[hsl(var(--foreground))]/90
+            hover:bg-[hsl(var(--action-active))]/15
+            transition-colors
+          "
         >
-          <Send className="h-3.5 w-3.5 mr-2" /> Add to Room
+          <RefreshCw className="h-3.5 w-3.5 mr-2" /> Regenerate
         </Button>
-      </div>
-    </PopoverContent>
+      )}
+
+      {messages.length > 0 && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={exportChat}
+          className="
+            justify-start h-9 w-full rounded-md
+            text-[hsl(var(--foreground))]/90
+            hover:bg-[hsl(var(--muted))]/40
+            transition-colors
+          "
+        >
+          <Download className="h-3.5 w-3.5 mr-2" /> Export Chat
+        </Button>
+      )}
+
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={startVoiceInput}
+        disabled={loading}
+        className="
+          justify-start h-9 w-full rounded-md
+          text-[hsl(var(--foreground))]/90
+          hover:bg-[hsl(var(--action-ring))]/10
+          transition-colors
+        "
+      >
+        <Mic className="h-3.5 w-3.5 mr-2" /> Voice Input
+      </Button>
+
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={handleAddMessage}
+        disabled={!prompt.trim() || !roomState.user}
+        className="
+          justify-start h-9 w-full rounded-md
+          bg-[hsl(var(--primary))]/10
+          text-[hsl(var(--primary))]/90
+          hover:bg-[hsl(var(--primary))]/20
+          transition-colors
+        "
+      >
+        <Send className="h-3.5 w-3.5 mr-2" /> Add to Room
+      </Button>
+    </div>
+  </PopoverContent>
   ), [theme, setTheme, clearHistory, loading, messages.length, regenerate, exportChat, startVoiceInput, handleAddMessage, prompt, roomState.user]);
 
   // ----------------- Render -----------------
@@ -1024,11 +1078,22 @@ const callSummarizeApi = useCallback(
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span className="bg-muted/50 px-2 py-0.5 rounded-full">#{roomName}</span>
                 <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full hover:bg-accent/80 transition-all">
-                      <MoreVertical className="h-4 w-4" />
-                    </Button>
-                  </PopoverTrigger>
+                <PopoverTrigger asChild>
+    <Button
+      variant="ghost"
+      size="icon"
+      className="
+        h-9 w-9 
+        
+        
+        text-[hsl(var(--foreground))]/70 
+        hover:bg-[hsl(var(--action-active))]/10
+        transition-all
+      "
+    >
+      <MoreVertical className="h-4 w-4" />
+    </Button>
+  </PopoverTrigger>
                   {popoverContent}
                 </Popover>
               </div>

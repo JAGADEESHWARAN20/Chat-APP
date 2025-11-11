@@ -2,8 +2,8 @@
 
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
-import { Bot } from "lucide-react";
+import { Dialog, DialogContent, DialogTrigger, DialogClose } from "@/components/ui/dialog";
+import { Bot, X } from "lucide-react";
 import RoomAssistantComponent from "./RoomAssistant";
 import { cn } from "@/lib/utils";
 
@@ -33,24 +33,44 @@ export function RoomAssistantDialog({
         {triggerButton || defaultTrigger}
       </DialogTrigger>
 
-      <DialogContent className={cn(
-        "p-0 overflow-hidden transition-all duration-300 ease-in-out ",
-        isExpanded 
-          ? "w-[95vw] lg:w-[85vw] h-[90vh] md:h-[90vh] max-w-[98vw] max-h-[95vh]" 
-          : "w-[85vw] lg:w-[65vw] h-[70vh] md:h-[80vh] max-w-[90vw] max-h-[85vh]"
-      )}>
-        
-          <RoomAssistantComponent
-            roomId={roomId}
-            roomName={roomName}
-            className="h-full border-0 shadow-none"
-            dialogMode={true}
-            onCloseDialog={() => setOpen(false)}
-            isExpanded={isExpanded}
-            onToggleExpand={() => setIsExpanded(!isExpanded)}
-          />
-        
-      </DialogContent>
+      <DialogContent
+  hideCloseButton
+  className={cn(
+    "p-0 overflow-hidden transition-all duration-300 ease-in-out",
+    isExpanded 
+      ? "w-[95vw] lg:w-[85vw] h-[90vh] md:h-[90vh] max-w-[98vw] max-h-[95vh]" 
+      : "w-[85vw] lg:w-[65vw] h-[70vh] md:h-[80vh] max-w-[90vw] max-h-[85vh]"
+  )}
+>
+  {/* ✅ Your custom-positioned close button */}
+  <DialogClose asChild>
+    <button
+      className="
+        absolute top-3 right-3 z-50 
+        h-9 w-9 flex items-center justify-center 
+        rounded-full 
+        bg-[hsl(var(--muted))]/60 
+        border border-[hsl(var(--border))/40]
+        hover:bg-[hsl(var(--action-active))]/15 
+        text-[hsl(var(--foreground))]/80 
+        transition-all
+      "
+    >
+      <X className="h-4 w-4" />
+    </button>
+  </DialogClose>
+
+  <RoomAssistantComponent
+    roomId={roomId}
+    roomName={roomName}
+    className="h-full border-0 shadow-none"
+    dialogMode={true}
+    onCloseDialog={() => setOpen(false)}
+    isExpanded={isExpanded}
+    onToggleExpand={() => setIsExpanded(!isExpanded)}
+  />
+</DialogContent>
+
     </Dialog>
   );
 }

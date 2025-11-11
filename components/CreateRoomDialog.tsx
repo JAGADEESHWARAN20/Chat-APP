@@ -10,8 +10,9 @@ import {
   DialogTitle,
   DialogFooter,
   DialogTrigger,
+  DialogClose
 } from "@/components/ui/dialog";
-import { PlusCircle } from "lucide-react";
+import { PlusCircle, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -68,8 +69,9 @@ export default function CreateRoomDialog({ user }: { user: SupabaseUser | undefi
           />
         </motion.button>
       </DialogTrigger>
-
+     
       <DialogContent
+      hideCloseButton
   className={cn(
     // ✅ Core layout
     "relative flex flex-col items-center justify-center",
@@ -83,11 +85,28 @@ export default function CreateRoomDialog({ user }: { user: SupabaseUser | undefi
     "transition-all duration-300 ease-in-out"
   )}
 >
+
   {/* Header */}
   <DialogHeader className="w-full mb-4 text-center">
     <DialogTitle className="text-xl sm:text-2xl font-semibold text-foreground">
       Create New Room
     </DialogTitle>
+    <DialogClose asChild>
+    <button
+      className="
+        absolute top-3 right-3 z-50 
+        h-9 w-9 flex items-center justify-center 
+        rounded-full 
+        bg-[hsl(var(--muted))]/60 
+        border border-[hsl(var(--border))/40]
+        hover:bg-[hsl(var(--action-active))]/15 
+        text-[hsl(var(--foreground))]/80 
+        transition-all
+      "
+    >
+      <X className="h-4 w-4" />
+    </button>
+  </DialogClose>
   </DialogHeader>
 
   {/* Body */}
