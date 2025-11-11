@@ -76,7 +76,7 @@ export default function NotificationsWrapper() {
         {/* 🔔 Bell Icon */}
         <Bell
           className={cn(
-            "relative z-10 h-5 w-5 transition-colors duration-200",
+            "relative z-10 h-5 w-5 transition-colors   duration-200",
             unreadCount > 0
               ? "stroke-[var(--action-active)] fill-[var(--action-active)]"
               : "stroke-[var(--action-text)] group-hover:stroke-[var(--action-active)]"

@@ -242,7 +242,7 @@ export default function Notifications({
   const { fetchRooms } = useRoomContext();
 
   /* ✅ Auth */
-  const { user, userId, isAuthenticated } = useAuthSync(); // <- consistent name
+  const { userId, isAuthenticated } = useAuthSync(); // <- consistent name
 
   const supabase = getSupabaseBrowserClient();
 
