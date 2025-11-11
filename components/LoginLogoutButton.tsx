@@ -109,7 +109,7 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
               initial={{ opacity: 0, x: 80 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 80 }}
-              transition={{ duration: 0.3, ease: "easeInOut" }}
+              transition={{ duration: 0.01, ease: "easeInOut" }}
             >
               <SheetContent
                 side="right"
