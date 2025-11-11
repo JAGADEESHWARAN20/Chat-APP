@@ -2,10 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { z, ZodError } from "zod";
 import { createClient } from "@supabase/supabase-js";
 import { v4 as uuidv4 } from "uuid";
-import { estimateTokens } from "@/lib/token-utils";
+// import { estimateTokens } from "@/lib/token-utils";
 import type { Database } from "@/lib/types/supabase";
 
-// ====================== SCHEMA VALIDATION ======================
 const SummarizeSchema = z.object({
   prompt: z.string().min(1).max(15000),
   roomId: z.string().min(1),
@@ -15,28 +14,19 @@ const SummarizeSchema = z.object({
   temperature: z.number().min(0).max(1).default(0.2),
 });
 
-// ====================== MODEL LIMITS ======================
-const modelLimits = {
-  "gpt-4o-mini": 128000,
-  "gpt-3.5-turbo": 4096,
-} as const;
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY!;
+const OPENROUTER_URL = process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1";
+const REFERER =
+  process.env.NEXT_PUBLIC_SITE_URL?.startsWith("http")
+    ? process.env.NEXT_PUBLIC_SITE_URL
+    : "https://localhost";
+const APP_TITLE = "FlyCode Chat AI Assistant";
 
-// ====================== CLIENTS ======================
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY!;
-const OPENROUTER_URL = process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1";
-const REFERER = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
-const APP_TITLE = "FlyCode Chat AI Assistant";
-
-if (!OPENROUTER_API_KEY) {
-  console.error("❌ Missing OPENROUTER_API_KEY in environment variables");
-}
-
-// ====================== RETRY WRAPPER ======================
 async function callWithRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
   for (let i = 0; i < retries; i++) {
     try {
@@ -51,7 +41,6 @@ async function callWithRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
   throw new Error("Retry limit exceeded");
 }
 
-// ====================== MAIN HANDLER ======================
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -60,42 +49,27 @@ export async function POST(req: NextRequest) {
 
     console.log("[AI Summarize] Request:", { roomId, userId, model });
 
-    // Token logic
-    const tokenLimit = modelLimits[model as keyof typeof modelLimits] || 128000;
-    const inputTokens = estimateTokens(prompt);
-
-    let finalPrompt = prompt;
-    if (inputTokens > tokenLimit - maxTokens - 200) {
-      const lines = prompt.split("\n");
-      finalPrompt =
-        lines.slice(-Math.floor(lines.length * 0.6)).join("\n") +
-        "\n[Context trimmed for optimization]";
-    }
-
-    // ✅ FIX: Direct fetch call to OpenRouter
     const completion = await callWithRetry(async () => {
       const res = await fetch(`${OPENROUTER_URL}/chat/completions`, {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
           "Content-Type": "application/json",
-          "Referer": REFERER,  // ✅ correct header key
+          "Referer": REFERER,
+          "Origin": REFERER,
           "X-Title": APP_TITLE,
         },
+        
         body: JSON.stringify({
           model,
           messages: [
-            {
-              role: "system",
-              content: "You are an AI summarizer. Respond concisely and clearly.",
-            },
-            { role: "user", content: finalPrompt },
+            { role: "system", content: "You are an AI summarizer. Respond concisely and clearly." },
+            { role: "user", content: prompt },
           ],
           max_tokens: maxTokens,
           temperature,
         }),
       });
-    
 
       if (!res.ok) {
         const text = await res.text();
@@ -109,8 +83,7 @@ export async function POST(req: NextRequest) {
     const content =
       completion?.choices?.[0]?.message?.content?.trim() || "No output";
 
-    // Save to Supabase
-    const { error } = await supabase.from("ai_chat_history").insert({
+    await supabase.from("ai_chat_history").insert({
       id: uuidv4(),
       room_id: roomId,
       user_id: userId,
@@ -119,8 +92,6 @@ export async function POST(req: NextRequest) {
       model_used: model,
       created_at: new Date().toISOString(),
     });
-
-    if (error) console.error("[Supabase Insert Error]", error);
 
     return NextResponse.json({
       success: true,
@@ -132,13 +103,7 @@ export async function POST(req: NextRequest) {
   } catch (err: any) {
     console.error("[Summarize API Error]", err);
     if (err instanceof ZodError)
-      return NextResponse.json(
-        { error: "Invalid input", details: err.issues },
-        { status: 400 }
-      );
-    return NextResponse.json(
-      { error: err.message || "Internal Server Error" },
-      { status: 500 }
-    );
+      return NextResponse.json({ error: "Invalid input", details: err.issues }, { status: 400 });
+    return NextResponse.json({ error: err.message || "Internal Server Error" }, { status: 500 });
   }
 }
