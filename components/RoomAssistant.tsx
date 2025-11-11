@@ -148,22 +148,16 @@ function RoomAssistantComponent({
     <div className={cn("relative w-full", className)}>
       <Card
         className={cn(
-          "flex flex-col rounded-2xl overflow-hidden border border-border/20 shadow-lg",
+          "flex flex-col rounded-2xl h-full overflow-hidden border border-border/20 shadow-lg",
           "bg-[hsl(var(--background))]/80 backdrop-blur-xl transition-all duration-300"
         )}
       >
         {/* Header */}
         <CardHeader className="flex items-center justify-between px-5 py-3 border-b border-border/30">
-          <div className="flex items-center gap-3">
-            <motion.div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center">
-              <Bot className="h-5 w-5 text-white" />
-            </motion.div>
-            <CardTitle className="text-lg font-bold">AI Assistant</CardTitle>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {/* Expand/Collapse */}
-            <Button
+          <div className="flex items-center justify-between gap-2">
+          
+           {/* Expand/Collapse */}
+           <Button
               variant="ghost"
               size="icon"
               onClick={toggleExpand}
@@ -176,6 +170,13 @@ function RoomAssistantComponent({
                 <Maximize2 className="h-4 w-4" />
               )}
             </Button>
+
+          <div className="flex items-center gap-3">
+            <motion.div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center">
+              <Bot className="h-5 w-5 text-white" />
+            </motion.div>
+            <CardTitle className="text-lg font-bold">AI Assistant</CardTitle>
+          </div>
 
             {/* Options */}
             <Popover>
@@ -206,21 +207,12 @@ function RoomAssistantComponent({
               </PopoverContent>
             </Popover>
 
-            {dialogMode && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={onCloseDialog}
-                className="rounded-full"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            )}
+          
           </div>
         </CardHeader>
 
         {/* Chat Area */}
-        <ScrollArea ref={scrollRef} className="flex-1 p-4 space-y-5 overflow-y-auto">
+        <ScrollArea ref={scrollRef} className="flex-1 p-4 space-y-5  overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
           <AnimatePresence mode="popLayout">
             {messages.length > 0 ? (
               messages.map((msg, i) => {

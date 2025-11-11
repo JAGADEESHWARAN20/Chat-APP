@@ -39,13 +39,13 @@ export function RoomAssistantDialog({
       <DialogContent
         hideCloseButton
         className={cn(
-          "p-0 overflow-hidden transition-all duration-300 ease-in-out flex flex-col",
+          "p-0 overflow-hidden flex flex-col transition-all duration-300 ease-in-out",
           isExpanded
-            ? "w-[95vw] lg:w-[85vw] h-[90vh] md:h-[90vh] max-w-[98vw] max-h-[95vh]"
-            : "w-[85vw] lg:w-[65vw] h-[75vh] md:h-[75vh] max-w-[90vw] max-h-[85vh]"
+            ? "w-[95vw] lg:w-[85vw] h-[90vh] max-h-[95vh]"
+            : "w-[85vw] lg:w-[65vw] h-[55vh] max-h-[55vh]"
         )}
       >
-        {/* Custom close button */}
+        {/* Close button */}
         <DialogClose asChild>
           <button
             className="
@@ -63,13 +63,12 @@ export function RoomAssistantDialog({
           </button>
         </DialogClose>
 
-        {/* Ensures the assistant fills entire dialog */}
-        <div className="flex-1 h-full overflow-hidden">
+        <div className="flex-1 h-auto overflow-hidden">
           <RoomAssistantComponent
             roomId={roomId}
             roomName={roomName}
             className="h-full border-0 shadow-none"
-            dialogMode={true}
+            dialogMode
             onCloseDialog={() => setOpen(false)}
             isExpanded={isExpanded}
             onToggleExpand={() => setIsExpanded(!isExpanded)}

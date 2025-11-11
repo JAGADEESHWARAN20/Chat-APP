@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z, ZodError } from "zod";
-import { OpenAI } from "openai";
 import { createClient } from "@supabase/supabase-js";
 import { v4 as uuidv4 } from "uuid";
 import { estimateTokens } from "@/lib/token-utils";
@@ -8,81 +7,45 @@ import type { Database } from "@/lib/types/supabase";
 
 // ====================== SCHEMA VALIDATION ======================
 const SummarizeSchema = z.object({
-  prompt: z.string().min(1, "Prompt cannot be empty").max(15000, "Prompt too long"),
-  roomId: z.string().min(1, "Room ID required"),
+  prompt: z.string().min(1).max(15000),
+  roomId: z.string().min(1),
   userId: z.string().optional(),
-  model: z
-    .enum([
-      "gpt-3.5-turbo",
-      "gpt-4o-mini",
-      "minimax/minimax-m2",
-      "andromeda/alpha",
-      "tongyi/deepresearch-30b-a3b",
-      "meituan/longcat-flash-chat",
-      "nvidia/nemotron-nano-9b-v2",
-      "deepseek/deepseek-v3-1",
-      "openai/gpt-oss-20b",
-      "z-ai/glm-4-5-air",
-      "qwen/qwen3-coder-480b-a35b",
-      "moonshot/kimi-k2-0711",
-    ])
-    .default("gpt-4o-mini"),
+  model: z.string().default("gpt-4o-mini"),
   maxTokens: z.number().min(100).max(3000).default(1500),
   temperature: z.number().min(0).max(1).default(0.2),
 });
 
-// ====================== MODEL TOKEN LIMITS ======================
+// ====================== MODEL LIMITS ======================
 const modelLimits = {
-  "gpt-3.5-turbo": 4096,
   "gpt-4o-mini": 128000,
-  "minimax/minimax-m2": 205000,
-  "andromeda/alpha": 128000,
-  "tongyi/deepresearch-30b-a3b": 131000,
-  "meituan/longcat-flash-chat": 131000,
-  "nvidia/nemotron-nano-9b-v2": 128000,
-  "deepseek/deepseek-v3-1": 164000,
-  "openai/gpt-oss-20b": 131000,
-  "z-ai/glm-4-5-air": 131000,
-  "qwen/qwen3-coder-480b-a35b": 262000,
-  "moonshot/kimi-k2-0711": 33000,
+  "gpt-3.5-turbo": 4096,
 } as const;
 
-// ====================== CLIENT INITIALIZATION ======================
-const apiKey = process.env.OPENROUTER_API_KEY;
-const referer = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
-
-if (!apiKey) {
-  console.error("[Summarize API] Missing OPENROUTER_API_KEY in environment.");
-}
-
-const openai = new OpenAI({
-  apiKey,
-  baseURL: process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1",
-  defaultHeaders: {
-    "HTTP-Referer": referer,
-    "X-Title": "FlyCode Chat AI Assistant",
-  },
-});
-
+// ====================== CLIENTS ======================
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// ====================== UTILITIES ======================
-async function callWithRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
-  for (let i = 0; i < maxRetries; i++) {
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY!;
+const OPENROUTER_URL = process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1";
+const REFERER = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+const APP_TITLE = "FlyCode Chat AI Assistant";
+
+if (!OPENROUTER_API_KEY) {
+  console.error("❌ Missing OPENROUTER_API_KEY in environment variables");
+}
+
+// ====================== RETRY WRAPPER ======================
+async function callWithRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
+  for (let i = 0; i < retries; i++) {
     try {
       return await fn();
     } catch (err: any) {
-      // ✅ stop retrying on 401
-      if (err?.status === 401 || err?.code === 401 || err?.error?.code === 401) {
-        console.error("[OpenRouter Auth Error] Invalid API key or missing headers.");
-        throw new Error("Unauthorized OpenRouter request");
-      }
-      if (i === maxRetries - 1) throw err;
-      console.warn(`[Retry ${i + 1}/${maxRetries}] Retrying after error:`, err);
-      await new Promise((r) => setTimeout(r, 500 * Math.pow(2, i)));
+      if (err?.message?.includes("401")) throw err;
+      if (i === retries - 1) throw err;
+      console.warn(`[Retry ${i + 1}] Retrying after error:`, err);
+      await new Promise((r) => setTimeout(r, 500 * (i + 1)));
     }
   }
   throw new Error("Retry limit exceeded");
@@ -97,35 +60,56 @@ export async function POST(req: NextRequest) {
 
     console.log("[AI Summarize] Request:", { roomId, userId, model });
 
-    // -------- Token optimization --------
-    const promptTokens = estimateTokens(prompt);
-    const maxInputTokens =
-      modelLimits[model as keyof typeof modelLimits] - maxTokens - 200;
+    // Token logic
+    const tokenLimit = modelLimits[model as keyof typeof modelLimits] || 128000;
+    const inputTokens = estimateTokens(prompt);
 
     let finalPrompt = prompt;
-    if (promptTokens > maxInputTokens) {
+    if (inputTokens > tokenLimit - maxTokens - 200) {
       const lines = prompt.split("\n");
       finalPrompt =
         lines.slice(-Math.floor(lines.length * 0.6)).join("\n") +
-        "\n[Context trimmed for token optimization]";
+        "\n[Context trimmed for optimization]";
     }
 
-    // -------- AI Call --------
-    const completion = await callWithRetry(() =>
-      openai.chat.completions.create({
-        model,
-        messages: [
-          { role: "system", content: "You are an AI summarizer. Respond concisely and in JSON." },
-          { role: "user", content: finalPrompt },
-        ],
-        max_tokens: maxTokens,
-        temperature,
-      })
-    );
+    // ✅ FIX: Direct fetch call to OpenRouter
+    const completion = await callWithRetry(async () => {
+      const res = await fetch(`${OPENROUTER_URL}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json",
+          "Referer": REFERER,  // ✅ correct header key
+          "X-Title": APP_TITLE,
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            {
+              role: "system",
+              content: "You are an AI summarizer. Respond concisely and clearly.",
+            },
+            { role: "user", content: finalPrompt },
+          ],
+          max_tokens: maxTokens,
+          temperature,
+        }),
+      });
+    
 
-    const content = completion.choices?.[0]?.message?.content?.trim() || "No output";
+      if (!res.ok) {
+        const text = await res.text();
+        console.error("[OpenRouter Error Response]", text);
+        throw new Error(`OpenRouter request failed (${res.status})`);
+      }
 
-    // -------- Save to Supabase --------
+      return res.json();
+    });
+
+    const content =
+      completion?.choices?.[0]?.message?.content?.trim() || "No output";
+
+    // Save to Supabase
     const { error } = await supabase.from("ai_chat_history").insert({
       id: uuidv4(),
       room_id: roomId,
@@ -140,18 +124,20 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      fullContent: content,
       model,
       userId,
       roomId,
-      fullContent: content,
     });
   } catch (err: any) {
     console.error("[Summarize API Error]", err);
-    if (err instanceof ZodError) {
-      return NextResponse.json({ error: "Invalid input", details: err.issues }, { status: 400 });
-    }
+    if (err instanceof ZodError)
+      return NextResponse.json(
+        { error: "Invalid input", details: err.issues },
+        { status: 400 }
+      );
     return NextResponse.json(
-      { error: "Internal Server Error", message: err.message || "Unexpected error" },
+      { error: err.message || "Internal Server Error" },
       { status: 500 }
     );
   }
