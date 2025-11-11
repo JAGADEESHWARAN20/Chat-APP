@@ -48,11 +48,18 @@ const modelLimits = {
 } as const;
 
 // ====================== CLIENT INITIALIZATION ======================
+const apiKey = process.env.OPENROUTER_API_KEY;
+const referer = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+
+if (!apiKey) {
+  console.error("[Summarize API] Missing OPENROUTER_API_KEY in environment.");
+}
+
 const openai = new OpenAI({
-  apiKey: process.env.OPENROUTER_API_KEY!,
+  apiKey,
   baseURL: process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1",
   defaultHeaders: {
-    "HTTP-Referer": process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000",
+    "HTTP-Referer": referer,
     "X-Title": "FlyCode Chat AI Assistant",
   },
 });
@@ -68,8 +75,9 @@ async function callWithRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T
     try {
       return await fn();
     } catch (err: any) {
-      if (err?.code === 401 || err?.error?.code === 401) {
-        console.error("[OpenRouter Auth Error] API key invalid or missing headers.");
+      // ✅ stop retrying on 401
+      if (err?.status === 401 || err?.code === 401 || err?.error?.code === 401) {
+        console.error("[OpenRouter Auth Error] Invalid API key or missing headers.");
         throw new Error("Unauthorized OpenRouter request");
       }
       if (i === maxRetries - 1) throw err;
@@ -78,16 +86,6 @@ async function callWithRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T
     }
   }
   throw new Error("Retry limit exceeded");
-}
-
-interface StructuredAnalysis {
-  type: string;
-  title: string;
-  summary: string;
-  sections: { title: string; content: string; metrics?: string[]; highlights?: string[] }[];
-  keyFindings: string[];
-  recommendations: string[];
-  metadata: { participantCount: number; messageCount: number; timeRange: string; sentiment: string };
 }
 
 // ====================== MAIN HANDLER ======================
@@ -99,19 +97,20 @@ export async function POST(req: NextRequest) {
 
     console.log("[AI Summarize] Request:", { roomId, userId, model });
 
+    // -------- Token optimization --------
     const promptTokens = estimateTokens(prompt);
     const maxInputTokens =
       modelLimits[model as keyof typeof modelLimits] - maxTokens - 200;
 
     let finalPrompt = prompt;
     if (promptTokens > maxInputTokens) {
+      const lines = prompt.split("\n");
       finalPrompt =
-        prompt
-          .split("\n")
-          .slice(-Math.floor(prompt.split("\n").length * 0.6))
-          .join("\n") + "\n[Context trimmed for token optimization]";
+        lines.slice(-Math.floor(lines.length * 0.6)).join("\n") +
+        "\n[Context trimmed for token optimization]";
     }
 
+    // -------- AI Call --------
     const completion = await callWithRetry(() =>
       openai.chat.completions.create({
         model,
@@ -126,21 +125,7 @@ export async function POST(req: NextRequest) {
 
     const content = completion.choices?.[0]?.message?.content?.trim() || "No output";
 
-    const structuredData: StructuredAnalysis = {
-      type: "analysis",
-      title: "AI Summary",
-      summary: content.slice(0, 180),
-      sections: [{ title: "Generated Output", content }],
-      keyFindings: [],
-      recommendations: [],
-      metadata: {
-        participantCount: 0,
-        messageCount: 0,
-        timeRange: "N/A",
-        sentiment: "Neutral",
-      },
-    };
-
+    // -------- Save to Supabase --------
     const { error } = await supabase.from("ai_chat_history").insert({
       id: uuidv4(),
       room_id: roomId,
@@ -148,7 +133,6 @@ export async function POST(req: NextRequest) {
       user_query: prompt,
       ai_response: content,
       model_used: model,
-      structured_data: JSON.parse(JSON.stringify(structuredData)),
       created_at: new Date().toISOString(),
     });
 
@@ -159,7 +143,6 @@ export async function POST(req: NextRequest) {
       model,
       userId,
       roomId,
-      structuredData,
       fullContent: content,
     });
   } catch (err: any) {
