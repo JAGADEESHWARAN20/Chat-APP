@@ -4,6 +4,8 @@ import { v4 as uuidv4 } from "uuid";
 import { OpenRouter } from "@openrouter/sdk";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/types/supabase";
+import { ensureSystemUserExists } from "@/lib/init/systemUser";
+
 
 // 🧱 Input schema validation
 const SummarizeSchema = z.object({
@@ -90,6 +92,7 @@ export async function POST(req: NextRequest) {
 
     const raw = response?.choices?.[0]?.message?.content ?? "";
     const content = parseContent(raw);
+    await ensureSystemUserExists();
 
     // 🗄️ Save to Supabase
     const insertData = {
