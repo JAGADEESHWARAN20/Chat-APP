@@ -271,36 +271,40 @@ function RoomAssistantComponent({
           className="flex-1 p-4 space-y-5 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent"
         >
           <AnimatePresence mode="popLayout">
-            {messages.length > 0 ? (
-              messages.map((msg, i) => {
-                const next = messages[i + 1];
-                const pair =
-                  next && next.role === "assistant"
-                    ? { user: msg, assistant: next }
-                    : { user: msg };
-                return (
-                  <PairedMessageRenderer
-                    key={msg.id}
-                    pair={pair}
-                    theme={theme === "dark" ? "dark" : "light"}
-                  />
-                );
-              })
-            ) : loading ? (
-              Array.from({ length: 3 }, (_, i) => <MessageSkeleton key={i} />)
-            ) : (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="flex flex-col items-center justify-center py-16 text-center"
-              >
-                <Bot className="h-10 w-10 text-primary mb-2" />
-                <p className="text-muted-foreground text-sm">
-                  Ask something about #{roomName}
-                </p>
-              </motion.div>
-            )}
-          </AnimatePresence>
+  {messages.length > 0 ? (
+    messages.map((msg, i) => {
+      if (msg.role !== "user") return null; // ✅ skip assistant duplicates
+
+      const next = messages[i + 1];
+      const pair =
+        next && next.role === "assistant"
+          ? { user: msg, assistant: next }
+          : { user: msg };
+
+      return (
+        <PairedMessageRenderer
+          key={msg.id}
+          pair={pair}
+          theme={theme === "dark" ? "dark" : "light"}
+        />
+      );
+    })
+  ) : loading ? (
+    Array.from({ length: 3 }, (_, i) => <MessageSkeleton key={i} />)
+  ) : (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="flex flex-col items-center justify-center py-16 text-center"
+    >
+      <Bot className="h-10 w-10 text-primary mb-2" />
+      <p className="text-muted-foreground text-sm">
+        Ask something about #{roomName}
+      </p>
+    </motion.div>
+  )}
+</AnimatePresence>
+
         </ScrollArea>
 
         {/* Input */}
