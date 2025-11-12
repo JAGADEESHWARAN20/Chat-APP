@@ -7,7 +7,10 @@ import {
   DialogContent,
   DialogTrigger,
   DialogClose,
+  DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
+
 import { Bot, X } from "lucide-react";
 import RoomAssistantComponent from "./RoomAssistant";
 import { cn } from "@/lib/utils";
@@ -37,44 +40,49 @@ export function RoomAssistantDialog({
       <DialogTrigger asChild>{triggerButton || defaultTrigger}</DialogTrigger>
 
       <DialogContent
-        hideCloseButton
-        className={cn(
-          "p-0 overflow-hidden flex flex-col transition-all duration-300 ease-in-out",
-          isExpanded
-            ? "w-[95vw] lg:w-[85vw] h-[90vh] max-h-[95vh]"
-            : "w-[85vw] lg:w-[65vw] h-[55vh] max-h-[55vh]"
-        )}
-      >
-        {/* Close button */}
-        <DialogClose asChild>
-          <button
-            className="
-              absolute top-3 right-3 z-50 
-              h-9 w-9 flex items-center justify-center 
-              rounded-full 
-              bg-[hsl(var(--muted))]/60 
-              border border-[hsl(var(--border))/40]
-              hover:bg-[hsl(var(--muted))]/80 
-              text-[hsl(var(--foreground))]/80 
-              transition-all
-            "
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </DialogClose>
+  hideCloseButton
+  className={cn(
+    "p-0 overflow-hidden flex flex-col transition-all duration-300 ease-in-out",
+    isExpanded
+      ? "w-[95vw] lg:w-[85vw] h-[90vh] max-h-[95vh]"
+      : "w-[85vw] lg:w-[65vw] h-[55vh] max-h-[55vh]"
+  )}
+>
+  <DialogTitle className="sr-only">AI Assistant</DialogTitle>
+  <DialogDescription className="sr-only">
+    Chat with AI Assistant about this room
+  </DialogDescription>
 
-        <div className="flex-1 h-auto overflow-hidden">
-          <RoomAssistantComponent
-            roomId={roomId}
-            roomName={roomName}
-            className="h-full border-0 shadow-none"
-            dialogMode
-            onCloseDialog={() => setOpen(false)}
-            isExpanded={isExpanded}
-            onToggleExpand={() => setIsExpanded(!isExpanded)}
-          />
-        </div>
-      </DialogContent>
+  <DialogClose asChild>
+    <button
+      className="
+        absolute top-3 right-3 z-50 
+        h-9 w-9 flex items-center justify-center 
+        rounded-full 
+        bg-[hsl(var(--muted))]/60 
+        border border-[hsl(var(--border))/40]
+        hover:bg-[hsl(var(--muted))]/80 
+        text-[hsl(var(--foreground))]/80 
+        transition-all
+      "
+    >
+      <X className="h-4 w-4" />
+    </button>
+  </DialogClose>
+
+  <div className="flex-1 h-auto overflow-hidden">
+    <RoomAssistantComponent
+      roomId={roomId}
+      roomName={roomName}
+      className="h-full border-0 shadow-none"
+      dialogMode
+      onCloseDialog={() => setOpen(false)}
+      isExpanded={isExpanded}
+      onToggleExpand={() => setIsExpanded(!isExpanded)}
+    />
+  </div>
+</DialogContent>
+
     </Dialog>
   );
 }
