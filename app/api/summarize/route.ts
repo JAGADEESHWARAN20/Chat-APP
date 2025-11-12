@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { v4 as uuidv4 } from "uuid";
-import { OpenRouter } from "@openrouter/sdk";
+import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/types/supabase";
 import { ensureSystemUserExists } from "@/lib/init/systemUser";
 
-// 🧱 Validate input
+// 🧱 Input schema
 const SummarizeSchema = z.object({
   prompt: z.string().min(1).max(15000),
   roomId: z.string().min(1),
@@ -14,18 +14,19 @@ const SummarizeSchema = z.object({
   model: z.string().default("openai/gpt-4o"),
 });
 
-// 🧩 Supabase (Service Role Key)
+// 🧩 Supabase client
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// 🧩 OpenRouter Client (minimal setup)
-const openRouter = new OpenRouter({
+// 🧩 OpenRouter (OpenAI-compatible) client
+const openai = new OpenAI({
+  baseURL: "https://openrouter.ai/api/v1",
   apiKey: process.env.OPENROUTER_API_KEY!,
 });
 
-// 🧠 Normalize content
+// 🧠 Normalize AI output
 function parseContent(raw: unknown): string {
   if (!raw) return "No response received.";
   if (typeof raw === "string") return raw;
@@ -58,29 +59,27 @@ export async function POST(req: NextRequest) {
 
     console.log("📨 [Summarize Request]", { model, userId, roomId });
 
-    // 🧩 Ensure system user exists before saving
+    // Ensure system user exists before insert
     await ensureSystemUserExists();
 
-    // 🧠 Generate response
-    const completion = await openRouter.chat.send({
+    // 🧠 Generate AI response using OpenRouter's OpenAI-compatible endpoint
+    const completion = await openai.chat.completions.create({
       model,
       messages: [
         { role: "system", content: "You are a concise, helpful AI summarizer." },
         { role: "user", content: prompt },
       ],
-      stream: false,
     });
 
-    const raw = completion?.choices?.[0]?.message?.content ?? "";
-    const aiResponse = parseContent(raw);
+    const content = parseContent(completion.choices?.[0]?.message?.content ?? "");
 
-    // 🗄️ Store in Supabase
+    // 🗄️ Save to Supabase
     const insertData = {
       id: uuidv4(),
       room_id: roomId,
       user_id: userId,
       user_query: prompt,
-      ai_response: aiResponse,
+      ai_response: content,
       model_used: model,
       created_at: new Date().toISOString(),
     } satisfies Database["public"]["Tables"]["ai_chat_history"]["Insert"];
@@ -94,17 +93,19 @@ export async function POST(req: NextRequest) {
       throw new Error("Database insert failed: " + insertError.message);
     }
 
-    console.log("✅ [AI Response Saved]", aiResponse.slice(0, 120));
+    console.log("✅ [AI Response Saved]", content.slice(0, 120));
 
-    return NextResponse.json({ success: true, fullContent: aiResponse });
+    return NextResponse.json({ success: true, fullContent: content });
   } catch (err: unknown) {
     console.error("💥 [Summarize Error]", err);
+
     const message =
       err instanceof Error
         ? err.message
         : typeof err === "string"
         ? err
         : "Internal Server Error";
+
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }
