@@ -42,7 +42,13 @@ function formatTimestamp(value?: string | Date): string {
 }
 
 export const PairedMessageRenderer = memo(
-  ({ pair, theme }: { pair: { user: ChatMessage; assistant?: ChatMessage }; theme: "light" | "dark" }) => {
+  ({
+    pair,
+    theme,
+  }: {
+    pair: { user: ChatMessage; assistant?: ChatMessage };
+    theme: "light" | "dark";
+  }) => {
     const handleCopy = () => {
       if (!pair.assistant?.content) return;
       navigator.clipboard.writeText(pair.assistant.content);
@@ -54,17 +60,19 @@ export const PairedMessageRenderer = memo(
       const safeMarkdown = DOMPurify.sanitize(pair.assistant.content);
 
       const components: Components = {
-        p: ({ children }) => <p className="my-1.5">{children}</p>,
+        p: ({ children }) => <p className="my-1 leading-relaxed">{children}</p>,
         li: ({ children }) => <li className="my-0.5">{children}</li>,
         code: ({ children }) => (
-          <code className="bg-[hsl(var(--muted))]/60 px-1 py-0.5 rounded text-xs font-mono">{children}</code>
+          <code className="bg-[hsl(var(--muted))]/60 px-1.5 py-0.5 rounded text-[0.75rem] font-mono">
+            {children}
+          </code>
         ),
         a: ({ href, children }) => (
           <a
             href={href}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-[hsl(var(--action-active))] hover:underline"
+            className="text-[hsl(var(--primary))] hover:underline"
           >
             {children}
           </a>
@@ -82,30 +90,41 @@ export const PairedMessageRenderer = memo(
     }, [pair.assistant]);
 
     return (
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }} className="space-y-3">
-        <Card className="bg-[hsl(var(--muted))]/40 border-border/30 backdrop-blur-sm rounded-xl">
-          <CardContent className="p-3 flex gap-3 items-start">
-            <div className="w-7 h-7 flex items-center justify-center bg-[hsl(var(--action-active))]/80 text-white rounded-full flex-shrink-0">
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.25 }}
+        className="space-y-3"
+      >
+        {/* 🧍 User Message */}
+        <Card className="bg-[hsl(var(--muted))]/30 border border-border/30 backdrop-blur-sm rounded-xl">
+          <CardContent className="px-3 py-2.5 flex gap-2 items-start">
+            <div className="w-7 h-7 flex items-center justify-center bg-[hsl(var(--primary))]/70 text-white rounded-full flex-shrink-0">
               <User className="h-3.5 w-3.5" />
             </div>
             <div className="flex-1">
-              <p className="text-sm text-foreground leading-snug">{pair.user.content}</p>
-              <p className="text-xs text-muted-foreground mt-1">{formatTimestamp(pair.user.timestamp)}</p>
+              <p className="text-[0.85rem] text-foreground leading-snug">
+                {pair.user.content}
+              </p>
+              <p className="text-[0.7rem] text-muted-foreground mt-1">
+                {formatTimestamp(pair.user.timestamp)}
+              </p>
             </div>
           </CardContent>
         </Card>
 
         {pair.assistant && (
           <>
-            <Separator className="my-2 bg-border/40" />
-            <Card className="border-border/30 bg-[hsl(var(--background))]/80 backdrop-blur-md shadow-sm rounded-xl">
-              <CardContent className="p-4 space-y-3">
+            <Separator className="my-2 bg-border/30" />
+            <Card className="border border-border/20 bg-[hsl(var(--background))]/80 backdrop-blur-lg shadow-sm rounded-xl">
+              <CardContent className="px-3 py-3 space-y-3">
                 <div className="flex justify-between items-center flex-wrap gap-2">
                   <div className="flex items-center gap-2">
                     <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[hsl(var(--primary))] to-[hsl(var(--primary))/70] flex items-center justify-center">
                       <Bot className="h-3.5 w-3.5 text-white" />
                     </div>
-                    <p className="text-xs font-medium text-muted-foreground">
+                    <p className="text-[0.7rem] font-medium text-muted-foreground">
                       AI • {pair.assistant.model || "Assistant"}
                     </p>
                   </div>
@@ -122,12 +141,16 @@ export const PairedMessageRenderer = memo(
                           <Copy className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
-                      <TooltipContent>Copy response</TooltipContent>
+                      <TooltipContent side="top" className="text-xs">
+                        Copy response
+                      </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
                 </div>
 
-                <div className="text-sm text-muted-foreground">{renderContent}</div>
+                <div className="text-[0.82rem] text-muted-foreground leading-relaxed">
+                  {renderContent}
+                </div>
               </CardContent>
             </Card>
           </>
