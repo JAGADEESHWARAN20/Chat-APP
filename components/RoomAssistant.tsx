@@ -107,16 +107,16 @@ function RoomAssistantComponent({
     });
 
     try {
-      const res = await fetch("/api/summarize", {
+      const res = await fetch(`/api/${user?.id || "system"}/summarize`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           prompt,
           roomId,
-          userId: user?.id || "system",
           model,
         }),
       });
+      
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "AI request failed");
