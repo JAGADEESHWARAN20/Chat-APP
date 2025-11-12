@@ -6,29 +6,39 @@ import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/types/supabase";
 import { ensureSystemUserExists } from "@/lib/init/systemUser";
 
-// 🧱 Validation schema
+// ============================================================
+// 🧱 1️⃣ Schema Validation
+// ============================================================
 const SummarizeSchema = z.object({
   prompt: z.string().min(1).max(15000),
   roomId: z.string().min(1),
+  userId: z.string().optional(),
   model: z.string().default("openai/gpt-4o"),
 });
 
-// 🧩 Supabase client
+// ============================================================
+// 🧩 2️⃣ Supabase Client (Service Role)
+// ============================================================
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// 🧩 OpenRouter (OpenAI-compatible) client
+// ============================================================
+// 🤖 3️⃣ OpenRouter Client (OpenAI-Compatible)
+// ============================================================
 const openai = new OpenAI({
   baseURL: "https://openrouter.ai/api/v1",
   apiKey: process.env.OPENROUTER_API_KEY!,
 });
 
-// 🧠 Parse content helper
+// ============================================================
+// 🧠 4️⃣ Utility - Parse AI Output Safely
+// ============================================================
 function parseContent(raw: unknown): string {
   if (!raw) return "No response received.";
   if (typeof raw === "string") return raw;
+
   if (Array.isArray(raw)) {
     return raw
       .map((item) => {
@@ -40,31 +50,52 @@ function parseContent(raw: unknown): string {
       .join(" ")
       .trim();
   }
+
   return "Unsupported AI response format.";
 }
 
-// ✅ POST handler
+// ============================================================
+// 🚀 5️⃣ API Route: POST /api/[userId]/summarize
+// ============================================================
 export async function POST(
   req: NextRequest,
   { params }: { params: { userId: string } }
 ) {
   try {
-    const userIdFromParams = params.userId;
+    // 🧩 Parse and validate input
     const body = await req.json();
     const { prompt, roomId, model } = SummarizeSchema.parse(body);
 
     const SYSTEM_USER_ID = "00000000-0000-0000-0000-000000000000";
     const userId =
-      userIdFromParams && userIdFromParams.trim() !== "" && userIdFromParams !== "system"
-        ? userIdFromParams
+      params.userId && params.userId.trim() !== "" && params.userId !== "system"
+        ? params.userId
         : SYSTEM_USER_ID;
 
     console.log("📨 [Summarize Request]", { model, userId, roomId });
 
-    // Ensure system user exists
+    // ✅ Ensure system user exists (for system fallbacks)
     await ensureSystemUserExists();
 
-    // 🧠 Generate AI completion
+    // ✅ Ensure this user exists in Supabase (fixes "User not found" foreign key errors)
+    const { data: existingUser } = await supabase
+      .from("users")
+      .select("id")
+      .eq("id", userId)
+      .single();
+
+    if (!existingUser) {
+      await supabase.from("users").insert({
+        id: userId,
+        username: "guest_user",
+        display_name: "Anonymous User",
+        avatar_url: "https://api.dicebear.com/9.x/thumbs/svg?seed=Guest",
+        created_at: new Date().toISOString(),
+      });
+      console.log(`👤 [Created Placeholder User] ${userId}`);
+    }
+
+    // 🧠 Query AI Model via OpenRouter (OpenAI compatible)
     const completion = await openai.chat.completions.create({
       model,
       messages: [
@@ -73,38 +104,39 @@ export async function POST(
       ],
     });
 
+    // 🧩 Extract content safely
     const content = parseContent(completion.choices?.[0]?.message?.content ?? "");
 
-    // 🗄️ Insert into Supabase
-    const insertData = {
-      id: uuidv4(),
-      room_id: roomId,
-      user_id: userId,
-      user_query: prompt,
-      ai_response: content,
-      model_used: model,
-      created_at: new Date().toISOString(),
-    } satisfies Database["public"]["Tables"]["ai_chat_history"]["Insert"];
-
+    // 💾 Save to Supabase
     const { error: insertError } = await supabase
       .from("ai_chat_history")
-      .insert(insertData);
+      .insert({
+        id: uuidv4(),
+        room_id: roomId,
+        user_id: userId,
+        user_query: prompt,
+        ai_response: content,
+        model_used: model,
+        created_at: new Date().toISOString(),
+      });
 
     if (insertError) {
       console.error("❌ [Supabase Insert Error]", insertError);
       throw new Error("Database insert failed: " + insertError.message);
     }
 
-    console.log("✅ [AI Response Saved]", content.slice(0, 120));
+    console.log("✅ [AI Response Saved]", content.slice(0, 100));
     return NextResponse.json({ success: true, fullContent: content });
   } catch (err: unknown) {
     console.error("💥 [Summarize Error]", err);
+
     const message =
       err instanceof Error
         ? err.message
         : typeof err === "string"
         ? err
         : "Internal Server Error";
+
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }

@@ -73,20 +73,37 @@ export async function POST(req: NextRequest) {
 
     const content = parseContent(completion.choices?.[0]?.message?.content ?? "");
 
-    // 🗄️ Save to Supabase
-    const insertData = {
-      id: uuidv4(),
-      room_id: roomId,
-      user_id: userId,
-      user_query: prompt,
-      ai_response: content,
-      model_used: model,
-      created_at: new Date().toISOString(),
-    } satisfies Database["public"]["Tables"]["ai_chat_history"]["Insert"];
+    // Ensure user exists before insert
+const { data: existingUser } = await supabase
+.from("users")
+.select("id")
+.eq("id", userId)
+.single();
 
-    const { error: insertError } = await supabase
-      .from("ai_chat_history")
-      .insert(insertData);
+if (!existingUser) {
+await supabase.from("users").insert({
+  id: userId,
+  username: "guest_user",
+  display_name: "Anonymous User",
+  avatar_url: "https://api.dicebear.com/9.x/thumbs/svg?seed=Guest",
+  created_at: new Date().toISOString(),
+});
+}
+
+const { error: insertError } = await supabase
+.from("ai_chat_history")
+.insert({
+  id: uuidv4(),
+  room_id: roomId,
+  user_id: userId,
+  user_query: prompt,
+  ai_response: content,
+  model_used: model,
+  created_at: new Date().toISOString(),
+});
+
+
+
 
     if (insertError) {
       console.error("❌ [Supabase Insert Error]", insertError);
