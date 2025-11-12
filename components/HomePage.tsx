@@ -38,7 +38,6 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen flex flex-col overflow-hidden bg-background">
-      {/* Header */}
       <header
   className="
     w-full px-4 py-3 border-b border-border/40
