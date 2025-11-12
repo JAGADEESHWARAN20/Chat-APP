@@ -17,7 +17,6 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 
-// ✅ Fix for className typing on ReactMarkdown
 const ReactMarkdown = ReactMarkdownImport as unknown as React.FC<
   React.ComponentPropsWithoutRef<typeof ReactMarkdownImport> & { className?: string }
 >;
@@ -31,7 +30,6 @@ export interface ChatMessage {
   structuredData?: any;
 }
 
-// ✅ Safe timestamp formatter (handles both string and Date)
 function formatTimestamp(value?: string | Date): string {
   if (!value) return "";
   try {
@@ -44,20 +42,13 @@ function formatTimestamp(value?: string | Date): string {
 }
 
 export const PairedMessageRenderer = memo(
-  ({
-    pair,
-    theme,
-  }: {
-    pair: { user: ChatMessage; assistant?: ChatMessage };
-    theme: "light" | "dark";
-  }) => {
+  ({ pair, theme }: { pair: { user: ChatMessage; assistant?: ChatMessage }; theme: "light" | "dark" }) => {
     const handleCopy = () => {
       if (!pair.assistant?.content) return;
       navigator.clipboard.writeText(pair.assistant.content);
       toast.success("Response copied!");
     };
 
-    // ✅ Sanitize + render markdown
     const renderContent = useMemo(() => {
       if (!pair.assistant) return null;
       const safeMarkdown = DOMPurify.sanitize(pair.assistant.content);
@@ -66,9 +57,7 @@ export const PairedMessageRenderer = memo(
         p: ({ children }) => <p className="my-1.5">{children}</p>,
         li: ({ children }) => <li className="my-0.5">{children}</li>,
         code: ({ children }) => (
-          <code className="bg-[hsl(var(--muted))]/60 px-1 py-0.5 rounded text-xs font-mono">
-            {children}
-          </code>
+          <code className="bg-[hsl(var(--muted))]/60 px-1 py-0.5 rounded text-xs font-mono">{children}</code>
         ),
         a: ({ href, children }) => (
           <a
@@ -84,8 +73,7 @@ export const PairedMessageRenderer = memo(
 
       return (
         <ReactMarkdown
-          className="prose prose-sm max-w-none leading-relaxed 
-                     text-[hsl(var(--foreground))] dark:prose-invert"
+          className="prose prose-sm max-w-none leading-relaxed text-[hsl(var(--foreground))] dark:prose-invert"
           components={components}
         >
           {safeMarkdown}
@@ -94,14 +82,7 @@ export const PairedMessageRenderer = memo(
     }, [pair.assistant]);
 
     return (
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.25 }}
-        className="space-y-3"
-      >
-        {/* 🧍 USER MESSAGE */}
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }} className="space-y-3">
         <Card className="bg-[hsl(var(--muted))]/40 border-border/30 backdrop-blur-sm rounded-xl">
           <CardContent className="p-3 flex gap-3 items-start">
             <div className="w-7 h-7 flex items-center justify-center bg-[hsl(var(--action-active))]/80 text-white rounded-full flex-shrink-0">
@@ -109,9 +90,7 @@ export const PairedMessageRenderer = memo(
             </div>
             <div className="flex-1">
               <p className="text-sm text-foreground leading-snug">{pair.user.content}</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                {formatTimestamp(pair.user.timestamp)}
-              </p>
+              <p className="text-xs text-muted-foreground mt-1">{formatTimestamp(pair.user.timestamp)}</p>
             </div>
           </CardContent>
         </Card>
