@@ -2,7 +2,6 @@
 
 import React, { memo, useMemo } from "react";
 import { motion } from "framer-motion";
-// 🧩 Import ReactMarkdown safely with type override
 import type { Components } from "react-markdown";
 import ReactMarkdownImport from "react-markdown";
 import DOMPurify from "dompurify";
@@ -18,7 +17,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 
-// ✅ Fix for className typing
+// ✅ Fix for className typing on ReactMarkdown
 const ReactMarkdown = ReactMarkdownImport as unknown as React.FC<
   React.ComponentPropsWithoutRef<typeof ReactMarkdownImport> & { className?: string }
 >;
@@ -27,9 +26,21 @@ export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
-  timestamp: Date;
+  timestamp: string | Date;
   model?: string;
   structuredData?: any;
+}
+
+// ✅ Safe timestamp formatter (handles both string and Date)
+function formatTimestamp(value?: string | Date): string {
+  if (!value) return "";
+  try {
+    const date = value instanceof Date ? value : new Date(value);
+    if (isNaN(date.getTime())) return "";
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return "";
+  }
 }
 
 export const PairedMessageRenderer = memo(
@@ -46,6 +57,7 @@ export const PairedMessageRenderer = memo(
       toast.success("Response copied!");
     };
 
+    // ✅ Sanitize + render markdown
     const renderContent = useMemo(() => {
       if (!pair.assistant) return null;
       const safeMarkdown = DOMPurify.sanitize(pair.assistant.content);
@@ -98,7 +110,7 @@ export const PairedMessageRenderer = memo(
             <div className="flex-1">
               <p className="text-sm text-foreground leading-snug">{pair.user.content}</p>
               <p className="text-xs text-muted-foreground mt-1">
-                {pair.user.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                {formatTimestamp(pair.user.timestamp)}
               </p>
             </div>
           </CardContent>
