@@ -77,23 +77,18 @@ function RoomAssistantComponent({
   const [error, setError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const scrollRef = useRef<HTMLDivElement>(null);
-
-  // local expansion state for standalone use
   const [localExpand, setLocalExpand] = useState(false);
   const isExpanded = externalExpand ?? localExpand;
 
-  // 🧩 Fetch chat history from DB
+  // 🔹 Fetch chat history
   useEffect(() => {
     let isMounted = true;
-
     const fetchHistory = async () => {
       if (!roomId) return;
       setHistoryLoading(true);
-
       try {
         const res = await fetch(`/api/ai-chat/history?roomId=${roomId}`);
         const data = await res.json();
-
         if (isMounted && data.success && Array.isArray(data.messages)) {
           setMessages(data.messages);
         }
@@ -103,14 +98,13 @@ function RoomAssistantComponent({
         if (isMounted) setHistoryLoading(false);
       }
     };
-
     fetchHistory();
     return () => {
       isMounted = false;
     };
   }, [roomId, dialogMode]);
 
-  // 🧩 Auto-scroll on new messages
+  // 🔹 Auto-scroll on new messages
   useEffect(() => {
     const scroll = scrollRef.current;
     if (scroll && !loading) {
@@ -118,7 +112,7 @@ function RoomAssistantComponent({
     }
   }, [messages, loading]);
 
-  // 🧹 Reset chat when dialog closes
+  // 🔹 Reset on close
   useEffect(() => {
     if (!dialogMode) return;
     if (!isExpanded && messages.length > 0) {
@@ -129,11 +123,11 @@ function RoomAssistantComponent({
     }
   }, [isExpanded, dialogMode]);
 
-  // 🧠 Handle Send
+  // 🧠 Send message
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!prompt.trim()) return toast.error("Type something first");
-    if (loading) return; // prevent double submit
+    if (loading) return;
 
     const userMsg = {
       id: Date.now().toString(),
@@ -152,11 +146,7 @@ function RoomAssistantComponent({
       const res = await fetch(`/api/${user?.id || "system"}/summarize`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt,
-          roomId,
-          model,
-        }),
+        body: JSON.stringify({ prompt, roomId, model }),
       });
 
       const data = await res.json();
@@ -170,7 +160,14 @@ function RoomAssistantComponent({
         model,
       };
 
-      startTransition(() => setMessages((prev) => [...prev, aiMsg]));
+      startTransition(() =>
+        setMessages((prev) => {
+          if (prev.some((m) => m.content === aiMsg.content && m.role === "assistant")) {
+            return prev;
+          }
+          return [...prev, aiMsg];
+        })
+      );
     } catch (err: any) {
       console.error("[AI Assistant Error]", err);
       setError(err.message || "Something went wrong");
@@ -185,34 +182,44 @@ function RoomAssistantComponent({
     else setLocalExpand((prev) => !prev);
   };
 
-  // 🧱 Show skeleton while loading chat history
+  // 🧱 Loading state
   if (historyLoading) {
     return (
       <div
         className={cn(
-          "relative w-full h-full flex flex-col items-center justify-center gap-4 p-8",
+          "absolute inset-0 flex flex-col items-center justify-center gap-6",
+          "bg-[hsl(var(--background))]/85 backdrop-blur-xl rounded-2xl border border-border/20",
+          "transition-all duration-300 ease-in-out shadow-sm",
           className
         )}
       >
-        <MessageSkeleton />
-        <MessageSkeleton />
-        <p className="text-sm text-muted-foreground">Loading chat history...</p>
+        <div className="flex flex-col gap-2 w-full max-w-md px-6">
+          <MessageSkeleton />
+          <MessageSkeleton />
+        </div>
+        <p className="text-sm text-muted-foreground animate-pulse">
+          Loading chat history...
+        </p>
       </div>
     );
   }
 
   return (
-    <div className={cn("relative w-full", className)}>
+    <div className={cn("relative w-full h-full", className)}>
       <Card
         className={cn(
-          "flex flex-col rounded-2xl h-full overflow-hidden border border-border/20 shadow-lg",
+          "flex flex-col rounded-2xl h-full overflow-hidden border border-border/20 shadow-md",
           "bg-[hsl(var(--background))]/80 backdrop-blur-xl transition-all duration-300"
         )}
       >
         {/* Header */}
-        <CardHeader className="flex items-center justify-between px-5 py-3 border-b border-border/30">
+        <CardHeader
+          className={cn(
+            "flex items-center justify-between border-b border-border/30",
+            dialogMode ? "px-3 py-2" : "px-5 py-3"
+          )}
+        >
           <div className="flex items-center justify-between gap-2">
-            {/* Expand/Collapse */}
             <Button
               variant="ghost"
               size="icon"
@@ -227,22 +234,28 @@ function RoomAssistantComponent({
               )}
             </Button>
 
-            <div className="flex items-center gap-3">
-              <motion.div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center">
-                <Bot className="h-5 w-5 text-white" />
+            <div className="flex items-center gap-2">
+              <motion.div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center">
+                <Bot className="h-4 w-4 text-white" />
               </motion.div>
-              <CardTitle className="text-lg font-bold">AI Assistant</CardTitle>
+              <CardTitle
+                className={cn(
+                  "font-semibold tracking-tight",
+                  dialogMode ? "text-sm" : "text-base"
+                )}
+              >
+                AI Assistant
+              </CardTitle>
             </div>
 
-            {/* Options */}
             <Popover>
               <PopoverTrigger asChild>
                 <Button variant="ghost" size="icon" className="rounded-full">
                   <MoreVertical className="h-4 w-4" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-56 p-3">
-                <div className="space-y-2 text-sm">
+              <PopoverContent className="w-52 p-3">
+                <div className="space-y-2 text-xs">
                   <div className="flex justify-between items-center">
                     <span>Dark Mode</span>
                     <Switch
@@ -265,60 +278,67 @@ function RoomAssistantComponent({
           </div>
         </CardHeader>
 
-        {/* Chat Area */}
+        {/* Chat */}
         <ScrollArea
           ref={scrollRef}
-          className="flex-1 p-4 space-y-5 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent"
+          className={cn(
+            "flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent",
+            dialogMode ? "p-3 space-y-3" : "p-4 space-y-5"
+          )}
         >
           <AnimatePresence mode="popLayout">
-  {messages.length > 0 ? (
-    messages.map((msg, i) => {
-      if (msg.role !== "user") return null; // ✅ skip assistant duplicates
+            {messages.length > 0 ? (
+              messages.map((msg, i) => {
+                if (msg.role !== "user") return null;
+                const next = messages[i + 1];
+                const pair =
+                  next && next.role === "assistant"
+                    ? { user: msg, assistant: next }
+                    : { user: msg };
 
-      const next = messages[i + 1];
-      const pair =
-        next && next.role === "assistant"
-          ? { user: msg, assistant: next }
-          : { user: msg };
-
-      return (
-        <PairedMessageRenderer
-          key={msg.id}
-          pair={pair}
-          theme={theme === "dark" ? "dark" : "light"}
-        />
-      );
-    })
-  ) : loading ? (
-    Array.from({ length: 3 }, (_, i) => <MessageSkeleton key={i} />)
-  ) : (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="flex flex-col items-center justify-center py-16 text-center"
-    >
-      <Bot className="h-10 w-10 text-primary mb-2" />
-      <p className="text-muted-foreground text-sm">
-        Ask something about #{roomName}
-      </p>
-    </motion.div>
-  )}
-</AnimatePresence>
-
+                return (
+                  <PairedMessageRenderer
+                    key={msg.id}
+                    pair={pair}
+                    theme={theme === "dark" ? "dark" : "light"}
+                  />
+                );
+              })
+            ) : loading ? (
+              Array.from({ length: 2 }, (_, i) => <MessageSkeleton key={i} />)
+            ) : (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className={cn(
+                  "flex flex-col items-center justify-center text-center text-muted-foreground",
+                  dialogMode ? "py-8 text-xs" : "py-16 text-sm"
+                )}
+              >
+                <Bot className={cn(dialogMode ? "h-6 w-6 mb-1" : "h-8 w-8 mb-2", "text-primary")} />
+                <p>Ask something about #{roomName}</p>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </ScrollArea>
 
         {/* Input */}
-        <CardContent className="border-t p-4">
-          <form onSubmit={handleSubmit} className="space-y-3">
+        <CardContent className={cn("border-t", dialogMode ? "p-3" : "p-4")}>
+          <form onSubmit={handleSubmit} className="space-y-2">
             <Textarea
               placeholder={`Ask about #${roomName}...`}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              className="min-h-[70px] resize-none rounded-xl focus-visible:ring-primary/50"
+              className={cn(
+                "min-h-[60px] resize-none rounded-xl focus-visible:ring-primary/50",
+                dialogMode ? "text-xs p-2" : "text-sm p-3"
+              )}
             />
             <div className="flex gap-2">
               <Select value={model} onValueChange={setModel}>
-                <SelectTrigger className="flex-1 rounded-xl">
+                <SelectTrigger
+                  className={cn("flex-1 rounded-xl", dialogMode ? "text-xs h-8 px-2" : "text-sm h-9 px-3")}
+                >
                   <SelectValue placeholder="Model" />
                 </SelectTrigger>
                 <SelectContent>
@@ -332,15 +352,18 @@ function RoomAssistantComponent({
               <Button
                 type="submit"
                 disabled={loading || !prompt.trim()}
-                className="px-5 rounded-xl"
+                className={cn(
+                  "rounded-xl flex items-center",
+                  dialogMode ? "px-3 py-1.5 text-xs" : "px-4 py-2 text-sm"
+                )}
               >
                 {loading ? (
                   <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Analyzing
+                    <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> Analyzing
                   </>
                 ) : (
                   <>
-                    <Send className="h-4 w-4 mr-2" /> Send
+                    <Send className="h-3.5 w-3.5 mr-2" /> Send
                   </>
                 )}
               </Button>

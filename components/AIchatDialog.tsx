@@ -44,7 +44,7 @@ export function RoomAssistantDialog({
           "p-0 overflow-hidden flex flex-col transition-all duration-300 ease-in-out",
           isExpanded
             ? "w-[95vw] lg:w-[85vw] h-[90vh] max-h-[95vh]"
-            : "w-[85vw] lg:w-[65vw] h-[55vh] max-h-[55vh]"
+            : "w-[85vw] lg:w-[65vw] h-[55vh] max-h-[60vh]"
         )}
       >
         <DialogTitle className="sr-only">AI Assistant</DialogTitle>
@@ -54,17 +54,17 @@ export function RoomAssistantDialog({
 
         <DialogClose asChild>
           <button
-            className="absolute top-3 right-3 z-50 h-9 w-9 flex items-center justify-center rounded-full 
-              bg-[hsl(var(--muted))]/60 border border-[hsl(var(--border))/40]
-              hover:bg-[hsl(var(--muted))]/80 text-[hsl(var(--foreground))]/80 transition-all"
+            className="absolute top-3 right-3 z-50 h-8 w-8 flex items-center justify-center rounded-full 
+              bg-[hsl(var(--muted))]/50 border border-border/30 hover:bg-[hsl(var(--muted))]/80
+              text-[hsl(var(--foreground))]/80 transition-all"
           >
-            <X className="h-4 w-4" />
+            <X className="h-3.5 w-3.5" />
           </button>
         </DialogClose>
 
         <div className="flex-1 h-auto overflow-hidden">
           <RoomAssistantComponent
-            key={roomId} // 🧠 ensures clean remount per room
+            key={roomId}
             roomId={roomId}
             roomName={roomName}
             className="h-full border-0 shadow-none"
