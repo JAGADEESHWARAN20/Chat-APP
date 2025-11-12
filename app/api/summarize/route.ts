@@ -5,6 +5,7 @@ import { OpenRouter } from "@openrouter/sdk";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/types/supabase";
 
+// 🧱 Input schema validation
 const SummarizeSchema = z.object({
   prompt: z.string().min(1).max(15000),
   roomId: z.string().min(1),
@@ -14,26 +15,55 @@ const SummarizeSchema = z.object({
   temperature: z.number().min(0).max(1).default(0.2),
 });
 
-// ✅ OpenRouter client
+// 🧩 OpenRouter client
 const openRouter = new OpenRouter({
   apiKey: process.env.OPENROUTER_API_KEY!,
 });
 
-// ✅ Supabase (server key)
+// 🧩 Supabase (Service Role Key)
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+// 🧠 Utility to clean up AI message content
+function parseContent(raw: unknown): string {
+  if (!raw) return "No response received.";
+  if (typeof raw === "string") return raw;
+  if (Array.isArray(raw)) {
+    return raw
+      .map((item) => {
+        if (typeof item === "string") return item;
+        if (item?.type === "text") return item.content ?? "";
+        if (item?.type === "image_url") return "[Image omitted]";
+        return "";
+      })
+      .join(" ")
+      .trim();
+  }
+  return "Unsupported AI response format.";
+}
+
+// ✅ Main route handler
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { prompt, roomId, userId = "system", model, maxTokens, temperature } =
+    const { prompt, roomId, userId: rawUserId, model, maxTokens, temperature } =
       SummarizeSchema.parse(body);
 
-    console.log("📨 [Summarize Request]", { model, userId, roomId });
+    const SYSTEM_USER_ID = "00000000-0000-0000-0000-000000000000";
+    const userId =
+      rawUserId && rawUserId.trim() !== "" && rawUserId !== "system"
+        ? rawUserId
+        : SYSTEM_USER_ID;
 
-    // ✅ Correct OpenRouter request (headers moved to 2nd argument)
+    console.log("📨 [Summarize Request]", {
+      model,
+      userId,
+      roomId,
+    });
+
+    // 🧠 Query OpenRouter
     const response = await openRouter.chat.send(
       {
         model,
@@ -41,7 +71,7 @@ export async function POST(req: NextRequest) {
           {
             role: "system",
             content:
-              "You are an AI summarizer. Respond with clear, human-like explanations that are short but informative.",
+              "You are a helpful AI summarizer. Keep responses clear, factual, and short.",
           },
           { role: "user", content: prompt },
         ],
@@ -58,79 +88,71 @@ export async function POST(req: NextRequest) {
       }
     );
 
-    // ✅ Extract AI response
     const raw = response?.choices?.[0]?.message?.content ?? "";
-    const content = Array.isArray(raw)
-      ? raw
-          .map((item: any) => {
-            if (typeof item === "string") return item;
-            if (item?.type === "text") return item.content ?? "";
-            if (item?.type === "image_url") return "[Image omitted]";
-            return "";
-          })
-          .join(" ")
-          .trim()
-      : typeof raw === "string"
-      ? raw
-      : "No valid AI response.";
+    const content = parseContent(raw);
 
-    // ✅ Save to Supabase
+    // 🗄️ Save to Supabase
+    const insertData = {
+      id: uuidv4(),
+      room_id: roomId,
+      user_id: userId,
+      user_query: prompt,
+      ai_response: content,
+      model_used: model,
+      created_at: new Date().toISOString(),
+    } satisfies Database["public"]["Tables"]["ai_chat_history"]["Insert"];
+
     const { error: insertError } = await supabase
       .from("ai_chat_history")
-      .insert([
-        {
-          id: uuidv4(),
-          room_id: roomId,
-          user_id: userId,
-          user_query: prompt,
-          ai_response: content,
-          model_used: model,
-          created_at: new Date().toISOString(),
-        },
-      ]);
+      .insert(insertData);
 
-    if (insertError) console.error("❌ Supabase Insert Error:", insertError);
+    if (insertError) {
+      console.error("❌ [Supabase Insert Error]", insertError);
+      throw new Error("Database insert failed: " + insertError.message);
+    }
 
-    console.log("✅ AI Response saved:", content.slice(0, 100));
+    console.log("✅ [AI Response Saved]", content.slice(0, 120));
     return NextResponse.json({ success: true, fullContent: content });
-  } catch (err: any) {
-    console.error("💥 Summarize Error:", err);
+  } catch (err: unknown) {
+    console.error("💥 [Summarize Error]", err);
 
-    const message =
-      typeof err?.message === "string"
+    // 🩹 Always coerce into string message (prevents function-type mismatch)
+    const errMessage =
+      err instanceof Error
         ? err.message
-        : JSON.stringify(err) || "Unknown error";
+        : typeof err === "string"
+        ? err
+        : "Internal Server Error";
 
-    // 🟡 Fallback to free model if unauthorized
-    if (message.toLowerCase().includes("unauthorized")) {
+    // 🧩 Auto fallback if unauthorized
+    if (errMessage.toLowerCase().includes("unauthorized")) {
       try {
         const fallback = await openRouter.chat.send({
           model: "mistralai/mistral-nemo:free",
           messages: [
-            { role: "system", content: "Summarize briefly:" },
+            { role: "system", content: "Summarize briefly and accurately:" },
             {
               role: "user",
-              content:
-                "The main model was unauthorized. Please provide a short summary for: " +
-                prompt,
+              content: `Fallback request due to: ${errMessage}`,
             },
           ],
         });
 
-        const content =
-          fallback?.choices?.[0]?.message?.content ?? "Fallback failed.";
+        const content = parseContent(
+          fallback?.choices?.[0]?.message?.content ?? ""
+        );
 
         return NextResponse.json({
           success: true,
           fullContent: `⚠️ Fallback model used:\n${content}`,
         });
       } catch (fallbackErr) {
-        console.error("💥 Fallback failed:", fallbackErr);
+        console.error("💥 [Fallback Error]", fallbackErr);
       }
     }
 
     return NextResponse.json(
-      { success: false, error: message || "Internal Server Error" },
+      { success: false, error: errMessage },
       { status: 500 }
     );
   }
