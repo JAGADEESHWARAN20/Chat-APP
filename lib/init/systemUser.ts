@@ -17,7 +17,7 @@ export async function ensureSystemUserExists() {
 
   if (data) return;
 
-  const { error: insertError } = await supabase.from("users").insert({
+  const { error } = await supabase.from("users").insert({
     id: SYSTEM_USER_ID,
     username: "system",
     display_name: "System AI Assistant",
@@ -26,9 +26,9 @@ export async function ensureSystemUserExists() {
     created_at: new Date().toISOString(),
   });
 
-  if (insertError) {
-    console.error("⚠️ Failed to create system user:", insertError);
+  if (error) {
+    console.error("⚠️ Failed to create system user:", error.message);
   } else {
-    console.log("✅ Created System User (AI Assistant bot)");
+    console.log("✅ Created System AI Assistant user");
   }
 }
