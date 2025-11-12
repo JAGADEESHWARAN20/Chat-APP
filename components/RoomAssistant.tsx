@@ -73,6 +73,7 @@ function RoomAssistantComponent({
   const [model, setModel] = useState("gpt-4o-mini");
   const [messages, setMessages] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -80,6 +81,34 @@ function RoomAssistantComponent({
   // local expansion state for standalone use
   const [localExpand, setLocalExpand] = useState(false);
   const isExpanded = externalExpand ?? localExpand;
+
+  // 🧩 Fetch chat history from DB
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchHistory = async () => {
+      if (!roomId) return;
+      setHistoryLoading(true);
+
+      try {
+        const res = await fetch(`/api/ai-chat/history?roomId=${roomId}`);
+        const data = await res.json();
+
+        if (isMounted && data.success && Array.isArray(data.messages)) {
+          setMessages(data.messages);
+        }
+      } catch (err) {
+        console.warn("[AI History] failed:", err);
+      } finally {
+        if (isMounted) setHistoryLoading(false);
+      }
+    };
+
+    fetchHistory();
+    return () => {
+      isMounted = false;
+    };
+  }, [roomId, dialogMode]);
 
   // 🧩 Auto-scroll on new messages
   useEffect(() => {
@@ -155,6 +184,22 @@ function RoomAssistantComponent({
     if (onToggleExpand) onToggleExpand();
     else setLocalExpand((prev) => !prev);
   };
+
+  // 🧱 Show skeleton while loading chat history
+  if (historyLoading) {
+    return (
+      <div
+        className={cn(
+          "relative w-full h-full flex flex-col items-center justify-center gap-4 p-8",
+          className
+        )}
+      >
+        <MessageSkeleton />
+        <MessageSkeleton />
+        <p className="text-sm text-muted-foreground">Loading chat history...</p>
+      </div>
+    );
+  }
 
   return (
     <div className={cn("relative w-full", className)}>
