@@ -16,7 +16,6 @@ import {
   MoreVertical,
   Maximize2,
   Minimize2,
-  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -82,6 +81,7 @@ function RoomAssistantComponent({
   const [localExpand, setLocalExpand] = useState(false);
   const isExpanded = externalExpand ?? localExpand;
 
+  // 🧩 Auto-scroll on new messages
   useEffect(() => {
     const scroll = scrollRef.current;
     if (scroll && !loading) {
@@ -89,9 +89,22 @@ function RoomAssistantComponent({
     }
   }, [messages, loading]);
 
+  // 🧹 Reset chat when dialog closes
+  useEffect(() => {
+    if (!dialogMode) return;
+    if (!isExpanded && messages.length > 0) {
+      setMessages([]);
+      setError(null);
+      setPrompt("");
+      setLoading(false);
+    }
+  }, [isExpanded, dialogMode]);
+
+  // 🧠 Handle Send
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!prompt.trim()) return toast.error("Type something first");
+    if (loading) return; // prevent double submit
 
     const userMsg = {
       id: Date.now().toString(),
@@ -116,7 +129,6 @@ function RoomAssistantComponent({
           model,
         }),
       });
-      
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "AI request failed");
@@ -155,9 +167,8 @@ function RoomAssistantComponent({
         {/* Header */}
         <CardHeader className="flex items-center justify-between px-5 py-3 border-b border-border/30">
           <div className="flex items-center justify-between gap-2">
-          
-           {/* Expand/Collapse */}
-           <Button
+            {/* Expand/Collapse */}
+            <Button
               variant="ghost"
               size="icon"
               onClick={toggleExpand}
@@ -171,12 +182,12 @@ function RoomAssistantComponent({
               )}
             </Button>
 
-          <div className="flex items-center gap-3">
-            <motion.div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center">
-              <Bot className="h-5 w-5 text-white" />
-            </motion.div>
-            <CardTitle className="text-lg font-bold">AI Assistant</CardTitle>
-          </div>
+            <div className="flex items-center gap-3">
+              <motion.div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center">
+                <Bot className="h-5 w-5 text-white" />
+              </motion.div>
+              <CardTitle className="text-lg font-bold">AI Assistant</CardTitle>
+            </div>
 
             {/* Options */}
             <Popover>
@@ -206,13 +217,14 @@ function RoomAssistantComponent({
                 </div>
               </PopoverContent>
             </Popover>
-
-          
           </div>
         </CardHeader>
 
         {/* Chat Area */}
-        <ScrollArea ref={scrollRef} className="flex-1 p-4 space-y-5  overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
+        <ScrollArea
+          ref={scrollRef}
+          className="flex-1 p-4 space-y-5 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent"
+        >
           <AnimatePresence mode="popLayout">
             {messages.length > 0 ? (
               messages.map((msg, i) => {
