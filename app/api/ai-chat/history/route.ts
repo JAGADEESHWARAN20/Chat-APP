@@ -1,3 +1,4 @@
+// app/api/ai-chat/history/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/types/supabase";
@@ -7,12 +8,30 @@ const supabase = createClient<Database>(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-export async function GET(req: NextRequest) {
+interface ChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  timestamp: Date;
+  model?: string;
+}
+
+interface ApiResponse {
+  success: boolean;
+  messages?: ChatMessage[];
+  error?: string;
+}
+
+export async function GET(req: NextRequest): Promise<NextResponse<ApiResponse>> {
   try {
     const { searchParams } = new URL(req.url);
     const roomId = searchParams.get("roomId");
+    
     if (!roomId) {
-      return NextResponse.json({ success: false, error: "Missing roomId" }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: "Missing roomId" }, 
+        { status: 400 }
+      );
     }
 
     const { data, error } = await supabase
@@ -23,27 +42,37 @@ export async function GET(req: NextRequest) {
 
     if (error) throw error;
 
-    const messages = data.flatMap((m) => [
+    // Transform data for frontend
+    const messages: ChatMessage[] = (data || []).flatMap((m, index) => [
       {
-        id: `${m.created_at}-user`,
-        role: "user",
+        id: `${m.created_at}-user-${index}`,
+        role: "user" as const,
         content: m.user_query,
-        timestamp: m.created_at,
+        timestamp: new Date(m.created_at!),
       },
       {
-        id: `${m.created_at}-ai`,
-        role: "assistant",
+        id: `${m.created_at}-ai-${index}`,
+        role: "assistant" as const,
         content: m.ai_response,
-        timestamp: m.created_at,
-        model: m.model_used,
+        timestamp: new Date(m.created_at!),
+        model: m.model_used || undefined,
       },
     ]);
 
-    return NextResponse.json({ success: true, messages });
-  } catch (err: any) {
+    return NextResponse.json({ 
+      success: true, 
+      messages 
+    });
+
+  } catch (err: unknown) {
     console.error("[AI History Error]", err);
+    const errorMessage = err instanceof Error ? err.message : "Internal Server Error";
+    
     return NextResponse.json(
-      { success: false, error: err.message || "Internal Server Error" },
+      { 
+        success: false, 
+        error: errorMessage 
+      },
       { status: 500 }
     );
   }

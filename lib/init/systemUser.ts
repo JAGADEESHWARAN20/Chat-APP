@@ -1,50 +1,40 @@
+// lib/init/systemUser.ts
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/types/supabase";
 
-export async function ensureSystemUserExists() {
+export async function ensureSystemUserExists(): Promise<string | null> {
   const supabase = createClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  const SYSTEM_EMAIL = "system@flychat.ai";
-  const SYSTEM_NAME = "System AI Assistant";
+  const SYSTEM_USER_ID = "ca9ff56d-a12a-4429-9f62-a78f03e3461c";
 
-  // 1️⃣ Check existing auth users
-  const { data: users } = await supabase.auth.admin.listUsers();
-  const existing = users?.users?.find((u) => u.email === SYSTEM_EMAIL);
+  // Check if profile exists
+  const { data: profile, error } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("id", SYSTEM_USER_ID)
+    .single();
 
-  if (existing) {
-    // ensure profile exists
-    await supabase.from("profiles").upsert({
-      id: existing.id,
-      display_name: SYSTEM_NAME,
-      avatar_url:
-        "https://api.dicebear.com/9.x/bottts-neutral/svg?seed=SystemBot",
-    });
-    return existing;
+  if (error || !profile) {
+    console.log("⚠️ System profile missing. Creating...");
+    
+    const { error: insertError } = await supabase.from("profiles").insert({
+      id: SYSTEM_USER_ID,
+      username: "system",
+      display_name: "System AI Assistant",
+      avatar_url: "https://avatar.vercel.sh/system%40flychat.ai.svg?txt=sy",
+      created_at: new Date().toISOString(),
+    } as Database["public"]["Tables"]["profiles"]["Insert"]);
+
+    if (insertError) {
+      console.error("❌ Failed to create system profile:", insertError.message);
+      return null;
+    }
+    
+    console.log("✅ System profile ensured");
   }
 
-  // 2️⃣ Create new auth user
-  const { data: created, error: authError } =
-    await supabase.auth.admin.createUser({
-      email: SYSTEM_EMAIL,
-      email_confirm: true,
-    });
-
-  if (authError || !created?.user) {
-    console.error("❌ Failed to create system user:", authError?.message);
-    return null;
-  }
-
-  // 3️⃣ Create matching profile (required by your schema)
-  await supabase.from("profiles").insert({
-    id: created.user.id,
-    display_name: SYSTEM_NAME,
-    avatar_url:
-      "https://api.dicebear.com/9.x/bottts-neutral/svg?seed=SystemBot",
-  });
-
-  console.log("✅ Created System AI Assistant User");
-  return created.user;
+  return SYSTEM_USER_ID;
 }
