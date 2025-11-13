@@ -191,7 +191,7 @@ function RoomAssistantComponent({
           )}
         >
           {/* LEFT */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center justify-between gap-3">
             <Button variant="ghost" size="icon" onClick={onToggleExpand} className="rounded-full">
               {isExpanded ? (
                 <Minimize2 className="h-4 w-4 text-foreground/80" />
@@ -202,11 +202,11 @@ function RoomAssistantComponent({
 
             <motion.div
               className={cn(
-                "w-8 h-8 rounded-lg flex items-center justify-center",
+                "w-8 h-8 rounded-lg flex items-center justify-between",
                 "bg-primary/85 text-primary-foreground"
               )}
             >
-              <span><Bot className="h-4 w-4" /> AI Assistant</span>
+             <Bot className="h-4 w-4" /><span>AI Assistant</span>
             </motion.div>
 
           {/* RIGHT MENU */}
