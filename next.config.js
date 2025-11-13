@@ -6,6 +6,10 @@ const nextConfig = {
 				hostname: "avatars.githubusercontent.com",
 				protocol: "https",
 			},
+			{
+				protocol: "https",
+				hostname: "res.cloudinary.com",
+			  },
 		],
 		dangerouslyAllowSVG: true,
 		contentDispositionType: 'attachment',

@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
 import { Imessage } from "@/lib/store/messages";
-import { Send } from "lucide-react";
+import { Send, Loader2 } from "lucide-react";
 import { useTypingStatus } from "@/hooks/useTypingStatus";
 
 export default function ChatInput() {
@@ -143,8 +143,8 @@ export default function ChatInput() {
         className="gap-2 h-[44px] px-4"
         size="sm"
       >
-        <Send className="w-4 h-4" />
-        {isSending ? "Sending..." : "Send"}
+        
+        {isSending ? <Loader2 className="h-4 w-4 animate-spin" />: <Send className="w-4 h-4" />}
       </Button>
     </div>
   );

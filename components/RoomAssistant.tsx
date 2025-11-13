@@ -216,6 +216,7 @@ function RoomAssistantComponent({
     return (
       <div className="w-full h-full flex flex-col gap-2 justify-center px-6">
         <MessageSkeleton />
+        <MessageSkeleton />
         
       </div>
     );

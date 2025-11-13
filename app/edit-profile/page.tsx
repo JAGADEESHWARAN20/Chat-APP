@@ -101,45 +101,43 @@ export default function EditProfilePage() {
   };
   // Handle avatar upload
   const handleAvatarUpload = async () => {
-    if (!avatarFile) return avatarUrl; // No new file
-
+    if (!avatarFile) return avatarUrl; // Keep old avatar if nothing uploaded
+  
     setUploading(true);
-    setUploadProgress(0);
-
+    setUploadProgress(10);
+  
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("No user logged in.");
-
-      const fileExt = avatarFile.name.split(".").pop();
-      const filePath = `${user.id}.${fileExt}`; // Unique per user
-
-      // Upload with progress simulation (for real progress, use XMLHttpRequest)
-      const { error: uploadError } = await supabase.storage
-        .from("avatars")
-        .upload(filePath, avatarFile, {
-          upsert: true,
-          contentType: avatarFile.type,
-        });
-
-      if (uploadError) throw uploadError;
-
-      // Simulate progress
-      setUploadProgress(100);
-
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage.from("avatars").getPublicUrl(filePath);
-
-      setAvatarUrl(publicUrl);
-      return publicUrl;
+      const formData = new FormData();
+      formData.append("file", avatarFile);
+  
+      // Hit Cloudinary upload API
+      const res = await fetch("/api/upload-avatar", {
+        method: "POST",
+        body: formData,
+      });
+  
+      const data = await res.json();
+  
+      if (!data.url) {
+        toast.error("Failed to upload avatar.");
+        return avatarUrl;
+      }
+  
+      // Update UI
+      setUploadProgress(90);
+      setAvatarUrl(data.url);
+  
+      return data.url; // Return Cloudinary URL
     } catch (err) {
       console.error("Avatar upload error:", err);
       toast.error("Failed to upload avatar.");
-      return avatarUrl; // Keep old
+      return avatarUrl;
     } finally {
       setUploading(false);
-      setAvatarFile(null);
+      setUploadProgress(100);
     }
   };
+  
 
   // Save profile
   const handleSave = async (e: React.FormEvent) => {

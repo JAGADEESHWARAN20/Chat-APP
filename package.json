@@ -29,6 +29,7 @@
     "@supabase/ssr": "^0.7.0",
     "@supabase/supabase-js": "^2.39.2",
     "class-variance-authority": "^0.7.0",
+    "cloudinary": "^2.8.0",
     "clsx": "^2.1.0",
     "dompurify": "^3.3.0",
     "framer-motion": "^12.23.24",
