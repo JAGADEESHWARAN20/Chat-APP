@@ -6,7 +6,7 @@ import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/types/supabase";
 import { ensureSystemUserExists } from "@/lib/init/systemUser";
 
-// 🧱 Input validation
+// ---------------- Schema ----------------
 const SummarizeSchema = z.object({
   prompt: z.string().min(1).max(15000),
   roomId: z.string().min(1),
@@ -14,19 +14,19 @@ const SummarizeSchema = z.object({
   model: z.string().default("openai/gpt-4o"),
 });
 
-// 🧩 Supabase service client (full DB access)
+// ---------------- Supabase Client ----------------
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// 🧠 OpenRouter AI Client
+// ---------------- OpenAI (OpenRouter) ----------------
 const openai = new OpenAI({
   baseURL: "https://openrouter.ai/api/v1",
   apiKey: process.env.OPENROUTER_API_KEY!,
 });
 
-// 🧩 Helper to clean output
+// ---------------- AI Response Parser ----------------
 function parseContent(raw: unknown): string {
   if (!raw) return "No response received.";
   if (typeof raw === "string") return raw;
@@ -44,7 +44,7 @@ function parseContent(raw: unknown): string {
   return "Unsupported AI response format.";
 }
 
-// ✅ MAIN HANDLER
+// ---------------- MAIN HANDLER ----------------
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -52,6 +52,7 @@ export async function POST(req: NextRequest) {
       SummarizeSchema.parse(body);
 
     const SYSTEM_USER_ID = "00000000-0000-0000-0000-000000000000";
+
     const userId =
       rawUserId && rawUserId.trim() !== "" && rawUserId !== "system"
         ? rawUserId
@@ -59,10 +60,10 @@ export async function POST(req: NextRequest) {
 
     console.log("📨 Summarize Request:", { userId, roomId, model });
 
-    // 🧩 Ensure system user exists
+    // Ensure system user exists in profiles
     await ensureSystemUserExists();
 
-    // 🧠 Generate AI Response
+    // ---------------- AI GENERATION ----------------
     const completion = await openai.chat.completions.create({
       model,
       messages: [
@@ -74,27 +75,27 @@ export async function POST(req: NextRequest) {
     const message = completion.choices?.[0]?.message?.content ?? "";
     const parsedContent = parseContent(message);
 
-    // 🧾 Token info (fallback if not available)
     const tokenCount = completion?.usage?.total_tokens ?? 0;
 
-    // 🧍 Ensure user exists in Supabase
-    const { data: userExists } = await supabase
-      .from("users")
+    // ---------------- PROFILE USER CHECK ----------------
+    const { data: profileExists } = await supabase
+      .from("profiles")
       .select("id")
       .eq("id", userId)
       .maybeSingle();
 
-    if (!userExists) {
-      await supabase.from("users").insert({
+    if (!profileExists) {
+      console.log("⚠️ Profile missing. Creating:", userId);
+
+      await supabase.from("profiles").insert({
         id: userId,
-        username: "guest_user",
         display_name: "Anonymous",
         avatar_url: "https://api.dicebear.com/9.x/thumbs/svg?seed=Guest",
         created_at: new Date().toISOString(),
       });
     }
 
-    // 💾 Save Chat History
+    // ---------------- SAVE CHAT HISTORY ----------------
     const insertPayload = {
       id: uuidv4(),
       room_id: roomId,
@@ -124,10 +125,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       fullContent: parsedContent,
-      meta: {
-        tokens: tokenCount,
-        model,
-      },
+      meta: { tokens: tokenCount, model },
     });
   } catch (err: any) {
     console.error("💥 Summarize Error:", err);
@@ -137,6 +135,7 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
 
 
 // // app/api/[userId]/summarize/route.ts
