@@ -1,5 +1,3 @@
-"use client";
-
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,26 +8,17 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+
 import { Bot, X } from "lucide-react";
 import RoomAssistantComponent from "./RoomAssistant";
 import { cn } from "@/lib/utils";
 
-interface RoomAssistantDialogProps {
-  roomId: string;
-  roomName: string;
-  triggerButton?: React.ReactNode;
-}
-
-export function RoomAssistantDialog({
-  roomId,
-  roomName,
-  triggerButton,
-}: RoomAssistantDialogProps) {
+export function RoomAssistantDialog({ roomId, roomName, triggerButton }: any) {
   const [open, setOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
 
   const defaultTrigger = (
-    <Button variant="ghost" size="icon" className="rounded-full">
+    <Button variant="ghost" size="icon">
       <Bot className="h-5 w-5" />
     </Button>
   );
@@ -41,39 +30,28 @@ export function RoomAssistantDialog({
       <DialogContent
         hideCloseButton
         className={cn(
-          "p-0 overflow-hidden flex flex-col transition-all duration-300 ease-in-out",
+          "p-0 overflow-hidden flex flex-col transition-all duration-300",
           isExpanded
-            ? "w-[95vw] lg:w-[85vw] h-[90vh] max-h-[95vh]"
-            : "w-[85vw] lg:w-[65vw] h-[55vh] max-h-[60vh]"
+            ? "w-[95vw] h-[90vh]"
+            : "w-[85vw] h-[58vh]"
         )}
       >
-        <DialogTitle className="sr-only">AI Assistant</DialogTitle>
-        <DialogDescription className="sr-only">
-          Chat with AI Assistant about this room
-        </DialogDescription>
+        <DialogTitle className="sr-only">AI Chat</DialogTitle>
+        <DialogDescription className="sr-only">AI Assistant</DialogDescription>
 
         <DialogClose asChild>
-          <button
-            className="absolute top-3 right-3 z-50 h-8 w-8 flex items-center justify-center rounded-full 
-              bg-[hsl(var(--muted))]/50 border border-border/30 hover:bg-[hsl(var(--muted))]/80
-              text-[hsl(var(--foreground))]/80 transition-all"
-          >
+          <button className="absolute top-3 right-3 h-8 w-8 rounded-full bg-muted/40 flex items-center justify-center">
             <X className="h-3.5 w-3.5" />
           </button>
         </DialogClose>
 
-        <div className="flex-1 h-auto overflow-hidden">
-          <RoomAssistantComponent
-            key={roomId}
-            roomId={roomId}
-            roomName={roomName}
-            className="h-full border-0 shadow-none"
-            dialogMode
-            onCloseDialog={() => setOpen(false)}
-            isExpanded={isExpanded}
-            onToggleExpand={() => setIsExpanded(!isExpanded)}
-          />
-        </div>
+        <RoomAssistantComponent
+          roomId={roomId}
+          roomName={roomName}
+          dialogMode
+          isExpanded={isExpanded}
+          onToggleExpand={() => setIsExpanded(!isExpanded)}
+        />
       </DialogContent>
     </Dialog>
   );
