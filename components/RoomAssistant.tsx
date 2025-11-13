@@ -206,9 +206,8 @@ function RoomAssistantComponent({
                 "bg-primary/85 text-primary-foreground"
               )}
             >
-              <Bot className="h-4 w-4" />
+              <span><Bot className="h-4 w-4" /> AI Assistant</span>
             </motion.div>
-          </div>
 
           {/* RIGHT MENU */}
           <Popover>
@@ -230,7 +229,7 @@ function RoomAssistantComponent({
                   <Switch
                     checked={theme === "dark"}
                     onCheckedChange={(v) => setTheme(v ? "dark" : "light")}
-                  />
+                    />
                 </div>
 
                 <Separator className="my-2" />
@@ -240,13 +239,14 @@ function RoomAssistantComponent({
                   size="sm"
                   onClick={() => setMessages([])}
                   className="w-full justify-start text-red-500 hover:bg-red-500/10"
-                >
+                  >
                   <Trash2 className="mr-2 h-3.5 w-3.5" />
                   Clear Chat
                 </Button>
               </div>
             </PopoverContent>
           </Popover>
+                  </div>
         </CardHeader>
 
         {/* MODEL SELECTOR */}
