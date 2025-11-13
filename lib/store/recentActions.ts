@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { Database } from "@/lib/types/supabase";
 
-type UserProfile = Database["public"]["Tables"]["users"]["Row"];
+type UserProfile = Database["public"]["Tables"]["profiles"]["Row"];
 type Room = Database["public"]["Tables"]["rooms"]["Row"];
 
 export interface RecentAction {
