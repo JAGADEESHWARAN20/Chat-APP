@@ -115,14 +115,10 @@ function RoomAssistantComponent({
   // 🔹 Reset on close
   useEffect(() => {
     if (!dialogMode) return;
-    if (!isExpanded && messages.length > 0) {
-      setMessages([]);
-      setError(null);
-      setPrompt("");
-      setLoading(false);
-    }
+    if (!isExpanded) return; // collapsing should NOT clear
+    // No reset
   }, [isExpanded, dialogMode]);
-
+  
   // 🧠 Send message
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
