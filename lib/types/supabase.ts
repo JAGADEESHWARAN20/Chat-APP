@@ -106,29 +106,7 @@ export type Database = {
           user_id_1?: string
           user_id_2?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "direct_chats_initiator_id_fkey"
-            columns: ["initiator_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "direct_chats_user_id_1_fkey"
-            columns: ["user_id_1"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "direct_chats_user_id_2_fkey"
-            columns: ["user_id_2"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       messages: {
         Row: {
@@ -343,13 +321,6 @@ export type Database = {
             referencedRelation: "rooms"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "room_members_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
         ]
       }
       room_participants: {
@@ -442,30 +413,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      users: {
-        Row: {
-          avatar_url: string
-          created_at: string
-          display_name: string
-          id: string
-          username: string
-        }
-        Insert: {
-          avatar_url: string
-          created_at?: string
-          display_name: string
-          id?: string
-          username?: string
-        }
-        Update: {
-          avatar_url?: string
-          created_at?: string
-          display_name?: string
-          id?: string
-          username?: string
-        }
-        Relationships: []
       }
     }
     Views: {
