@@ -7,6 +7,7 @@ import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/types/supabase";
 import { ensureSystemUserExists } from "@/lib/init/systemUser";
 
+export const dynamic = 'force-dynamic';
 // ---------------- Schema ----------------
 const SummarizeSchema = z.object({
   prompt: z.string().min(1).max(15000),

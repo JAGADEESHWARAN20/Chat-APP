@@ -4,6 +4,8 @@ import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/types/supabase";
 import { v4 as uuidv4 } from "uuid";
 
+export const dynamic = 'force-dynamic';
+
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -35,7 +37,7 @@ export async function POST(req: NextRequest) {
       structured_data: {},
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-    });
+    } as Database["public"]["Tables"]["ai_chat_history"]["Insert"]);
 
     if (error) throw new Error(error.message);
 

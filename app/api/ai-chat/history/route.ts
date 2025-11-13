@@ -3,6 +3,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/types/supabase";
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+// Or alternatively, you can disable caching
+export const revalidate = 0;
+
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -24,8 +29,9 @@ interface ApiResponse {
 
 export async function GET(req: NextRequest): Promise<NextResponse<ApiResponse>> {
   try {
-    const { searchParams } = new URL(req.url);
-    const roomId = searchParams.get("roomId");
+    // Use req.url directly without destructuring to avoid static optimization
+    const url = new URL(req.url);
+    const roomId = url.searchParams.get("roomId");
     
     if (!roomId) {
       return NextResponse.json(
