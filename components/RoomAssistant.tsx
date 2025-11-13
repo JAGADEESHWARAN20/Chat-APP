@@ -282,7 +282,7 @@ function RoomAssistantComponent({
         <ScrollArea
           ref={scrollRef}
           className={cn(
-            "flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent",
+            "flex-1 ",
             dialogMode ? "p-3 space-y-3" : "p-4 space-y-5"
           )}
         >
