@@ -677,7 +677,7 @@ useEffect(() => {
 
       {/* Crop Dialog */}
       <Dialog open={!!cropSrc} onOpenChange={(open) => { if (!open) setCropSrc(""); }}>
-      <DialogContent className="sm:max-w-[650px] h-[90vh] flex flex-col p-0 overflow-hidden">
+      <DialogContent className="sm:max-w-[650px] h-[90vh] flex flex-col p-0">
           <DialogHeader className="p-6 pb-4 border-b bg-gradient-to-r from-primary/5 to-secondary/5">
             <DialogTitle className="text-xl font-bold flex items-center gap-2">
               <Edit3 className="w-5 h-5" /> Crop Your Avatar
@@ -685,7 +685,8 @@ useEffect(() => {
             <p className="text-sm text-muted-foreground">Drag to pan, scroll to zoom. Square crop recommended.</p>
           </DialogHeader>
 
-          <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 flex flex-col overflow-auto">
+
             <div className="flex-1 relative bg-gradient-to-br from-muted to-muted/50">
               <AvatarCropperUI
                 ref={cropperRef}

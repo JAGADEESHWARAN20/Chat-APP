@@ -60,27 +60,34 @@ const AvatarCropperUI = forwardRef<CropperRef, Props>(
           }}
         />
 
-        
+{/* Dark mask outside crop area */}
 <div className="absolute inset-0 pointer-events-none">
   <div className="absolute inset-0 backdrop-brightness-[0.45] pointer-events-none" />
 </div>
 
-{/* Glass Highlight circle */}
+{/* Glass highlight circle */}
 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
   <div
     className="
       pointer-events-none
-      w-[65%] aspect-square rounded-full
+      w-[65%] aspect-square rounded-full 
       border border-white/40 shadow-[0_0_25px_rgba(255,255,255,0.2)]
       backdrop-blur-sm mix-blend-overlay
     "
   />
 </div>
 
-{/* Guide Ring */}
+{/* Outer guide ring */}
 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-  <div className="w-[75%] aspect-square rounded-full border border-primary/20 pointer-events-none" />
+  <div
+    className="
+      pointer-events-none
+      w-[75%] aspect-square rounded-full 
+      border border-primary/20
+    "
+  />
 </div>
+
 
 
         
