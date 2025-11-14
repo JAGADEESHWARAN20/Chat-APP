@@ -76,17 +76,44 @@ export function useNotificationHandler() {
 
           switch (notification.type) {
             case "join_request_accepted": {
-              toast.success("Your request to join a room was accepted!");
-
-              const rooms = await fetchRoomsForUser(userId);
-              setRooms(rooms);
-
-              const matched = rooms.find((r: any) => r.id === notification.room_id);
-              if (matched) setSelectedRoom(matched);
-
+              toast.success("Your request to join a room was accepted!", {
+                description: notification.message ?? "",
+              });
+            
+              // Fetch updated rooms
+              const { data, error } = await supabase.rpc("get_rooms_with_counts", {
+                p_user_id: userId,
+                p_query: undefined,
+                p_include_participants: true,
+              });
+            
+              if (error) {
+                console.error("RPC get_rooms_with_counts error:", error);
+                break;
+              }
+            
+              const roomsData = (data || []).map((r: any) => ({
+                ...r,
+                isMember: r.is_member,
+                participationStatus: r.participation_status,
+                participant_count: r.member_count,
+              }));
+            
+              // Update Zustand room store
+              setRooms(roomsData);
+            
+              // Auto-open the room
+              if (notification.room_id) {
+                const matched = roomsData.find((x: any) => x.id === notification.room_id);
+                if (matched) {
+                  setSelectedRoom(matched);
+                }
+              }
+            
               break;
             }
-
+            
+            
             case "join_request_rejected":
               toast.error("Your join request was rejected.");
               break;
