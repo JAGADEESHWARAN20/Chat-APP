@@ -38,7 +38,6 @@ import { Swipeable } from "./ui/swipeable";
 import {
   Accordion,
   AccordionItem,
-  AccordionTrigger,
   AccordionContent,
 } from "@/components/ui/accordion";
 import { useAuthSync } from "@/hooks/useAuthSync";

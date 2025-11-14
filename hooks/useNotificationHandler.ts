@@ -4,7 +4,8 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useNotification, Inotification } from "@/lib/store/notifications";
 import { useEffect, useRef } from "react";
 import { useUser } from "@/lib/store/user";
-import { useRoomStore } from "@/lib/store/roomstore";
+import { useRoomContext } from "@/lib/store/RoomContext";
+
 
 async function fetchRoomsForUser(userId: string) {
   const supabase = getSupabaseBrowserClient();
@@ -31,8 +32,10 @@ async function fetchRoomsForUser(userId: string) {
 export function useNotificationHandler() {
   const { user: currentUser, authUser } = useUser();
   const { addNotification } = useNotification();
-  const setRooms = useRoomStore((s) => s.setRooms);
-  const setSelectedRoom = useRoomStore((s) => s.setSelectedRoom);
+  const roomStore = useRoomContext();
+
+  const setRooms = roomStore.setAvailableRooms;
+  const setSelectedRoomId = roomStore.setSelectedRoomId;
 
   const mountedRef = useRef(true);
   const userId = currentUser?.id || authUser?.id;
@@ -80,7 +83,6 @@ export function useNotificationHandler() {
                 description: notification.message ?? "",
               });
             
-              // Fetch updated rooms
               const { data, error } = await supabase.rpc("get_rooms_with_counts", {
                 p_user_id: userId,
                 p_query: undefined,
@@ -88,30 +90,35 @@ export function useNotificationHandler() {
               });
             
               if (error) {
-                console.error("RPC get_rooms_with_counts error:", error);
+                console.error("RPC error:", error);
                 break;
               }
             
               const roomsData = (data || []).map((r: any) => ({
-                ...r,
+                id: r.id,
+                name: r.name,
+                is_private: r.is_private,
+                created_by: r.created_by,
+                created_at: r.created_at,
                 isMember: r.is_member,
                 participationStatus: r.participation_status,
-                participant_count: r.member_count,
+                memberCount: r.member_count,
               }));
             
-              // Update Zustand room store
+              // 🔥 Update RoomContext store
               setRooms(roomsData);
             
-              // Auto-open the room
+              // 🔥 Auto-open room in UI
               if (notification.room_id) {
-                const matched = roomsData.find((x: any) => x.id === notification.room_id);
+                const matched = roomsData.find((x) => x.id === notification.room_id);
                 if (matched) {
-                  setSelectedRoom(matched);
+                  setSelectedRoomId(notification.room_id);
                 }
               }
             
               break;
             }
+            
             
             
             case "join_request_rejected":
@@ -147,5 +154,5 @@ export function useNotificationHandler() {
       mountedRef.current = false;
       subscription.unsubscribe();
     };
-  }, [userId, addNotification, setRooms, setSelectedRoom]);
+  }, [userId, addNotification, setRooms]);
 }
