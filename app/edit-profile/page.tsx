@@ -677,7 +677,7 @@ useEffect(() => {
 
       {/* Crop Dialog */}
       <Dialog open={!!cropSrc} onOpenChange={(open) => { if (!open) setCropSrc(""); }}>
-        <DialogContent className="sm:max-w-[650px] max-h-[95vh] flex flex-col p-0">
+      <DialogContent className="sm:max-w-[650px] h-[90vh] flex flex-col p-0 overflow-hidden">
           <DialogHeader className="p-6 pb-4 border-b bg-gradient-to-r from-primary/5 to-secondary/5">
             <DialogTitle className="text-xl font-bold flex items-center gap-2">
               <Edit3 className="w-5 h-5" /> Crop Your Avatar

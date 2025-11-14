@@ -54,41 +54,36 @@ const AvatarCropperUI = forwardRef<CropperRef, Props>(
             containerClassName: "w-full h-full",
             mediaClassName: "transition-all duration-300 ease-out",
             cropAreaClassName: cn(
-              "rounded-full shadow-[0_0_25px_rgba(0,0,0,0.45)]",
-              "border border-primary/60 backdrop-blur-md",
-              "before:absolute before:inset-0 before:rounded-full before:ring-2 before:ring-primary/40 before:shadow-xl"
-            ),
+              "rounded-full border-2 border-primary/40 shadow-xl",
+              "bg-black/10 backdrop-blur-sm"
+            ),            
           }}
         />
 
-        {/* Dark mask outside crop area */}
-        <div className="absolute inset-0 pointer-events-none">
-          <div
-            className="
-              absolute inset-0 
-              backdrop-brightness-[0.45]
-              transition-all duration-300
-            "
-          />
-        </div>
+        
+<div className="absolute inset-0 pointer-events-none">
+  <div className="absolute inset-0 backdrop-brightness-[0.45] pointer-events-none" />
+</div>
 
-        {/* Glass Highlight circle */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div
-            className="
-              w-[65%] aspect-square rounded-full 
-              border border-white/40 shadow-[0_0_25px_rgba(255,255,255,0.2)]
-              backdrop-blur-sm 
-              mix-blend-overlay
-              pointer-events-none
-            "
-          />
-        </div>
+{/* Glass Highlight circle */}
+<div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+  <div
+    className="
+      pointer-events-none
+      w-[65%] aspect-square rounded-full
+      border border-white/40 shadow-[0_0_25px_rgba(255,255,255,0.2)]
+      backdrop-blur-sm mix-blend-overlay
+    "
+  />
+</div>
 
-        {/* Subtle crop guide ring */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="w-[75%] aspect-square rounded-full border border-primary/20" />
-        </div>
+{/* Guide Ring */}
+<div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+  <div className="w-[75%] aspect-square rounded-full border border-primary/20 pointer-events-none" />
+</div>
+
+
+        
       </div>
     );
   }
