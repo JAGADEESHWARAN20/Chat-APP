@@ -69,13 +69,19 @@ export async function POST(req: NextRequest) {
         console.warn('[Create Room API] Notification error (non-blocking):', notifError);
       }
 
-      return successResponse({
-        id: createdRoom.id,
-        name: roomName,
-        created_by: userId,
-        is_private: isPrivate,
-        created_at: timestamp
-      }, 201);
+      return successResponse(
+        {
+          room: {
+            id: createdRoom.id,
+            name: roomName,
+            created_by: userId,
+            is_private: isPrivate,
+            created_at: timestamp
+          }
+        },
+        201
+      );
+      
     } catch (error) {
       console.error('[Create Room API] Unexpected error:', error);
       return errorResponse('Internal server error', 'INTERNAL_ERROR', 500);

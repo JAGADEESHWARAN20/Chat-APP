@@ -443,7 +443,11 @@ export type Database = {
           p_user_id: string
         }
         Returns: {
+          created_at: string
+          created_by: string
           id: string
+          is_private: boolean
+          name: string
         }[]
       }
       get_room_members: {

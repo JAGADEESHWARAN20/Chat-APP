@@ -265,16 +265,22 @@ export const useRoomStore = create<RoomState>()(
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ name, isPrivate })
           });
+      
           const json = await res.json();
-          if (json.success && json.room) {
-            get().addRoom(json.room);
-            return json.room;
+      
+          if (!json.success || !json.room) {
+            toast.error(json.error || "Room creation failed");
+            return null;
           }
-          return null;
-        } catch {
+      
+          get().addRoom(json.room);
+          return json.room;
+        } catch (err) {
+          console.error("Create room error:", err);
           return null;
         }
       }
+      
     }))
   )
 );
