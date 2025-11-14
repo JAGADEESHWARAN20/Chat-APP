@@ -1,3 +1,4 @@
+// components/SearchComponent.tsx
 "use client";
 
 import React, {
@@ -6,12 +7,17 @@ import React, {
   useMemo,
   useCallback,
   memo,
+  Fragment,
 } from "react";
-
+import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { User as SupabaseUser } from "@supabase/supabase-js";
+import type { User as SupabaseUser } from "@supabase/supabase-js";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { useDebounce } from "use-debounce";
+import { toast } from "sonner";
 
 import {
   useAvailableRooms,
@@ -21,13 +27,24 @@ import {
   type Room,
 } from "@/lib/store/RoomContext";
 
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import {
+  Users as UsersIcon,
+  Lock as LockIcon,
+  Settings,
+  LogOut,
+  User as UserIcon,
+  Search as SearchIcon,
+} from "lucide-react";
 
-import { Users, LockIcon, Settings, LogOut, UserIcon } from "lucide-react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-
-import { toast } from "sonner";
-import { useDebounce } from "use-debounce";
+/**
+ * Enhanced SearchComponent (realtime + polished UI)
+ *
+ * - Realtime data comes from your RoomContext (availableRooms + roomPresence)
+ * - Client-side search with highlighting and debounced input
+ * - Clean responsive cards, skeletons, presence badges, accessible buttons
+ *
+ * Drop-in replacement for your existing SearchComponent file.
+ */
 
 type PartialProfile = {
   id: string;
@@ -36,10 +53,37 @@ type PartialProfile = {
   avatar_url: string | null;
 };
 
-type RoomResult = Room;
-
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function highlightMatch(text: string, q: string) {
+  if (!q) return text;
+  const idx = text.toLowerCase().indexOf(q.toLowerCase());
+  if (idx === -1) return text;
+  const before = text.slice(0, idx);
+  const match = text.slice(idx, idx + q.length);
+  const after = text.slice(idx + q.length);
+  return (
+    <>
+      {before}
+      <span className="bg-yellow-200 dark:bg-yellow-600/30 px-[2px] rounded-sm">{match}</span>
+      {after}
+    </>
+  );
+}
+
+const SkeletonCard = ({ keyIdx = 0 }: { keyIdx?: number }) => (
+  <div key={keyIdx} className="p-4 border rounded-lg bg-card animate-pulse">
+    <div className="flex items-center gap-3 mb-3">
+      <div className="h-12 w-12 rounded-lg bg-accent" />
+      <div className="flex-1 space-y-2">
+        <div className="h-4 w-3/5 bg-accent rounded" />
+        <div className="h-3 w-1/3 bg-accent rounded" />
+      </div>
+    </div>
+    <div className="h-8 w-full bg-accent rounded" />
+  </div>
+);
 
 const SearchComponent = memo(function SearchComponent({
   user,
@@ -48,261 +92,340 @@ const SearchComponent = memo(function SearchComponent({
 }) {
   const router = useRouter();
 
-  // STATE
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchType, setSearchType] = useState<"rooms" | "users">("rooms");
+  // local UI state
+  const [query, setQuery] = useState("");
+  const [tab, setTab] = useState<"rooms" | "users">("rooms");
   const [userResults, setUserResults] = useState<PartialProfile[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loadingUsers, setLoadingUsers] = useState(false);
 
-  const [debouncedQuery] = useDebounce(searchQuery, 300);
+  const [debouncedQuery] = useDebounce(query, 300);
 
-  // STORE DATA
+  // store (realtime)
   const availableRooms = useAvailableRooms();
+  const presence = useRoomPresence(); // Record<roomId, { onlineUsers, userIds }>
   const { joinRoom, leaveRoom } = useRoomActions();
-  const roomPresence = useRoomPresence(); // full presence object
 
-  // -----------------------------------------------
-  // 🔥 USERS SEARCH
-  // -----------------------------------------------
-  const handleUserSearch = useCallback(async () => {
-    if (searchType !== "users") return;
-
-    setLoading(true);
-
-    try {
-      const allUsers = await fetchAllUsers();
-
-      if (!debouncedQuery.trim()) {
-        setUserResults(allUsers);
-      } else {
-        const q = debouncedQuery.toLowerCase();
-        setUserResults(
-          allUsers.filter(
-            (u) =>
-              u.username?.toLowerCase().includes(q) ||
-              u.display_name?.toLowerCase().includes(q)
-          )
-        );
-      }
-    } catch (e) {
-      toast.error("Failed to fetch users");
-    } finally {
-      setLoading(false);
-    }
-  }, [searchType, debouncedQuery]);
-
-  useEffect(() => {
-    if (searchType === "users") handleUserSearch();
-  }, [searchType, debouncedQuery, handleUserSearch]);
-
-  // -----------------------------------------------
-  // 🔥 ROOMS SEARCH — FULL REALTIME
-  // -----------------------------------------------
-  const roomResults: RoomResult[] = useMemo(() => {
-    if (availableRooms.length === 0) return [];
-
+  // derived filtered lists (instant, from realtime store)
+  const filteredRooms = useMemo(() => {
     if (!debouncedQuery.trim()) return availableRooms;
-
     const q = debouncedQuery.toLowerCase();
-    return availableRooms.filter((room) =>
-      room.name.toLowerCase().includes(q)
-    );
+    return availableRooms.filter((r) => r.name.toLowerCase().includes(q));
   }, [availableRooms, debouncedQuery]);
 
-  // -----------------------------------------------
-  // 🔥 JOIN ROOM
-  // -----------------------------------------------
-  const handleJoinRoom = useCallback(
+  // users search (server) — only when users tab active
+  const fetchUsers = useCallback(
+    async (q: string) => {
+      setLoadingUsers(true);
+      try {
+        const all = await fetchAllUsers();
+        if (!q.trim()) {
+          setUserResults(all);
+          return;
+        }
+        const low = q.toLowerCase();
+        setUserResults(
+          all.filter(
+            (u) =>
+              u.username?.toLowerCase().includes(low) ||
+              u.display_name?.toLowerCase().includes(low)
+          )
+        );
+      } catch (err) {
+        console.error("fetchUsers", err);
+        toast.error("Failed to fetch users");
+      } finally {
+        setLoadingUsers(false);
+      }
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (tab === "users") fetchUsers(debouncedQuery);
+    else setUserResults([]);
+  }, [tab, debouncedQuery, fetchUsers]);
+
+  const handleJoin = useCallback(
     async (roomId: string) => {
       if (!UUID_REGEX.test(roomId)) {
-        toast.error("Invalid room ID");
+        toast.error("Invalid room id");
         return;
       }
       if (!user?.id) {
         toast.error("Login required");
         return;
       }
-
-      await joinRoom(roomId);
+      try {
+        await joinRoom(roomId);
+      } catch (err: any) {
+        console.error("join error", err);
+        toast.error(err?.message ?? "Failed to join room");
+      }
     },
-    [user?.id, joinRoom]
+    [joinRoom, user?.id]
   );
 
-  // -----------------------------------------------
-  // 🔥 RENDER A ROOM RESULT
-  // -----------------------------------------------
-  const renderRoom = useCallback(
-    (room: RoomResult) => {
-      const presence = roomPresence[room.id];
-      const online = presence?.onlineUsers ?? 0;
-      const memberCount = room.memberCount ?? 0;
+  const handleLeave = useCallback(
+    async (roomId: string) => {
+      try {
+        await leaveRoom(roomId);
+      } catch (err: any) {
+        console.error("leave error", err);
+        toast.error(err?.message ?? "Failed to leave room");
+      }
+    },
+    [leaveRoom]
+  );
+
+  // keyboard: Enter focuses first result
+  useEffect(() => {
+    // no-op for now; keep placeholder for future keyboard UX
+  }, []);
+
+  // small presentational renderers
+  const RoomCard = useCallback(
+    ({ room }: { room: Room }) => {
+      const pres = presence?.[room.id];
+      const online = pres?.onlineUsers ?? 0;
+      const members = room.memberCount ?? 0;
+      const q = debouncedQuery;
 
       return (
-        <div
+        <motion.div
+          layout
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 6 }}
           key={room.id}
-          className="p-4 border rounded-lg bg-card hover:bg-accent transition cursor-pointer"
+          className="p-4 border rounded-xl bg-card hover:shadow-md transition"
         >
-          <div className="flex items-center gap-3 mb-2">
-            <div className="h-12 w-12 rounded-lg bg-indigo-500/20 flex items-center justify-center text-indigo-500 font-bold">
-              {room.name[0].toUpperCase()}
+          <div className="flex items-start gap-4">
+            <div
+              aria-hidden
+              className="h-12 w-12 flex items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500/10 to-indigo-400/6 text-indigo-500 text-lg font-bold"
+            >
+              {room.name?.charAt(0).toUpperCase() || "#"}
             </div>
 
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
-                <span className="font-semibold text-lg">#{room.name}</span>
+                <button
+                  onClick={() => router.push(`/rooms/${room.id}`)}
+                  className="text-foreground font-semibold text-sm truncate hover:underline text-left"
+                  aria-label={`Open room ${room.name}`}
+                >
+                  #{highlightMatch(room.name, q) as React.ReactNode}
+                </button>
+
                 {room.is_private && (
                   <LockIcon className="h-4 w-4 text-muted-foreground" />
                 )}
               </div>
 
-              <div className="flex items-center gap-3 text-xs mt-1">
-                <span className="flex items-center gap-1 text-blue-600">
-                  <Users className="h-3 w-3" />
-                  {memberCount} members
+              <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <UsersIcon className="h-3 w-3" />
+                  <span className="font-medium text-foreground">{members}</span>
+                  <span className="opacity-70">members</span>
                 </span>
 
                 {online > 0 && (
-                  <span className="text-green-600">
-                    {online} online
+                  <span className="inline-flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-green-400 animate-pulse" />
+                    <span className="font-medium text-foreground">{online}</span>
+                    <span className="opacity-70">online</span>
                   </span>
                 )}
 
-                {room.isMember && (
-                  <span className="text-green-600 font-medium">Joined</span>
-                )}
-
                 {room.participationStatus === "pending" && (
-                  <span className="text-yellow-600">Pending…</span>
+                  <span className="text-yellow-600 bg-yellow-500/10 px-2 py-1 rounded-md">
+                    Pending
+                  </span>
                 )}
               </div>
             </div>
-          </div>
 
-          <div className="flex justify-end gap-2 mt-3">
-            {room.isMember ? (
-              <>
+            <div className="flex flex-col items-end gap-2">
+              {room.isMember ? (
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => router.push(`/rooms/${room.id}/settings`)}
+                  >
+                    <Settings className="h-4 w-4 mr-2" />
+                    Settings
+                  </Button>
+
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleLeave(room.id)}
+                    className="text-red-500"
+                  >
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Leave
+                  </Button>
+                </div>
+              ) : (
                 <Button
                   size="sm"
-                  variant="ghost"
-                  onClick={() => router.push(`/rooms/${room.id}/settings`)}
+                  className="bg-indigo-600 text-white"
+                  onClick={() => handleJoin(room.id)}
                 >
-                  <Settings className="h-4 w-4 mr-2" />
-                  Settings
+                  Join
                 </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => leaveRoom(room.id)}
-                  className="text-red-500"
-                >
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Leave
-                </Button>
-              </>
-            ) : room.participationStatus === "pending" ? (
-              <span className="text-sm text-yellow-600 bg-yellow-500/10 px-2 py-1 rounded">
-                Pending Approval
-              </span>
-            ) : (
-              <Button
-                size="sm"
-                className="bg-indigo-600 text-white"
-                onClick={() => handleJoinRoom(room.id)}
-              >
-                Join Room
-              </Button>
-            )}
+              )}
+            </div>
           </div>
-        </div>
+        </motion.div>
       );
     },
-    [router, leaveRoom, handleJoinRoom, roomPresence]
+    [presence, debouncedQuery, router, handleJoin, handleLeave]
   );
 
-  // -----------------------------------------------
-  // UI
-  // -----------------------------------------------
-  return (
-    <div className="w-full max-w-lg mx-auto p-4">
-      <Input
-        placeholder={
-          searchType === "users" ? "Search users..." : "Search rooms..."
-        }
-        value={searchQuery}
-        onChange={(e) => setSearchQuery(e.target.value)}
-        className="mb-4"
-      />
-
-      <Tabs
-        defaultValue={searchType}
-        onValueChange={(value) =>
-          setSearchType(value as "rooms" | "users")
-        }
+  const UserRow = useCallback(
+    ({ u }: { u: PartialProfile }) => (
+      <motion.div
+        layout
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 6 }}
+        key={u.id}
+        className="flex items-center gap-3 p-3 rounded-lg hover:bg-accent transition"
       >
-        <TabsList className="grid grid-cols-2 mb-4">
-          <TabsTrigger value="rooms">Rooms</TabsTrigger>
-          <TabsTrigger value="users">Users</TabsTrigger>
-        </TabsList>
-
-        {/* ROOMS TAB */}
-        <TabsContent value="rooms" className="space-y-3">
-          {loading ? (
-            <div className="text-muted-foreground text-center">
-              Loading…
-            </div>
-          ) : roomResults.length ? (
-            roomResults.map(renderRoom)
+        <Avatar className="h-10 w-10">
+          {u.avatar_url ? (
+            <AvatarImage src={u.avatar_url} alt={u.display_name ?? u.username ?? "User"} />
           ) : (
-            <div className="text-muted-foreground text-center p-4 border rounded-lg">
-              No rooms found
-            </div>
+            <AvatarFallback>{(u.display_name ?? u.username ?? "?")[0]?.toUpperCase()}</AvatarFallback>
           )}
-        </TabsContent>
+        </Avatar>
 
-        {/* USERS TAB */}
-        <TabsContent value="users" className="space-y-3">
-          {loading ? (
-            <div className="text-muted-foreground text-center">
-              Loading…
+        <div className="min-w-0">
+          <div className="text-sm font-medium text-foreground">
+            {highlightMatch(u.display_name ?? u.username ?? "Unknown", debouncedQuery)}
+          </div>
+          <div className="text-xs text-muted-foreground">@{u.username}</div>
+        </div>
+
+        <div className="ml-auto">
+          <Button size="sm" variant="ghost" onClick={() => router.push(`/profile/${u.id}`)}>
+            <UserIcon className="h-4 w-4" />
+          </Button>
+        </div>
+      </motion.div>
+    ),
+    [debouncedQuery, router]
+  );
+
+  // final render
+  return (
+    <div className="w-full max-w-3xl mx-auto p-4">
+      <div className="flex items-center gap-3 mb-4">
+        <div className="flex-1">
+          <label htmlFor="global-search" className="sr-only">
+            Search rooms or users
+          </label>
+          <div className="relative">
+            <Input
+              id="global-search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search rooms or people — try ‘design’, ‘general’..."
+              className="pl-10"
+              aria-label="Search rooms or users"
+            />
+            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none">
+              <SearchIcon className="h-4 w-4" />
             </div>
-          ) : userResults.length ? (
-            userResults.map((u) => (
-              <div
-                key={u.id}
-                className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent transition cursor-pointer"
-              >
-                <Avatar>
-                  {u.avatar_url ? (
-                    <AvatarImage src={u.avatar_url} />
-                  ) : (
-                    <AvatarFallback>
-                      {u.username?.[0]?.toUpperCase() ||
-                        u.display_name?.[0]?.toUpperCase()}
-                    </AvatarFallback>
-                  )}
-                </Avatar>
-                <div>
-                  <div className="text-sm font-semibold">
-                    {u.display_name}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    @{u.username}
-                  </div>
+          </div>
+        </div>
+
+        <div className="hidden sm:flex items-center gap-2">
+          <Button
+            variant={tab === "rooms" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setTab("rooms")}
+          >
+            Rooms
+          </Button>
+          <Button
+            variant={tab === "users" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setTab("users")}
+          >
+            Users
+          </Button>
+        </div>
+      </div>
+
+      {/* mobile tabs (compact) */}
+      <div className="sm:hidden mb-3 flex gap-2">
+        <button
+          className={`flex-1 py-2 rounded-lg ${tab === "rooms" ? "bg-[color:var(--action-active)]/20 text-[color:var(--action-active)]" : "bg-muted/10"}`}
+          onClick={() => setTab("rooms")}
+        >
+          Rooms
+        </button>
+        <button
+          className={`flex-1 py-2 rounded-lg ${tab === "users" ? "bg-[color:var(--action-active)]/20 text-[color:var(--action-active)]" : "bg-muted/10"}`}
+          onClick={() => setTab("users")}
+        >
+          Users
+        </button>
+      </div>
+
+      <div className="space-y-3">
+        <AnimatePresence mode="wait">
+          {tab === "rooms" ? (
+            <motion.div key="rooms" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              {availableRooms.length === 0 ? (
+                <div className="p-6 text-center text-muted-foreground border rounded-lg bg-card">
+                  No rooms available yet — try creating one or refresh.
                 </div>
-                <UserIcon className="ml-auto h-4 w-4 text-muted-foreground" />
-              </div>
-            ))
+              ) : filteredRooms.length === 0 ? (
+                <div className="p-6 text-center text-muted-foreground border rounded-lg bg-card">
+                  No rooms match your search.
+                </div>
+              ) : (
+                <div className="grid gap-3">
+                  {filteredRooms.map((r) => (
+                    <Fragment key={r.id}>
+                      <RoomCard room={r} />
+                    </Fragment>
+                  ))}
+                </div>
+              )}
+            </motion.div>
           ) : (
-            <div className="text-center text-muted-foreground p-4 border rounded-lg">
-              No users found
-            </div>
+            <motion.div key="users" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              {loadingUsers ? (
+                <div className="grid gap-3">
+                  <SkeletonCard keyIdx={1} />
+                  <SkeletonCard keyIdx={2} />
+                  <SkeletonCard keyIdx={3} />
+                </div>
+              ) : userResults.length === 0 ? (
+                <div className="p-6 text-center text-muted-foreground border rounded-lg bg-card">
+                  No users found.
+                </div>
+              ) : (
+                <div className="grid gap-2">
+                  {userResults.map((u) => (
+                    <UserRow key={u.id} u={u} />
+                  ))}
+                </div>
+              )}
+            </motion.div>
           )}
-        </TabsContent>
-      </Tabs>
+        </AnimatePresence>
+      </div>
     </div>
   );
 });
 
+SearchComponent.displayName = "SearchComponent";
 export default SearchComponent;
 
 
