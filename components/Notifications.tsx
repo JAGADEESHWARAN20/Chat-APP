@@ -1,7 +1,14 @@
+// components/Notifications.tsx
 "use client";
 
-/* ✅ Imports */
-import React, { memo, useEffect, useState, useCallback, useMemo } from "react";
+import React, {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { MouseEvent } from "react";
 import { toast } from "sonner";
 import { Button } from "./ui/button";
@@ -22,22 +29,22 @@ import {
   Loader2,
 } from "lucide-react";
 
-import { useNotification, Inotification, useNotificationSubscription } from "@/lib/store/notifications"; // ✅ use store + built-in subscription
+import { useNotification, Inotification, useNotificationSubscription } from "@/lib/store/notifications";
 import { useRoomStore } from "@/lib/store/roomstore";
 import { useRoomContext } from "@/lib/store/RoomContext";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Database } from "@/lib/types/supabase";
 import { Swipeable } from "./ui/swipeable";
-
-/* ✅ Auth: either import the right hook name... */
+import {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from "@/components/ui/accordion";
 import { useAuthSync } from "@/hooks/useAuthSync";
-/* ...or if you really want to keep `useAuth` here, re-export it once in hooks:
-   // hooks/index.ts (new)
-   export { useAuthSync as useAuth } from "./useAuthSync";
-   and then you'd import { useAuth } from "@/hooks"
-*/
 
-/* Types */
+/* -------------------- Types -------------------- */
+
 type Room = Database["public"]["Tables"]["rooms"]["Row"];
 type RoomWithMembership = Room & { isMember: boolean; participationStatus: string | null };
 
@@ -46,38 +53,24 @@ interface NotificationsProps {
   onClose?: () => void;
 }
 
-/* ----------  Module-level helpers (pure, no hooks!)  ---------- */
+/* -------------------- Helpers -------------------- */
 
-function getNotificationDisplay(n: Inotification) {
-  const sender = n.users?.display_name || n.users?.username || "Someone";
-  const room = n.rooms?.name || "a room";
-
-  switch (n.type) {
-    case "room_invite":
-      return { icon: <UserPlus className="h-4 w-4 text-blue-500" />, text: `${sender} invited you to join ${room}` };
-    case "join_request":
-      return { icon: <Mail className="h-4 w-4 text-purple-500" />, text: `${sender} requested to join ${room}` };
-    case "user_joined":
-      return { icon: <UserCheck className="h-4 w-4 text-green-500" />, text: n.message || `${sender} joined ${room}` };
-    case "message":
-      return { icon: <Mail className="h-4 w-4 text-green-500" />, text: n.message || `New message from ${sender} in ${room}` };
-    case "join_request_accepted":
-      return { icon: <UserCheck className="h-4 w-4 text-green-600" />, text: n.message || `Your request to join ${room} was accepted` };
-    case "join_request_rejected":
-      return { icon: <UserX className="h-4 w-4 text-red-600" />, text: n.message || `Your request to join ${room} was rejected` };
-    case "room_left":
-      return { icon: <LogOut className="h-4 w-4 text-gray-500" />, text: n.message || `${sender} left ${room}` };
-    default:
-      return { icon: <Mail className="h-4 w-4 text-muted-foreground" />, text: n.message || "New notification" };
-  }
+/** Map DB types to our local "display" types if needed */
+function normalizeNotificationType(dbType: string): string {
+  const map: Record<string, string> = {
+    join_request: "join_request",
+    new_message: "message",
+    room_switch: "room_invite",
+    user_joined: "user_joined",
+    join_request_rejected: "join_request_rejected",
+    join_request_accepted: "join_request_accepted",
+    notification_unread: "notification_unread",
+    room_left: "room_left",
+  };
+  return map[dbType] ?? dbType;
 }
 
-function shouldShowNotificationActions(n: Inotification) {
-  return (n.type === "join_request" || n.type === "room_invite") && n.status !== "read";
-}
-
-/* ----------  Utilities  ---------- */
-
+/* ---------- Lightweight room enrichment (used only on accept) ---------- */
 const transformRoom = async (
   room: Room,
   userId: string,
@@ -113,111 +106,205 @@ const transformRoom = async (
   }
 };
 
-/* ----------  Presentational item (memoized)  ---------- */
+/* ---------- Notification display helpers ---------- */
+function getNotificationDisplay(n: Inotification) {
+  const sender = n.users?.display_name || n.users?.username || "Someone";
+  const room = n.rooms?.name || "a room";
 
-const NotificationItem = memo(function NotificationItem({
+  switch (n.type) {
+    case "room_invite":
+      return { icon: <UserPlus className="h-4 w-4" />, text: `${sender} invited you to join ${room}` };
+    case "join_request":
+      return { icon: <Mail className="h-4 w-4" />, text: `${sender} requested to join ${room}` };
+    case "user_joined":
+      return { icon: <UserCheck className="h-4 w-4" />, text: n.message || `${sender} joined ${room}` };
+    case "message":
+      return { icon: <Mail className="h-4 w-4" />, text: n.message || `New message from ${sender} in ${room}` };
+    case "join_request_accepted":
+      return { icon: <UserCheck className="h-4 w-4" />, text: n.message || `Your request to join ${room} was accepted` };
+    case "join_request_rejected":
+      return { icon: <UserX className="h-4 w-4" />, text: n.message || `Your request to join ${room} was rejected` };
+    case "room_left":
+      return { icon: <LogOut className="h-4 w-4" />, text: n.message || `${sender} left ${room}` };
+    case "system":
+    case "info":
+      return { icon: <Mail className="h-4 w-4" />, text: n.message || "System notification" };
+    default:
+      return { icon: <Mail className="h-4 w-4" />, text: n.message || "New notification" };
+  }
+}
+
+function shouldShowNotificationActions(n: Inotification) {
+  return (n.type === "join_request" || n.type === "room_invite") && n.status !== "read";
+}
+
+/* -------------------- NotificationItem -------------------- */
+
+type NotificationItemProps = {
+  notification: Inotification;
+  onAccept: (id: string, roomId: string | null, type: string) => Promise<void> | void;
+  onReject: (id: string, senderId: string | null, roomId: string | null) => Promise<void> | void;
+  onDelete: (id: string) => Promise<void> | void;
+  isLoading?: boolean;
+};
+
+export const NotificationItem: React.FC<NotificationItemProps> = memo(function NotificationItem({
   notification,
   onAccept,
   onReject,
   onDelete,
   isLoading = false,
-}: {
-  notification: Inotification;
-  onAccept: (id: string, roomId: string | null, type: string) => void;
-  onReject: (id: string, senderId: string | null, roomId: string | null) => void;
-  onDelete: (id: string) => void;
-  isLoading: boolean;
 }) {
   const { icon, text } = useMemo(() => getNotificationDisplay(notification), [notification]);
   const showActions = useMemo(() => shouldShowNotificationActions(notification), [notification]);
 
-  const handleAccept = useCallback((e: MouseEvent) => {
-    e.stopPropagation();
-    onAccept(notification.id, notification.room_id, notification.type);
-  }, [notification, onAccept]);
+  // local expand state for accordion (string id for shadcn single accordion)
+  const [open, setOpen] = useState(false);
 
-  const handleReject = useCallback((e: MouseEvent) => {
-    e.stopPropagation();
-    onReject(notification.id, notification.sender_id, notification.room_id);
-  }, [notification, onReject]);
+  const isAction =
+    notification.type === "join_request" || notification.type === "room_invite";
 
-  const handleDelete = useCallback((e: MouseEvent) => {
-    e.stopPropagation();
-    onDelete(notification.id);
-  }, [notification, onDelete]);
+  const handleClick = useCallback(
+    (e?: MouseEvent) => {
+      if (e) e.stopPropagation();
+      setOpen((prev) => !prev);
+    },
+    [setOpen]
+  );
 
-  const handleClick = useCallback(() => {
-    console.log("🔔 Notification clicked:", { notificationId: notification.id, type: notification.type });
-  }, [notification]);
+  // Swipe handlers use your Swipeable component's API
+  const handleSwipeLeft = useCallback(() => {
+    if (isAction && !isLoading) onAccept(notification.id, notification.room_id, notification.type);
+  }, [isAction, isLoading, onAccept, notification]);
+
+  const handleSwipeRight = useCallback(() => {
+    if (!isLoading) onReject(notification.id, notification.sender_id, notification.room_id);
+  }, [isLoading, onReject, notification]);
 
   return (
     <Swipeable
-      onSwipeLeft={() => !isLoading && onAccept(notification.id, notification.room_id, notification.type)}
-      onSwipeRight={() => !isLoading && onReject(notification.id, notification.sender_id, notification.room_id)}
+      onSwipeLeft={handleSwipeLeft}
+      onSwipeRight={handleSwipeRight}
+      swipeThreshold={120}
+      enableMouseEvents={true}
+      className="select-none"
     >
-      <div
-        className={`p-4 flex items-start space-x-4 hover:bg-muted/50 border-b border-slate-800/20  transition-colors relative ${
-          notification.status === "read" ? "opacity-60" : "bg-muted/30"
-        } ${isLoading ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
-        onClick={handleClick}
-      >
-        {/* Avatar */}
-        <Avatar className="h-10 w-10 flex-shrink-0">
-          <AvatarImage src={notification.users?.avatar_url || ""} alt={notification.users?.username || "User"} />
-          <AvatarFallback className="bg-primary/10 text-primary">
-            {(notification.users?.username || "U")[0]?.toUpperCase()}
-          </AvatarFallback>
-        </Avatar>
+      <Accordion type="single" collapsible value={open ? notification.id : ""} onValueChange={(v) => setOpen(v === notification.id)}>
+        <AccordionItem value={notification.id} className="border-b border-slate-800/20">
+          {/* MAIN ROW */}
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={handleClick}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") handleClick(); }}
+            className={`p-4 flex items-start space-x-4 transition-colors duration-150 relative
+              ${notification.status === "read" ? "opacity-60" : "bg-muted/30"}
+              ${isLoading ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+          >
+            <Avatar className="h-10 w-10 flex-shrink-0">
+              <AvatarImage src={notification.users?.avatar_url ?? ""} alt={notification.users?.username ?? "Sender avatar"} />
+              <AvatarFallback className="bg-primary/10 text-primary">
+                {(notification.users?.username ?? "U")[0]?.toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
 
-        {/* Content */}
-        <div className="flex-1 space-y-1 min-w-0">
-          <div className="flex items-center gap-2 text-sm">
-            {icon}
-            <span className="line-clamp-2 font-medium">{text}</span>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            {notification.created_at
-              ? new Date(notification.created_at).toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })
-              : "Unknown date"}
-          </p>
-        </div>
+            <div className="flex-1 space-y-1 min-w-0">
+              <div className="flex items-center gap-2 text-sm">
+                {icon}
+                <span className="line-clamp-2 font-medium">{text}</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {notification.created_at
+                  ? new Date(notification.created_at).toLocaleString(undefined, {
+                      month: "short",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })
+                  : "Unknown date"}
+              </p>
+            </div>
 
-        {/* Actions */}
-        {showActions ? (
-          <div className="flex space-x-1 flex-shrink-0">
-            <Button variant="ghost" size="icon" onClick={handleReject} disabled={isLoading} className="h-8 w-8 hover:bg-destructive/10 hover:text-destructive">
-              <X className="h-3.5 w-3.5" />
-            </Button>
-            <Button variant="ghost" size="icon" onClick={handleAccept} disabled={isLoading} className="h-8 w-8 hover:bg-green-500/10 hover:text-green-600">
-              <Check className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        ) : (
-          <div>
-            <Button asChild variant="ghost" size="icon" className="flex-shrink-0 h-8 w-8">
-              <MoreVertical className="w-3.5 h-3.5" />
-            </Button>
-            {/* if you're using shadcn DropdownMenu here, keep your original code */}
-          </div>
-        )}
+            {/* Actions/overflow */}
+            <div className="flex items-center gap-1">
+              {showActions ? (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={(e) => { e.stopPropagation(); onReject(notification.id, notification.sender_id, notification.room_id); }}
+                    disabled={isLoading}
+                    className="h-8 w-8 hover:bg-destructive/10"
+                    aria-label="Reject"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
 
-        {/* Loading Overlay */}
-        {isLoading && (
-          <div className="absolute inset-0 bg-background/80 rounded flex items-center justify-center">
-            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={(e) => { e.stopPropagation(); onAccept(notification.id, notification.room_id, notification.type); }}
+                    disabled={isLoading}
+                    className="h-8 w-8 hover:bg-green-500/10"
+                    aria-label="Accept"
+                  >
+                    <Check className="h-3.5 w-3.5" />
+                  </Button>
+                </>
+              ) : (
+                <Button variant="ghost" size="icon" asChild aria-label="More">
+                  <button onClick={(e) => e.stopPropagation()} className="h-8 w-8 flex items-center justify-center">
+                    <MoreVertical className="h-3.5 w-3.5" />
+                  </button>
+                </Button>
+              )}
+            </div>
           </div>
-        )}
-      </div>
+
+          {/* ACCORDION CONTENT */}
+          <AccordionContent>
+            <div className="px-4 pb-4 bg-muted/40 flex items-center gap-3">
+              {showActions && (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onReject(notification.id, notification.sender_id, notification.room_id)}
+                    className="text-destructive"
+                  >
+                    <X className="h-3.5 w-3.5 mr-1" /> Reject
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onAccept(notification.id, notification.room_id, notification.type)}
+                    className="text-green-600"
+                  >
+                    <Check className="h-3.5 w-3.5 mr-1" /> Accept
+                  </Button>
+                </>
+              )}
+
+              <div className="ml-auto">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onDelete(notification.id)}
+                  className="text-muted-foreground"
+                >
+                  <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete
+                </Button>
+              </div>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
     </Swipeable>
   );
 });
 
-/* ----------  Main component  ---------- */
+/* -------------------- Main Notifications component -------------------- */
 
 export default function Notifications({
   isOpen: externalIsOpen,
@@ -226,55 +313,120 @@ export default function Notifications({
   const [internalIsOpen, setInternalIsOpen] = useState(false);
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
 
-  /* ✅ Selector pattern to avoid re-renders */
-  const { notifications, markAsRead, fetchNotifications, removeNotification, isLoading, unreadCount } =
-  useNotification((s) => ({
+  const {
+    notifications,
+    markAsRead,
+    fetchNotifications,
+    removeNotification,
+    isLoading,
+    unreadCount,
+    lastFetch,
+  } = useNotification((s) => ({
     notifications: s.notifications,
     markAsRead: s.markAsRead,
     fetchNotifications: s.fetchNotifications,
     removeNotification: s.removeNotification,
     isLoading: s.isLoading,
     unreadCount: s.unreadCount,
+    lastFetch: s.lastFetch,
   }));
-
 
   const { setSelectedRoom } = useRoomStore();
   const { fetchRooms } = useRoomContext();
 
-  /* ✅ Auth */
-  const { userId, isAuthenticated } = useAuthSync(); // <- consistent name
+  const { userId, isAuthenticated } = useAuthSync();
 
   const supabase = getSupabaseBrowserClient();
 
-  /* ✅ Real-time subscription via store hook (replaces missing useNotificationManager) */
+  // subscribe to realtime updates via store hook
   useNotificationSubscription(userId ?? null);
 
   const isOpen = externalIsOpen ?? internalIsOpen;
 
+  // minimize re-opening animation cost with shorter duration classes (shadcn Sheet may handle className)
   const handleClose = useCallback(() => {
-    externalOnClose?.() || setInternalIsOpen(false);
+    if (externalOnClose) externalOnClose();
+    else setInternalIsOpen(false);
   }, [externalOnClose]);
 
-  useEffect(() => {
-    if (!userId) return;
-    fetchNotifications(userId);
-  }, [userId, fetchNotifications]);
+  // caching policy: avoid refetching if lastFetch was within 20 seconds
+  const CACHE_TTL = 20_000;
+  const lastFetchRef = useRef<number | null>(lastFetch ?? null);
 
   useEffect(() => {
-    if (isOpen && userId && notifications.length === 0) {
-      fetchNotifications(userId);
+    lastFetchRef.current = lastFetch ?? null;
+  }, [lastFetch]);
+
+  // fetch on initial mount or when userId becomes available. Fast path: skip fetch if recent.
+  useEffect(() => {
+    if (!userId) return;
+
+    const shouldFetch = (() => {
+      if (!lastFetchRef.current) return true;
+      return Date.now() - lastFetchRef.current > CACHE_TTL;
+    })();
+
+    if (shouldFetch) {
+      // Use a small AbortController to abort if component unmounts quickly
+      let cancelled = false;
+      const ac = new AbortController();
+
+      (async () => {
+        try {
+          await fetchNotifications(userId);
+        } catch (err) {
+          if (!cancelled) console.error("fetchNotifications error:", err);
+        }
+      })();
+
+      return () => {
+        cancelled = true;
+        ac.abort();
+      };
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, fetchNotifications]);
+
+  // fetch when panel opens — but skip if we already have notifications (fast)
+  useEffect(() => {
+    if (!isOpen || !userId) return;
+
+    if (notifications.length === 0) {
+      fetchNotifications(userId).catch((err) => console.error("fetchNotifications when open:", err));
     }
   }, [isOpen, userId, notifications.length, fetchNotifications]);
+
+  /* -------------------- Handlers -------------------- */
+
+  const addLoading = useCallback((id: string) => {
+    setLoadingIds((prev) => new Set(prev).add(id));
+  }, []);
+
+  const removeLoading = useCallback((id: string) => {
+    setLoadingIds((prev) => {
+      const s = new Set(prev);
+      s.delete(id);
+      return s;
+    });
+  }, []);
 
   const handleAccept = useCallback(
     async (id: string, roomId: string | null, type: string) => {
       if (!userId || !roomId || loadingIds.has(id)) return;
-      setLoadingIds((prev) => new Set([...prev, id]));
+      addLoading(id);
+
       try {
-        removeNotification(id); // optimistic
-        const res = await fetch(`/api/notifications/${id}/accept`, { method: "POST", headers: { "Content-Type": "application/json" } });
+        // optimistic remove
+        removeNotification(id);
+
+        const res = await fetch(`/api/notifications/${id}/accept`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        });
+
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Failed to accept notification");
+        if (!res.ok) throw new Error(data?.error || "Failed to accept notification");
+
         await markAsRead(id);
         await fetchRooms();
 
@@ -291,78 +443,71 @@ export default function Notifications({
           toast.success("Notification accepted.");
         }
       } catch (err: any) {
-        console.error("❌ Error accepting notification:", err);
-        toast.error(err.message || "Error accepting notification.");
+        console.error("Error accepting notification:", err);
+        toast.error(err?.message || "Error accepting notification");
       } finally {
-        setLoadingIds((prev) => {
-          const s = new Set(prev);
-          s.delete(id);
-          return s;
-        });
+        removeLoading(id);
       }
     },
-    [userId, loadingIds, removeNotification, markAsRead, fetchRooms, supabase, setSelectedRoom]
+    [userId, loadingIds, removeNotification, markAsRead, fetchRooms, supabase, setSelectedRoom, addLoading, removeLoading]
   );
 
   const handleReject = useCallback(
     async (id: string, senderId: string | null, roomId: string | null) => {
       if (!userId || !senderId || !roomId || loadingIds.has(id)) return;
-      setLoadingIds((prev) => new Set([...prev, id]));
+      addLoading(id);
+
       try {
         removeNotification(id); // optimistic
-        const res = await fetch(`/api/notifications/reject`, {
+
+        const res = await fetch(`/api/notifications/${id}/reject`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ notification_id: id, sender_id: senderId, room_id: roomId, userId }),
+          body: JSON.stringify({ room_id: roomId, sender_id: senderId }),
         });
-        if (!res.ok) throw new Error((await res.json()).error || "Reject failed");
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || "Reject failed");
+
         await markAsRead(id);
         toast.success("Request rejected.");
       } catch (err: any) {
-        console.error("❌ Error rejecting notification:", err);
-        toast.error(err.message || "Reject error.");
+        console.error("Error rejecting notification:", err);
+        toast.error(err?.message || "Reject error.");
       } finally {
-        setLoadingIds((prev) => {
-          const s = new Set(prev);
-          s.delete(id);
-          return s;
-        });
+        removeLoading(id);
       }
     },
-    [userId, loadingIds, removeNotification, markAsRead]
+    [userId, loadingIds, removeNotification, markAsRead, addLoading, removeLoading]
   );
 
   const handleDeleteNotification = useCallback(
     async (id: string) => {
       if (!userId || loadingIds.has(id)) return;
-      setLoadingIds((prev) => new Set([...prev, id]));
+      addLoading(id);
+
       try {
-        const res = await fetch(`/api/notifications/${id}`, {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ userId }),
-        });
-        if (!res.ok) throw new Error((await res.json()).error || "Delete failed");
+        const res = await fetch(`/api/notifications/${id}`, { method: "DELETE" });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || "Delete failed");
         removeNotification(id);
         toast.success("Notification deleted.");
       } catch (err: any) {
-        console.error("❌ Error deleting notification:", err);
-        toast.error(err.message || "Error deleting notification.");
+        console.error("Error deleting notification:", err);
+        toast.error(err?.message || "Error deleting notification.");
       } finally {
-        setLoadingIds((prev) => {
-          const s = new Set(prev);
-          s.delete(id);
-          return s;
-        });
+        removeLoading(id);
       }
     },
-    [userId, loadingIds, removeNotification]
+    [userId, loadingIds, removeNotification, addLoading, removeLoading]
   );
+
+  /* -------------------- Notification list memo -------------------- */
 
   const sortedNotifications = useMemo(() => {
     return [...notifications].sort((a, b) => {
-      const dateA = new Date(a.created_at || 0).getTime();
-      const dateB = new Date(b.created_at || 0).getTime();
+      const dateA = new Date(a.created_at ?? 0).getTime();
+      const dateB = new Date(b.created_at ?? 0).getTime();
       return dateB - dateA;
     });
   }, [notifications]);
@@ -382,10 +527,13 @@ export default function Notifications({
     [sortedNotifications, handleAccept, handleReject, handleDeleteNotification, loadingIds]
   );
 
+  /* -------------------- Render -------------------- */
+
+  // short-circuit: don't render heavy UI until auth resolved or user not authenticated
   if (!isAuthenticated) {
     return (
       <Sheet open={isOpen} onOpenChange={handleClose}>
-        <SheetContent side="right" className="p-0 flex flex-col h-full w-full sm:max-w-sm">
+        <SheetContent side="right" className="p-0 flex flex-col h-full w-full sm:max-w-sm transition-all duration-150">
           <SheetHeader className="p-1 border-b">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -396,6 +544,7 @@ export default function Notifications({
               </div>
             </div>
           </SheetHeader>
+
           <div className="flex flex-col items-center justify-center h-full p-8 text-center">
             <Bell className="h-16 w-16 text-muted-foreground/50 mb-4" />
             <h3 className="text-lg font-semibold mb-2">Sign In Required</h3>
@@ -411,7 +560,10 @@ export default function Notifications({
 
   return (
     <Sheet open={isOpen} onOpenChange={handleClose}>
-      <SheetContent side="right" className=" flex flex-col h-full p-0 w-full sm:max-w-sm">
+      <SheetContent
+        side="right"
+        className="flex flex-col h-full p-0 w-full sm:max-w-sm transition-all duration-150"
+      >
         <SheetHeader className="p-2 border-b">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -437,10 +589,10 @@ export default function Notifications({
               <span className="ml-2 text-sm text-muted-foreground">Loading notifications...</span>
             </div>
           ) : notifications.length === 0 ? (
-            <div className="flex flex-col items-center justify-start h-full text-muted-foreground text-center">
+            <div className="flex flex-col items-center justify-start h-full text-muted-foreground text-center p-6">
               <Bell className="h-12 w-12 text-muted-foreground/50 mb-4" />
               <p className="text-lg font-medium mb-2">No notifications yet</p>
-              <p className="text-sm text-muted-foreground mb-4">When you get notifications, they&apos;ll appear here.</p>
+              <p className="text-sm text-muted-foreground mb-4">When you get notifications, they'll appear here.</p>
               <Button onClick={() => userId && fetchNotifications(userId)} disabled={isLoading} variant="outline" size="sm">
                 {isLoading ? (
                   <>

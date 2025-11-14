@@ -547,86 +547,59 @@ useEffect(() => {
               </p>
             </div>
 
-            {/* Avatar */}
-            <div className="space-y-4">
-              <Label className="text-base font-semibold">Profile Avatar</Label>
-              <Separator />
-              <div className="relative group">
-                <div className="relative">
-                  <Avatar className="w-28 h-28 border-4 border-background shadow-lg ring-4 ring-transparent group-hover:ring-primary/30 transition-all duration-300 transform group-hover:scale-105">
-                    {avatarUrl ? (
-                      <AvatarImage src={avatarUrl} alt="Profile avatar" className="object-cover" />
-                    ) : (
-                      <AvatarFallback className="bg-gradient-to-br from-primary to-secondary text-background text-2xl font-bold">
-                        {displayName?.charAt(0)?.toUpperCase?.() || "U"}
-                      </AvatarFallback>
-                    )}
-                  </Avatar>
-                  <div className="absolute inset-0 bg-black/20 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-                    <Edit3 className="w-6 h-6 text-white" />
-                  </div>
-                </div>
+          {/* Avatar */}
+<div className="space-y-4">
+  <Label className="text-base font-semibold">Profile Avatar</Label>
+  <Separator />
 
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="absolute -bottom-2 -right-2 rounded-full w-10 h-10 bg-background border-2 border-border shadow-lg group-hover:bg-primary group-hover:border-primary transition-all duration-200 opacity-0 group-hover:opacity-100 z-10"
-                      onClick={handleAvatarEditClick}
-                      disabled={saving || uploading}
-                      aria-label="Edit avatar"
-                    >
-                      <Edit3 className="w-4 h-4" />
-                    </Button>
-                  </DialogTrigger>
+  <div className="relative w-32 h-32 mx-auto group">
+    {/* Avatar Preview */}
+    <Avatar className="w-32 h-32 rounded-full shadow-xl border-4 border-background ring-2 ring-border group-hover:ring-primary/40 transition-all duration-300">
+      {avatarUrl ? (
+        <AvatarImage src={avatarUrl} alt="Profile avatar" className="object-cover" />
+      ) : (
+        <AvatarFallback className="bg-gradient-to-br from-primary to-secondary text-background text-3xl font-bold">
+          {displayName?.charAt(0)?.toUpperCase?.() || "U"}
+        </AvatarFallback>
+      )}
+    </Avatar>
 
-                  <DialogContent className="sm:max-w-[450px] p-0 max-h-[90vh] overflow-hidden">
-                    <div className="p-6 pb-0 flex flex-col h-full">
-                      <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
-                          <Upload className="w-5 h-5" />
-                          Select New Avatar
-                        </DialogTitle>
-                      </DialogHeader>
+    {/* Hover overlay */}
+    <div className="absolute inset-0 bg-black/30 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center">
+      <Edit3 className="w-7 h-7 text-white" />
+    </div>
 
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/*"
-                        onChange={onFilePick}
-                        disabled={saving || uploading}
-                        className="mx-0 mt-4 hidden"
-                      />
+    {/* Edit Button bottom-right */}
+    <button
+      type="button"
+      onClick={handleAvatarEditClick}
+      disabled={saving || uploading}
+      className="
+        absolute -bottom-2 -right-2 z-20 
+        w-11 h-11 rounded-full bg-primary text-white flex items-center justify-center 
+        shadow-lg hover:scale-110 transition-all duration-200 
+        border-4 border-background
+      "
+      aria-label="Edit avatar"
+    >
+      <Edit3 className="w-5 h-5" />
+    </button>
 
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="mx-4 mt-4 border-2 border-dashed border-muted-foreground hover:border-primary"
-                        onClick={handleAvatarEditClick}
-                        disabled={saving || uploading}
-                      >
-                        <Upload className="w-4 h-4 mr-2" />
-                        Choose Image ({LIMIT_MB}MB max)
-                      </Button>
+    <input
+      ref={fileInputRef}
+      type="file"
+      accept="image/*"
+      onChange={onFilePick}
+      disabled={saving || uploading}
+      className="hidden"
+    />
+  </div>
 
-                      {uploading && (
-                        <div className="mx-4 mt-4 space-y-2">
-                          <Progress value={uploadProgress} className="h-2" />
-                          <p className="text-sm text-muted-foreground flex items-center gap-1">
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                            Uploading... {Math.round(uploadProgress)}%
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </DialogContent>
-                </Dialog>
-              </div>
+  <p className="text-xs text-muted-foreground text-center">
+    High-quality square images recommended (1:1)
+  </p>
+</div>
 
-              <p className="text-xs text-muted-foreground text-center">Square images work best (1:1 aspect ratio)</p>
-            </div>
 
             {/* Bio */}
             <div className="space-y-2">
@@ -676,56 +649,67 @@ useEffect(() => {
       </Card>
 
       {/* Crop Dialog */}
-      <Dialog open={!!cropSrc} onOpenChange={(open) => { if (!open) setCropSrc(""); }}>
-      <DialogContent className="sm:max-w-[650px] h-[90vh] flex flex-col p-0">
-          <DialogHeader className="p-6 pb-4 border-b bg-gradient-to-r from-primary/5 to-secondary/5">
-            <DialogTitle className="text-xl font-bold flex items-center gap-2">
-              <Edit3 className="w-5 h-5" /> Crop Your Avatar
-            </DialogTitle>
-            <p className="text-sm text-muted-foreground">Drag to pan, scroll to zoom. Square crop recommended.</p>
-          </DialogHeader>
+<Dialog open={!!cropSrc} onOpenChange={(open) => !open && setCropSrc("")}>
+  <DialogContent className="sm:max-w-[600px] h-[85vh] flex flex-col p-0 rounded-xl overflow-hidden">
 
-          <div className="flex-1 flex flex-col overflow-auto">
+    <DialogHeader className="p-6 pb-4 border-b bg-gradient-to-r from-primary/10 to-secondary/10">
+      <DialogTitle className="flex items-center gap-2 text-xl font-bold">
+        <Edit3 className="w-5 h-5" /> Adjust Your Avatar
+      </DialogTitle>
+      <p className="text-sm text-muted-foreground">
+        Drag to move. Scroll to zoom. Preview updates live.
+      </p>
+    </DialogHeader>
 
-            <div className="flex-1 relative bg-gradient-to-br from-muted to-muted/50">
-              <AvatarCropperUI
-                ref={cropperRef}
-                imageSrc={cropSrc}
-                crop={crop}
-                zoom={zoom}
-                onCropChange={setCrop}
-                onZoomChange={setZoom}
-              />
-            </div>
+    <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Cropper area */}
+      <div className="flex-1 relative bg-background">
+        <AvatarCropperUI
+          ref={cropperRef}
+          imageSrc={cropSrc}
+          crop={crop}
+          zoom={zoom}
+          onCropChange={setCrop}
+          onZoomChange={setZoom}
+        />
+      </div>
 
-            <div className="p-6 pt-4 border-t bg-background flex items-center justify-between">
-              <div className="flex-1 pr-4">
-                <Label htmlFor="zoom-slider" className="text-sm font-medium block mb-1">
-                  Zoom: {Math.round(zoom * 100)}%
-                </Label>
-                <input
-                  id="zoom-slider"
-                  type="range"
-                  min={1}
-                  max={4}
-                  step={0.1}
-                  value={zoom}
-                  onChange={(e) => setZoom(Number(e.target.value))}
-                  className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer slider premium-slider"
-                  aria-label="Adjust zoom level"
-                />
-              </div>
+      {/* Controls */}
+      <div className="p-6 border-t bg-background flex items-center justify-between">
+        <div className="flex-1 pr-4">
+          <Label htmlFor="zoom-slider" className="text-sm font-medium mb-1 block">
+            Zoom: {Math.round(zoom * 100)}%
+          </Label>
+          <input
+            id="zoom-slider"
+            type="range"
+            min={1}
+            max={4}
+            step={0.1}
+            value={zoom}
+            onChange={(e) => setZoom(Number(e.target.value))}
+            className="w-full h-2 rounded-lg cursor-pointer bg-muted"
+          />
+        </div>
 
-              <div className="flex gap-2">
-                <DialogClose asChild>
-                  <Button variant="outline" size="sm">Cancel</Button>
-                </DialogClose>
-                <Button onClick={createSquareImage} size="sm" className="font-semibold">Apply Crop</Button>
-              </div>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+        <div className="flex gap-2">
+          <DialogClose asChild>
+            <Button variant="outline" size="sm">Cancel</Button>
+          </DialogClose>
+
+          <Button
+            onClick={createSquareImage}
+            size="sm"
+            className="font-semibold"
+          >
+            Apply Crop
+          </Button>
+        </div>
+      </div>
+    </div>
+  </DialogContent>
+</Dialog>
+
     </div>
   );
 }
