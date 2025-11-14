@@ -72,6 +72,30 @@ const highlight = (text: string, q: string) => {
   );
 };
 
+// Custom scrollbar styles as CSS-in-JS
+const scrollbarStyles = {
+  scrollbar: `
+    /* Firefox */
+    scrollbar-width: thin;
+    scrollbar-color: rgb(75 85 99) transparent;
+    
+    /* WebKit */
+    &::-webkit-scrollbar {
+      width: 6px;
+    }
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    &::-webkit-scrollbar-thumb {
+      background-color: rgb(75 85 99);
+      border-radius: 3px;
+    }
+    &::-webkit-scrollbar-thumb:hover {
+      background-color: rgb(107 114 128);
+    }
+  `,
+};
+
 //
 // ------------------------------------------------------
 // MAIN COMPONENT — premium grade
@@ -425,11 +449,34 @@ const SearchComponent = memo(function SearchComponent({
                 <div
                   className="
                     h-full overflow-y-auto
-                    scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent
                     grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4
                     gap-[1.5rem] content-start
                     max-md:grid-cols-1 max-md:overflow-x-visible
                   "
+                  style={{
+                    scrollbarWidth: 'thin',
+                    scrollbarColor: 'rgb(75 85 99) transparent',
+                  }}
+                  // Apply CSS via style tag
+                  dangerouslySetInnerHTML={{
+                    __html: `
+                      <style>
+                        .rooms-grid::-webkit-scrollbar {
+                          width: 6px;
+                        }
+                        .rooms-grid::-webkit-scrollbar-track {
+                          background: transparent;
+                        }
+                        .rooms-grid::-webkit-scrollbar-thumb {
+                          background-color: rgb(75 85 99);
+                          border-radius: 3px;
+                        }
+                        .rooms-grid::-webkit-scrollbar-thumb:hover {
+                          background-color: rgb(107 114 128);
+                        }
+                      </style>
+                    `,
+                  }}
                 >
                   {filteredRooms.map((room) => (
                     <div key={room.id} className="break-inside-avoid">
@@ -466,9 +513,32 @@ const SearchComponent = memo(function SearchComponent({
                 <div 
                   className="
                     h-full overflow-y-auto
-                    scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent
                     grid gap-[1rem] content-start
                   "
+                  style={{
+                    scrollbarWidth: 'thin',
+                    scrollbarColor: 'rgb(75 85 99) transparent',
+                  }}
+                  // Apply CSS via style tag
+                  dangerouslySetInnerHTML={{
+                    __html: `
+                      <style>
+                        .users-grid::-webkit-scrollbar {
+                          width: 6px;
+                        }
+                        .users-grid::-webkit-scrollbar-track {
+                          background: transparent;
+                        }
+                        .users-grid::-webkit-scrollbar-thumb {
+                          background-color: rgb(75 85 99);
+                          border-radius: 3px;
+                        }
+                        .users-grid::-webkit-scrollbar-thumb:hover {
+                          background-color: rgb(107 114 128);
+                        }
+                      </style>
+                    `,
+                  }}
                 >
                   {userResults.map((u) => (
                     <UserCard key={u.id} {...u} />
