@@ -439,21 +439,37 @@ export type Database = {
         Args: { p_message_ids: string[]; p_user_id: string }
         Returns: undefined
       }
-      create_room_with_member: {
-        Args: {
-          p_is_private: boolean
-          p_name: string
-          p_timestamp: string
-          p_user_id: string
-        }
-        Returns: {
-          created_at: string
-          created_by: string
-          id: string
-          is_private: boolean
-          name: string
-        }[]
-      }
+      create_room_with_member:
+        | {
+            Args: {
+              p_is_private: boolean
+              p_name: string
+              p_timestamp: string
+              p_user_id: string
+            }
+            Returns: {
+              created_at: string
+              created_by: string
+              id: string
+              is_private: boolean
+              name: string
+            }[]
+          }
+        | {
+            Args: {
+              p_is_private: boolean
+              p_name: string
+              p_timestamp: string
+              p_user_id: string
+            }
+            Returns: {
+              created_at: string
+              created_by: string
+              id: string
+              is_private: boolean
+              name: string
+            }[]
+          }
       get_room_members: {
         Args: { room_id_param: string }
         Returns: {
