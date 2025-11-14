@@ -219,3 +219,20 @@ export const useRoomStore = create<RoomState>()(
     }))
   )
 );
+
+// 🔥 Global utility to fetch all users for SearchComponent
+export const fetchAllUsers = async () => {
+    const supabase = getSupabaseBrowserClient();
+  
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, username, display_name, avatar_url, created_at");
+  
+    if (error) {
+      console.error("fetchAllUsers error:", error);
+      return [];
+    }
+  
+    return data || [];
+  };
+  
