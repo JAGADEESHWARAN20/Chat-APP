@@ -427,6 +427,10 @@ export type Database = {
       }
     }
     Functions: {
+      accept_join_request: {
+        Args: { p_owner_id: string; p_room_id: string; p_user_id: string }
+        Returns: Json
+      }
       accept_notification: {
         Args: { p_notification_id: string; p_target_user_id: string }
         Returns: undefined
