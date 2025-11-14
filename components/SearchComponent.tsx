@@ -207,7 +207,8 @@ const SearchComponent = memo(function SearchComponent({
         className="
           flex flex-col rounded-2xl bg-card border shadow-sm 
           overflow-hidden min-w-[18rem] md:min-w-0
-          aspect-[3/4]
+          aspect-[3/4] hover:border-indigo-300/50 dark:hover:border-indigo-600/50
+          transition-colors duration-200
         "
       >
         {/* Header */}
@@ -249,7 +250,7 @@ const SearchComponent = memo(function SearchComponent({
               <>
                 <Button
                   size="sm"
-                  className="bg-indigo-600 text-white"
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white transition-colors"
                   onClick={() => router.push(`/rooms/${room.id}`)}
                 >
                   Open Room
@@ -258,7 +259,7 @@ const SearchComponent = memo(function SearchComponent({
                 <Button
                   size="sm"
                   variant="outline"
-                  className="text-red-600"
+                  className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors"
                   onClick={() => handleLeave(room.id)}
                 >
                   <LogOut className="h-[1rem] w-[1rem] mr-[0.4rem]" />
@@ -268,7 +269,7 @@ const SearchComponent = memo(function SearchComponent({
             ) : (
               <Button
                 size="sm"
-                className="bg-indigo-600 text-white"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white transition-colors"
                 onClick={() => handleJoin(room.id)}
               >
                 Join Room
@@ -297,7 +298,8 @@ const SearchComponent = memo(function SearchComponent({
         exit={{ opacity: 0, y: 8 }}
         className="
           flex items-center gap-[1rem] p-[1rem] border bg-card
-          rounded-xl shadow-sm hover:shadow-md transition-all
+          rounded-xl shadow-sm hover:shadow-md hover:border-indigo-300/50 
+          dark:hover:border-indigo-600/50 transition-all
         "
       >
         <Avatar className="h-[3rem] w-[3rem] rounded-xl">
@@ -326,7 +328,7 @@ const SearchComponent = memo(function SearchComponent({
         <Button
           size="sm"
           variant="secondary"
-          className="ml-auto text-[0.85rem] px-[1rem]"
+          className="ml-auto text-[0.85rem] px-[1rem] hover:bg-indigo-100 hover:text-indigo-700 dark:hover:bg-indigo-900/20 transition-colors"
           onClick={() => router.push(`/profile/${u.id}`)}
         >
           View
@@ -342,10 +344,10 @@ const SearchComponent = memo(function SearchComponent({
   //
 
   return (
-    <div className="w-full max-w-[80rem] mx-auto p-[1.5rem]">
+    <div className="w-full max-w-[80rem] mx-auto p-[1.5rem] min-h-0 h-full flex flex-col">
 
       {/* Search + Tabs */}
-      <div className="flex items-center gap-[1rem] mb-[2rem]">
+      <div className="flex items-center gap-[1rem] mb-[2rem] flex-shrink-0">
         <div className="relative flex-1">
           <Input
             className="pl-[2.4rem] h-[3rem] rounded-xl text-[1rem]"
@@ -357,18 +359,18 @@ const SearchComponent = memo(function SearchComponent({
         </div>
 
         {/* Desktop Tabs */}
-        <div className="hidden md:flex gap-[0.6rem]">
+        <div className="hidden md:flex gap-[0.6rem] flex-shrink-0">
           <Button
             variant={tab === "rooms" ? "default" : "ghost"}
             onClick={() => setTab("rooms")}
-            className="rounded-xl px-[1.2rem]"
+            className="rounded-xl px-[1.2rem] hover:bg-indigo-100 hover:text-indigo-700 dark:hover:bg-indigo-900/20 transition-colors"
           >
             Rooms
           </Button>
           <Button
             variant={tab === "users" ? "default" : "ghost"}
             onClick={() => setTab("users")}
-            className="rounded-xl px-[1.2rem]"
+            className="rounded-xl px-[1.2rem] hover:bg-indigo-100 hover:text-indigo-700 dark:hover:bg-indigo-900/20 transition-colors"
           >
             Users
           </Button>
@@ -376,11 +378,13 @@ const SearchComponent = memo(function SearchComponent({
       </div>
 
       {/* Mobile Tabs */}
-      <div className="md:hidden flex gap-[0.6rem] mb-[1rem]">
+      <div className="md:hidden flex gap-[0.6rem] mb-[1rem] flex-shrink-0">
         <button
           onClick={() => setTab("rooms")}
-          className={`flex-1 py-[0.7rem] rounded-xl text-[1rem] ${
-            tab === "rooms" ? "bg-indigo-500/20 text-indigo-500" : "bg-muted/20"
+          className={`flex-1 py-[0.7rem] rounded-xl text-[1rem] transition-colors ${
+            tab === "rooms" 
+              ? "bg-indigo-500/20 text-indigo-500" 
+              : "bg-muted/20 hover:bg-muted/30"
           }`}
         >
           Rooms
@@ -388,74 +392,93 @@ const SearchComponent = memo(function SearchComponent({
 
         <button
           onClick={() => setTab("users")}
-          className={`flex-1 py-[0.7rem] rounded-xl text-[1rem] ${
-            tab === "users" ? "bg-indigo-500/20 text-indigo-500" : "bg-muted/20"
+          className={`flex-1 py-[0.7rem] rounded-xl text-[1rem] transition-colors ${
+            tab === "users" 
+              ? "bg-indigo-500/20 text-indigo-500" 
+              : "bg-muted/20 hover:bg-muted/30"
           }`}
         >
           Users
         </button>
       </div>
 
-      {/* Animated Tab Content */}
-      <AnimatePresence mode="wait">
-        {/* ROOMS */}
-        {tab === "rooms" && (
-          <motion.div
-            key="rooms-tab"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            <div
-              className="
-                grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4
-                gap-[1.5rem]
-                md:overflow-visible
-                max-md:flex max-md:overflow-x-auto max-md:gap-[1.2rem] max-md:pb-[1rem]
-                snap-x snap-mandatory
-              "
+      {/* Scrollable Content Area */}
+      <div className="flex-1 min-h-0 overflow-hidden">
+        {/* Animated Tab Content */}
+        <AnimatePresence mode="wait">
+          {/* ROOMS */}
+          {tab === "rooms" && (
+            <motion.div
+              key="rooms-tab"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="h-full"
             >
-              {filteredRooms.map((room) => (
-                <div key={room.id} className="snap-center max-md:min-w-[90%]">
-                  <RoomCard room={room} />
+              {filteredRooms.length === 0 ? (
+                <div className="h-full flex items-center justify-center">
+                  <p className="text-muted-foreground text-[1rem]">
+                    No rooms found.
+                  </p>
                 </div>
-              ))}
-            </div>
+              ) : (
+                <div
+                  className="
+                    h-full overflow-y-auto
+                    scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent
+                    grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4
+                    gap-[1.5rem] content-start
+                    max-md:grid-cols-1 max-md:overflow-x-visible
+                  "
+                >
+                  {filteredRooms.map((room) => (
+                    <div key={room.id} className="break-inside-avoid">
+                      <RoomCard room={room} />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </motion.div>
+          )}
 
-            {filteredRooms.length === 0 && (
-              <p className="text-center text-muted-foreground text-[1rem] py-[3rem]">
-                No rooms found.
-              </p>
-            )}
-          </motion.div>
-        )}
-
-        {/* USERS */}
-        {tab === "users" && (
-          <motion.div
-            key="users-tab"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            {loadingUsers ? (
-              <p className="text-center text-muted-foreground py-[2rem]">
-                Loading users…
-              </p>
-            ) : userResults.length === 0 ? (
-              <p className="text-center text-muted-foreground py-[2rem]">
-                No users found.
-              </p>
-            ) : (
-              <div className="grid gap-[1rem]">
-                {userResults.map((u) => (
-                  <UserCard key={u.id} {...u} />
-                ))}
-              </div>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+          {/* USERS */}
+          {tab === "users" && (
+            <motion.div
+              key="users-tab"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="h-full"
+            >
+              {loadingUsers ? (
+                <div className="h-full flex items-center justify-center">
+                  <p className="text-muted-foreground">
+                    Loading users…
+                  </p>
+                </div>
+              ) : userResults.length === 0 ? (
+                <div className="h-full flex items-center justify-center">
+                  <p className="text-muted-foreground">
+                    No users found.
+                  </p>
+                </div>
+              ) : (
+                <div 
+                  className="
+                    h-full overflow-y-auto
+                    scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent
+                    grid gap-[1rem] content-start
+                  "
+                >
+                  {userResults.map((u) => (
+                    <UserCard key={u.id} {...u} />
+                  ))}
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 });
