@@ -174,7 +174,7 @@ const SearchComponent = memo(function SearchComponent({ user }: { user: PartialP
               <span className="text-xs md:text-sm font-medium bg-yellow-400/20 px-2 py-1 rounded-md text-yellow-700">Pending approval</span>
             )}
 
-          
+            
           </div>
 
           <div className="flex flex-col gap-2 mt-3">
@@ -246,29 +246,48 @@ const SearchComponent = memo(function SearchComponent({ user }: { user: PartialP
         <AnimatePresence mode="wait">
           {/* ROOMS TAB */}
           {tab === "rooms" && (
-            <motion.section key="rooms-tab" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="h-full">
+            <motion.section
+              key="rooms-tab"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="h-full"
+            >
               {filteredRooms.length === 0 ? (
                 <div className="h-full flex items-center justify-center py-12">
                   <p className="text-muted-foreground">No rooms found.</p>
                 </div>
               ) : (
                 <>
-                  {/* Mobile & small screens: vertical list with y-scroll */}
-                  <div className="block md:hidden h-full overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent py-2">
+                  {/* Mobile: vertical scroll (Y) */}
+                  <div className="block md:hidden h-[80vh] overflow-y-auto custom-scrollbar-y py-2">
                     <div className="flex flex-col gap-4 px-2 py-2">
                       {filteredRooms.map((room) => (
-                        <motion.div key={room.id} layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }}>
+                        <motion.div
+                          key={room.id}
+                          layout
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 8 }}
+                        >
                           <RoomCard room={room} />
                         </motion.div>
                       ))}
                     </div>
                   </div>
 
-                  {/* Desktop & md+: horizontal strip with x-scroll */}
-                  <div className="hidden md:block w-full overflow-x-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent py-4">
+                  {/* Large devices: horizontal scroll (X) */}
+                  <div className="hidden md:block w-full overflow-x-auto custom-scrollbar-x py-4">
                     <div className="flex gap-6 px-4 items-stretch">
                       {filteredRooms.map((room) => (
-                        <motion.div key={room.id} layout initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 12 }} className="flex-shrink-0">
+                        <motion.div
+                          key={room.id}
+                          layout
+                          initial={{ opacity: 0, x: 12 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: 12 }}
+                          className="flex-shrink-0"
+                        >
                           <RoomCard room={room} />
                         </motion.div>
                       ))}
@@ -279,9 +298,15 @@ const SearchComponent = memo(function SearchComponent({ user }: { user: PartialP
             </motion.section>
           )}
 
-          {/* USERS TAB */}
+          {/* USERS TAB — Always horizontal scroll */}
           {tab === "users" && (
-            <motion.section key="users-tab" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="h-full">
+            <motion.section
+              key="users-tab"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="h-full"
+            >
               {loadingUsers ? (
                 <div className="h-full flex items-center justify-center py-12">
                   <p className="text-muted-foreground">Loading users…</p>
@@ -291,10 +316,17 @@ const SearchComponent = memo(function SearchComponent({ user }: { user: PartialP
                   <p className="text-muted-foreground">No users found.</p>
                 </div>
               ) : (
-                <div className="w-full overflow-x-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent py-3">
+                <div className="w-full overflow-x-auto custom-scrollbar-x py-3">
                   <div className="flex gap-4 md:gap-6 px-4 items-start">
                     {userResults.map((u) => (
-                      <motion.div key={u.id} layout initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 12 }} className="flex-shrink-0">
+                      <motion.div
+                        key={u.id}
+                        layout
+                        initial={{ opacity: 0, x: 12 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: 12 }}
+                        className="flex-shrink-0"
+                      >
                         <UserCard {...u} />
                       </motion.div>
                     ))}
