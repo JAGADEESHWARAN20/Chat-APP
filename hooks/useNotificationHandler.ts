@@ -1,142 +1,124 @@
-// hooks/useNotificationHandler.ts
-import { toast } from 'sonner';
-import { getSupabaseBrowserClient } from '@/lib/supabase/client';
-import { useNotification } from '@/lib/store/notifications';
-import { useEffect, useRef } from 'react';
-import { useUser } from '@/lib/store/user';
+"use client";
+import { toast } from "sonner";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { useNotification, Inotification } from "@/lib/store/notifications";
+import { useEffect, useRef } from "react";
+import { useUser } from "@/lib/store/user";
+import { useRoomStore } from "@/lib/store/roomstore";
 
-interface RawNotification {
-  id: string;
-  message: string;
-  created_at: string;
-  status: string;
-  type: string;
-  sender_id: string | null;
-  user_id: string;
-  room_id: string | null;
-  join_status: string | null;
-  direct_chat_id: string | null;
-  sender?: any;
-  recipient?: any;
-  room?: any;
+async function fetchRoomsForUser(userId: string) {
+  const supabase = getSupabaseBrowserClient();
+
+  const { data, error } = await supabase.rpc("get_rooms_with_counts", {
+    p_user_id: userId,
+    p_query: undefined,
+    p_include_participants: true,
+  });
+
+  if (error) {
+    console.error("get_rooms_with_counts error:", error);
+    return [];
+  }
+
+  return (data || []).map((room: any) => ({
+    ...room,
+    isMember: room.is_member,
+    participationStatus: room.participation_status,
+    participant_count: room.member_count,
+  }));
 }
 
 export function useNotificationHandler() {
   const { user: currentUser, authUser } = useUser();
   const { addNotification } = useNotification();
-  const mountedRef = useRef(true);
+  const setRooms = useRoomStore((s) => s.setRooms);
+  const setSelectedRoom = useRoomStore((s) => s.setSelectedRoom);
 
+  const mountedRef = useRef(true);
   const userId = currentUser?.id || authUser?.id;
 
   useEffect(() => {
     mountedRef.current = true;
-
-    if (!userId) {
-      console.log("❌ No user ID for notification handler");
-      return;
-    }
-
-    console.log("🔔 Setting up notification handler for user:", userId);
+    if (!userId) return;
 
     const supabase = getSupabaseBrowserClient();
-    
-    // Subscribe to notifications table
-    const notificationSubscription = supabase
-      .channel('notification-channel')
+
+    const subscription = supabase
+      .channel("notifications-realtime")
       .on(
-        'postgres_changes',
+        "postgres_changes",
         {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notifications',
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
           filter: `user_id=eq.${userId}`,
         },
-        async (payload) => {
+        async ({ new: raw }) => {
           if (!mountedRef.current) return;
 
-          try {
-            const rawNotification = payload.new as RawNotification;
-            
-            // Transform the raw notification
-            const notification = {
-              id: rawNotification.id,
-              message: rawNotification.message,
-              created_at: rawNotification.created_at,
-              status: rawNotification.status,
-              type: rawNotification.type,
-              sender_id: rawNotification.sender_id,
-              user_id: rawNotification.user_id,
-              room_id: rawNotification.room_id,
-              join_status: rawNotification.join_status,
-              direct_chat_id: rawNotification.direct_chat_id,
-              users: rawNotification.sender || null,
-              recipient: rawNotification.recipient || null,
-              rooms: rawNotification.room || null,
-            };
-            
-            // Add to notification store
-            await addNotification(notification);
+          const notification: Inotification = {
+            id: raw.id,
+            message: raw.message,
+            created_at: raw.created_at,
+            status: raw.status,
+            type: raw.type,
+            sender_id: raw.sender_id,
+            user_id: raw.user_id,
+            room_id: raw.room_id,
+            join_status: raw.join_status,
+            direct_chat_id: raw.direct_chat_id,
+            users: raw.sender ?? null,
+            recipient: raw.recipient ?? null,
+            rooms: raw.room ?? null,
+          };
 
-            // Show toast based on notification type
-            switch (notification.type) {
-              case 'message':
-                toast.info(`New message from ${notification.users?.username || 'someone'}`, {
-                  description: notification.message,
-                  duration: 4000,
-                });
-                break;
+          await addNotification(notification);
 
-              case 'room_join':
-                toast.success(`${notification.users?.username || 'Someone'} joined the room`, {
-                  description: notification.message,
-                  duration: 3000,
-                });
-                break;
+          switch (notification.type) {
+            case "join_request_accepted": {
+              toast.success("Your request to join a room was accepted!");
 
-              case 'room_leave':
-                toast.info(`${notification.users?.username || 'Someone'} left the room`, {
-                  description: notification.message,
-                  duration: 3000,
-                });
-                break;
+              const rooms = await fetchRoomsForUser(userId);
+              setRooms(rooms);
 
-              case 'join_request':
-                toast.info('New join request', {
-                  description: notification.message,
-                  duration: 5000,
-                  action: {
-                    label: 'View',
-                    onClick: () => {
-                      // TODO: Navigate to notifications
-                    }
-                  }
-                });
-                break;
+              const matched = rooms.find((r: any) => r.id === notification.room_id);
+              if (matched) setSelectedRoom(matched);
 
-              case 'ownership_transfer':
-                toast.success('Room ownership transferred', {
-                  description: notification.message,
-                  duration: 4000,
-                });
-                break;
-                
-              default:
-                toast(notification.message, { duration: 3000 });
+              break;
             }
-          } catch (error) {
-            console.error('Error handling notification:', error);
+
+            case "join_request_rejected":
+              toast.error("Your join request was rejected.");
+              break;
+
+            case "room_invite":
+              toast.info("You were invited to a room.");
+              break;
+
+            case "user_joined":
+              toast.success("A user joined your room");
+              break;
+
+            case "room_left":
+              toast.info("A user left your room");
+              break;
+
+            case "message":
+              toast.info(`New message from ${notification.users?.username || "someone"}`, {
+                description: notification.message,
+              });
+              break;
+
+            default:
+              toast(notification.message ?? "New notification");
           }
         }
       )
-      .subscribe((status) => {
-        if (mountedRef.current) {
-          console.log(`🔔 Notification subscription: ${status}`);
-        }
-      });
+      .subscribe();
 
     return () => {
       mountedRef.current = false;
-      notificationSubscription.unsubscribe();
+      subscription.unsubscribe();
     };
-  }, [userId, addNotification]);
+  }, [userId, addNotification, setRooms, setSelectedRoom]);
 }
