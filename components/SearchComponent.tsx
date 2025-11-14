@@ -6,22 +6,20 @@ import React, {
   useMemo,
   useCallback,
   memo,
-  Fragment,
 } from "react";
 
-import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
 
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 import {
   Users as UsersIcon,
   Lock as LockIcon,
   Search as SearchIcon,
   LogOut,
-  Settings,
 } from "lucide-react";
 
 import {
@@ -35,89 +33,146 @@ import {
 import { useDebounce } from "use-debounce";
 import { toast } from "sonner";
 
+//
+// ------------------------------------------------------
+// TYPES — mapped from your Supabase schema
+// ------------------------------------------------------
+//
+
 type PartialProfile = {
   id: string;
   username: string | null;
   display_name: string | null;
   avatar_url: string | null;
+  created_at: string | null;
 };
+
+//
+// ------------------------------------------------------
+// UTILITY HELPERS
+// ------------------------------------------------------
+//
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function highlight(text: string, q: string) {
+const highlight = (text: string, q: string) => {
   if (!q) return text;
-  const idx = text.toLowerCase().indexOf(q.toLowerCase());
-  if (idx === -1) return text;
+  const index = text.toLowerCase().indexOf(q.toLowerCase());
+  if (index === -1) return text;
 
   return (
     <>
-      {text.slice(0, idx)}
-      <span className="bg-yellow-300/40 dark:bg-yellow-600/40 px-0.5 rounded">
-        {text.slice(idx, idx + q.length)}
+      {text.slice(0, index)}
+      <span className="bg-yellow-300/40 dark:bg-yellow-700/40 px-[0.2rem] rounded-sm">
+        {text.slice(index, index + q.length)}
       </span>
-      {text.slice(idx + q.length)}
+      {text.slice(index + q.length)}
     </>
   );
-}
+};
 
-const SearchComponent = memo(function SearchComponentUltra({
+//
+// ------------------------------------------------------
+// MAIN COMPONENT — premium grade
+// ------------------------------------------------------
+//
+
+const SearchComponent = memo(function SearchComponent({
   user,
 }: {
-  user: any;
+  user: PartialProfile;
 }) {
   const router = useRouter();
 
-  // local state
+  //
+  // ------------------------------------------------------
+  // STATE
+  // ------------------------------------------------------
+  //
   const [query, setQuery] = useState("");
-  const [debounced] = useDebounce(query, 300);
   const [tab, setTab] = useState<"rooms" | "users">("rooms");
-
   const [userResults, setUserResults] = useState<PartialProfile[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
 
-  // store
+  const [debounced] = useDebounce(query, 300);
+
+  //
+  // ------------------------------------------------------
+  // STORE DATA
+  // ------------------------------------------------------
+  //
   const rooms = useAvailableRooms();
   const presence = useRoomPresence();
   const { joinRoom, leaveRoom } = useRoomActions();
 
-  // filtering
+  //
+  // ------------------------------------------------------
+  // FILTER ROOMS (optimized)
+  // ------------------------------------------------------
+  //
   const filteredRooms = useMemo(() => {
-    if (!debounced) return rooms;
-    return rooms.filter((r) =>
-      r.name.toLowerCase().includes(debounced.toLowerCase())
+    if (!debounced.trim()) return rooms;
+    const q = debounced.toLowerCase();
+
+    return rooms.filter((room) =>
+      room.name.toLowerCase().includes(q)
     );
   }, [rooms, debounced]);
 
-  // fetch users on user tab
+  //
+  // ------------------------------------------------------
+  // FETCH USERS (optimized, safe, typed)
+  // ------------------------------------------------------
+  //
   useEffect(() => {
     if (tab !== "users") return;
+
+    let active = true;
+
     (async () => {
       setLoadingUsers(true);
+
       try {
-        const res = await fetchAllUsers();
+        const users = (await fetchAllUsers()) as PartialProfile[];
         const q = debounced.toLowerCase();
-        setUserResults(
-          res.filter(
-            (u) =>
-              u.username?.toLowerCase().includes(q) ||
-              u.display_name?.toLowerCase().includes(q)
-          )
-        );
+
+        const results = !debounced.trim()
+          ? users
+          : users.filter(
+              (u) =>
+                u.username?.toLowerCase().includes(q) ||
+                u.display_name?.toLowerCase().includes(q)
+            );
+
+        if (active) setUserResults(results);
       } catch {
         toast.error("Failed loading users");
       }
+
       setLoadingUsers(false);
     })();
+
+    return () => {
+      active = false;
+    };
   }, [tab, debounced]);
+
+  //
+  // ------------------------------------------------------
+  // ROOM ACTIONS
+  // ------------------------------------------------------
+  //
 
   const handleJoin = useCallback(
     async (roomId: string) => {
-      if (!UUID_REGEX.test(roomId)) return;
+      if (!UUID_REGEX.test(roomId))
+        return toast.error("Invalid room ID");
+
       try {
         await joinRoom(roomId);
-      } catch (err: any) {
-        toast.error(err?.message ?? "Failed to join");
+      } catch (err: unknown) {
+        toast.error((err as Error)?.message ?? "Failed to join");
       }
     },
     [joinRoom]
@@ -127,16 +182,18 @@ const SearchComponent = memo(function SearchComponentUltra({
     async (roomId: string) => {
       try {
         await leaveRoom(roomId);
-      } catch (err: any) {
-        toast.error(err?.message ?? "Failed to leave");
+      } catch (err: unknown) {
+        toast.error((err as Error)?.message ?? "Failed to leave");
       }
     },
     [leaveRoom]
   );
 
-  // -------------------------
-  // CARD COMPONENT
-  // -------------------------
+  //
+  // ------------------------------------------------------
+  // ROOM CARD — premium shadcn style
+  // ------------------------------------------------------
+  //
   const RoomCard = ({ room }: { room: Room }) => {
     const online = presence?.[room.id]?.onlineUsers ?? 0;
     const members = room.memberCount ?? 0;
@@ -144,58 +201,56 @@ const SearchComponent = memo(function SearchComponentUltra({
     return (
       <motion.div
         layout
-        initial={{ opacity: 0, y: 6 }}
+        initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: 6 }}
-        key={room.id}
+        exit={{ opacity: 0, y: 8 }}
         className="
-          rounded-2xl shadow-sm border bg-card relative overflow-hidden
-          flex flex-col min-w-[260px] md:min-w-0
+          flex flex-col rounded-2xl bg-card border shadow-sm 
+          overflow-hidden min-w-[18rem] md:min-w-0
           aspect-[3/4]
         "
       >
-        {/* TOP HEADER */}
-        <div className="h-20 bg-gradient-to-br from-indigo-500/30 to-indigo-600/20 p-4 flex items-center justify-between">
-          <div className="text-lg font-semibold truncate text-foreground flex items-center gap-2">
-            #{highlight(room.name, debounced) as any}
-            {room.is_private && <LockIcon className="h-4 w-4 text-muted-foreground" />}
-          </div>
+        {/* Header */}
+        <div className="h-[5rem] bg-gradient-to-br from-indigo-500/20 to-indigo-700/30 p-[1rem] flex items-center justify-between">
+          <p className="text-[1.15rem] font-semibold truncate flex items-center gap-[0.4rem]">
+            #{highlight(room.name, debounced)}
+            {room.is_private && (
+              <LockIcon className="h-[1rem] w-[1rem] text-muted-foreground" />
+            )}
+          </p>
         </div>
 
-        {/* BODY */}
-        <div className="flex flex-col flex-1 p-4 justify-between">
-          <div className="space-y-3">
-            <div className="flex items-center gap-3 text-sm">
-              <UsersIcon className="h-4 w-4 text-muted-foreground" />
-              <span className="font-medium text-foreground">
-                {members} members
-              </span>
+        {/* Body */}
+        <div className="flex flex-col justify-between flex-1 p-[1.2rem]">
+          <div className="space-y-[0.7rem]">
+            {/* Members */}
+            <div className="flex items-center gap-[0.6rem] text-[0.9rem]">
+              <UsersIcon className="h-[1.1rem] w-[1.1rem] text-muted-foreground" />
+              <span className="font-medium">{members} members</span>
 
               {online > 0 && (
-                <div className="flex items-center gap-1 ml-2 text-xs">
-                  <span className="h-2 w-2 bg-green-500 rounded-full animate-pulse" />
-                  <span className="text-green-600 dark:text-green-400 font-medium">
-                    {online} online
-                  </span>
-                </div>
+                <span className="flex items-center gap-[0.3rem] text-green-600 dark:text-green-400 ml-[0.4rem] text-[0.85rem]">
+                  <span className="h-[0.5rem] w-[0.5rem] bg-green-500 rounded-full animate-pulse" />
+                  {online} online
+                </span>
               )}
             </div>
 
             {room.participationStatus === "pending" && (
-              <span className="text-yellow-700 bg-yellow-300/30 rounded-md px-2 py-1 text-xs font-medium">
+              <span className="text-[0.8rem] font-medium bg-yellow-400/20 px-[0.5rem] py-[0.2rem] rounded-md text-yellow-700">
                 Pending approval
               </span>
             )}
           </div>
 
-          {/* ACTIONS */}
-          <div className="mt-4 flex flex-col gap-2">
+          {/* Actions */}
+          <div className="flex flex-col mt-[1rem] gap-[0.6rem]">
             {room.isMember ? (
               <>
                 <Button
                   size="sm"
-                  onClick={() => router.push(`/rooms/${room.id}`)}
                   className="bg-indigo-600 text-white"
+                  onClick={() => router.push(`/rooms/${room.id}`)}
                 >
                   Open Room
                 </Button>
@@ -203,18 +258,18 @@ const SearchComponent = memo(function SearchComponentUltra({
                 <Button
                   size="sm"
                   variant="outline"
+                  className="text-red-600"
                   onClick={() => handleLeave(room.id)}
-                  className="text-red-500"
                 >
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Leave Room
+                  <LogOut className="h-[1rem] w-[1rem] mr-[0.4rem]" />
+                  Leave
                 </Button>
               </>
             ) : (
               <Button
                 size="sm"
-                onClick={() => handleJoin(room.id)}
                 className="bg-indigo-600 text-white"
+                onClick={() => handleJoin(room.id)}
               >
                 Join Room
               </Button>
@@ -225,54 +280,115 @@ const SearchComponent = memo(function SearchComponentUltra({
     );
   };
 
-  // -------------------------
-  // PAGE LAYOUT
-  // -------------------------
+  //
+  // ------------------------------------------------------
+  // USER CARD — premium
+  // ------------------------------------------------------
+  //
+  const UserCard = (u: PartialProfile) => {
+    const initial =
+      (u.display_name ?? u.username ?? "?")[0]?.toUpperCase();
+
+    return (
+      <motion.div
+        layout
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 8 }}
+        className="
+          flex items-center gap-[1rem] p-[1rem] border bg-card
+          rounded-xl shadow-sm hover:shadow-md transition-all
+        "
+      >
+        <Avatar className="h-[3rem] w-[3rem] rounded-xl">
+          {u.avatar_url ? (
+            <AvatarImage
+              src={u.avatar_url}
+              alt={u.display_name ?? "User"}
+              className="object-cover"
+            />
+          ) : (
+            <AvatarFallback className="bg-indigo-600 text-white text-[1.2rem]">
+              {initial}
+            </AvatarFallback>
+          )}
+        </Avatar>
+
+        <div className="min-w-0">
+          <p className="font-semibold text-[1rem] truncate">
+            {highlight(u.display_name ?? u.username ?? "Unknown", debounced)}
+          </p>
+          <p className="text-[0.85rem] text-muted-foreground">
+            @{u.username}
+          </p>
+        </div>
+
+        <Button
+          size="sm"
+          variant="secondary"
+          className="ml-auto text-[0.85rem] px-[1rem]"
+          onClick={() => router.push(`/profile/${u.id}`)}
+        >
+          View
+        </Button>
+      </motion.div>
+    );
+  };
+
+  //
+  // ------------------------------------------------------
+  // RENDER UI — premium layout
+  // ------------------------------------------------------
+  //
+
   return (
-    <div className="w-full max-w-6xl mx-auto p-4 md:p-6">
-      {/* Header Search Bar */}
-      <div className="flex items-center gap-3 mb-5">
+    <div className="w-full max-w-[80rem] mx-auto p-[1.5rem]">
+
+      {/* Search + Tabs */}
+      <div className="flex items-center gap-[1rem] mb-[2rem]">
         <div className="relative flex-1">
           <Input
+            className="pl-[2.4rem] h-[3rem] rounded-xl text-[1rem]"
             placeholder="Search rooms or users…"
-            className="pl-10 h-11 rounded-xl"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-5 w-5" />
+          <SearchIcon className="absolute left-[0.9rem] top-1/2 -translate-y-1/2 text-muted-foreground h-[1.2rem] w-[1.2rem]" />
         </div>
 
-        <div className="hidden md:flex items-center gap-2">
+        {/* Desktop Tabs */}
+        <div className="hidden md:flex gap-[0.6rem]">
           <Button
             variant={tab === "rooms" ? "default" : "ghost"}
             onClick={() => setTab("rooms")}
-            className="rounded-xl"
+            className="rounded-xl px-[1.2rem]"
           >
             Rooms
           </Button>
           <Button
             variant={tab === "users" ? "default" : "ghost"}
             onClick={() => setTab("users")}
-            className="rounded-xl"
+            className="rounded-xl px-[1.2rem]"
           >
             Users
           </Button>
         </div>
       </div>
 
-      {/* Mobile tabs */}
-      <div className="md:hidden flex mb-4 gap-2">
+      {/* Mobile Tabs */}
+      <div className="md:hidden flex gap-[0.6rem] mb-[1rem]">
         <button
           onClick={() => setTab("rooms")}
-          className={`flex-1 py-2 rounded-xl ${
+          className={`flex-1 py-[0.7rem] rounded-xl text-[1rem] ${
             tab === "rooms" ? "bg-indigo-500/20 text-indigo-500" : "bg-muted/20"
           }`}
         >
           Rooms
         </button>
+
         <button
           onClick={() => setTab("users")}
-          className={`flex-1 py-2 rounded-xl ${
+          className={`flex-1 py-[0.7rem] rounded-xl text-[1rem] ${
             tab === "users" ? "bg-indigo-500/20 text-indigo-500" : "bg-muted/20"
           }`}
         >
@@ -280,89 +396,62 @@ const SearchComponent = memo(function SearchComponentUltra({
         </button>
       </div>
 
+      {/* Animated Tab Content */}
       <AnimatePresence mode="wait">
+        {/* ROOMS */}
         {tab === "rooms" && (
           <motion.div
-            key="rooms"
+            key="rooms-tab"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            {/* 🔥 Desktop = columns | Mobile = horizontal scroll */}
             <div
               className="
-                grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 
-                gap-6 
+                grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4
+                gap-[1.5rem]
                 md:overflow-visible
-                max-md:flex max-md:overflow-x-auto max-md:gap-4 max-md:pb-3 
+                max-md:flex max-md:overflow-x-auto max-md:gap-[1.2rem] max-md:pb-[1rem]
                 snap-x snap-mandatory
               "
             >
               {filteredRooms.map((room) => (
-                <div key={room.id} className="snap-center max-md:min-w-[80%]">
+                <div key={room.id} className="snap-center max-md:min-w-[90%]">
                   <RoomCard room={room} />
                 </div>
               ))}
             </div>
 
             {filteredRooms.length === 0 && (
-              <p className="text-center text-muted-foreground py-10">
+              <p className="text-center text-muted-foreground text-[1rem] py-[3rem]">
                 No rooms found.
               </p>
             )}
           </motion.div>
         )}
 
+        {/* USERS */}
         {tab === "users" && (
           <motion.div
-            key="users"
+            key="users-tab"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            {loadingUsers && (
-              <p className="text-center py-8 text-muted-foreground">Loading…</p>
-            )}
-
-            {!loadingUsers &&
-              userResults.map((u) => (
-                <div
-                  key={u.id}
-                  className="flex items-center gap-3 p-3 bg-card border rounded-xl mb-2"
-                >
-                  <Avatar>
-                    <AvatarFallback>
-                      {(u.display_name ?? u.username ?? "?")[0]}
-                    </AvatarFallback>
-                  </Avatar>
-
-                  <div>
-                    <p className="font-medium">
-                      {highlight(
-                        u.display_name ?? u.username ?? "Unknown",
-                        debounced
-                      )}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      @{u.username}
-                    </p>
-                  </div>
-
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="ml-auto"
-                    onClick={() => router.push(`/profile/${u.id}`)}
-                  >
-                    View
-                  </Button>
-                </div>
-              ))}
-
-            {!loadingUsers && userResults.length === 0 && (
-              <p className="text-center py-10 text-muted-foreground">
+            {loadingUsers ? (
+              <p className="text-center text-muted-foreground py-[2rem]">
+                Loading users…
+              </p>
+            ) : userResults.length === 0 ? (
+              <p className="text-center text-muted-foreground py-[2rem]">
                 No users found.
               </p>
+            ) : (
+              <div className="grid gap-[1rem]">
+                {userResults.map((u) => (
+                  <UserCard key={u.id} {...u} />
+                ))}
+              </div>
             )}
           </motion.div>
         )}
@@ -371,438 +460,5 @@ const SearchComponent = memo(function SearchComponentUltra({
   );
 });
 
-SearchComponent.displayName = "SearchComponentUltra";
+SearchComponent.displayName = "SearchComponent";
 export default SearchComponent;
-
-
-
-// "use client";
-// import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
-// import { Button } from "./ui/button";
-// import { User as SupabaseUser } from "@supabase/supabase-js";
-// import { useRouter } from "next/navigation";
-// import { Settings, UserIcon, LockIcon, LogOut, Users } from "lucide-react";
-// import { Input } from "@/components/ui/input";
-// import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-// import { toast } from "sonner";
-// import { useAvailableRooms, useRoomActions, useRoomPresence, fetchAllUsers, type Room } from "@/lib/store/RoomContext";
-// import { useDebounce } from "use-debounce";
-// import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-// type RoomWithMembershipCount = Room;
-
-// type PartialProfile = {
-//   id: string;
-//   username: string | null;
-//   display_name: string | null;
-//   avatar_url: string | null;
-//   created_at: string | null;
-// };
-
-// // 🚀 Just use Room — no extended type required
-
-
-// const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-// const SearchComponent = memo(function SearchComponent({
-//   user,
-// }: {
-//   user: SupabaseUser | undefined;
-// }) {
-//   const router = useRouter();
-//   const [searchQuery, setSearchQuery] = useState("");
-//   const [searchType, setSearchType] = useState<"rooms" | "users">("rooms");
-//   const [userResults, setUserResults] = useState<PartialProfile[]>([]);
-//   const [isLoading, setIsLoading] = useState(false);
-//   const [isFaded, setIsFaded] = useState(false);
-  
-//   const isMounted = useRef(true);
-//   const [debouncedSearchQuery] = useDebounce(searchQuery, 500);
-  
-//   // ✅ FIXED: Use Zustand selectors
-//   const availableRooms = useAvailableRooms();
-//   const { joinRoom, leaveRoom } = useRoomActions();
-//   const roomPresence = useRoomPresence(); // ✅ FIXED: This is an object, not a function
-
-//   // ✅ FIXED: Stable mount state management
-//   useEffect(() => {
-//     const timer = setTimeout(() => setIsFaded(true), 2);
-//     return () => {
-//       clearTimeout(timer);
-//       isMounted.current = false;
-//     };
-//   }, []);
-
-//   // ✅ FIXED: Stable search handler with proper typing
-//   const handleSearchInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-//     setSearchQuery(e.target.value);
-//   }, []);
-
-//   // ✅ FIXED: Optimized user search with proper error handling
-//   const fetchUserResults = useCallback(async () => {
-//     if (searchType !== "users" || !user?.id) {
-//       setIsLoading(false);
-//       setUserResults([]);
-//       return;
-//     }
-    
-//     if (!isMounted.current) return;
-    
-//     setIsLoading(true);
-//     try {
-//       const users = await fetchAllUsers(); // ✅ FIXED: Now imported directly
-//       if (!isMounted.current) return;
-
-//       if (debouncedSearchQuery.trim()) {
-//         const q = debouncedSearchQuery.toLowerCase();
-//         const filteredUsers = users.filter(
-//           (u: PartialProfile) =>
-//             u.username?.toLowerCase().includes(q) ||
-//             u.display_name?.toLowerCase().includes(q)
-//         );
-//         setUserResults(filteredUsers);
-//       } else {
-//         setUserResults(users);
-//       }
-//     } catch (error) {
-//       if (!isMounted.current) return;
-//       console.error("User search error:", error);
-//       toast.error(
-//         error instanceof Error ? error.message : "An error occurred while searching users"
-//       );
-//       setUserResults([]);
-//     } finally {
-//       if (isMounted.current) setIsLoading(false);
-//     }
-//   }, [searchType, user?.id, debouncedSearchQuery]); // ✅ FIXED: Removed fetchAllUsers from deps
-
-//   // ✅ FIXED: Optimized effect for user search
-//   useEffect(() => {
-//     if (searchType === "users") {
-//       fetchUserResults();
-//     } else {
-//       setUserResults([]);
-//     }
-//   }, [searchType, debouncedSearchQuery, fetchUserResults]);
-
-//   // ✅ FIXED: Stable room results with proper filtering
-//   const roomResults = useMemo(() => {
-//     if (availableRooms.length === 0) {
-//       return [];
-//     }
-    
-//     if (!debouncedSearchQuery.trim()) {
-//       return availableRooms.filter(room => room.id);
-//     }
-    
-//     const q = debouncedSearchQuery.toLowerCase();
-//     return availableRooms.filter((room) => 
-//       room.id && room.name.toLowerCase().includes(q)
-//     );
-//   }, [availableRooms, debouncedSearchQuery]);
-
-//   // ✅ FIXED: Stable join room handler with proper validation
-//   const handleJoinRoom = useCallback(
-//     async (roomId: string) => {
-//       if (!roomId || roomId === 'undefined' || !UUID_REGEX.test(roomId)) {
-//         console.error("❌ Invalid room ID:", roomId);
-//         toast.error("Invalid room ID. Try refreshing the list.");
-//         return;
-//       }
-
-//       if (!user?.id) {
-//         toast.error("You must be logged in to join a room");
-//         return;
-//       }
-
-//       try {
-//         await joinRoom(roomId);
-//       } catch (error) {
-//         console.error("Join room error:", error);
-//         const errorMsg = (error as Error).message || "Failed to join room";
-//         toast.error(errorMsg);
-//       }
-//     },
-//     [user?.id, joinRoom]
-//   );
-
-//   // ✅ FIXED: Stable room render with optimized presence data
-//   const renderRoomSearchResult = useCallback((result: RoomWithMembershipCount) => {
-//     if (!result.id) return null;
-
-//     // ✅ FIXED: Access presence directly from the object
-//     const presence = roomPresence[result.id];
-//     const onlineCount = presence?.onlineUsers ?? 0;
-//     const memberCount = result.memberCount ?? 0;
-    
-//     return (
-//       <div
-//         key={result.id}
-//         className="flex flex-col p-4 rounded-lg border border-border bg-card hover:bg-accent/50 transition-all hover:shadow-md"
-//       >
-//         <div className="flex items-start justify-between mb-3">
-//           <div className="flex items-center gap-3 flex-1">
-//             <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-indigo-500/30 flex-shrink-0">
-//               <span className="text-xl font-semibold text-indigo-400">
-//                 {result.name.charAt(0).toUpperCase()}
-//               </span>
-//             </div>
-//             <div className="flex-1 min-w-0">
-//               <div className="flex items-center gap-2 mb-2">
-//                 <span className="font-semibold text-lg text-foreground truncate">
-//                   #{result.name}
-//                 </span>
-//                 {result.is_private && (
-//                   <LockIcon className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-//                 )}
-//               </div>
-              
-//               {/* ✅ FIXED: Stable member count display */}
-//               <div className="flex items-center gap-2 flex-wrap">
-//                 {/* Total Members Badge */}
-//                 <div className="flex items-center gap-1 text-xs px-2.5 py-1.5 bg-blue-500/10 border border-blue-500/30 rounded-full">
-//                   <Users className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
-//                   <span className="font-semibold text-blue-600 dark:text-blue-400">
-//                     {memberCount}
-//                   </span>
-//                   <span className="text-blue-600/70 dark:text-blue-400/70">
-//                     {memberCount === 1 ? "member" : "members"}
-//                   </span>
-//                 </div>
-                
-//                 {/* Online Users Badge */}
-//                 {onlineCount > 0 && (
-//                   <div className="flex items-center gap-1 text-xs px-2.5 py-1.5 bg-green-500/10 border border-green-500/30 rounded-full">
-//                     <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-//                     <span className="font-semibold text-green-600 dark:text-green-400">
-//                       {onlineCount}
-//                     </span>
-//                     <span className="text-green-600/70 dark:text-green-400/70">
-//                       online
-//                     </span>
-//                   </div>
-//                 )}
-                
-//                 {/* Membership Status Badge */}
-//                 {result.isMember && (
-//                   <div className="flex items-center gap-1 text-xs px-2.5 py-1.5 bg-green-500/10 border border-green-500/30 rounded-full">
-//                     <span className="text-green-600 dark:text-green-400">
-//                       ✓ Joined
-//                     </span>
-//                   </div>
-//                 )}
-//               </div>
-//             </div>
-//           </div>
-//         </div>
-        
-//         <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
-//           {result.isMember ? (
-//             <>
-//               <Button
-//                 size="sm"
-//                 variant="ghost"
-//                 onClick={() => router.push(`/rooms/${result.id}/settings`)}
-//                 className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300"
-//               >
-//                 <Settings className="h-4 w-4 mr-2" />
-//                 Settings
-//               </Button>
-//               <Button
-//                 size="sm"
-//                 variant="ghost"
-//                 onClick={() => leaveRoom(result.id)}
-//                 className="bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400"
-//                 title="Leave Room"
-//               >
-//                 <LogOut className="h-4 w-4 mr-2" />
-//                 Leave
-//               </Button>
-//             </>
-//           ) : result.participationStatus === "pending" ? (
-//             <span className="text-sm text-yellow-500 dark:text-yellow-400 font-medium px-3 py-1 bg-yellow-500/10 rounded-md">
-//               Pending Request
-//             </span>
-//           ) : (
-//             <Button
-//               size="sm"
-//               onClick={() => handleJoinRoom(result.id)}
-//               disabled={!user}
-//               className="bg-indigo-500 text-white hover:bg-indigo-600 transition-colors w-full"
-//             >
-//               Join Room
-//             </Button>
-//           )}
-//         </div>
-//       </div>
-//     );
-//   }, [router, user, handleJoinRoom, leaveRoom, roomPresence]); // ✅ FIXED: Changed getRoomPresence to roomPresence
-
-//   // ✅ FIXED: Optimized loading state calculation
-//   const showLoading = useMemo(() => 
-//     isLoading,
-//     [isLoading]
-//   );
-
-//   // ✅ FIXED: Memoized tab change handler
-//   const handleTabChange = useCallback((value: string) => {
-//     setSearchType(value as "rooms" | "users");
-//   }, []);
-
-//   // ✅ FIXED: Memoized profile navigation
-//   const handleProfileNavigation = useCallback(() => {
-//     router.push("/profile");
-//   }, [router]);
-
-//   // ✅ FIXED: Memoized user list items
-//   const userListItems = useMemo(() => 
-//     userResults.map((result) => (
-//       <li key={result.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-accent transition-colors">
-//         <div className="flex items-center gap-3">
-//           <Avatar className="h-10 w-10">
-//             {result.avatar_url ? (
-//               <AvatarImage src={result.avatar_url} alt={result.username || "Avatar"} />
-//             ) : (
-//               <AvatarFallback className="bg-indigo-500 text-white">
-//                 {result.username?.charAt(0).toUpperCase() || result.display_name?.charAt(0).toUpperCase() || "?"}
-//               </AvatarFallback>
-//             )}
-//           </Avatar>
-//           <div>
-//             <div className="text-xs text-muted-foreground">{result.username}</div>
-//             <div className="text-[1em] font-medium text-black dark:text-white">
-//               {result.display_name}
-//             </div>
-//           </div>
-//         </div>
-//         <UserIcon className="h-4 w-4 text-muted-foreground" />
-//       </li>
-//     )),
-//     [userResults]
-//   );
-
-//   // ✅ FIXED: Memoized loading skeletons
-//   const loadingSkeletons = useMemo(() => 
-//     Array.from({ length: 3 }).map((_, i) => (
-//       searchType === "rooms" ? (
-//         <div key={i} className="flex flex-col p-4 rounded-lg border border-border bg-card animate-pulse">
-//           <div className="flex items-center gap-3 mb-3">
-//             <div className="h-12 w-12 rounded-lg bg-accent" />
-//             <div className="flex-1">
-//               <div className="h-5 w-32 bg-accent rounded mb-2" />
-//               <div className="h-4 w-24 bg-accent rounded" />
-//             </div>
-//           </div>
-//           <div className="h-8 w-full bg-accent rounded" />
-//         </div>
-//       ) : (
-//         <li key={i} className="flex items-center justify-between p-2 rounded-lg bg-muted animate-pulse">
-//           <div className="flex items-center gap-3">
-//             <div className="h-10 w-10 rounded-full bg-accent" />
-//             <div>
-//               <div className="h-4 w-24 bg-accent rounded mb-2" />
-//               <div className="h-3 w-16 bg-accent rounded" />
-//             </div>
-//           </div>
-//           <div className="h-6 w-6 bg-accent rounded" />
-//         </li>
-//       )
-//     )),
-//     [searchType]
-//   );
-
-//   // ✅ FIXED: Memoized empty state messages
-//   const emptyStateMessage = useMemo(() => {
-//     if (searchType === "rooms") {
-//       return debouncedSearchQuery ? "No rooms found" : "No rooms available";
-//     } else {
-//       return debouncedSearchQuery ? "No users found" : "Search for users to see results";
-//     }
-//   }, [searchType, debouncedSearchQuery]);
-
-//   return (
-//     <div className="w-full max-w-[400px] mx-auto p-4">
-//       <div className="flex justify-between items-center mb-4">
-//         <h3 className="font-bold text-[1.5em]">Search</h3>
-//         <Button
-//           variant="ghost"
-//           size="icon"
-//           onClick={handleProfileNavigation}
-//           className="text-muted-foreground hover:text-foreground transition-colors"
-//         >
-//           <Settings className="h-4 w-4" />
-//         </Button>
-//       </div>
-      
-//       <Input
-//         type="text"
-//         placeholder={
-//           searchType === "users"
-//             ? "Search users..."
-//             : "Search rooms..."
-//         }
-//         value={searchQuery}
-//         onChange={handleSearchInputChange}
-//         className="mb-4 bg-muted/50 border-border text-foreground placeholder-muted-foreground rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
-//       />
-      
-//       <Tabs
-//         defaultValue={searchType}
-//         onValueChange={handleTabChange}
-//         className="w-full"
-//       >
-//         <TabsList className="grid w-full grid-cols-2 mb-4">
-//           <TabsTrigger value="rooms">Rooms</TabsTrigger>
-//           <TabsTrigger value="users">Users</TabsTrigger>
-//         </TabsList>
-        
-//         <TabsContent value="rooms">
-//           <div className="mt-4">
-//             <h4 className="font-semibold text-[1em] text-muted-foreground mb-3">Rooms</h4>
-//             <div className="grid gap-3 overflow-y-auto max-h-[440px] py-[0.2em] rounded-lg scrollbar-none lg:scrollbar-custom">
-//               {showLoading ? (
-//                 loadingSkeletons
-//               ) : roomResults.length > 0 ? (
-//                 roomResults.map((result) => renderRoomSearchResult(result))
-//               ) : (
-//                 <div className="text-[1em] text-muted-foreground p-4 text-center border border-border rounded-lg bg-card">
-//                   {emptyStateMessage}
-//                 </div>
-//               )}
-//             </div>
-//           </div>
-//         </TabsContent>
-        
-//         <TabsContent value="users">
-//           <div className="mt-4">
-//             <h4 className="font-semibold text-[1em] text-muted-foreground mb-3">User Profiles</h4>
-//             <ul className="space-y-3 overflow-y-auto max-h-[440px] scrollbar-none lg:scrollbar-custom">
-//               {showLoading ? (
-//                 loadingSkeletons
-//               ) : userResults.length > 0 ? (
-//                 userListItems
-//               ) : (
-//                 <li className="text-[1em] text-muted-foreground p-2 text-center">
-//                   {emptyStateMessage}
-//                 </li>
-//               )}
-//             </ul>
-//           </div>
-//         </TabsContent>
-//       </Tabs>
-      
-//       {searchQuery.length === 0 && searchType && (
-//         <p className={`text-[1em] text-muted-foreground mt-3 transition-opacity duration-500 ${isFaded ? "opacity-0" : "opacity-100"}`}>
-//           Showing all {searchType}...
-//         </p>
-//       )}
-      
-//       {showLoading && (
-//         <p className={`text-[1em] text-muted-foreground mt-3 transition-opacity duration-500 ${isFaded ? "opacity-0" : "opacity-100"}`}>
-//           Loading...
-//         </p>
-//       )}
-//     </div>
-//   );
-// });
-
-// export default SearchComponent;
