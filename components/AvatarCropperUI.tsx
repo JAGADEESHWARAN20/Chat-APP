@@ -40,22 +40,21 @@ const AvatarCropperUI = forwardRef<CropperRef, Props>(
             "border-2 border-border/50 hover:border-primary/30 transition-colors duration-200"
           )}
         >
-        <Cropper
+       <Cropper
   image={imageSrc}
   crop={crop}
   zoom={zoom}
   aspect={1}
   cropShape="round"
-  showGrid={true}
-  // gridConfig removed (invalid prop)
+  showGrid={true}  // Basic grid; style via CSS below if needed
   objectFit="horizontal-cover"
   onCropChange={onCropChange}
   onZoomChange={onZoomChange}
   onCropComplete={handleCropComplete}
   classes={{
     containerClassName: "h-full w-full",
-    mediaClassName: "object-cover rounded-full",  // Moved here
-    cropAreaClassName: "border-4 border-primary/50 rounded-full shadow-2xl",  // Moved here
+    mediaClassName: "object-cover rounded-full",  // All styling here
+    cropAreaClassName: "border-4 border-primary/50 rounded-full shadow-2xl",
   }}
 />
         </div>

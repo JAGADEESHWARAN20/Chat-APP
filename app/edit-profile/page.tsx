@@ -618,48 +618,7 @@ export default function EditProfilePage() {
         </DialogContent>
       </Dialog>
 
-      <style jsx>{`
-        @keyframes fade-in {
-          from { opacity: 0; transform: translateY(10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes slide-in {
-          from { opacity: 0; transform: translateX(-20px); }
-          to { opacity: 1; transform: translateX(0); }
-        }
-        .animate-fade-in { animation: fade-in 0.5s ease-out; }
-        .animate-slide-in { animation: slide-in 0.3s ease-out; }
-        .premium-slider::-webkit-slider-thumb {
-          appearance: none;
-          height: 20px;
-          width: 20px;
-          border-radius: 50%;
-          background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)));
-          cursor: pointer;
-          box-shadow: 0 4px 12px hsl(var(--primary)/0.3);
-          border: 2px solid hsl(var(--background));
-          transition: all 0.2s ease;
-        }
-        .premium-slider::-webkit-slider-thumb:hover {
-          transform: scale(1.1);
-          box-shadow: 0 6px 16px hsl(var(--primary)/0.4);
-        }
-        .premium-slider::-moz-range-thumb {
-          height: 20px;
-          width: 20px;
-          border-radius: 50%;
-          background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)));
-          cursor: pointer;
-          border: none;
-          box-shadow: 0 4px 12px hsl(var(--primary)/0.3);
-          transition: all 0.2s ease;
-        }
-        .premium-slider::-moz-range-thumb:hover {
-          transform: scale(1.1);
-          box-shadow: 0 6px 16px hsl(var(--primary)/0.4);
-        }
-        .group:hover .group-hover\:scale-105 { transform: scale(1.05); }
-      `}</style>
+
     </div>
   );
 }
