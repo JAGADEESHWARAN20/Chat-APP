@@ -223,7 +223,7 @@ const SearchComponent = memo(function SearchComponent({ user }: { user: PartialP
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto p-6 min-h-0 h-full flex flex-col text-sm md:text-base lg:text-lg">
+    <div className="w-full max-w-4xl mx-auto p-4 md:p-6 min-h-0 h-full flex flex-col text-sm md:text-base lg:text-lg">
       {/* Search + Tabs */}
       <div className="flex flex-col sm:flex-row items-center gap-4 mb-6 flex-shrink-0">
         <div className="relative flex-1 w-full sm:w-auto">
@@ -276,7 +276,7 @@ const SearchComponent = memo(function SearchComponent({ user }: { user: PartialP
 
                   {/* Large devices: horizontal scroll (X) */}
                   <div className="hidden md:block w-full overflow-x-auto custom-scrollbar-x py-4">
-                    <div className="flex gap-6 px-4 items-stretch">
+                    <div className="flex gap-4 md:gap-6 px-2 md:px-4 items-stretch max-w-full overflow-hidden">
                       {filteredRooms.map((room) => (
                         <motion.div
                           key={room.id}
@@ -315,7 +315,7 @@ const SearchComponent = memo(function SearchComponent({ user }: { user: PartialP
                 </div>
               ) : (
                 <div className="w-full overflow-x-auto custom-scrollbar-x py-3">
-                  <div className="flex gap-4 md:gap-6 px-4 items-start">
+                  <div className="flex gap-4 md:gap-6 px-2 md:px-4 items-start max-w-full overflow-hidden">
                     {userResults.map((u) => (
                       <motion.div
                         key={u.id}
