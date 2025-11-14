@@ -4,7 +4,8 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useNotification, Inotification } from "@/lib/store/notifications";
 import { useEffect, useRef } from "react";
 import { useUser } from "@/lib/store/user";
-import { useRoomStore } from "@/lib/store/roomstore";
+import { useRoomStore } from "@/lib/store/room.store";
+
 
 async function fetchRoomsForUser(userId: string) {
   const supabase = getSupabaseBrowserClient();
@@ -80,34 +81,10 @@ export function useNotificationHandler() {
                 description: notification.message ?? "",
               });
             
-              // Fetch updated rooms
-              const { data, error } = await supabase.rpc("get_rooms_with_counts", {
-                p_user_id: userId,
-                p_query: undefined,
-                p_include_participants: true,
-              });
+              await useRoomStore.getState().fetchRooms();
             
-              if (error) {
-                console.error("RPC get_rooms_with_counts error:", error);
-                break;
-              }
-            
-              const roomsData = (data || []).map((r: any) => ({
-                ...r,
-                isMember: r.is_member,
-                participationStatus: r.participation_status,
-                participant_count: r.member_count,
-              }));
-            
-              // Update Zustand room store
-              setRooms(roomsData);
-            
-              // Auto-open the room
               if (notification.room_id) {
-                const matched = roomsData.find((x: any) => x.id === notification.room_id);
-                if (matched) {
-                  setSelectedRoom(matched);
-                }
+                useRoomStore.getState().setSelectedRoom(notification.room_id);
               }
             
               break;

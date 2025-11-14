@@ -1,21 +1,20 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { useRoomStore } from "@/lib/store/RoomContext";
+import { useEffect } from "react";
+import { useRoomStore } from "@/lib/store/room.store";
+import { useUser } from "@/lib/store/user";
 
 export default function RoomInitializer() {
-  const initializedRef = useRef(false);
-
-  const user = useRoomStore((state) => state.user);
-  const fetchRooms = useRoomStore((state) => state.fetchRooms);
+  const { user } = useUser();
+  const setUserId = useRoomStore((s) => s.setUserId);
+  const fetchRooms = useRoomStore((s) => s.fetchRooms);
 
   useEffect(() => {
-    if (!user || initializedRef.current) return;
+    if (!user?.id) return;
 
-    initializedRef.current = true; // ✅ prevents duplicate calls
-    console.log("🏁 RoomInitializer: User detected, fetching rooms...");
+    setUserId(user.id);
     fetchRooms();
-  }, [user, fetchRooms]); // ✅ `initializeRooms` removed
+  }, [user?.id]);
 
   return null;
 }
