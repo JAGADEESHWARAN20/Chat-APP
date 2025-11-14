@@ -349,84 +349,76 @@ const SearchComponent = memo(function SearchComponent({
         </Tabs>
       </div>
 
-      {/* Scrollable Content Area - Scrollbar applied here */}
-      <div className="flex-1 min-h-0 overflow-y-scroll scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
-        {/* Animated Tab Content */}
-        <AnimatePresence mode="wait">
-          {/* ROOMS */}
-          {tab === "rooms" && (
-            <motion.div
-              key="rooms-tab"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent"
-            >
-              {filteredRooms.length === 0 ? (
-                <div className="h-full flex items-center justify-center">
-                  <p className="text-muted-foreground text-base">
-                    No rooms found.
-                  </p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-6">
-                  {filteredRooms.map((room) => (
-                    <motion.div
-                      key={room.id}
-                      layout
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: 8 }}
-                      className="h-80" // Fixed height for consistent cards
-                    >
-                      <RoomCard room={room} />
-                    </motion.div>
-                  ))}
-                </div>
-              )}
-            </motion.div>
-          )}
 
-          {/* USERS */}
-          {tab === "users" && (
-            <motion.div
-              key="users-tab"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent"
-            >
-              {loadingUsers ? (
-                <div className="h-full flex items-center justify-center">
-                  <p className="text-muted-foreground">
-                    Loading users…
-                  </p>
-                </div>
-              ) : userResults.length === 0 ? (
-                <div className="h-full flex items-center justify-center">
-                  <p className="text-muted-foreground">
-                    No users found.
-                  </p>
-                </div>
-              ) : (
-                <div className="grid gap-4 pb-6">
-                  {userResults.map((u) => (
-                    <motion.div
-                      key={u.id}
-                      layout
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: 8 }}
-                    >
-                      <UserCard {...u} />
-                    </motion.div>
-                  ))}
-                </div>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+<div className="flex-1 min-h-0 overflow-y-scroll scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
+  <AnimatePresence mode="wait">
+    {tab === "rooms" && (
+      <motion.div
+        key="rooms-tab"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+      >
+        {filteredRooms.length === 0 ? (
+          <div className="h-full flex items-center justify-center">
+            <p className="text-muted-foreground text-base">
+              No rooms found.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-6">
+            {filteredRooms.map((room) => (
+              <motion.div
+                key={room.id}
+                layout
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 8 }}
+                className="h-80"
+              >
+                <RoomCard room={room} />
+              </motion.div>
+            ))}
+          </div>
+        )}
+      </motion.div>
+    )}
+
+    {tab === "users" && (
+      <motion.div
+        key="users-tab"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+      >
+        {loadingUsers ? (
+          <div className="h-full flex items-center justify-center">
+            <p className="text-muted-foreground">Loading users…</p>
+          </div>
+        ) : userResults.length === 0 ? (
+          <div className="h-full flex items-center justify-center">
+            <p className="text-muted-foreground">No users found.</p>
+          </div>
+        ) : (
+          <div className="grid gap-4 pb-6">
+            {userResults.map((u) => (
+              <motion.div
+                key={u.id}
+                layout
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 8 }}
+              >
+                <UserCard {...u} />
+              </motion.div>
+            ))}
+          </div>
+        )}
+      </motion.div>
+    )}
+  </AnimatePresence>
+</div>
+
     </div>
   );
 });
