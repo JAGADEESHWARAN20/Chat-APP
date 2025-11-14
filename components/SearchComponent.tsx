@@ -174,7 +174,7 @@ const SearchComponent = memo(function SearchComponent({ user }: { user: PartialP
               <span className="text-xs md:text-sm font-medium bg-yellow-400/20 px-2 py-1 rounded-md text-yellow-700">Pending approval</span>
             )}
 
-            
+
           </div>
 
           <div className="flex flex-col gap-2 mt-3">
@@ -203,21 +203,19 @@ const SearchComponent = memo(function SearchComponent({ user }: { user: PartialP
   const UserCard = (u: PartialProfile) => {
     const initial = (u.display_name ?? u.username ?? "?")[0]?.toUpperCase();
     return (
-      <Card className="flex items-center gap-4 p-3 rounded-xl min-w-[13rem] md:min-w-[16rem]">
-        <Avatar className="h-12 w-12 rounded-lg">
+      <Card className="flex flex-col items-center justify-between p-3 rounded-xl aspect-[3/4] min-w-[10rem] md:min-w-[12rem] max-w-[12rem]">
+        <Avatar className="h-16 w-16 rounded-lg mb-3">
           {u.avatar_url ? (
             <AvatarImage src={u.avatar_url} alt={u.display_name ?? "User"} className="object-cover" />
           ) : (
             <AvatarFallback className="bg-indigo-600 text-white text-lg">{initial}</AvatarFallback>
           )}
         </Avatar>
-
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 w-full text-center">
           <p className="font-semibold text-sm md:text-base truncate">{highlight(u.display_name ?? u.username ?? "Unknown", debounced)}</p>
           <p className="text-xs md:text-sm text-muted-foreground">@{u.username}</p>
         </div>
-
-        <Button size="sm" variant="secondary" onClick={() => router.push(`/profile/${u.id}`)}>
+        <Button size="sm" variant="secondary" className="mt-3 w-full" onClick={() => router.push(`/profile/${u.id}`)}>
           View
         </Button>
       </Card>
