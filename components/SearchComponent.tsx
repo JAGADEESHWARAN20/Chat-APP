@@ -352,7 +352,7 @@ const SearchComponent = memo(function SearchComponent({
                   No users found.
                 </div>
               ) : (
-                <div className="h-full w-[80vw] flex md:flex-col gap-4 md:gap-6 px-1 md:px-2 py-2 overflow-x-auto md:overflow-y-auto scrollbar-thin md:scrollbar-custom">
+                <div className="h-full w-[90vw] flex md:flex-col gap-4 md:gap-6 px-1 md:px-2 py-2 overflow-x-auto md:overflow-y-auto scrollbar-thin md:scrollbar-custom">
                   {userResults.map((u) => (
                     <motion.div
                       key={u.id}
