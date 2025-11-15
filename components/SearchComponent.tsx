@@ -279,98 +279,98 @@ const SearchComponent = memo(function SearchComponent({
         </Tabs>
       </div>
 
-      {/* CONTENT - SCROLLABLE AREA */}
-      <div className="flex-1 min-h-0 overflow-hidden">
-        <AnimatePresence mode="wait">
-          {/* ROOMS TAB */}
-          {tab === "rooms" && (
-            <motion.div
-              key="rooms-tab"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="h-full overflow-hidden"
-            >
-              {filteredRooms.length === 0 ? (
-                <div className="h-full flex items-center justify-center text-muted-foreground">
-                  No rooms found.
-                </div>
-              ) : (
-                <>
-                  {/* MOBILE VERTICAL - SCROLLABLE */}
-                  <div className="block md:hidden h-full overflow-y-auto scrollbar-thin">
-                    <div className="flex flex-col gap-4 px-1 pb-4">
-                      {filteredRooms.map((room) => (
-                        <motion.div
-                          key={room.id}
-                          layout
-                          initial={{ opacity: 0, y: 8 }}
-                          animate={{ opacity: 1, y: 0 }}
-                        >
-                          <RoomCard room={room} />
-                        </motion.div>
-                      ))}
-                    </div>
-                  </div>
+      
+<div className="flex-1 min-h-0 overflow-hidden">
+  <AnimatePresence mode="wait">
+    {/* ROOMS TAB */}
+    {tab === "rooms" && (
+      <motion.div
+        key="rooms-tab"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="h-full overflow-hidden"
+      >
+        {filteredRooms.length === 0 ? (
+          <div className="h-full flex items-center justify-center text-muted-foreground">
+            No rooms found.
+          </div>
+        ) : (
+          <>
+            {/* MOBILE VERTICAL - SCROLLABLE */}
+            <div className="block md:hidden h-full overflow-y-auto scrollbar-thin scroll-container">
+              <div className="flex flex-col gap-4 px-1 pb-4">
+                {filteredRooms.map((room) => (
+                  <motion.div
+                    key={room.id}
+                    layout
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                  >
+                    <RoomCard room={room} />
+                  </motion.div>
+                ))}
+              </div>
+            </div>
 
-                  {/* DESKTOP HORIZONTAL - SCROLLABLE */}
-                  <div className="hidden md:flex h-full overflow-x-auto scrollbar-custom overflow-y-hidden">
-                    <div className="flex gap-6 px-2 pb-6">
-                      {filteredRooms.map((room) => (
-                        <motion.div
-                          key={room.id}
-                          layout
-                          initial={{ opacity: 0, x: 12 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          className="flex-shrink-0"
-                        >
-                          <RoomCard room={room} />
-                        </motion.div>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              )}
-            </motion.div>
-          )}
+            {/* DESKTOP HORIZONTAL - SCROLLABLE */}
+            <div className="hidden md:flex h-full overflow-x-auto scrollbar-custom overflow-y-hidden scroll-container">
+              <div className="flex gap-6 px-2 pb-6">
+                {filteredRooms.map((room) => (
+                  <motion.div
+                    key={room.id}
+                    layout
+                    initial={{ opacity: 0, x: 12 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    className="flex-shrink-0"
+                  >
+                    <RoomCard room={room} />
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+      </motion.div>
+    )}
 
-          {/* USERS TAB */}
-          {tab === "users" && (
-            <motion.div
-              key="users-tab"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="h-full overflow-hidden"
-            >
-              {loadingUsers ? (
-                <div className="h-full flex items-center justify-center text-muted-foreground">
-                  Loading users…
-                </div>
-              ) : userResults.length === 0 ? (
-                <div className="h-full flex items-center justify-center text-muted-foreground">
-                  No users found.
-                </div>
-              ) : (
-                <div className="h-full overflow-y-auto scrollbar-thin">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-2">
-                    {userResults.map((u) => (
-                      <motion.div
-                        key={u.id}
-                        layout
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                      >
-                        <UserCard {...u} />
-                      </motion.div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+    {/* USERS TAB */}
+    {tab === "users" && (
+      <motion.div
+        key="users-tab"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="h-full overflow-hidden"
+      >
+        {loadingUsers ? (
+          <div className="h-full flex items-center justify-center text-muted-foreground">
+            Loading users…
+          </div>
+        ) : userResults.length === 0 ? (
+          <div className="h-full flex items-center justify-center text-muted-foreground">
+            No users found.
+          </div>
+        ) : (
+          <div className="h-full overflow-y-auto scrollbar-thin scroll-container">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-2">
+              {userResults.map((u) => (
+                <motion.div
+                  key={u.id}
+                  layout
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                >
+                  <UserCard {...u} />
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        )}
+      </motion.div>
+    )}
+  </AnimatePresence>
+</div>
     </div>
   );
 });

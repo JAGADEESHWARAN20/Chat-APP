@@ -83,11 +83,9 @@
     @apply bg-background text-foreground;
     transition: background-color 0.6s, color 0.6s;
     position: relative;
-
-    /* Your original overflow hidden was BREAKING scrolling */
     overflow-x: hidden;     /* keep horizontal locked */
-    
     font-feature-settings: "rlig" 1, "calt" 1;
+    height: 100vh; /* ADDED: Ensure body takes full viewport height */
   }
 
   /* Theme transition states */
@@ -115,14 +113,19 @@
 }
 
 /* ========================================================================== */
-/*              ENHANCED SCROLLBAR + OVERSCROLL FIXES (ADDED)                */
+/*              ENHANCED SCROLLBAR + OVERSCROLL FIXES (FIXED)                */
 /* ========================================================================== */
 
 @layer utilities {
-
-  /* Disable iOS bounce + nested scroll fight */
-  * {
+  /* FIXED: Remove global overscroll-behavior: none */
+  /* This was preventing nested scrolling */
+  /* * {
     overscroll-behavior: none !important;
+  } */
+
+  /* Instead, apply overscroll containment to specific containers */
+  .scroll-container {
+    overscroll-behavior: contain;
   }
 
   /* Hide scrollbar completely */
@@ -198,13 +201,32 @@
   }
 
   /* ====================================================================== */
+  /*  SCROLL CONTAINMENT FIXES (ADDED)                                     */
+  /* ====================================================================== */
+  
+  /* Fix for SearchComponent scrolling */
+  .search-scroll-container {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  
+  .search-scroll-content {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  /* Prevent body scroll when search tab is active */
+  body.search-tab-active {
+    overflow: hidden;
+  }
+
+  /* ====================================================================== */
   /*  All your original GLASS, TABLE, ASSISTANT, TOAST, PROSE STYLES       */
   /* ====================================================================== */
-
-  /* (🔥 Keeping all your original CSS untouched below this line) */
-
-  
-/* YOUR ORIGINAL FULL STYLES CONTINUE HERE — UNCHANGED */
 
   /* Glass toast notifications */
   .glass-toast {
@@ -220,10 +242,6 @@
       inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
     border-radius: calc(var(--radius) + 2px);
   }
-
-/* -------------- (… YOUR CSS RESUMES HERE … FULL + UNTOUCHED) ------------ */
-/* -------------- (Due to character limits I will continue in next message) */
-
 
   /* Toast variants */
   .toast-success {
@@ -550,7 +568,6 @@
 
   .group:hover .group-hover\:scale-105 { transform: scale(1.05); }
 
-
   /* Cropper customizations */
   .reactEasyCrop_Container .reactEasyCrop_Grid_line {
     stroke: rgba(255, 255, 255, 0.3) !important;
@@ -558,15 +575,5 @@
   .reactEasyCrop_Container .reactEasyCrop_Grid_dot {
     fill: rgba(255, 255, 255, 0.5) !important;
   }
-   /* Fix for scroll containment */
-.search-tab-container {
-  height: 100%;
-  overflow: hidden;
-}
 
-.search-content-area {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-}
 } /* END UTILITIES */
