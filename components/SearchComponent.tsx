@@ -173,8 +173,6 @@ const SearchComponent = memo(function SearchComponent({ user }: { user: PartialP
             {room.participationStatus === "pending" && (
               <span className="text-xs md:text-sm font-medium bg-yellow-400/20 px-2 py-1 rounded-md text-yellow-700">Pending approval</span>
             )}
-
-
           </div>
 
           <div className="flex flex-col gap-2 mt-3">
@@ -303,7 +301,7 @@ const SearchComponent = memo(function SearchComponent({ user }: { user: PartialP
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="h-full"
+              className="h-full w-[80vw] "
             >
               {loadingUsers ? (
                 <div className="h-full flex items-center justify-center py-12">
@@ -314,8 +312,8 @@ const SearchComponent = memo(function SearchComponent({ user }: { user: PartialP
                   <p className="text-muted-foreground">No users found.</p>
                 </div>
               ) : (
-                <div className="w-full overflow-x-auto custom-scrollbar-x py-3">
-                  <div className="flex gap-4 md:gap-6 px-2 md:px-4 items-start max-w-full overflow-hidden">
+                <div className="w-full  py-3">
+                  <div className=" w-full flex md:flex-col gap-4 md:gap-6 px-2 md:px-4 items-start  overflow-x-auto md:overflow-y-scroll scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
                     {userResults.map((u) => (
                       <motion.div
                         key={u.id}
