@@ -238,7 +238,7 @@ const SearchComponent = memo(function SearchComponent({ user }: { user: PartialP
       </div>
 
       {/* Content container: single-scroll-per-tab strategy */}
-      <div className="flex-1 min-h-0">
+      <div className="flex-1 min-h-0 w-full">
         <AnimatePresence mode="wait">
           {/* ROOMS TAB */}
           {tab === "rooms" && (
@@ -247,7 +247,7 @@ const SearchComponent = memo(function SearchComponent({ user }: { user: PartialP
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="h-full"
+              className="h-full w-full"
             >
               {filteredRooms.length === 0 ? (
                 <div className="h-full flex items-center justify-center py-12">
@@ -256,8 +256,8 @@ const SearchComponent = memo(function SearchComponent({ user }: { user: PartialP
               ) : (
                 <>
                   {/* Mobile: vertical scroll (Y) */}
-                  <div className="block md:hidden h-[80vh] overflow-y-auto custom-scrollbar-y py-2">
-                    <div className="flex flex-col gap-4 px-2 py-2">
+                  <div className="block md:hidden h-full overflow-y-auto scrollbar-thin py-2">
+                    <div className="flex flex-col gap-4 px-2">
                       {filteredRooms.map((room) => (
                         <motion.div
                           key={room.id}
@@ -273,8 +273,8 @@ const SearchComponent = memo(function SearchComponent({ user }: { user: PartialP
                   </div>
 
                   {/* Large devices: horizontal scroll (X) */}
-                  <div className="hidden md:block w-full overflow-x-auto custom-scrollbar-x py-4">
-                    <div className="flex gap-4 md:gap-6 px-2 md:px-4 items-stretch max-w-full overflow-hidden">
+                  <div className="hidden md:block w-full overflow-x-auto scrollbar-thin py-4 overflow-y-hidden">
+                    <div className="flex gap-4 md:gap-6 px-2 md:px-4 items-stretch max-w-none">
                       {filteredRooms.map((room) => (
                         <motion.div
                           key={room.id}
@@ -294,14 +294,14 @@ const SearchComponent = memo(function SearchComponent({ user }: { user: PartialP
             </motion.section>
           )}
 
-          {/* USERS TAB — Always horizontal scroll */}
+          {/* USERS TAB — Horizontal on small, vertical on large */}
           {tab === "users" && (
             <motion.section
               key="users-tab"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="h-full w-[80vw] "
+              className="h-full w-full"
             >
               {loadingUsers ? (
                 <div className="h-full flex items-center justify-center py-12">
@@ -312,8 +312,8 @@ const SearchComponent = memo(function SearchComponent({ user }: { user: PartialP
                   <p className="text-muted-foreground">No users found.</p>
                 </div>
               ) : (
-                <div className="w-full  py-3">
-                  <div className=" w-full flex md:flex-col gap-4 md:gap-6 px-2 md:px-4 items-start  overflow-x-auto md:overflow-y-scroll scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
+                <div className="h-full w-full py-3 overflow-hidden">
+                  <div className="h-full w-full flex md:flex-col gap-4 md:gap-6 px-2 md:px-4 items-stretch overflow-x-auto scrollbar-thin md:overflow-y-auto">
                     {userResults.map((u) => (
                       <motion.div
                         key={u.id}
@@ -321,7 +321,7 @@ const SearchComponent = memo(function SearchComponent({ user }: { user: PartialP
                         initial={{ opacity: 0, x: 12 }}
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: 12 }}
-                        className="flex-shrink-0"
+                        className="flex-shrink-0 md:flex-shrink"
                       >
                         <UserCard {...u} />
                       </motion.div>

@@ -145,6 +145,9 @@
   .scrollbar-thin::-webkit-scrollbar-thumb:hover {
     background: hsl(var(--muted-foreground) / 0.5);
   }
+  .scrollbar-thin::-webkit-scrollbar-button {
+    display: none;
+  }
 
   /* Custom enhanced scrollbar for desktop */
   @media (min-width: 1024px) {
@@ -176,6 +179,9 @@
         hsl(var(--primary) / 0.2)
       );
     }
+    .scrollbar-custom::-webkit-scrollbar-button {
+      display: none;
+    }
   }
 
   /* Transparent scrollbar track */
@@ -201,7 +207,7 @@
     background-color: hsl(var(--foreground) / 0.7);
   }
   .transparent-scrollbar-track::-webkit-scrollbar-button {
-    background-color: hsl(var(--muted-foreground) / 0.3);
+    display: none;
   }
 
   /* ================================
@@ -377,6 +383,9 @@
   .ai-response-container::-webkit-scrollbar-thumb:hover {
     background-color: rgba(155, 155, 155, 0.7);
   }
+  .ai-response-container::-webkit-scrollbar-button {
+    display: none;
+  }
 
   /* Responsive tables in AI responses */
   .ai-response-container table {
@@ -457,6 +466,9 @@
 
   .room-assistant-scroll::-webkit-scrollbar-thumb:hover {
     background-color: rgba(155, 155, 155, 0.35);
+  }
+  .room-assistant-scroll::-webkit-scrollbar-button {
+    display: none;
   }
 
   .room-assistant-ai-content {
@@ -823,4 +835,3 @@
 .reactEasyCrop_Container .reactEasyCrop_Grid_dot {
   fill: rgba(255, 255, 255, 0.5) !important;
 }
-
