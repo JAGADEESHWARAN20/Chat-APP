@@ -23,7 +23,6 @@ export default function HomePage() {
     { id: "home", icon: Home, label: "Home" },
     { id: "search", icon: Search, label: "Search" },
   ];
-  
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
@@ -39,13 +38,12 @@ export default function HomePage() {
   return (
     <div className="min-h-screen flex flex-col overflow-hidden bg-background">
       <header
-  className="
-    w-full px-4 py-3 border-b border-border/40
-    bg-background/80 backdrop-blur-md supports-[backdrop-filter]:bg-background/60
-    sticky top-0 z-20 shadow-sm transition-colors duration-200
-  "
->
-
+        className="
+          w-full px-4 py-3 border-b border-border/40
+          bg-background/80 backdrop-blur-md supports-[backdrop-filter]:bg-background/60
+          sticky top-0 z-20 shadow-sm transition-colors duration-200
+        "
+      >
         <div className="flex items-center justify-between max-w-7xl mx-auto w-full">
           
           {/* Left Section */}
@@ -174,10 +172,9 @@ export default function HomePage() {
         </div>
       </header>
 
-      {/* Main Content */}
+      {/* Main Content - FIXED SCROLLING ISSUE */}
       <main className="flex-1 flex w-full overflow-hidden">
-      <AnimatePresence mode="sync" initial={false}>
-
+        <AnimatePresence mode="sync" initial={false}>
           {activeTab === "home" && (
             <motion.div
               key="home"
@@ -202,18 +199,11 @@ export default function HomePage() {
               animate={{ opacity: 1, x: 0, scale: 1 }}
               exit={{ opacity: 0, x: -40, scale: 0.98 }}
               transition={{ duration: 0.35, ease: "easeInOut" }}
-              className="flex-1"
+              className="flex-1 overflow-hidden" 
             >
-              <div className="w-full px-4 sm:px-6 lg:px-8 py-4 sm:py-6 h-full overflow-hidden">
-                <div className="max-w-6xl mx-auto">
-                  <div className="mb-6">
-                    <h2 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">
-                      Discover Rooms
-                    </h2>
-                    <p className="text-muted-foreground text-sm sm:text-base">
-                      Find and join interesting conversations
-                    </p>
-                  </div>
+              {/* FIXED: This container should NOT scroll */}
+              <div className="w-full h-full flex flex-col">
+                <div className="flex-1 overflow-hidden"> {/* ADDED: This prevents parent scrolling */}
                   <SearchComponent user={user} />
                 </div>
               </div>
