@@ -558,5 +558,15 @@
   .reactEasyCrop_Container .reactEasyCrop_Grid_dot {
     fill: rgba(255, 255, 255, 0.5) !important;
   }
+   /* Fix for scroll containment */
+.search-tab-container {
+  height: 100%;
+  overflow: hidden;
+}
 
+.search-content-area {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
 } /* END UTILITIES */
