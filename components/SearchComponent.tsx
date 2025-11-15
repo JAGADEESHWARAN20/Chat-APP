@@ -280,7 +280,7 @@ const SearchComponent = memo(function SearchComponent({
       </div>
 
       {/* CONTENT - FIXED HEIGHT WITH INTERNAL SCROLLING */}
-      <div className="flex-1 min-h-0 overflow-hidden">
+      <div className="flex-1 h-[60vh]  overflow-y-scroll">
         <AnimatePresence mode="wait">
           {/* ROOMS TAB */}
           {tab === "rooms" && (

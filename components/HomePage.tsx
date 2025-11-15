@@ -204,7 +204,7 @@ export default function HomePage() {
               transition={{ duration: 0.35, ease: "easeInOut" }}
               className="flex-1"
             >
-              <div className="w-full px-4 sm:px-6 lg:px-8 py-4 sm:py-6 overflow-y-auto">
+              <div className="w-full px-4 sm:px-6 lg:px-8 py-4 sm:py-6 h-full overflow-hidden">
                 <div className="max-w-6xl mx-auto">
                   <div className="mb-6">
                     <h2 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">
