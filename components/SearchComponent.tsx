@@ -250,7 +250,7 @@ const SearchComponent = memo(function SearchComponent({
   // MAIN UI
   // -------------------------------------------------------------------
   return (
-    <div className="w-full max-w-4xl mx-auto p-4 md:p-6 h-full flex flex-col overflow-hidden">
+    <div className="w-full  mx-auto p-4 md:p-6 h-full flex flex-col overflow-hidden">
       {/* Search + Tabs */}
       <div className="flex flex-col sm:flex-row items-center gap-4 mb-6">
         <div className="relative flex-1">
@@ -352,7 +352,7 @@ const SearchComponent = memo(function SearchComponent({
                   No users found.
                 </div>
               ) : (
-                <div className="h-full flex md:flex-col gap-4 md:gap-6 px-1 md:px-2 py-2 overflow-x-auto md:overflow-y-auto scrollbar-thin md:scrollbar-custom">
+                <div className="h-full w-[80vw] flex md:flex-col gap-4 md:gap-6 px-1 md:px-2 py-2 overflow-x-auto md:overflow-y-auto scrollbar-thin md:scrollbar-custom">
                   {userResults.map((u) => (
                     <motion.div
                       key={u.id}
