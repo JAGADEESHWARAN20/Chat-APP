@@ -86,7 +86,7 @@
 
     /* Your original overflow hidden was BREAKING scrolling */
     overflow-x: hidden;     /* keep horizontal locked */
-    overflow-y: auto;       /* allow vertical scroll */
+    
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 
