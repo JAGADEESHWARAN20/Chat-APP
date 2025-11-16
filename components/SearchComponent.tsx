@@ -131,16 +131,27 @@ const SearchComponent = memo(function SearchComponent({
     [leaveRoom]
   );
 
-  // -------------------------------------------------------------------
-  // ROOM CARD
-  // -------------------------------------------------------------------
+  /* ========================================================= */
+  /* ROOM CARD (Dark/Light Optimized)                          */
+  /* ========================================================= */
   const RoomCard = ({ room }: { room: Room }) => {
     const online = presence?.[room.id]?.onlineUsers ?? 0;
     const members = room.memberCount ?? 0;
 
     return (
-      <Card className="flex flex-col h-full min-h-[18rem] md:min-h-[20rem] min-w-[16rem] md:min-w-[22rem] rounded-2xl shadow-sm hover:shadow-md transition-all bg-card/80 backdrop-blur-sm border border-border/40">
-        <CardHeader className="h-20 bg-gradient-to-br from-indigo-600/20 to-indigo-800/40 p-4 rounded-t-2xl">
+      <Card className="
+        flex items-center h-[20vh] min-w-[16rem] md:min-w-[22rem]
+        rounded-2xl shadow-sm transition-all
+        bg-card/80 backdrop-blur-sm 
+        border border-border hover:border-primary/40
+      ">
+        <CardHeader className="
+          w-[12em] h-full 
+          bg-gradient-to-br 
+          from-indigo-500/20 to-indigo-700/40 
+          rounded-md
+          flex items-center
+        ">
           <p className="text-base md:text-lg font-semibold truncate flex items-center gap-2">
             #{highlight(room.name, debounced)}
             {room.is_private && (
@@ -164,7 +175,11 @@ const SearchComponent = memo(function SearchComponent({
             </div>
 
             {room.participationStatus === "pending" && (
-              <span className="text-xs font-medium bg-yellow-500/20 text-yellow-700 px-2 py-1 rounded-md">
+              <span className="
+                text-xs font-medium 
+                bg-yellow-500/20 text-yellow-700 dark:text-yellow-300 
+                px-2 py-1 rounded-md
+              ">
                 Pending approval
               </span>
             )}
@@ -183,7 +198,7 @@ const SearchComponent = memo(function SearchComponent({
                 <Button
                   size="sm"
                   variant="outline"
-                  className="text-red-600 hover:text-red-700"
+                  className="text-red-600 dark:text-red-400 hover:text-red-700"
                   onClick={() => handleLeave(room.id)}
                 >
                   <LogOut className="h-4 w-4 mr-2" />
@@ -205,15 +220,20 @@ const SearchComponent = memo(function SearchComponent({
     );
   };
 
-  // -------------------------------------------------------------------
-  // USER CARD
-  // -------------------------------------------------------------------
+  /* ========================================================= */
+  /* USER CARD (Dark/Light Optimized)                          */
+  /* ========================================================= */
   const UserCard = (u: PartialProfile) => {
     const first = (u.display_name ?? u.username ?? "?")[0]?.toUpperCase();
 
     return (
-      <Card className="flex flex-col items-center justify-between p-4 rounded-xl aspect-[3/4] min-w-[10rem] md:min-w-[12rem] bg-card/80 backdrop-blur-sm border border-border/40 hover:shadow-md transition-all">
-        <Avatar className="h-16 w-16 rounded-xl mb-3">
+      <Card className="
+        flex items-center gap-6 justify-start p-4 w-full h-[15em]
+        rounded-xl bg-card backdrop-blur-sm 
+        border border-border hover:border-primary/40 hover:bg-card/60
+        transition-all
+      ">
+        <Avatar className="h-[10em] w-[10em] rounded-xl">
           {u.avatar_url ? (
             <AvatarImage
               src={u.avatar_url}
@@ -227,40 +247,44 @@ const SearchComponent = memo(function SearchComponent({
           )}
         </Avatar>
 
-        <div className="min-w-0 text-center">
-          <p className="font-semibold text-sm md:text-base truncate">
+        <div className="min-w-0 text-left">
+          <p className="font-semibold text-base md:text-lg truncate">
             {highlight(u.display_name ?? u.username ?? "Unknown", debounced)}
           </p>
           <p className="text-xs text-muted-foreground">@{u.username}</p>
-        </div>
 
-        <Button
-          size="sm"
-          variant="secondary"
-          className="w-full mt-3"
-          onClick={() => router.push(`/profile/${u.id}`)}
-        >
-          View
-        </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            className="w-full mt-4"
+            onClick={() => router.push(`/profile/${u.id}`)}
+          >
+            View
+          </Button>
+        </div>
       </Card>
     );
   };
 
-  // -------------------------------------------------------------------
-  // MAIN UI - FIXED SCROLLING
-  // -------------------------------------------------------------------
+  /* ========================================================= */
+  /* MAIN UI - Dark/Light Ready                                */
+  /* ========================================================= */
   return (
-    <div className="w-full mx-auto p-4 md:p-6 h-full flex flex-col overflow-hidden">
-      {/* Search + Tabs - FIXED HEIGHT */}
+    <div className="w-full mx-auto p-4 md:p-6 h-full flex flex-col overflow-hidden bg-background">
+      
+      {/* Search Bar + Tabs */}
       <div className="flex flex-col sm:flex-row items-center gap-4 mb-6 flex-shrink-0">
         <div className="relative flex-1">
           <Input
-            className="pl-10 h-12 rounded-xl text-sm md:text-base"
+            className="pl-10 h-12 rounded-xl text-sm md:text-base bg-card border-border"
             placeholder="Search rooms or users…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-5 w-5" />
+          <SearchIcon className="
+            absolute left-3 top-1/2 -translate-y-1/2 
+            text-muted-foreground h-5 w-5
+          " />
         </div>
 
         <Tabs
@@ -268,111 +292,119 @@ const SearchComponent = memo(function SearchComponent({
           onValueChange={(v) => setTab(v as "rooms" | "users")}
           className="w-full sm:w-auto"
         >
-          <TabsList className="grid grid-cols-2 w-full sm:w-auto">
-            <TabsTrigger value="rooms" className="rounded-lg">
-              Rooms
-            </TabsTrigger>
-            <TabsTrigger value="users" className="rounded-lg">
-              Users
-            </TabsTrigger>
-          </TabsList>
+         <TabsList className="grid grid-cols-2 w-full sm:w-auto bg-card border border-border rounded-xl">
+  <TabsTrigger
+    value="rooms"
+    className="rounded-lg data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+  >
+    Rooms
+  </TabsTrigger>
+
+  <TabsTrigger
+    value="users"
+    className="rounded-lg data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+  >
+    Users
+  </TabsTrigger>
+</TabsList>
+
         </Tabs>
       </div>
 
-      
+      {/* Scroll Area */}
       <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin">
 
+        <AnimatePresence mode="wait">
+          {/* ROOMS TAB */}
+          {tab === "rooms" && (
+            <motion.div
+              key="rooms-tab"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="h-full overflow-hidden"
+            >
+              {filteredRooms.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-muted-foreground">
+                  No rooms found.
+                </div>
+              ) : (
+                <>
+                  {/* MOBILE VERTICAL */}
+                  <div className="block md:hidden h-[80vh] pb-12 overflow-y-auto scrollbar-thin scroll-container">
+                    <div className="flex flex-col gap-4 px-1 pb-4">
+                      {filteredRooms.map((room) => (
+                        <motion.div
+                          key={room.id}
+                          layout
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                        >
+                          <RoomCard room={room} />
+                        </motion.div>
+                      ))}
+                    </div>
+                  </div>
 
-  <AnimatePresence mode="wait">
-    {/* ROOMS TAB */}
-    {tab === "rooms" && (
-      <motion.div
-        key="rooms-tab"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="h-full overflow-hidden"
-      >
-        {filteredRooms.length === 0 ? (
-          <div className="h-full flex items-center justify-center text-muted-foreground">
-            No rooms found.
-          </div>
-        ) : (
-          <>
-            {/* MOBILE VERTICAL - SCROLLABLE */}
-            <div className="block md:hidden h-[80vh] overflow-y-auto scrollbar-thin scroll-container">
-              <div className="flex flex-col gap-4 px-1 pb-4">
-                {filteredRooms.map((room) => (
-                  <motion.div
-                    key={room.id}
-                    layout
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                  >
-                    <RoomCard room={room} />
-                  </motion.div>
-                ))}
-              </div>
-            </div>
+                  {/* DESKTOP HORIZONTAL */}
+                  <div className="hidden md:flex h-full overflow-x-auto scrollbar-custom overflow-y-hidden scroll-container">
+                    <div className="flex gap-6 px-2 pb-6">
+                      {filteredRooms.map((room) => (
+                        <motion.div
+                          key={room.id}
+                          layout
+                          initial={{ opacity: 0, x: 12 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          className="flex-shrink-0"
+                        >
+                          <RoomCard room={room} />
+                        </motion.div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </motion.div>
+          )}
 
-            {/* DESKTOP HORIZONTAL - SCROLLABLE */}
-            <div className="hidden md:flex h-full overflow-x-auto scrollbar-custom overflow-y-hidden scroll-container">
-              <div className="flex gap-6 px-2 pb-6">
-                {filteredRooms.map((room) => (
-                  <motion.div
-                    key={room.id}
-                    layout
-                    initial={{ opacity: 0, x: 12 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    className="flex-shrink-0"
-                  >
-                    <RoomCard room={room} />
-                  </motion.div>
-                ))}
-              </div>
-            </div>
-          </>
-        )}
-      </motion.div>
-    )}
+          {/* USERS TAB */}
+          {tab === "users" && (
+            <motion.div
+              key="users-tab"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="h-full"
+            >
+              {loadingUsers ? (
+                <div className="h-full flex items-center justify-center text-muted-foreground">
+                  Loading users…
+                </div>
+              ) : userResults.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-muted-foreground">
+                  No users found.
+                </div>
+              ) : (
+                <div className="h-[80vh] overflow-y-auto scrollbar-thin scroll-container pb-[6em]">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-2">
+                    {userResults.map((u) => (
+                      <motion.div
+                        key={u.id}
+                        layout
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                      >
+                        <UserCard {...u} />
+                      </motion.div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-    {/* USERS TAB */}
-    {tab === "users" && (
-      <motion.div
-        key="users-tab"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="h-full"
-      >
-        {loadingUsers ? (
-          <div className="h-full flex items-center justify-center text-muted-foreground">
-            Loading users…
-          </div>
-        ) : userResults.length === 0 ? (
-          <div className="h-full flex items-center justify-center text-muted-foreground">
-            No users found.
-          </div>
-        ) : (
-          <div className="h-[80vh] overflow-y-auto scrollbar-thin scroll-container">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-2">
-              {userResults.map((u) => (
-                <motion.div
-                  key={u.id}
-                  layout
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                >
-                  <UserCard {...u} />
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        )}
-      </motion.div>
-    )}
-  </AnimatePresence>
-</div>
+      </div>
     </div>
   );
 });
