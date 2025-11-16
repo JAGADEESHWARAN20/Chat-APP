@@ -280,7 +280,9 @@ const SearchComponent = memo(function SearchComponent({
       </div>
 
       
-<div className="flex-1 h-[80vh] overflow-y-scroll">
+      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin">
+
+
   <AnimatePresence mode="wait">
     {/* ROOMS TAB */}
     {tab === "rooms" && (
@@ -298,7 +300,7 @@ const SearchComponent = memo(function SearchComponent({
         ) : (
           <>
             {/* MOBILE VERTICAL - SCROLLABLE */}
-            <div className="block md:hidden h-full overflow-y-auto scrollbar-thin scroll-container">
+            <div className="block md:hidden h-[80vh] overflow-y-auto scrollbar-thin scroll-container">
               <div className="flex flex-col gap-4 px-1 pb-4">
                 {filteredRooms.map((room) => (
                   <motion.div
@@ -341,7 +343,7 @@ const SearchComponent = memo(function SearchComponent({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="h-full overflow-hidden"
+        className="h-full"
       >
         {loadingUsers ? (
           <div className="h-full flex items-center justify-center text-muted-foreground">
@@ -352,7 +354,7 @@ const SearchComponent = memo(function SearchComponent({
             No users found.
           </div>
         ) : (
-          <div className="h-full overflow-y-auto scrollbar-thin scroll-container">
+          <div className="h-[80vh] overflow-y-auto scrollbar-thin scroll-container">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-2">
               {userResults.map((u) => (
                 <motion.div
