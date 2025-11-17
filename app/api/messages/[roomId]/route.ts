@@ -7,7 +7,7 @@ export async function GET(
 ) {
   return withAuth(async ({ supabase, user }) => {
     try {
-      const { roomId } = params; // ✅ No need to await
+      const { roomId } = params; 
 
       const ip = req.headers.get('x-forwarded-for') || 'unknown';
       await withRateLimit(`messages-${roomId}-${ip}`);
