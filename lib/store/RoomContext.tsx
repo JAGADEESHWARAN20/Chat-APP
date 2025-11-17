@@ -241,22 +241,69 @@ export const useRoomStore = create<RoomState>()(
       
 
 
-      leaveRoom: async (roomId) => {
-        const supabase = getSupabaseBrowserClient();
-        const { fetchRooms, setSelectedRoomId } = get();
-        try {
-          const { error } = await supabase.rpc("leave_room", {
-            p_room_id: roomId,
-            p_user_id: get().user.id
-          });
-          if (error) throw error;
-          if (get().selectedRoomId === roomId) setSelectedRoomId(null);
-          await fetchRooms();
-          return true;
-        } catch {
-          return false;
-        }
-      },
+      // In your RoomContext.tsx - OPTIMIZED leaveRoom action
+leaveRoom: async (roomId: string) => {
+  const startTime = Date.now();
+  const supabase = getSupabaseBrowserClient();
+  const { fetchRooms, setSelectedRoomId, removeRoom, user } = get();
+
+  if (!user?.id) {
+    toast.error("Please log in to leave rooms");
+    return false;
+  }
+
+  try {
+    console.log(`🚀 LEAVE ACTION START: ${roomId}`);
+    
+    // 🚀 OPTIMISTIC UPDATE (Remove from UI immediately)
+    removeRoom(roomId);
+    if (get().selectedRoomId === roomId) {
+      setSelectedRoomId(null);
+    }
+
+    // 🚀 API CALL
+    const res = await fetch(`/api/rooms/${roomId}/leave`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: 'include'
+    });
+
+    const data = await res.json();
+    const apiTime = Date.now() - startTime;
+
+    if (!res.ok || !data.success) {
+      console.error(`❌ LEAVE ACTION FAILED (${apiTime}ms):`, data.error);
+      
+      // 🚀 ROLLBACK OPTIMISTIC UPDATE
+      setTimeout(() => fetchRooms(), 100); // Refresh to restore state
+      
+      if (data.error?.includes('CREATOR_CANNOT_LEAVE')) {
+        toast.error(data.error);
+      } else {
+        toast.error(data.error || "Failed to leave room");
+      }
+      return false;
+    }
+
+    const totalTime = Date.now() - startTime;
+    console.log(`✅ LEAVE ACTION SUCCESS: ${totalTime}ms (API: ${apiTime}ms)`);
+
+    toast.success(data.message || "Left room successfully");
+    
+    // 🚀 BACKGROUND REFRESH
+    setTimeout(() => fetchRooms(), 200);
+    return true;
+
+  } catch (err: any) {
+    const totalTime = Date.now() - startTime;
+    console.error(`💥 LEAVE ACTION ERROR (${totalTime}ms):`, err);
+    
+    // 🚀 ROLLBACK ON NETWORK ERRORS
+    setTimeout(() => fetchRooms(), 100);
+    toast.error("Network error - please try again");
+    return false;
+  }
+},
 
       createRoom: async (name, isPrivate) => {
         try {
