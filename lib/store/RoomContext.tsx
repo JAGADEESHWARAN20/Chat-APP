@@ -245,7 +245,7 @@ export const useRoomStore = create<RoomState>()(
         const supabase = getSupabaseBrowserClient();
         const { fetchRooms, setSelectedRoomId } = get();
         try {
-          const { error } = await supabase.rpc("leave_room", {
+          const { error } = await supabase.rpc("remove_from_room", {
             p_room_id: roomId,
             p_user_id: get().user.id
           });

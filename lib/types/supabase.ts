@@ -323,6 +323,39 @@ export type Database = {
           },
         ]
       }
+      room_overview: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          id: string
+          is_private: boolean | null
+          latest_message: string | null
+          latest_message_created_at: string | null
+          member_count: number | null
+          name: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          id: string
+          is_private?: boolean | null
+          latest_message?: string | null
+          latest_message_created_at?: string | null
+          member_count?: number | null
+          name?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          is_private?: boolean | null
+          latest_message?: string | null
+          latest_message_created_at?: string | null
+          member_count?: number | null
+          name?: string | null
+        }
+        Relationships: []
+      }
       room_participants: {
         Row: {
           active: boolean | null
@@ -439,37 +472,41 @@ export type Database = {
         Args: { p_message_ids: string[]; p_user_id: string }
         Returns: undefined
       }
-      create_room_with_member:
-        | {
-            Args: {
-              p_is_private: boolean
-              p_name: string
-              p_timestamp: string
-              p_user_id: string
-            }
-            Returns: {
-              created_at: string
-              created_by: string
-              id: string
-              is_private: boolean
-              name: string
-            }[]
-          }
-        | {
-            Args: {
-              p_is_private: boolean
-              p_name: string
-              p_timestamp: string
-              p_user_id: string
-            }
-            Returns: {
-              created_at: string
-              created_by: string
-              id: string
-              is_private: boolean
-              name: string
-            }[]
-          }
+      create_room_with_member: {
+        Args: {
+          p_is_private: boolean
+          p_name: string
+          p_timestamp: string
+          p_user_id: string
+        }
+        Returns: {
+          created_at: string
+          created_by: string
+          id: string
+          is_private: boolean
+          name: string
+        }[]
+      }
+      get_messages: {
+        Args: { room_id: string }
+        Returns: {
+          created_at: string
+          direct_chat_id: string | null
+          dm_thread_id: string | null
+          id: string
+          is_edited: boolean
+          room_id: string | null
+          sender_id: string
+          status: string | null
+          text: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "messages"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       get_room_members: {
         Args: { room_id_param: string }
         Returns: {
@@ -517,14 +554,8 @@ export type Database = {
         Args: { p_room_id: string; p_user_id: string }
         Returns: undefined
       }
-      join_room: {
-        Args: { p_room_id: string; p_user_id: string }
-        Returns: Json
-      }
-      leave_room: {
-        Args: { p_room_id: string; p_user_id: string }
-        Returns: undefined
-      }
+      join_room: { Args: { p_room_id: string }; Returns: Json }
+      refresh_room_overview: { Args: { room_id: string }; Returns: undefined }
       reject_notification: {
         Args: {
           p_notification_id: string
@@ -532,6 +563,27 @@ export type Database = {
           p_sender_id: string
         }
         Returns: undefined
+      }
+      remove_from_room: { Args: { p_room_id: string }; Returns: Json }
+      search_rooms: {
+        Args: { p_query?: string }
+        Returns: {
+          id: string
+          is_member: boolean
+          is_private: boolean
+          member_count: number
+          name: string
+          participation_status: string
+        }[]
+      }
+      search_users: {
+        Args: { p_query?: string }
+        Returns: {
+          avatar_url: string
+          display_name: string
+          id: string
+          username: string
+        }[]
       }
       send_message_with_notify: {
         Args: {
