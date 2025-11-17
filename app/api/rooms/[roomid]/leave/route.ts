@@ -1,105 +1,63 @@
-import { NextRequest } from "next/server";
-import { withAuth, validateUUID, errorResponse, successResponse } from "@/lib/api-utils";
+// app/api/rooms/[roomid]/leave/route.ts - OPTIMIZED
+import { NextRequest, NextResponse } from "next/server";
+import { withAuth, UUID_REGEX } from "@/lib/api-utils";
 
 export async function PATCH(
-  _request: NextRequest,
-  { params }: { params: Promise<{ roomId?: string; roomid?: string }> }
+  request: NextRequest,
+  { params }: { params: { roomid: string } }
 ) {
+  const startTime = Date.now();
+  
   return withAuth(async ({ supabase, user }) => {
     try {
-      const { roomId, roomid } = await params;
-      const actualRoomId = roomId ?? roomid;
+      const roomId = params.roomid?.trim();
 
-      if (!actualRoomId) {
-        return errorResponse("Room ID is required", "MISSING_ROOM_ID", 400);
-      }
-      validateUUID(actualRoomId, "roomId");
-
-      // Get room details
-      const { data: room, error: roomError } = await supabase
-        .from("rooms")
-        .select("id, name, created_by")
-        .eq("id", actualRoomId)
-        .single();
-
-      if (roomError || !room) {
-        return errorResponse("Room not found", "ROOM_NOT_FOUND", 404);
+      // 🚀 ULTRA-FAST VALIDATION
+      if (!roomId || !UUID_REGEX.test(roomId)) {
+        return NextResponse.json({ error: 'Invalid room ID' }, { status: 400 });
       }
 
-      // Check if user is a member
-      const { data: member } = await supabase
-        .from("room_members")
-        .select("status")
-        .eq("room_id", actualRoomId)
-        .eq("user_id", user.id)
-        .single();
+      console.log(`🚀 LEAVE START: ${roomId} by ${user.id}`);
 
-      if (!member) {
-        return errorResponse("Not a member of this room", "NOT_A_MEMBER", 403);
-      }
-
-      // Check if creator is trying to leave
-      if (room.created_by === user.id) {
-        const { count } = await supabase
-          .from("room_members")
-          .select("user_id", { count: "exact" })
-          .eq("room_id", actualRoomId)
-          .eq("status", "accepted");
-
-        if (count && count > 1) {
-          return errorResponse("Creator must transfer ownership before leaving", "CREATOR_CANNOT_LEAVE", 400);
-        }
-        // If only member, delete the room
-        await supabase.from("rooms").delete().eq("id", actualRoomId);
-      } else {
-        // Use RPC to leave room
-        const { error: leaveError } = await supabase.rpc("leave_room", {
-          p_room_id: actualRoomId,
-          p_user_id: user.id
-        });
-
-        if (leaveError) {
-          throw leaveError;
-        }
-      }
-
-      // Get user's remaining rooms
-      const { data: otherRooms } = await supabase
-        .from("room_members")
-        .select("room_id, rooms(name)")
-        .eq("user_id", user.id)
-        .eq("status", "accepted")
-        .order("created_at", { ascending: false });
-
-      return successResponse({
-        message: `Successfully left "${room.name}"`,
-        roomLeft: { id: room.id, name: room.name },
-        hasOtherRooms: !!otherRooms?.length,
-        defaultRoom: otherRooms?.[0] ? {
-          id: otherRooms[0].room_id,
-          name: otherRooms[0].rooms.name
-        } : null
+      // 🚀 DIRECT RPC CALL (Single operation)
+      const { error } = await supabase.rpc('leave_room', {
+        p_room_id: roomId,
+        p_user_id: user.id
       });
-    } catch (error) {
-      console.error("[Leave Room] Error:", error);
-      return errorResponse("Internal server error", "INTERNAL_ERROR", 500);
+
+      const dbTime = Date.now() - startTime;
+      
+      if (error) {
+        console.error(`❌ LEAVE RPC ERROR (${dbTime}ms):`, error.message);
+        
+        // 🚀 SMART ERROR HANDLING
+        if (error.message.includes('CREATOR_CANNOT_LEAVE')) {
+          return NextResponse.json({ 
+            error: error.message.replace('CREATOR_CANNOT_LEAVE: ', '') 
+          }, { status: 400 });
+        }
+        
+        // 🚀 Silent success for edge cases
+        if (error.message.includes('ROOM_NOT_FOUND') || error.message.includes('not a member')) {
+          return NextResponse.json({ success: true, message: 'Left room' });
+        }
+
+        throw error;
+      }
+
+      const totalTime = Date.now() - startTime;
+      console.log(`✅ LEAVE SUCCESS: ${totalTime}ms (DB: ${dbTime}ms)`);
+
+      return NextResponse.json({ 
+        success: true,
+        message: 'Left room successfully',
+        performance: `${totalTime}ms`
+      });
+
+    } catch (err: any) {
+      const totalTime = Date.now() - startTime;
+      console.error(`💥 LEAVE ERROR (${totalTime}ms):`, err);
+      return NextResponse.json({ error: 'Failed to leave room' }, { status: 500 });
     }
   });
-}
-
-// Add other HTTP methods for completeness
-export async function GET() {
-  return errorResponse("Method not allowed", "METHOD_NOT_ALLOWED", 405);
-}
-
-export async function POST() {
-  return errorResponse("Method not allowed", "METHOD_NOT_ALLOWED", 405);
-}
-
-export async function PUT() {
-  return errorResponse("Method not allowed", "METHOD_NOT_ALLOWED", 405);
-}
-
-export async function DELETE() {
-  return errorResponse("Method not allowed", "METHOD_NOT_ALLOWED", 405);
 }
