@@ -8,71 +8,56 @@ export async function PATCH(
 ) {
   const startTime = Date.now();
 
-  return withAuth(async ({ supabase, user }) => {
+  return withAuth(async ({ supabase }) => {
     try {
       const roomId = params.roomid?.trim();
 
-      // ⚡ Validation
       if (!roomId || !UUID_REGEX.test(roomId)) {
         return NextResponse.json(
-          { success: false, error: "Invalid room ID" },
+          { success: false, error: 'Invalid room ID' },
           { status: 400 }
         );
       }
 
-      console.log(`🚀 LEAVE START: room=${roomId} user=${user.id}`);
+      console.log(`🚀 LEAVE START: room=${roomId}`);
 
-      // ⚡ DIRECT RPC CALL
       const { data, error } = await supabase.rpc("leave_room", {
-        p_room_id: roomId
+        p_room_id: roomId      // ✅ ONLY THIS
       });
 
       const dbTime = Date.now() - startTime;
 
       if (error) {
-        console.error(`❌ LEAVE RPC ERROR (${dbTime}ms):`, error.message);
-        return NextResponse.json(
-          { success: false, error: "Failed to leave room" },
-          { status: 500 }
-        );
+        console.error(`❌ RPC ERROR (${dbTime}ms):`, error.message);
+        return NextResponse.json({
+          success: false,
+          error: 'Failed to leave room'
+        }, { status: 500 });
       }
 
-      // ❗ Handle business logic errors returned by RPC
-      if (data.success === false) {
-        console.warn(`⚠️ LEAVE FAILED (${dbTime}ms):`, data.error);
+      if (!data?.success) {
+        console.warn("❌ LEAVE FAILED:", data.error);
 
-        if (data.error === "CREATOR_CANNOT_LEAVE") {
-          return NextResponse.json(
-            { success: false, error: data.message },
-            { status: 400 }
-          );
-        }
-
-        return NextResponse.json(
-          { success: false, error: data.error || "Failed to leave room" },
-          { status: 500 }
-        );
+        return NextResponse.json({
+          success: false,
+          error: data.message ?? data.error
+        }, { status: 400 });
       }
 
-      const totalTime = Date.now() - startTime;
-      console.log(
-        `✅ LEAVE SUCCESS: ${totalTime}ms (DB ${dbTime}ms) — ${data.message}`
-      );
+      const total = Date.now() - startTime;
 
       return NextResponse.json({
         success: true,
         message: data.message,
         leftRoomId: roomId,
-        performance: `${totalTime}ms`,
+        performance: `${total}ms`
       });
-    } catch (err: any) {
-      const totalTime = Date.now() - startTime;
-      console.error(`💥 LEAVE ERROR (${totalTime}ms):`, err);
 
-      return NextResponse.json(
-        { success: false, error: "Internal server error" },
-        { status: 500 }
-      );
+    } catch (err: any) {
+      return NextResponse.json({
+        success: false,
+        error: 'Internal server error'
+      }, { status: 500 });
     }
   });
 }
