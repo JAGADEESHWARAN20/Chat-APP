@@ -204,42 +204,41 @@ export const useRoomStore = create<RoomState>()(
         const supabase = getSupabaseBrowserClient();
         const { fetchRooms, setSelectedRoomId } = get();
       
+        if (!get().user) return false;
+      
         try {
-          const { data, error } = await supabase.rpc("join_room", {
-            p_room_id: roomId,
-            p_user_id: get().user.id
-          }) as any;
+          const response = await fetch(`/api/rooms/${roomId}/join`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+          });
       
-          if (error) throw error;
-          if (!data) return false;
-      
-          switch (data.action) {
-            case "joined_public_room":
-              toast.success("Joined room!");
-              await fetchRooms();
-              setSelectedRoomId(roomId); // ✅ auto-open
-              return true;
-      
-            case "join_request_sent":
-              toast.info("Join request sent to room owner");
-              await fetchRooms();
-              return true;
-      
-            case "owner_joined_private_room":
-              toast.success("Welcome to your private room!");
-              await fetchRooms();
-              setSelectedRoomId(roomId);
-              return true;
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || "Failed to join room");
           }
       
-          return true;
+          const data = await response.json();
+      
+          if (data.status === "accepted") {
+            toast.success("Joined room!");
+            await fetchRooms();
+            setSelectedRoomId(roomId); // ✅ auto-open
+            return true;
+          } else if (data.status === "pending") {
+            toast.info("Join request sent to room owner");
+            await fetchRooms();
+            return true;
+          } else {
+            toast.success(data.message || "Welcome to your private room!");
+            await fetchRooms();
+            setSelectedRoomId(roomId);
+            return true;
+          }
         } catch (err: any) {
           toast.error(err.message ?? "Failed to join room");
           return false;
         }
       },
-      
-
 
       leaveRoom: async (roomId) => {
         const supabase = getSupabaseBrowserClient();
