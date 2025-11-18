@@ -569,7 +569,6 @@ export type Database = {
         Args: { p_room_id: string; p_user_id: string }
         Returns: undefined
       }
-      join_room: { Args: { p_room_id: string }; Returns: Json }
       refresh_room_overview: { Args: { room_id: string }; Returns: undefined }
       reject_notification: {
         Args: {
@@ -579,10 +578,7 @@ export type Database = {
         }
         Returns: undefined
       }
-      remove_from_room: {
-        Args: { p_room_id: string; p_user_id?: string }
-        Returns: Json
-      }
+      remove_from_room: { Args: { p_room_id: string }; Returns: Json }
       search_rooms: {
         Args: { p_query?: string }
         Returns: {

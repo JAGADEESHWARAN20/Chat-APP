@@ -6,14 +6,24 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Button } from "./ui/button";
 import { toast } from "sonner";
 import { useUser } from "@/lib/store/user";
-import { IRoom, IRoomParticipant } from "@/lib/types/rooms";
+import { Database } from "@/lib/types/supabase";
 import { ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { RoomCard } from "./ui/room-card";
+import { RoomWithMembership } from "@/lib/store/roomstore"; // ← Single source: Use store's type
+
+// Define missing type from Supabase schema (IRoomParticipant was in deleted file)
+type IRoomParticipant = Database["public"]["Tables"]["room_participants"]["Row"];
 
 export default function RoomList() {
   const [userParticipations, setUserParticipations] = useState<IRoomParticipant[]>([]);
-  const { rooms, setRooms, selectedRoom, setSelectedRoom } = useRoomStore();
+  const { 
+    rooms, 
+    setRooms, 
+    selectedRoom, 
+    setSelectedRoom,
+    fetchRooms // ← Use store's RPC fetch (includes memberCount!)
+  } = useRoomStore();
   const supabase = getSupabaseBrowserClient();
   const user = useUser((state) => state.user);
 
@@ -24,34 +34,29 @@ export default function RoomList() {
     }
 
     try {
-      const response = await fetch("/api/rooms/all");
-      if (!response.ok) {
-        throw new Error("Failed to fetch rooms");
-      }
-
-      const { success, rooms } = await response.json();
-      if (success && rooms) {
-        const transformedRooms = rooms.map((room: IRoom) => ({
-          ...room,
-          isMember: userParticipations.some(p => p.room_id === room.id && p.status === 'accepted'),
-          participationStatus: userParticipations.find(p => p.room_id === room.id)?.status || null
-        }));
-        setRooms(transformedRooms);
-        toast.success("Rooms refreshed");
-      }
+      await fetchRooms(); // ← Delegate to store: fetches + transforms with memberCount
+      toast.success("Rooms refreshed");
     } catch (err) {
       toast.error("Failed to refresh rooms");
       console.error(err);
     }
   };
 
-  const handleRoomSwitch = useCallback(async (room: IRoom) => {
+  const handleRoomSwitch = useCallback(async (room: RoomWithMembership) => {
     if (!user) {
       toast.error("You must be logged in to switch rooms");
       return;
     }
 
     try {
+      // Optimistic switch (no API needed if already member)
+      if (room.isMember) {
+        setSelectedRoom(room); // ← Already full type with memberCount
+        toast.success("Switched to room");
+        return;
+      }
+
+      // Fallback: API switch if needed
       const response = await fetch("/api/rooms/switch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -63,16 +68,17 @@ export default function RoomList() {
         throw new Error(errorData.error || "Failed to switch room");
       }
 
-      setSelectedRoom({
-        ...room,
-        isMember: userParticipations.some(p => p.room_id === room.id && p.status === 'accepted'),
-        participationStatus: userParticipations.find(p => p.room_id === room.id)?.status || null
-      });
-      toast.success("Successfully switched room");
+      // Refresh to get updated membership + counts
+      await fetchRooms();
+      const updatedRoom = rooms.find((r) => r.id === room.id);
+      if (updatedRoom) {
+        setSelectedRoom(updatedRoom);
+        toast.success("Successfully switched room");
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to switch room");
     }
-  }, [user, setSelectedRoom, userParticipations]);
+  }, [user, setSelectedRoom, fetchRooms, rooms]);
 
   const handleLeaveRoom = async (roomId: string) => {
     if (!user) {
@@ -94,7 +100,7 @@ export default function RoomList() {
       if (!hasOtherRooms) {
         setSelectedRoom(null);
       }
-      await refreshRooms();
+      await fetchRooms(); // ← Refresh via store
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to leave room");
     }
@@ -118,13 +124,10 @@ export default function RoomList() {
       const data = await response.json();
       toast.success(data.message);
       if (!data.status || data.status === "accepted") {
-        const { data: room } = await supabase
-          .from("rooms")
-          .select("*")
-          .eq("id", roomId)
-          .single();
-        if (room) {
-          await handleRoomSwitch(room);
+        await fetchRooms(); // ← Refresh to update membership + counts
+        const updatedRoom = rooms.find((r) => r.id === roomId);
+        if (updatedRoom) {
+          await handleRoomSwitch(updatedRoom);
         }
       } else if (data.status === "pending") {
         await fetchParticipations();
@@ -133,11 +136,6 @@ export default function RoomList() {
       toast.error(error instanceof Error ? error.message : "Failed to join room");
     }
   };
-
-  // const canJoinRoom = (room: IRoom) => {
-  //   const participation = userParticipations.find((p) => p.room_id === room.id);
-  //   return !participation || participation.status === "rejected";
-  // };
 
   const fetchParticipations = useCallback(async () => {
     if (!user) return;
@@ -153,60 +151,44 @@ export default function RoomList() {
         return;
       }
 
-      if (participations) {
-        setUserParticipations(participations);
-      }
+      setUserParticipations(participations || []);
     } catch (err) {
       toast.error("Unexpected error fetching participations");
       console.error("Unexpected error:", err);
     }
-  }, [user, supabase, setUserParticipations]);
+  }, [user, supabase]);
 
   useEffect(() => {
     if (!user) return;
 
-    const fetchRooms = async () => {
-      try {
-        const response = await fetch("/api/rooms/all");
-        if (!response.ok) {
-          throw new Error("Failed to fetch rooms");
-        }
+    const initialize = async () => {
+      await fetchParticipations();
+      await fetchRooms(); // ← Store handles transformation with memberCount
 
-        const { success, rooms: fetchedRooms } = await response.json();
-        if (success && fetchedRooms) {
-          const transformedRooms = fetchedRooms.map((room: IRoom) => ({
-            ...room,
-            isMember: userParticipations.some(p => p.room_id === room.id && p.status === 'accepted'),
-            participationStatus: userParticipations.find(p => p.room_id === room.id)?.status || null
-          }));
-          setRooms(transformedRooms);
-        }
-      } catch (err) {
-        toast.error("Unexpected error fetching rooms");
-        console.error("Unexpected error:", err);
-      }
-    };
-
-    const initializeActiveRoom = async () => {
+      // Initialize active room logic
       const { data: activeRooms, error: activeRoomsError } = await supabase
         .from("room_members")
         .select("room_id")
         .eq("user_id", user.id)
         .eq("active", true);
+      
       if (activeRoomsError) {
         console.error("Error fetching active rooms:", activeRoomsError.message);
         toast.error("Failed to initialize active room");
         return;
       }
 
-      if (!activeRooms || activeRooms.length === 0) {
+      if (!activeRooms?.length) {
         const generalChat = rooms.find((r) => r.name === "General Chat");
         if (generalChat && generalChat.created_by === user.id) {
           await handleRoomSwitch(generalChat);
         } else {
           setSelectedRoom(null);
         }
-      } else if (activeRooms.length > 1) {
+        return;
+      }
+
+      if (activeRooms.length > 1) {
         const firstActiveRoomId = activeRooms[0].room_id;
         const { error: fixError } = await supabase
           .from("room_members")
@@ -234,8 +216,9 @@ export default function RoomList() {
       }
     };
 
-    fetchRooms().then(() => initializeActiveRoom());
+    initialize();
 
+    // Realtime: Rooms changes
     const roomChannel = supabase
       .channel("room_changes")
       .on(
@@ -245,17 +228,8 @@ export default function RoomList() {
       )
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(roomChannel);
-    };
-  }, [user, supabase, setRooms, setSelectedRoom, rooms, handleRoomSwitch, userParticipations]);
-
-  useEffect(() => {
-    if (!user) return;
-
-    fetchParticipations();
-
-    const channel = supabase
+    // Realtime: Participants changes
+    const participantChannel = supabase
       .channel("room_participants_changes")
       .on(
         "postgres_changes",
@@ -265,9 +239,10 @@ export default function RoomList() {
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(roomChannel);
+      supabase.removeChannel(participantChannel);
     };
-  }, [user, supabase, fetchParticipations]);
+  }, [user, supabase, fetchRooms, fetchParticipations, handleRoomSwitch, rooms, setSelectedRoom]);
 
   if (!user) {
     return (
@@ -305,7 +280,7 @@ export default function RoomList() {
                 onJoin={() => handleJoinRoom(room.id)}
                 onLeave={() => handleLeaveRoom(room.id)}
                 participationStatus={participation?.status || null}
-                userCount={room.participant_count || 0}
+                userCount={room.memberCount || 0} // ← Use memberCount from store type
               />
             </div>
           );
