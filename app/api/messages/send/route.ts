@@ -1,50 +1,70 @@
 // app/api/messages/send/route.ts
 import { NextRequest } from "next/server";
-import { withAuth, successResponse, errorResponse, validateUUID, validateMessageText, withRateLimit } from "@/lib/api-utils";
+import {
+  withAuth,
+  successResponse,
+  errorResponse,
+  validateUUID,
+  validateMessageText,
+  withRateLimit,
+} from "@/lib/api-utils";
 
-export async function POST(req: NextRequest) {
-  return withAuth(async ({ supabase, user }) => {
+// ⛔ DO NOT export async function POST()
+// ⛔ DO NOT return withAuth()
+
+// ✅ Correct: POST receives req, passes ONLY (supabase, user) to handler
+export const POST = (req: NextRequest) =>
+  withAuth(async ({ supabase, user }) => {
     try {
       const { roomId, directChatId, text } = await req.json();
-      
-      // Rate limiting
-      const ip = req.headers.get('x-forwarded-for') || 'unknown';
+
+      // Rate limit by IP
+      const ip = req.headers.get("x-forwarded-for") || "unknown";
       await withRateLimit(`send-message-${ip}`);
 
-      // Validate input
+      // Validate text
       try {
         validateMessageText(text);
-      } catch (error) {
+      } catch (err: any) {
         return errorResponse(
-          error instanceof Error ? error.message : "Invalid message text",
+          err?.message || "Invalid message text",
           "INVALID_TEXT",
           400
         );
       }
-      
+
       if (!roomId && !directChatId) {
-        return errorResponse("Room ID or Direct Chat ID required", "INVALID_TARGET", 400);
+        return errorResponse(
+          "Room ID or Direct Chat ID required",
+          "INVALID_TARGET",
+          400
+        );
       }
-      
+
+      // Validate IDs
       if (roomId) {
         try {
           validateUUID(roomId, "roomId");
-        } catch (error) {
-          return errorResponse("Invalid room ID format", "INVALID_ROOM_ID", 400);
+        } catch {
+          return errorResponse("Invalid room ID", "INVALID_ROOM_ID", 400);
         }
       }
-      
+
       if (directChatId) {
         try {
           validateUUID(directChatId, "directChatId");
-        } catch (error) {
-          return errorResponse("Invalid direct chat ID format", "INVALID_DIRECT_CHAT_ID", 400);
+        } catch {
+          return errorResponse(
+            "Invalid direct chat ID",
+            "INVALID_DIRECT_CHAT_ID",
+            400
+          );
         }
       }
 
       const userId = user.id;
 
-      // Verify membership/participation
+      // Membership check
       if (roomId) {
         const { data: member } = await supabase
           .from("room_members")
@@ -53,9 +73,13 @@ export async function POST(req: NextRequest) {
           .eq("user_id", userId)
           .eq("status", "accepted")
           .single();
-        
+
         if (!member) {
-          return errorResponse("Not a member of this room", "NOT_A_MEMBER", 403);
+          return errorResponse(
+            "Not a member of this room",
+            "NOT_A_MEMBER",
+            403
+          );
         }
       } else if (directChatId) {
         const { data: chat } = await supabase
@@ -63,9 +87,16 @@ export async function POST(req: NextRequest) {
           .select("user_id_1, user_id_2")
           .eq("id", directChatId)
           .single();
-        
-        if (!chat || (chat.user_id_1 !== userId && chat.user_id_2 !== userId)) {
-          return errorResponse("Not a participant in this direct chat", "NOT_A_PARTICIPANT", 403);
+
+        if (
+          !chat ||
+          (chat.user_id_1 !== userId && chat.user_id_2 !== userId)
+        ) {
+          return errorResponse(
+            "Not a participant in this direct chat",
+            "NOT_A_PARTICIPANT",
+            403
+          );
         }
       }
 
@@ -81,7 +112,8 @@ export async function POST(req: NextRequest) {
           status: "sent",
           is_edited: false,
         })
-        .select(`
+        .select(
+          `
           id,
           text,
           sender_id,
@@ -90,7 +122,7 @@ export async function POST(req: NextRequest) {
           room_id,
           direct_chat_id,
           status,
-          profiles:profiles!messages_sender_id_fkey (
+          profiles:profiles!messages_sender_id_fkey(
             id,
             username,
             display_name,
@@ -99,18 +131,26 @@ export async function POST(req: NextRequest) {
             updated_at,
             bio
           )
-        `)
+        `
+        )
         .single();
 
       if (error) {
-        console.error("[messages] Insert error:", error);
-        return errorResponse("Failed to send message", "INSERT_FAILED", 500);
+        console.error("Insert error:", error);
+        return errorResponse(
+          "Failed to send message",
+          "INSERT_FAILED",
+          500
+        );
       }
 
       return successResponse({ success: true, message });
-    } catch (error) {
-      console.error("[messages] Server error:", error);
-      return errorResponse("Internal server error", "INTERNAL_ERROR", 500);
+    } catch (err) {
+      console.error("Message send error:", err);
+      return errorResponse(
+        "Internal server error",
+        "INTERNAL_ERROR",
+        500
+      );
     }
-  });
-}
+  })(req); // IMPORTANT: pass req HERE
