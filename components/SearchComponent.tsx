@@ -17,9 +17,7 @@ import {
   LogOut,
 } from "lucide-react";
 
-import {
-  useRoomPresence,
-} from "@/lib/store/RoomContext";
+import { useRoomPresence } from "@/lib/store/RoomContext";
 import { useRoomStore } from "@/lib/store/roomstore";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useDebounce } from "use-debounce";
@@ -74,64 +72,66 @@ const SearchComponent = memo(function SearchComponent({
   const [debounced] = useDebounce(query, 300);
 
   const presence = useRoomPresence();
- 
-const joinRoom = useRoomStore(state => state.joinRoom);
-const leaveRoom = useRoomStore(state => state.leaveRoom);
-const fetchRooms = useRoomStore(state => state.fetchRooms);
-  // -------------------------------------------------------------------
+  const joinRoom = useRoomStore((s) => s.joinRoom);
+  const leaveRoom = useRoomStore((s) => s.leaveRoom);
+  const fetchRooms = useRoomStore((s) => s.fetchRooms);
+
+  // ---------------------------------------------------------
   // RPC: search_rooms
-  // -------------------------------------------------------------------
+  // ---------------------------------------------------------
   const fetchRoomsRPC = useCallback(async () => {
     try {
       setLoading(true);
+
       const { data, error } = await supabase.rpc("search_rooms", {
         p_query: debounced || "",
       });
 
       if (error) throw error;
       setRoomResults(data || []);
-    } catch (err) {
+    } catch (e) {
       toast.error("Failed loading rooms");
     } finally {
       setLoading(false);
     }
   }, [supabase, debounced]);
 
-  // -------------------------------------------------------------------
+  // ---------------------------------------------------------
   // RPC: search_users
-  // -------------------------------------------------------------------
+  // ---------------------------------------------------------
   const fetchUsersRPC = useCallback(async () => {
     try {
       setLoading(true);
+
       const { data, error } = await supabase.rpc("search_users", {
         p_query: debounced || "",
       });
 
       if (error) throw error;
       setUserResults(data || []);
-    } catch (err) {
+    } catch (e) {
       toast.error("Failed loading users");
     } finally {
       setLoading(false);
     }
   }, [supabase, debounced]);
 
-  // -------------------------------------------------------------------
-  // TAB SWITCH / QUERY CHANGE
-  // -------------------------------------------------------------------
+  // ---------------------------------------------------------
+  // TAB SWITCH / SEARCH EXECUTION
+  // ---------------------------------------------------------
   useEffect(() => {
     if (tab === "rooms") fetchRoomsRPC();
     if (tab === "users") fetchUsersRPC();
-  }, [tab, debounced]);
+  }, [tab, debounced, fetchRoomsRPC, fetchUsersRPC]); // ✅ fixed deps
 
-  // -------------------------------------------------------------------
-  // HANDLERS
-  // -------------------------------------------------------------------
+  // ---------------------------------------------------------
+  // JOIN + LEAVE handlers
+  // ---------------------------------------------------------
   const handleJoin = async (roomId: string) => {
     try {
       await joinRoom(roomId);
       fetchRoomsRPC();
-    } catch (err) {
+    } catch {
       toast.error("Failed to join room");
     }
   };
@@ -140,23 +140,25 @@ const fetchRooms = useRoomStore(state => state.fetchRooms);
     try {
       await leaveRoom(roomId);
       fetchRoomsRPC();
-    } catch (err) {
+    } catch {
       toast.error("Failed to leave room");
     }
   };
 
-  // -------------------------------------------------------------------
+  // ---------------------------------------------------------
   // ROOM CARD
-  // -------------------------------------------------------------------
+  // ---------------------------------------------------------
   const RoomCard = ({ room }: { room: RoomResult }) => {
     const online = presence?.[room.id]?.onlineUsers ?? 0;
 
     return (
-      <Card className="flex flex-col h-full min-h-[18rem] md:min-h-[20rem] min-w-[16rem] md:min-w-[22rem] rounded-2xl shadow-sm hover:shadow-md transition-all bg-card/80 border">
-        <CardHeader className="h-20 bg-gradient-to-br from-indigo-600/20 to-indigo-800/40 p-4 rounded-t-2xl">
+      <Card className="flex flex-col h-full min-h-[18rem] md:min-h-[20rem] rounded-2xl bg-card/80 border shadow-sm hover:shadow-md transition-all">
+        <CardHeader className="h-20 p-4 bg-gradient-to-br from-indigo-600/20 to-indigo-800/40 rounded-t-2xl">
           <p className="text-base md:text-lg font-semibold truncate flex items-center gap-2">
             #{highlight(room.name, debounced)}
-            {room.is_private && <LockIcon className="h-4 w-4 text-muted-foreground" />}
+            {room.is_private && (
+              <LockIcon className="h-4 w-4 text-muted-foreground" />
+            )}
           </p>
         </CardHeader>
 
@@ -167,15 +169,15 @@ const fetchRooms = useRoomStore(state => state.fetchRooms);
               <span className="font-medium">{room.member_count} members</span>
 
               {online > 0 && (
-                <span className="flex items-center gap-1 text-green-500 ml-2 text-xs md:text-sm font-medium">
-                  <span className="h-2 w-2 bg-green-500 rounded-full animate-pulse" />
+                <span className="flex items-center gap-1 text-green-500 ml-2 text-xs font-medium">
+                  <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
                   {online} online
                 </span>
               )}
             </div>
 
             {room.participation_status === "pending" && (
-              <span className="text-xs font-medium bg-yellow-500/20 text-yellow-700 px-2 py-1 rounded-md">
+              <span className="text-xs bg-yellow-500/20 text-yellow-700 px-2 py-1 rounded-md">
                 Pending approval
               </span>
             )}
@@ -186,11 +188,12 @@ const fetchRooms = useRoomStore(state => state.fetchRooms);
               <>
                 <Button
                   size="sm"
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                  className="bg-indigo-600 hover:bg-indigo-700"
                   onClick={() => router.push(`/rooms/${room.id}`)}
                 >
                   Open Room
                 </Button>
+
                 <Button
                   size="sm"
                   variant="outline"
@@ -216,20 +219,20 @@ const fetchRooms = useRoomStore(state => state.fetchRooms);
     );
   };
 
-  // -------------------------------------------------------------------
+  // ---------------------------------------------------------
   // USER CARD
-  // -------------------------------------------------------------------
+  // ---------------------------------------------------------
   const UserCard = (u: PartialProfile) => {
-    const first = (u.display_name ?? u.username ?? "?")[0]?.toUpperCase();
+    const initial = (u.display_name ?? u.username ?? "?")[0]?.toUpperCase();
 
     return (
-      <Card className="flex flex-col items-center justify-between p-4 rounded-xl aspect-[3/4] bg-card/80 border">
+      <Card className="flex flex-col items-center justify-between p-4 rounded-xl bg-card/80 border aspect-[3/4]">
         <Avatar className="h-16 w-16 rounded-xl mb-3">
           {u.avatar_url ? (
             <AvatarImage src={u.avatar_url} alt={u.display_name ?? "User"} />
           ) : (
             <AvatarFallback className="bg-indigo-600 text-white text-lg">
-              {first}
+              {initial}
             </AvatarFallback>
           )}
         </Avatar>
@@ -253,12 +256,11 @@ const fetchRooms = useRoomStore(state => state.fetchRooms);
     );
   };
 
-  // -------------------------------------------------------------------
+  // ---------------------------------------------------------
   // MAIN UI
-  // -------------------------------------------------------------------
+  // ---------------------------------------------------------
   return (
     <div className="w-full mx-auto p-4 md:p-6 h-full flex flex-col overflow-hidden">
-      
       {/* Search bar */}
       <div className="flex flex-col sm:flex-row items-center gap-4 mb-6">
         <div className="relative flex-1">
@@ -272,7 +274,7 @@ const fetchRooms = useRoomStore(state => state.fetchRooms);
         </div>
 
         <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
-          <TabsList className="grid grid-cols-2">
+          <TabsList className="grid grid-cols-2 w-full sm:w-auto">
             <TabsTrigger value="rooms">Rooms</TabsTrigger>
             <TabsTrigger value="users">Users</TabsTrigger>
           </TabsList>
@@ -281,13 +283,20 @@ const fetchRooms = useRoomStore(state => state.fetchRooms);
 
       <div className="flex-1 h-[80vh] overflow-y-scroll">
         <AnimatePresence mode="wait">
-          {/* ROOMS */}
           {tab === "rooms" && (
-            <motion.div key="rooms" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            <motion.div
+              key="rooms"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+            >
               {loading ? (
-                <div className="h-full flex items-center justify-center">Loading…</div>
+                <div className="h-full flex items-center justify-center">
+                  Loading…
+                </div>
               ) : roomResults.length === 0 ? (
-                <div className="h-full flex items-center justify-center text-muted-foreground">No rooms</div>
+                <div className="h-full flex items-center justify-center text-muted-foreground">
+                  No rooms
+                </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 p-2">
                   {roomResults.map((room) => (
@@ -298,13 +307,20 @@ const fetchRooms = useRoomStore(state => state.fetchRooms);
             </motion.div>
           )}
 
-          {/* USERS */}
           {tab === "users" && (
-            <motion.div key="users" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            <motion.div
+              key="users"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+            >
               {loading ? (
-                <div className="h-full flex items-center justify-center">Loading…</div>
+                <div className="h-full flex items-center justify-center">
+                  Loading…
+                </div>
               ) : userResults.length === 0 ? (
-                <div className="h-full flex items-center justify-center text-muted-foreground">No users</div>
+                <div className="h-full flex items-center justify-center text-muted-foreground">
+                  No users
+                </div>
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4 p-2">
                   {userResults.map((u) => (

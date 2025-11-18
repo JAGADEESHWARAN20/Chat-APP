@@ -1,29 +1,39 @@
 import { NextRequest } from "next/server";
-import { withAuth, validateUUID, errorResponse, successResponse, withRateLimit } from "@/lib/api-utils";
+import {
+  withAuth,
+  validateUUID,
+  errorResponse,
+  successResponse,
+  withRateLimit,
+} from "@/lib/api-utils";
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { roomId: string } } // ✅ FIXED
-) {
-  return withAuth(async ({ supabase, user }) => {
+export const GET = (req: NextRequest, ctx: { params: { roomId: string } }) =>
+  withAuth(async ({ supabase, user }) => {
     try {
-      const { roomId } = params; // ✅ No need to await
+      const roomId = ctx.params.roomId;
 
-      const ip = req.headers.get('x-forwarded-for') || 'unknown';
-      await withRateLimit(`messages-${roomId}-${ip}`);
+      if (!roomId) {
+        return errorResponse("Room ID missing", "MISSING_ROOM_ID", 400);
+      }
 
       validateUUID(roomId, "roomId");
 
-      const { data: room } = await supabase
+      // Rate limit by room + IP
+      const ip = req.headers.get("x-forwarded-for") || "unknown";
+      await withRateLimit(`messages-${roomId}-${ip}`);
+
+      // Check room exists
+      const { data: room, error: roomError } = await supabase
         .from("rooms")
         .select("id, is_private, created_by")
         .eq("id", roomId)
         .single();
 
-      if (!room) {
+      if (roomError || !room) {
         return errorResponse("Room not found", "ROOM_NOT_FOUND", 404);
       }
 
+      // Private room access check
       if (room.is_private) {
         const { data: member } = await supabase
           .from("room_members")
@@ -34,13 +44,19 @@ export async function GET(
           .single();
 
         if (!member) {
-          return errorResponse("Access denied to private room", "ACCESS_DENIED", 403);
+          return errorResponse(
+            "Access denied to private room",
+            "ACCESS_DENIED",
+            403
+          );
         }
       }
 
-      const { data: messages, error } = await supabase
+      // Fetch latest messages
+      const { data: messages, error: msgError } = await supabase
         .from("messages")
-        .select(`
+        .select(
+          `
           id,
           text,
           sender_id,
@@ -49,7 +65,7 @@ export async function GET(
           room_id,
           direct_chat_id,
           status,
-          profiles:profiles!messages_sender_id_fkey (
+          profiles:profiles!messages_sender_id_fkey(
             id,
             username,
             display_name,
@@ -58,19 +74,27 @@ export async function GET(
             updated_at,
             bio
           )
-        `)
+        `
+        )
         .eq("room_id", roomId)
         .order("created_at", { ascending: false })
         .limit(50);
 
-      if (error) {
-        return errorResponse("Failed to fetch messages", "FETCH_ERROR", 500);
+      if (msgError) {
+        return errorResponse(
+          "Failed to fetch messages",
+          "FETCH_ERROR",
+          500
+        );
       }
 
       return successResponse({ messages });
     } catch (error) {
-      console.error("Server error:", error);
-      return errorResponse("Internal server error", "INTERNAL_ERROR", 500);
+      console.error("GET /messages error:", error);
+      return errorResponse(
+        "Internal server error",
+        "INTERNAL_ERROR",
+        500
+      );
     }
-  });
-}
+  })(req);
