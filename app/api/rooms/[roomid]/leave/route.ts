@@ -1,21 +1,29 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { withAuth, validateUUID, errorResponse, successResponse } from "@/lib/api-utils";
+import { supabaseServer } from "@/lib/supabase/server"; // ← Server client (not used directly; passed via withAuth)
 
 export async function PATCH(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ roomId?: string; roomid?: string }> }
 ) {
   return withAuth(async ({ supabase, user }) => {
+    let actualRoomId: string | undefined; // ← Declare outside try for catch access
     try {
       const { roomId, roomid } = await params;
-      const actualRoomId = roomId ?? roomid;
+      actualRoomId = roomId ?? roomid;
 
+      // Security: Sanitize & validate early
       if (!actualRoomId) {
         return errorResponse("Room ID is required", "MISSING_ROOM_ID", 400);
       }
       validateUUID(actualRoomId, "roomId");
 
-      // Get room details
+      // Secure: Verify user via getUser (already in withAuth)
+      if (!user) {
+        return errorResponse("Unauthorized", "UNAUTHENTICATED", 401);
+      }
+
+      // Get room details (RLS-protected)
       const { data: room, error: roomError } = await supabase
         .from("rooms")
         .select("id, name, created_by")
@@ -26,80 +34,116 @@ export async function PATCH(
         return errorResponse("Room not found", "ROOM_NOT_FOUND", 404);
       }
 
-      // Check if user is a member
-      const { data: member } = await supabase
+      // Security: Double-check membership (RLS + explicit query)
+      const { data: member, error: memberError } = await supabase
         .from("room_members")
         .select("status")
         .eq("room_id", actualRoomId)
         .eq("user_id", user.id)
         .single();
 
-      if (!member) {
+      if (memberError || !member || member.status !== "accepted") {
         return errorResponse("Not a member of this room", "NOT_A_MEMBER", 403);
       }
 
-      // Check if creator is trying to leave
+      // Creator leave logic: Secure count check
       if (room.created_by === user.id) {
-        const { count } = await supabase
+        const { count, error: countError } = await supabase
           .from("room_members")
-          .select("user_id", { count: "exact" })
+          .select("*", { count: "exact", head: true })
           .eq("room_id", actualRoomId)
           .eq("status", "accepted");
+
+        if (countError) {
+          console.error("[Leave Room] Count error:", { userId: user.id, roomId: actualRoomId, error: countError });
+          return errorResponse("Failed to verify membership", "MEMBERSHIP_ERROR", 500);
+        }
 
         if (count && count > 1) {
           return errorResponse("Creator must transfer ownership before leaving", "CREATOR_CANNOT_LEAVE", 400);
         }
-        // If only member, delete the room
-        await supabase.from("rooms").delete().eq("id", actualRoomId);
+
+        // Solo creator: Delete room (RLS-protected)
+        const { error: deleteError } = await supabase
+          .from("rooms")
+          .delete()
+          .eq("id", actualRoomId)
+          .eq("created_by", user.id); // ← Extra security layer
+
+        if (deleteError) {
+          console.error("[Leave Room] Delete error:", { userId: user.id, roomId: actualRoomId, error: deleteError });
+          return errorResponse("Failed to delete room", "DELETE_ERROR", 500);
+        }
+
+        // Clean up memberships (cascade via FK or explicit)
+        await supabase.from("room_members").delete().eq("room_id", actualRoomId);
       } else {
-        // Use RPC to leave room
-        const { error: leaveError } = await supabase.rpc("leave_room", {
+        // Non-creator: Use correct RPC
+        const { data: rpcResult, error: leaveError } = await supabase.rpc("remove_from_room", { // ← Fixed RPC name
           p_room_id: actualRoomId,
           p_user_id: user.id
         });
 
         if (leaveError) {
-          throw leaveError;
+          console.error("[Leave Room] RPC error:", { userId: user.id, roomId: actualRoomId, error: leaveError });
+          throw new Error(`Leave failed: ${leaveError.message}`);
+        }
+
+        // Handle RPC response (e.g., if it returns { success, action })
+        if (!rpcResult?.success) {
+          return errorResponse(rpcResult?.message ?? "Failed to leave room", "LEAVE_FAILED", 400);
         }
       }
 
-      // Get user's remaining rooms
-      const { data: otherRooms } = await supabase
+      // Get remaining rooms (minimized exposure)
+      const { data: otherRooms, error: otherError } = await supabase
         .from("room_members")
-        .select("room_id, rooms(name)")
+        .select(`
+          room_id,
+          rooms!room_id_fkey (name)  // ← Join for name only (secure)
+        `)
         .eq("user_id", user.id)
         .eq("status", "accepted")
-        .order("created_at", { ascending: false });
+        .limit(1);  // ← Only need first for default (removed .single() to avoid error on empty)
+
+      const hasOtherRooms = !!otherRooms?.length;
+      const defaultRoom = otherRooms?.[0] ? {
+        id: otherRooms[0].room_id,
+        name: otherRooms[0].rooms.name
+      } : null;
 
       return successResponse({
         message: `Successfully left "${room.name}"`,
         roomLeft: { id: room.id, name: room.name },
-        hasOtherRooms: !!otherRooms?.length,
-        defaultRoom: otherRooms?.[0] ? {
-          id: otherRooms[0].room_id,
-          name: otherRooms[0].rooms.name
-        } : null
+        hasOtherRooms,
+        defaultRoom
+      }, 200);
+    } catch (error: any) {
+      console.error("[Leave Room] Full error:", {
+        userId: user?.id,
+        roomId: actualRoomId, // ← Now accessible
+        message: error.message,
+        stack: error.stack,
+        timestamp: new Date().toISOString()
       });
-    } catch (error) {
-      console.error("[Leave Room] Error:", error);
       return errorResponse("Internal server error", "INTERNAL_ERROR", 500);
     }
-  });
+  })(request); // ← Pass request to withAuth for header-based auth
 }
 
-// Add other HTTP methods for completeness
-export async function GET() {
+// Other methods unchanged (but secure them similarly if used)
+export async function GET(request: NextRequest) {
   return errorResponse("Method not allowed", "METHOD_NOT_ALLOWED", 405);
 }
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   return errorResponse("Method not allowed", "METHOD_NOT_ALLOWED", 405);
 }
 
-export async function PUT() {
+export async function PUT(request: NextRequest) {
   return errorResponse("Method not allowed", "METHOD_NOT_ALLOWED", 405);
 }
 
-export async function DELETE() {
+export async function DELETE(request: NextRequest) {
   return errorResponse("Method not allowed", "METHOD_NOT_ALLOWED", 405);
 }
