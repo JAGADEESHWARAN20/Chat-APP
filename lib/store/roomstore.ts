@@ -87,81 +87,87 @@ export const useRoomStore = create<RoomState>((set, get) => ({
   },
 
   // --------------------------------------------------------------------
-  // JOIN ROOM
+  // JOIN ROOM (Fixed: Use API route instead of missing RPC)
   // --------------------------------------------------------------------
   joinRoom: async (roomId) => {
     const supabase = getSupabaseBrowserClient();
     const user = (await supabase.auth.getUser()).data.user;
     if (!user) return false;
 
-    const { data, error } = await supabase.rpc("join_room", {
-      p_room_id: roomId,
-      p_user_id: user.id,
-    });
+    try {
+      // Use API route (consistent with RoomList; avoids RPC issue)
+      const response = await fetch(`/api/rooms/${roomId}/join`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
 
-    if (error) {
-      toast.error(error.message);
+      if (!response.ok) {
+        const errorData = await response.json();
+        toast.error(errorData.error || "Join failed");
+        return false;
+      }
+
+      const data = await response.json();
+      if (data.status === "accepted") {
+        toast.success("Joined room");
+      } else if (data.status === "pending") {
+        toast.info("Join request sent");
+      } else {
+        toast.error(data.message || "Join failed");
+        return false;
+      }
+
+      await get().fetchRooms();
+      const sel = get().rooms.find((r) => r.id === roomId);
+      if (sel) set({ selectedRoom: sel });
+
+      return true;
+    } catch (error) {
+      toast.error("Join failed");
+      console.error("Join error:", error);
       return false;
     }
-
-    const result = normalizeRpc(data);
-
-    if (!result?.success) {
-      toast.error(result?.message ?? "Join failed");
-      return false;
-    }
-
-    if (result.action === "joined_public_room") {
-      toast.success("Joined room");
-    } else if (result.action === "join_request_sent") {
-      toast.info("Join request sent");
-    }
-
-    await get().fetchRooms();
-    const sel = get().rooms.find((r) => r.id === roomId);
-    if (sel) set({ selectedRoom: sel });
-
-    return true;
   },
 
   // --------------------------------------------------------------------
-  // LEAVE ROOM
+  // LEAVE ROOM (Fixed: Use API route instead of missing RPC)
   // --------------------------------------------------------------------
   leaveRoom: async (roomId) => {
     const supabase = getSupabaseBrowserClient();
     const user = (await supabase.auth.getUser()).data.user;
     if (!user) return false;
 
-    const { data, error } = await supabase.rpc("remove_from_room", {
-      p_room_id: roomId,
-      p_user_id: user.id,
-    });
+    try {
+      // Use API route (consistent with RoomList; avoids RPC issue)
+      const response = await fetch(`/api/rooms/${roomId}/leave`, {
+        method: "PATCH",
+      });
 
-    if (error) {
-      toast.error(error.message);
+      if (!response.ok) {
+        const errorData = await response.json();
+        toast.error(errorData.error || "Failed to leave");
+        return false;
+      }
+
+      const data = await response.json();
+      if (data.deleted) {
+        toast.success("Room deleted");
+      } else {
+        toast.success("Left room");
+      }
+
+      await get().fetchRooms();
+
+      const selected = get().selectedRoom;
+      if (selected?.id === roomId) {
+        set({ selectedRoom: null });
+      }
+
+      return true;
+    } catch (error) {
+      toast.error("Leave failed");
+      console.error("Leave error:", error);
       return false;
     }
-
-    const result = normalizeRpc(data);
-
-    if (!result?.success) {
-      toast.error(result?.message ?? "Failed to leave");
-      return false;
-    }
-
-    if (result.action === "owner_deleted") {
-      toast.success("Room deleted");
-    } else {
-      toast.success("Left room");
-    }
-
-    await get().fetchRooms();
-
-    const selected = get().selectedRoom;
-    if (selected?.id === roomId) {
-      set({ selectedRoom: null });
-    }
-
-    return true;
   },
 }));
