@@ -18,10 +18,9 @@ import {
 } from "lucide-react";
 
 import {
-  useRoomActions,
   useRoomPresence,
 } from "@/lib/store/RoomContext";
-
+import { useRoomStore } from "@/lib/store/roomstore";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useDebounce } from "use-debounce";
 import { toast } from "sonner";
@@ -75,8 +74,10 @@ const SearchComponent = memo(function SearchComponent({
   const [debounced] = useDebounce(query, 300);
 
   const presence = useRoomPresence();
-  const { joinRoom, leaveRoom } = useRoomActions();
-
+ 
+const joinRoom = useRoomStore(state => state.joinRoom);
+const leaveRoom = useRoomStore(state => state.leaveRoom);
+const fetchRooms = useRoomStore(state => state.fetchRooms);
   // -------------------------------------------------------------------
   // RPC: search_rooms
   // -------------------------------------------------------------------

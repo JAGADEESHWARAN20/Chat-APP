@@ -532,6 +532,21 @@ export type Database = {
           participation_status: string
         }[]
       }
+      get_rooms_with_details: {
+        Args: never
+        Returns: {
+          created_at: string
+          created_by: string
+          id: string
+          is_member: boolean
+          is_private: boolean
+          latest_message: string
+          latest_message_created_at: string
+          member_count: number
+          name: string
+          participation_status: string
+        }[]
+      }
       get_typing_users: {
         Args: { p_room_id: string; p_stale_threshold?: unknown }
         Returns: {
@@ -564,7 +579,10 @@ export type Database = {
         }
         Returns: undefined
       }
-      remove_from_room: { Args: { p_room_id: string }; Returns: Json }
+      remove_from_room: {
+        Args: { p_room_id: string; p_user_id?: string }
+        Returns: Json
+      }
       search_rooms: {
         Args: { p_query?: string }
         Returns: {
