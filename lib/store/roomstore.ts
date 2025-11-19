@@ -1,4 +1,4 @@
-// lib/store/roomStore.ts
+// File: lib/store/roomStore.ts
 "use client";
 
 import { create } from "zustand";
@@ -48,7 +48,6 @@ interface RoomState {
   createRoom: (name: string, isPrivate: boolean) => Promise<RoomWithMembership | null>;
 }
 
-/* helpers */
 const normalizeRpcRooms = (data: any): RoomWithMembership[] =>
   (Array.isArray(data) ? data : []).map((r: any) => ({
     ...r,
@@ -121,7 +120,6 @@ export const useRoomStore = create<RoomState>()(
 
           if (error) {
             console.error("fetchRooms RPC error:", error);
-            toast.error("Failed to load rooms");
             set({ error: error.message ?? "Failed to fetch rooms" });
             return null;
           }
@@ -132,7 +130,6 @@ export const useRoomStore = create<RoomState>()(
         } catch (err: any) {
           console.error("fetchRooms error:", err);
           set({ error: err.message ?? "Failed to fetch rooms" });
-          toast.error("Failed to fetch rooms");
           return null;
         } finally {
           set({ isLoading: false });
@@ -144,25 +141,29 @@ export const useRoomStore = create<RoomState>()(
         get()._pendingJoins.add(roomId);
 
         const prevRooms = get().rooms;
-        const prevRoomIndex = prevRooms.findIndex((r) => r.id === roomId);
-        const prevRoom = prevRoomIndex >= 0 ? prevRooms[prevRoomIndex] : null;
-
-        const applyOptimistic = () => {
-          if (!prevRoom) return;
-          const next = [...prevRooms];
-          next[prevRoomIndex] = {
-            ...prevRoom,
-            isMember: true,
-            participationStatus: "pending",
-            memberCount: Math.max(0, prevRoom.memberCount + 1),
-          };
-          set({ rooms: next });
-        };
+        const prevIndex = prevRooms.findIndex((r) => r.id === roomId);
+        const prevRoom = prevIndex >= 0 ? prevRooms[prevIndex] : null;
 
         const rollback = () => set({ rooms: prevRooms });
 
         try {
-          applyOptimistic();
+          // If room known and private -> only mark participationStatus pending locally
+          if (prevRoom?.is_private) {
+            set({
+              rooms: prevRooms.map((r, i) =>
+                i === prevIndex ? { ...r, participationStatus: "pending" } : r
+              ),
+            });
+          } else if (prevRoom) {
+            // public: optimistic member
+            set({
+              rooms: prevRooms.map((r, i) =>
+                i === prevIndex
+                  ? { ...r, isMember: true, participationStatus: "accepted", memberCount: (r.memberCount || 0) + 1 }
+                  : r
+              ),
+            });
+          }
 
           const res = await apiJoin(roomId);
           const json = await safeJson(res);
@@ -175,19 +176,31 @@ export const useRoomStore = create<RoomState>()(
           }
 
           const status = json?.status ?? null;
+
+          // Always fetch canonical state after join to sync counts & membership
           await get().fetchRooms({ force: true });
 
           if (status === "accepted") {
+            // ensure accepted state
+            set((state) => ({
+              rooms: state.rooms.map((r) =>
+                r.id === roomId ? { ...r, isMember: true, participationStatus: "accepted" } : r
+              ),
+              selectedRoomId: roomId,
+            }));
             toast.success(json?.message || "Joined room");
-            set({ selectedRoomId: roomId });
             return true;
           } else if (status === "pending") {
+            set((state) => ({
+              rooms: state.rooms.map((r) => (r.id === roomId ? { ...r, participationStatus: "pending" } : r)),
+            }));
             toast.info(json?.message || "Join request sent — awaiting approval");
             return true;
-          } else {
-            toast.success(json?.message || "Request processed");
-            return true;
           }
+
+          // fallback
+          toast.success(json?.message || "Request processed");
+          return true;
         } catch (err: any) {
           rollback();
           console.error("joinRoom error:", err);
@@ -199,31 +212,27 @@ export const useRoomStore = create<RoomState>()(
       },
 
       leaveRoom: async (roomId) => {
-        // dedupe
         if (get()._pendingLeaves.has(roomId)) return false;
         get()._pendingLeaves.add(roomId);
 
         const prevRooms = get().rooms;
-        const prevRoomIndex = prevRooms.findIndex((r) => r.id === roomId);
-        const prevRoom = prevRoomIndex >= 0 ? prevRooms[prevRoomIndex] : null;
-
-        const applyOptimistic = () => {
-          if (!prevRoom) return;
-          const next = [...prevRooms];
-          next[prevRoomIndex] = {
-            ...prevRoom,
-            isMember: false,
-            participationStatus: null,
-            memberCount: Math.max(0, prevRoom.memberCount - 1),
-          };
-          set({ rooms: next });
-          if (get().selectedRoomId === roomId) set({ selectedRoomId: null });
-        };
+        const prevIndex = prevRooms.findIndex((r) => r.id === roomId);
+        const prevRoom = prevIndex >= 0 ? prevRooms[prevIndex] : null;
 
         const rollback = () => set({ rooms: prevRooms });
 
         try {
-          applyOptimistic();
+          // optimistic
+          if (prevRoom) {
+            set({
+              rooms: prevRooms.map((r, i) =>
+                i === prevIndex
+                  ? { ...r, isMember: false, participationStatus: null, memberCount: Math.max(0, r.memberCount - 1) }
+                  : r
+              ),
+            });
+            if (get().selectedRoomId === roomId) set({ selectedRoomId: null });
+          }
 
           const res = await apiLeave(roomId);
           const json = await safeJson(res);
@@ -235,7 +244,6 @@ export const useRoomStore = create<RoomState>()(
             return false;
           }
 
-          // rpc returned a structured jsonb success result
           const result = json ?? {};
           if (result.success === false) {
             rollback();
@@ -243,31 +251,20 @@ export const useRoomStore = create<RoomState>()(
             return false;
           }
 
-          // success — handle different actions
-          const action = result.action ?? null;
-          if (action === "owner_deleted" || result.deleted === true) {
-            // Room removed — refresh and ensure selection cleared
-            await get().fetchRooms({ force: true });
+          // refresh canonical rooms
+          await get().fetchRooms({ force: true });
+
+          if (result.action === "owner_deleted" || result.deleted === true) {
             set({ selectedRoomId: null });
             toast.success(result.message || "Room deleted");
             return true;
           }
 
-          if (action === "not_member") {
-            // no-op: already not a member
-            await get().fetchRooms({ force: true });
+          if (result.action === "not_member") {
             toast.info(result.message || "Not a member");
             return true;
           }
 
-          if (action === "left") {
-            await get().fetchRooms({ force: true });
-            toast.success(result.message || `Left "${result.room_name ?? ""}"`);
-            return true;
-          }
-
-          // fallback: refresh and accept success
-          await get().fetchRooms({ force: true });
           toast.success(result.message || "Left room");
           return true;
         } catch (err: any) {
@@ -330,3 +327,4 @@ export const getRoomPresence = (roomId: string) => {
   const p = useRoomStore.getState().roomPresence[roomId];
   return { onlineCount: p?.onlineUsers ?? 0, onlineUsers: p?.userIds ?? [] as string[] };
 };
+
