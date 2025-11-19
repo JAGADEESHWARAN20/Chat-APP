@@ -487,6 +487,19 @@ export type Database = {
           name: string
         }[]
       }
+      get_all_rooms_with_membership: {
+        Args: { p_query?: string; p_user_id: string }
+        Returns: {
+          created_at: string
+          created_by: string
+          id: string
+          is_member: boolean
+          is_private: boolean
+          member_count: number
+          name: string
+          participation_status: string
+        }[]
+      }
       get_messages: {
         Args: { room_id: string }
         Returns: {
@@ -580,7 +593,7 @@ export type Database = {
       }
       remove_from_room: { Args: { p_room_id: string }; Returns: Json }
       search_rooms: {
-        Args: { p_query?: string }
+        Args: { p_query: string; p_user_id?: string }
         Returns: {
           id: string
           is_member: boolean

@@ -74,7 +74,26 @@ const SearchComponent = memo(function SearchComponent({
   const presence = useRoomPresence();
   const joinRoom = useRoomStore((s) => s.joinRoom);
   const leaveRoom = useRoomStore((s) => s.leaveRoom);
-  const fetchRooms = useRoomStore((s) => s.fetchRooms);
+
+  // ---------------------------------------------------------
+  // UPDATE LOCAL UI INSTANTLY (important)
+  // ---------------------------------------------------------
+  const updateRoomMembershipStatus = (roomId: string, isMember: boolean) => {
+    setRoomResults((prev) =>
+      prev.map((room) =>
+        room.id === roomId
+          ? {
+              ...room,
+              is_member: isMember,
+              participation_status: null,
+              member_count: isMember
+                ? room.member_count + 1
+                : Math.max(0, room.member_count - 1),
+            }
+          : room
+      )
+    );
+  };
 
   // ---------------------------------------------------------
   // RPC: search_rooms
@@ -83,13 +102,15 @@ const SearchComponent = memo(function SearchComponent({
     try {
       setLoading(true);
 
-      const { data, error } = await supabase.rpc("search_rooms", {
+      const { data, error } = await supabase.rpc("get_all_rooms_with_membership", {
+        p_user_id: user.id,
         p_query: debounced || "",
       });
+      
 
       if (error) throw error;
       setRoomResults(data || []);
-    } catch (e) {
+    } catch {
       toast.error("Failed loading rooms");
     } finally {
       setLoading(false);
@@ -109,7 +130,7 @@ const SearchComponent = memo(function SearchComponent({
 
       if (error) throw error;
       setUserResults(data || []);
-    } catch (e) {
+    } catch {
       toast.error("Failed loading users");
     } finally {
       setLoading(false);
@@ -117,31 +138,32 @@ const SearchComponent = memo(function SearchComponent({
   }, [supabase, debounced]);
 
   // ---------------------------------------------------------
-  // TAB SWITCH / SEARCH EXECUTION
+  // TAB CHANGE
   // ---------------------------------------------------------
   useEffect(() => {
     if (tab === "rooms") fetchRoomsRPC();
     if (tab === "users") fetchUsersRPC();
-  }, [tab, debounced, fetchRoomsRPC, fetchUsersRPC]); // ✅ fixed deps
+  }, [tab, debounced, fetchRoomsRPC, fetchUsersRPC]);
 
   // ---------------------------------------------------------
-  // JOIN + LEAVE handlers
+  // JOIN ROOM
   // ---------------------------------------------------------
   const handleJoin = async (roomId: string) => {
-    try {
-      await joinRoom(roomId);
-      fetchRoomsRPC();
-    } catch {
-      toast.error("Failed to join room");
+    const ok = await joinRoom(roomId);
+    if (ok) {
+      updateRoomMembershipStatus(roomId, true);
+      toast.success("Joined room");
     }
   };
 
+  // ---------------------------------------------------------
+  // LEAVE ROOM
+  // ---------------------------------------------------------
   const handleLeave = async (roomId: string) => {
-    try {
-      await leaveRoom(roomId);
-      fetchRoomsRPC();
-    } catch {
-      toast.error("Failed to leave room");
+    const ok = await leaveRoom(roomId);
+    if (ok) {
+      updateRoomMembershipStatus(roomId, false);
+      toast.success("Left room");
     }
   };
 
@@ -152,13 +174,11 @@ const SearchComponent = memo(function SearchComponent({
     const online = presence?.[room.id]?.onlineUsers ?? 0;
 
     return (
-      <Card className="flex flex-col h-full min-h-[18rem] md:min-h-[20rem] rounded-2xl bg-card/80 border shadow-sm hover:shadow-md transition-all">
+      <Card className="flex flex-col h-full rounded-2xl bg-card/80 border shadow-sm hover:shadow-md transition-all">
         <CardHeader className="h-20 p-4 bg-gradient-to-br from-indigo-600/20 to-indigo-800/40 rounded-t-2xl">
-          <p className="text-base md:text-lg font-semibold truncate flex items-center gap-2">
+          <p className="text-base md:text-lg font-semibold flex items-center gap-2 truncate">
             #{highlight(room.name, debounced)}
-            {room.is_private && (
-              <LockIcon className="h-4 w-4 text-muted-foreground" />
-            )}
+            {room.is_private && <LockIcon className="h-4 w-4 text-muted-foreground" />}
           </p>
         </CardHeader>
 
@@ -281,18 +301,13 @@ const SearchComponent = memo(function SearchComponent({
         </Tabs>
       </div>
 
+      {/* Results */}
       <div className="flex-1 h-[80vh] overflow-y-scroll">
         <AnimatePresence mode="wait">
           {tab === "rooms" && (
-            <motion.div
-              key="rooms"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-            >
+            <motion.div key="rooms" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
               {loading ? (
-                <div className="h-full flex items-center justify-center">
-                  Loading…
-                </div>
+                <div className="h-full flex items-center justify-center">Loading…</div>
               ) : roomResults.length === 0 ? (
                 <div className="h-full flex items-center justify-center text-muted-foreground">
                   No rooms
@@ -308,15 +323,9 @@ const SearchComponent = memo(function SearchComponent({
           )}
 
           {tab === "users" && (
-            <motion.div
-              key="users"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-            >
+            <motion.div key="users" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
               {loading ? (
-                <div className="h-full flex items-center justify-center">
-                  Loading…
-                </div>
+                <div className="h-full flex items-center justify-center">Loading…</div>
               ) : userResults.length === 0 ? (
                 <div className="h-full flex items-center justify-center text-muted-foreground">
                   No users

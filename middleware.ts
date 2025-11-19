@@ -1,23 +1,19 @@
-import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { createServerClient } from "@supabase/ssr";
 
-export async function middleware(request: NextRequest) {
-  // Prepare an initial response
-  let response = NextResponse.next({
+export function middleware(request: NextRequest) {
+  const response = NextResponse.next({
     request: { headers: request.headers },
   });
 
-  // ✅ Use new cookie API (`getAll` + `setAll`)
-  const supabase = createServerClient(
+  // Create server client WITHOUT refreshing session
+  createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
         getAll() {
-          return request.cookies.getAll().map(({ name, value }) => ({
-            name,
-            value,
-          }));
+          return request.cookies.getAll();
         },
         setAll(cookies) {
           cookies.forEach(({ name, value, options }) => {
@@ -28,13 +24,13 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // Optional: refresh the user's session (keeps Supabase cookies fresh)
-  await supabase.auth.getSession();
+  // ❌ DO NOT CALL getSession() here
+  // ❌ DO NOT CALL any auth APIs
+  // They will break refresh token flow
 
   return response;
 }
 
-// ✅ Match all routes except static/image assets
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };
