@@ -1,11 +1,11 @@
 "use client";
-import { useRoomStore } from '@/lib/store/RoomContext';
+import { useUnifiedRoomStore } from '@/lib/store/roomstore';
 import { useMemo } from 'react';
 
 export function useRoomPresence(roomId: string | null) {
-  const roomPresence = useRoomStore((state) => state.roomPresence);
-  const availableRooms = useRoomStore((state) => state.availableRooms);
-  const isLoading = useRoomStore((state) => state.isLoading);
+  const roomPresence = useUnifiedRoomStore((state) => state.roomPresence);
+  const rooms = useUnifiedRoomStore((state) => state.rooms); // ✅ Use 'rooms' not 'availableRooms'
+  const isLoading = useUnifiedRoomStore((state) => state.isLoading);
 
   const presenceData = useMemo(() => {
     if (!roomId) return { onlineCount: 0, onlineUsers: [] };
@@ -20,12 +20,12 @@ export function useRoomPresence(roomId: string | null) {
     }
 
     // 2) Fallback: check if we stored onlineUsers on room object
-    const room = availableRooms.find((r) => r.id === roomId);
+    const room = rooms.find((r) => r.id === roomId);
     return {
-      onlineCount: room?.onlineUsers ?? 0,
+      onlineCount: room?.online_users ?? 0, // ✅ Use 'online_users' (with underscore)
       onlineUsers: [],
     };
-  }, [roomId, roomPresence, availableRooms]);
+  }, [roomId, roomPresence, rooms]);
 
   return {
     ...presenceData,
