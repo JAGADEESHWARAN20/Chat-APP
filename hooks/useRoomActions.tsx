@@ -8,8 +8,7 @@ export function useRoomActions() {
     sendMessage: state.sendMessage,
     fetchRooms: state.fetchRooms,
     createRoom: state.createRoom,
-    leaveRoom: state.leaveRoom,
-    joinRoom: state.joinRoom,
+   
     updateTypingUsers: state.updateTypingUsers,
     mergeRoomMembership: state.mergeRoomMembership,
     updateTypingText: state.updateTypingText,

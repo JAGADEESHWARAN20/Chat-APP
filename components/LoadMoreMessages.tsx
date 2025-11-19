@@ -14,11 +14,11 @@ export default function LoadMoreMessages() {
   const page = useMessage((state) => state.page);
   const setMessages = useMessage((state) => state.setMessages);
   const hasMore = useMessage((state) => state.hasMore);
-  const selectedRoom = useRoomStore((state) => state.selectedRoom);
+  const selectedRoom = useRoomStore((state) => state.selectedRoomId);
   const [loading, setLoading] = useState(false);
 
   const fetchMore = async () => {
-    if (!selectedRoom?.id) {
+    if (!selectedRoom) {
       toast.error("No room selected");
       return;
     }
@@ -28,12 +28,12 @@ export default function LoadMoreMessages() {
       const { from, to } = getFromAndTo(page, LIMIT_MESSAGE);
       const supabase = getSupabaseBrowserClient();
 
-      console.log("[LoadMoreMessages] Fetching messages for room:", selectedRoom.id, { from, to });
+      console.log("[LoadMoreMessages] Fetching messages for room:", selectedRoom, { from, to });
 
       const { data, error } = await supabase
         .from("messages")
         .select(MESSAGE_WITH_PROFILE_SELECT)
-        .eq("room_id", selectedRoom.id)
+        .eq("room_id", selectedRoom)
         .range(from, to)
         .order("created_at", { ascending: false })
         .returns<Imessage[]>(); // ✅ ensures correct typing

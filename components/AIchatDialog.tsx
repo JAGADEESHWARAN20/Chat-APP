@@ -40,9 +40,9 @@ export function RoomAssistantDialog({ roomId, roomName, triggerButton }: any) {
         <DialogDescription className="sr-only">AI Assistant</DialogDescription>
 
         <DialogClose asChild>
-          <button className="absolute top-3 right-3 h-8 w-8 rounded-full bg-muted/40 flex items-center justify-center">
+          <Button className="absolute top-3 right-3 h-8 w-8 rounded-full bg-muted/40 flex items-center justify-center">
             <X className="h-3.5 w-3.5" />
-          </button>
+          </Button>
         </DialogClose>
 
         <RoomAssistantComponent

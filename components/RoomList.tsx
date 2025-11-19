@@ -1,3 +1,4 @@
+// components/RoomList.tsx
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
@@ -6,24 +7,31 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Button } from "./ui/button";
 import { toast } from "sonner";
 import { useUser } from "@/lib/store/user";
-import { Database } from "@/lib/types/supabase";
+import type { Database } from "@/lib/types/supabase";
 import { ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { RoomCard } from "./ui/room-card";
-import { RoomWithMembership } from "@/lib/store/roomstore"; // ← Single source: Use store's type
+import type { RoomWithMembership } from "@/lib/store/roomstore"; // ← Single source: Use store's type
 
 // Define missing type from Supabase schema (IRoomParticipant was in deleted file)
 type IRoomParticipant = Database["public"]["Tables"]["room_participants"]["Row"];
 
 export default function RoomList() {
   const [userParticipations, setUserParticipations] = useState<IRoomParticipant[]>([]);
-  const { 
-    rooms, 
-    setRooms, 
-    selectedRoom, 
-    setSelectedRoom,
-    fetchRooms // ← Use store's RPC fetch (includes memberCount!)
-  } = useRoomStore();
+
+  // Only select what we need from the store
+  const {
+    rooms,
+    selectedRoomId,
+    setSelectedRoomId,
+    fetchRooms
+  } = useRoomStore((s) => ({
+    rooms: s.rooms,
+    selectedRoomId: s.selectedRoomId,
+    setSelectedRoomId: s.setSelectedRoomId,
+    fetchRooms: s.fetchRooms,
+  }));
+
   const supabase = getSupabaseBrowserClient();
   const user = useUser((state) => state.user);
 
@@ -34,7 +42,7 @@ export default function RoomList() {
     }
 
     try {
-      await fetchRooms(); // ← Delegate to store: fetches + transforms with memberCount
+      await fetchRooms({ force: true } as any);
       toast.success("Rooms refreshed");
     } catch (err) {
       toast.error("Failed to refresh rooms");
@@ -42,43 +50,51 @@ export default function RoomList() {
     }
   };
 
-  const handleRoomSwitch = useCallback(async (room: RoomWithMembership) => {
-    if (!user) {
-      toast.error("You must be logged in to switch rooms");
-      return;
-    }
-
-    try {
-      // Optimistic switch (no API needed if already member)
-      if (room.isMember) {
-        setSelectedRoom(room); // ← Already full type with memberCount
-        toast.success("Switched to room");
+  const handleRoomSwitch = useCallback(
+    async (room: RoomWithMembership) => {
+      if (!user) {
+        toast.error("You must be logged in to switch rooms");
         return;
       }
 
-      // Fallback: API switch if needed
-      const response = await fetch("/api/rooms/switch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roomId: room.id }),
-      });
+      try {
+        // If user is already a member, just set selection locally
+        if (room.isMember) {
+          setSelectedRoomId(room.id);
+          toast.success("Switched to room");
+          return;
+        }
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to switch room");
-      }
+        // If not a member, call server endpoint to switch (fallback)
+        const response = await fetch("/api/rooms/switch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ roomId: room.id }),
+        });
 
-      // Refresh to get updated membership + counts
-      await fetchRooms();
-      const updatedRoom = rooms.find((r) => r.id === room.id);
-      if (updatedRoom) {
-        setSelectedRoom(updatedRoom);
-        toast.success("Successfully switched room");
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || "Failed to switch room");
+        }
+
+        // Refresh canonical state then set selected room id
+        await fetchRooms({ force: true } as any);
+        const updatedRooms = useRoomStore.getState().rooms;
+        const updatedRoom = updatedRooms.find((r) => r.id === room.id);
+        if (updatedRoom) {
+          setSelectedRoomId(updatedRoom.id);
+          toast.success("Successfully switched room");
+        } else {
+          // Still switch locally as fallback
+          setSelectedRoomId(room.id);
+          toast.success("Switched to room (optimistic)");
+        }
+      } catch (error: any) {
+        toast.error(error?.message ?? "Failed to switch room");
       }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to switch room");
-    }
-  }, [user, setSelectedRoom, fetchRooms, rooms]);
+    },
+    [user, setSelectedRoomId, fetchRooms]
+  );
 
   const handleLeaveRoom = async (roomId: string) => {
     if (!user) {
@@ -90,19 +106,32 @@ export default function RoomList() {
       const response = await fetch(`/api/rooms/${roomId}/leave`, {
         method: "PATCH",
       });
+
+      const json = await response.json().catch(() => ({}));
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to leave room");
+        throw new Error(json?.error || "Failed to leave room");
       }
 
-      const { hasOtherRooms } = await response.json();
-      toast.success("Left room successfully");
-      if (!hasOtherRooms) {
-        setSelectedRoom(null);
+      // If room deleted by owner action, backend may return deleted/owner_deleted
+      if (json?.deleted || json?.action === "owner_deleted") {
+        toast.success(json?.message || "Room removed");
+        // refresh and clear selection if needed
+        await fetchRooms({ force: true } as any);
+        setSelectedRoomId(null);
+        return;
       }
-      await fetchRooms(); // ← Refresh via store
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to leave room");
+
+      // Standard leave
+      toast.success(json?.message || "Left room successfully");
+      // if user had no other active rooms, clear selection
+      if (!json?.hasOtherRooms) {
+        setSelectedRoomId(null);
+      }
+      await fetchRooms({ force: true } as any);
+    } catch (error: any) {
+      toast.error(error?.message ?? "Failed to leave room");
+      console.error("Leave error:", error);
     }
   };
 
@@ -116,24 +145,32 @@ export default function RoomList() {
       const response = await fetch(`/api/rooms/${roomId}/join`, {
         method: "POST",
       });
+
+      const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to join room");
+        throw new Error(data?.error || data?.message || "Failed to join room");
       }
 
-      const data = await response.json();
-      toast.success(data.message);
-      if (!data.status || data.status === "accepted") {
-        await fetchRooms(); // ← Refresh to update membership + counts
-        const updatedRoom = rooms.find((r) => r.id === roomId);
+      // Show a single toast depending on status
+      if (!data?.status || data?.status === "accepted") {
+        toast.success(data?.message || "Joined room");
+        await fetchRooms({ force: true } as any);
+        const updatedRooms = useRoomStore.getState().rooms;
+        const updatedRoom = updatedRooms.find((r) => r.id === roomId);
         if (updatedRoom) {
+          // automatically switch into room
           await handleRoomSwitch(updatedRoom);
         }
-      } else if (data.status === "pending") {
+      } else if (data?.status === "pending") {
+        toast.info(data?.message || "Join request sent — awaiting approval");
         await fetchParticipations();
+      } else {
+        toast.success(data?.message || "Request processed");
+        await fetchRooms({ force: true } as any);
       }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to join room");
+    } catch (error: any) {
+      toast.error(error?.message ?? "Failed to join room");
+      console.error("Join error:", error);
     }
   };
 
@@ -145,6 +182,7 @@ export default function RoomList() {
         .from("room_participants")
         .select("*")
         .eq("user_id", user.id);
+
       if (error) {
         toast.error("Failed to fetch participations");
         console.error("Error fetching participations:", error);
@@ -161,74 +199,75 @@ export default function RoomList() {
   useEffect(() => {
     if (!user) return;
 
+    let mounted = true;
+
     const initialize = async () => {
       await fetchParticipations();
-      await fetchRooms(); // ← Store handles transformation with memberCount
+      await fetchRooms({ force: true } as any);
 
-      // Initialize active room logic
+      // Get active rooms for the user
       const { data: activeRooms, error: activeRoomsError } = await supabase
         .from("room_members")
         .select("room_id")
         .eq("user_id", user.id)
         .eq("active", true);
-      
+
       if (activeRoomsError) {
         console.error("Error fetching active rooms:", activeRoomsError.message);
-        toast.error("Failed to initialize active room");
+        if (mounted) toast.error("Failed to initialize active room");
         return;
       }
 
+      const storeRooms = useRoomStore.getState().rooms;
+
       if (!activeRooms?.length) {
-        const generalChat = rooms.find((r) => r.name === "General Chat");
-        if (generalChat && generalChat.created_by === user.id) {
-          await handleRoomSwitch(generalChat);
+        // no active rooms: pick general or clear
+        const generalChat = storeRooms.find((r) => r.name === "General Chat");
+        if (generalChat) {
+          setSelectedRoomId(generalChat.id);
         } else {
-          setSelectedRoom(null);
+          setSelectedRoomId(null);
         }
         return;
       }
 
       if (activeRooms.length > 1) {
         const firstActiveRoomId = activeRooms[0].room_id;
+        // make only the first active, deactivate others
         const { error: fixError } = await supabase
           .from("room_members")
           .update({ active: false })
           .eq("user_id", user.id)
           .neq("room_id", firstActiveRoomId);
+
         if (fixError) {
           console.error("Error fixing multiple active rooms:", fixError.message);
-          toast.error("Failed to fix active room state");
+          if (mounted) toast.error("Failed to fix active room state");
           return;
         }
-        const activeRoom = rooms.find((r) => r.id === firstActiveRoomId);
-        if (activeRoom) {
-          setSelectedRoom(activeRoom);
-        } else {
-          setSelectedRoom(null);
-        }
+
+        const activeRoom = storeRooms.find((r) => r.id === firstActiveRoomId);
+        if (activeRoom) setSelectedRoomId(activeRoom.id);
+        else setSelectedRoomId(null);
       } else {
-        const activeRoom = rooms.find((r) => r.id === activeRooms[0].room_id);
-        if (activeRoom) {
-          setSelectedRoom(activeRoom);
-        } else {
-          setSelectedRoom(null);
-        }
+        const activeRoom = storeRooms.find((r) => r.id === activeRooms[0].room_id);
+        if (activeRoom) setSelectedRoomId(activeRoom.id);
+        else setSelectedRoomId(null);
       }
     };
 
     initialize();
 
-    // Realtime: Rooms changes
+    // realtime subscriptions
     const roomChannel = supabase
       .channel("room_changes")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "rooms" },
-        () => fetchRooms()
+        () => fetchRooms({ force: true } as any)
       )
       .subscribe();
 
-    // Realtime: Participants changes
     const participantChannel = supabase
       .channel("room_participants_changes")
       .on(
@@ -239,10 +278,11 @@ export default function RoomList() {
       .subscribe();
 
     return () => {
+      mounted = false;
       supabase.removeChannel(roomChannel);
       supabase.removeChannel(participantChannel);
     };
-  }, [user, supabase, fetchRooms, fetchParticipations, handleRoomSwitch, rooms, setSelectedRoom]);
+  }, [user, supabase, fetchRooms, fetchParticipations, setSelectedRoomId]);
 
   if (!user) {
     return (
@@ -260,11 +300,12 @@ export default function RoomList() {
           <ArrowRight className="h-4 w-4" />
         </Button>
       </div>
+
       <div className="space-y-3 overflow-y-auto flex-grow">
         {rooms.map((room) => {
           const participation = userParticipations.find((p) => p.room_id === room.id);
-          const isSelected = selectedRoom?.id === room.id;
-          
+          const isSelected = selectedRoomId === room.id;
+
           return (
             <div
               key={room.id}
@@ -280,7 +321,7 @@ export default function RoomList() {
                 onJoin={() => handleJoinRoom(room.id)}
                 onLeave={() => handleLeaveRoom(room.id)}
                 participationStatus={participation?.status || null}
-                userCount={room.memberCount || 0} // ← Use memberCount from store type
+                userCount={room.memberCount || 0}
               />
             </div>
           );

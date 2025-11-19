@@ -92,7 +92,7 @@ export default function CreateRoomDialog({ user }: { user: SupabaseUser | undefi
       Create New Room
     </DialogTitle>
     <DialogClose asChild>
-    <button
+    <Button
       className="
         absolute top-3 right-3 z-50 
         h-9 w-9 flex items-center justify-center 
@@ -105,7 +105,7 @@ export default function CreateRoomDialog({ user }: { user: SupabaseUser | undefi
       "
     >
       <X className="h-4 w-4" />
-    </button>
+    </Button>
   </DialogClose>
   </DialogHeader>
 
