@@ -152,7 +152,7 @@ const SearchComponent = memo(function SearchComponent({
     const ok = await joinRoom(roomId);
     if (ok) {
       updateRoomMembershipStatus(roomId, true);
-      toast.success("Joined room");
+      
     }
   };
 
@@ -163,7 +163,7 @@ const SearchComponent = memo(function SearchComponent({
     const ok = await leaveRoom(roomId);
     if (ok) {
       updateRoomMembershipStatus(roomId, false);
-      toast.success("Left room");
+      
     }
   };
 

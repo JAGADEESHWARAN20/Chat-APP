@@ -273,7 +273,7 @@ export default function Notifications({
     lastFetch,
   } = useNotification();
 
-  const { setSelectedRoom } = useRoomStore();
+  const setSelectedRoomId = useRoomStore((s) => s.setSelectedRoomId);
   const { fetchRooms } = useRoomContext();
   const { userId, isAuthenticated } = useAuthSync();
   const supabase = getSupabaseBrowserClient();
@@ -320,7 +320,7 @@ export default function Notifications({
       const { data: room } = await supabase.from("rooms").select("*").eq("id", roomId).single();
       if (room) {
         const enriched = await transformRoom(room, userId, supabase);
-        setSelectedRoom(enriched); // ← Now type-safe with memberCount
+        setSelectedRoomId(enriched.id); // ← Now type-safe with memberCount
         toast.success(`Joined "${room.name}" 🎉`);
       }
     } catch (err: any) {
@@ -328,7 +328,7 @@ export default function Notifications({
     } finally {
       removeLoading(id);
     }
-  }, [userId, loadingIds, removeNotification, markAsRead, fetchRooms, supabase, setSelectedRoom]);
+  }, [userId, loadingIds, removeNotification, markAsRead, fetchRooms, supabase, setSelectedRoomId]);
 
   const handleReject = useCallback(async (id: string, senderId: string | null, roomId: string | null) => {
     if (loadingIds.has(id)) return;

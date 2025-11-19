@@ -38,7 +38,7 @@
     "lodash": "^4.17.21",
     "lodash.debounce": "^4.0.8",
     "lucide-react": "^0.303.0",
-    "next": "14.0.4",
+    "next": "^14.2.33",
     "next-themes": "^0.2.1",
     "openai": "^6.6.0",
     "react": "^18.2.0",

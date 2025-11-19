@@ -1,173 +1,332 @@
+// lib/store/roomStore.ts
 "use client";
 
 import { create } from "zustand";
-import { toast } from "sonner";
-import { Database } from "@/lib/types/supabase";
+import { devtools, subscribeWithSelector } from "zustand/middleware";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { toast } from "sonner";
+import type { Database } from "@/lib/types/supabase";
 
-type IRoom = Database["public"]["Tables"]["rooms"]["Row"];
+type IRoomRow = Database["public"]["Tables"]["rooms"]["Row"];
 
-export type RoomWithMembership = IRoom & {
+export type RoomWithMembership = IRoomRow & {
   isMember: boolean;
   participationStatus: string | null;
   memberCount: number;
   participant_count?: number;
   online_users?: number;
+  latestMessage?: string | null;
 };
 
-interface RoomState {
-  rooms: RoomWithMembership[];
-  selectedRoom: RoomWithMembership | null;
-
-  setRooms: (rooms: RoomWithMembership[]) => void;
-  setSelectedRoom: (room: RoomWithMembership | null) => void;
-
-  initializeDefaultRoom: () => void;
-
-  fetchRooms: () => Promise<void>;
-  joinRoom: (roomId: string) => Promise<boolean>;
-  leaveRoom: (roomId: string) => Promise<boolean>;
+export interface RoomPresence {
+  onlineUsers: number;
+  userIds: string[];
+  lastUpdated?: string;
 }
 
-const normalizeRpc = (data: any) => {
-  if (!data) return null;
-  return Array.isArray(data) ? data[0] : data;
+interface RoomState {
+  user: { id: string } | null;
+  rooms: RoomWithMembership[];
+  selectedRoomId: string | null | undefined;
+  roomPresence: Record<string, RoomPresence>;
+  isLoading: boolean;
+  error: string | null;
+
+  _pendingJoins: Set<string>;
+  _pendingLeaves: Set<string>;
+
+  setUser: (u: { id: string } | null) => void;
+  setRooms: (rooms: RoomWithMembership[]) => void;
+  setSelectedRoomId: (id: string | null | undefined) => void;
+  setRoomPresence: (roomId: string, p: RoomPresence) => void;
+  setLoading: (v: boolean) => void;
+  setError: (v: string | null) => void;
+
+  fetchRooms: (opts?: { force?: boolean }) => Promise<RoomWithMembership[] | null>;
+  joinRoom: (roomId: string) => Promise<boolean>;
+  leaveRoom: (roomId: string) => Promise<boolean>;
+  createRoom: (name: string, isPrivate: boolean) => Promise<RoomWithMembership | null>;
+}
+
+/* helpers */
+const normalizeRpcRooms = (data: any): RoomWithMembership[] =>
+  (Array.isArray(data) ? data : []).map((r: any) => ({
+    ...r,
+    isMember: Boolean(r.is_member),
+    participationStatus: r.participation_status ?? null,
+    memberCount: Number(r.member_count ?? 0),
+  }));
+
+const safeJson = async (res: Response) => {
+  try {
+    return await res.json();
+  } catch {
+    return null;
+  }
 };
 
-export const useRoomStore = create<RoomState>((set, get) => ({
-  rooms: [],
-  selectedRoom: null,
+const apiJoin = (roomId: string) =>
+  fetch(`/api/rooms/${roomId}/join`, { method: "POST", headers: { "Content-Type": "application/json" } });
 
-  setRooms: (rooms) => {
-    set({ rooms });
-    get().initializeDefaultRoom();
-  },
+const apiLeave = (roomId: string) =>
+  fetch(`/api/rooms/${roomId}/leave`, { method: "PATCH", headers: { "Content-Type": "application/json" } });
 
-  setSelectedRoom: (room) => set({ selectedRoom: room }),
+export const useRoomStore = create<RoomState>()(
+  devtools(
+    subscribeWithSelector((set, get) => ({
+      user: null,
+      rooms: [],
+      selectedRoomId: undefined,
+      roomPresence: {},
+      isLoading: false,
+      error: null,
 
-  initializeDefaultRoom: () => {
-    const { rooms, selectedRoom } = get();
-    if (rooms.length > 0 && !selectedRoom) {
-      const defaultRoom =
-        rooms.find((r) => r.name === "General Chat") || rooms[0];
-      set({ selectedRoom: defaultRoom });
-    }
-  },
+      _pendingJoins: new Set<string>(),
+      _pendingLeaves: new Set<string>(),
 
-  // --------------------------------------------------------------------
-  // FETCH ROOMS
-  // --------------------------------------------------------------------
-  fetchRooms: async () => {
-    const supabase = getSupabaseBrowserClient();
-    const user = (await supabase.auth.getUser()).data.user;
+      setUser: (u) => set({ user: u }),
+      setRooms: (rooms) => {
+        set({ rooms });
+        const sel = get().selectedRoomId;
+        if (!sel && rooms.length > 0) {
+          const defaultRoom = rooms.find((r) => r.name === "General Chat") ?? rooms[0];
+          set({ selectedRoomId: defaultRoom?.id });
+        }
+      },
+      setSelectedRoomId: (id) => set({ selectedRoomId: id }),
+      setRoomPresence: (roomId, p) =>
+        set((s) => ({ roomPresence: { ...s.roomPresence, [roomId]: p } })),
+      setLoading: (v) => set({ isLoading: v }),
+      setError: (v) => set({ error: v }),
 
-    if (!user) return;
+      fetchRooms: async ({ force = false } = {}) => {
+        const supabase = getSupabaseBrowserClient();
+        let userId = get().user?.id;
+        try {
+          if (!userId) {
+            const u = await supabase.auth.getUser();
+            userId = u.data.user?.id ?? undefined;
+            if (userId) set({ user: { id: userId } });
+          }
+          if (!userId) return null;
+          if (!force && get().rooms.length > 0) return get().rooms;
 
-    const { data, error } = await supabase.rpc("get_rooms_with_counts", {
-     p_user_id: user.id,
-     p_query: undefined,
-     p_include_participants: true,
-   });
-   
+          set({ isLoading: true, error: null });
 
-    if (error) {
-      toast.error("Failed to fetch rooms");
-      return;
-    }
+          const { data, error } = await supabase.rpc("get_rooms_with_counts", {
+            p_user_id: userId,
+            p_query: undefined,
+            p_include_participants: true,
+          });
 
-    const formatted: RoomWithMembership[] =
-      (data || []).map((r: any) => ({
-        ...r,
-        isMember: r.is_member,
-        participationStatus: r.participation_status,
-        memberCount: r.member_count,
-      })) ?? [];
+          if (error) {
+            console.error("fetchRooms RPC error:", error);
+            toast.error("Failed to load rooms");
+            set({ error: error.message ?? "Failed to fetch rooms" });
+            return null;
+          }
 
-    get().setRooms(formatted);
-  },
+          const formatted = normalizeRpcRooms(data);
+          set({ rooms: formatted });
+          return formatted;
+        } catch (err: any) {
+          console.error("fetchRooms error:", err);
+          set({ error: err.message ?? "Failed to fetch rooms" });
+          toast.error("Failed to fetch rooms");
+          return null;
+        } finally {
+          set({ isLoading: false });
+        }
+      },
 
-  // --------------------------------------------------------------------
-  // JOIN ROOM (Fixed: Use API route instead of missing RPC)
-  // --------------------------------------------------------------------
-  joinRoom: async (roomId) => {
-    const supabase = getSupabaseBrowserClient();
-    const user = (await supabase.auth.getUser()).data.user;
-    if (!user) return false;
+      joinRoom: async (roomId) => {
+        if (get()._pendingJoins.has(roomId)) return false;
+        get()._pendingJoins.add(roomId);
 
-    try {
-      // Use API route (consistent with RoomList; avoids RPC issue)
-      const response = await fetch(`/api/rooms/${roomId}/join`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
+        const prevRooms = get().rooms;
+        const prevRoomIndex = prevRooms.findIndex((r) => r.id === roomId);
+        const prevRoom = prevRoomIndex >= 0 ? prevRooms[prevRoomIndex] : null;
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        toast.error(errorData.error || "Join failed");
-        return false;
-      }
+        const applyOptimistic = () => {
+          if (!prevRoom) return;
+          const next = [...prevRooms];
+          next[prevRoomIndex] = {
+            ...prevRoom,
+            isMember: true,
+            participationStatus: "pending",
+            memberCount: Math.max(0, prevRoom.memberCount + 1),
+          };
+          set({ rooms: next });
+        };
 
-      const data = await response.json();
-      if (data.status === "accepted") {
-        toast.success("Joined room");
-      } else if (data.status === "pending") {
-        toast.info("Join request sent");
-      } else {
-        toast.error(data.message || "Join failed");
-        return false;
-      }
+        const rollback = () => set({ rooms: prevRooms });
 
-      await get().fetchRooms();
-      const sel = get().rooms.find((r) => r.id === roomId);
-      if (sel) set({ selectedRoom: sel });
+        try {
+          applyOptimistic();
 
-      return true;
-    } catch (error) {
-      toast.error("Join failed");
-      console.error("Join error:", error);
-      return false;
-    }
-  },
+          const res = await apiJoin(roomId);
+          const json = await safeJson(res);
 
-  // --------------------------------------------------------------------
-  // LEAVE ROOM (Fixed: Use API route instead of missing RPC)
-  // --------------------------------------------------------------------
-  leaveRoom: async (roomId) => {
-    const supabase = getSupabaseBrowserClient();
-    const user = (await supabase.auth.getUser()).data.user;
-    if (!user) return false;
+          if (!res.ok) {
+            rollback();
+            const msg = json?.error || json?.message || "Failed to join room";
+            toast.error(msg);
+            return false;
+          }
 
-    try {
-      // Use API route (consistent with RoomList; avoids RPC issue)
-      const response = await fetch(`/api/rooms/${roomId}/leave`, {
-        method: "PATCH",
-      });
+          const status = json?.status ?? null;
+          await get().fetchRooms({ force: true });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        toast.error(errorData.error || "Failed to leave");
-        return false;
-      }
+          if (status === "accepted") {
+            toast.success(json?.message || "Joined room");
+            set({ selectedRoomId: roomId });
+            return true;
+          } else if (status === "pending") {
+            toast.info(json?.message || "Join request sent — awaiting approval");
+            return true;
+          } else {
+            toast.success(json?.message || "Request processed");
+            return true;
+          }
+        } catch (err: any) {
+          rollback();
+          console.error("joinRoom error:", err);
+          toast.error("Failed to join room");
+          return false;
+        } finally {
+          get()._pendingJoins.delete(roomId);
+        }
+      },
 
-      const data = await response.json();
-      if (data.deleted) {
-        toast.success("Room deleted");
-      } else {
-        toast.success("Left room");
-      }
+      leaveRoom: async (roomId) => {
+        // dedupe
+        if (get()._pendingLeaves.has(roomId)) return false;
+        get()._pendingLeaves.add(roomId);
 
-      await get().fetchRooms();
+        const prevRooms = get().rooms;
+        const prevRoomIndex = prevRooms.findIndex((r) => r.id === roomId);
+        const prevRoom = prevRoomIndex >= 0 ? prevRooms[prevRoomIndex] : null;
 
-      const selected = get().selectedRoom;
-      if (selected?.id === roomId) {
-        set({ selectedRoom: null });
-      }
+        const applyOptimistic = () => {
+          if (!prevRoom) return;
+          const next = [...prevRooms];
+          next[prevRoomIndex] = {
+            ...prevRoom,
+            isMember: false,
+            participationStatus: null,
+            memberCount: Math.max(0, prevRoom.memberCount - 1),
+          };
+          set({ rooms: next });
+          if (get().selectedRoomId === roomId) set({ selectedRoomId: null });
+        };
 
-      return true;
-    } catch (error) {
-      toast.error("Leave failed");
-      console.error("Leave error:", error);
-      return false;
-    }
-  },
-}));
+        const rollback = () => set({ rooms: prevRooms });
+
+        try {
+          applyOptimistic();
+
+          const res = await apiLeave(roomId);
+          const json = await safeJson(res);
+
+          if (!res.ok) {
+            rollback();
+            const msg = json?.error || json?.message || "Failed to leave room";
+            toast.error(msg);
+            return false;
+          }
+
+          // rpc returned a structured jsonb success result
+          const result = json ?? {};
+          if (result.success === false) {
+            rollback();
+            toast.error(result.message || "Failed to leave room");
+            return false;
+          }
+
+          // success — handle different actions
+          const action = result.action ?? null;
+          if (action === "owner_deleted" || result.deleted === true) {
+            // Room removed — refresh and ensure selection cleared
+            await get().fetchRooms({ force: true });
+            set({ selectedRoomId: null });
+            toast.success(result.message || "Room deleted");
+            return true;
+          }
+
+          if (action === "not_member") {
+            // no-op: already not a member
+            await get().fetchRooms({ force: true });
+            toast.info(result.message || "Not a member");
+            return true;
+          }
+
+          if (action === "left") {
+            await get().fetchRooms({ force: true });
+            toast.success(result.message || `Left "${result.room_name ?? ""}"`);
+            return true;
+          }
+
+          // fallback: refresh and accept success
+          await get().fetchRooms({ force: true });
+          toast.success(result.message || "Left room");
+          return true;
+        } catch (err: any) {
+          rollback();
+          console.error("leaveRoom error:", err);
+          toast.error("Failed to leave room");
+          return false;
+        } finally {
+          get()._pendingLeaves.delete(roomId);
+        }
+      },
+
+      createRoom: async (name, isPrivate) => {
+        try {
+          const res = await fetch("/api/rooms/create", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name, isPrivate }),
+          });
+          const json = await safeJson(res);
+          if (!res.ok) {
+            toast.error(json?.error || "Failed to create room");
+            return null;
+          }
+
+          await get().fetchRooms({ force: true });
+          const created = get().rooms.find((r) => r.name === name) ?? null;
+          if (created) {
+            toast.success("Room created");
+            return created;
+          }
+          return null;
+        } catch (err: any) {
+          console.error("createRoom error:", err);
+          toast.error("Failed to create room");
+          return null;
+        }
+      },
+    }))
+  )
+);
+
+/* selectors & helpers */
+export const useAvailableRooms = () => useRoomStore((s) => s.rooms);
+export const useSelectedRoom = () => useRoomStore((s) => s.rooms.find((r) => r.id === s.selectedRoomId) ?? null);
+export const useRoomLoading = () => useRoomStore((s) => s.isLoading);
+export const useRoomError = () => useRoomStore((s) => s.error);
+export const useRoomPresence = () => useRoomStore((s) => s.roomPresence);
+
+export const useRoomActions = () =>
+  useRoomStore((s) => ({
+    fetchRooms: s.fetchRooms,
+    joinRoom: s.joinRoom,
+    leaveRoom: s.leaveRoom,
+    createRoom: s.createRoom,
+    setSelectedRoomId: s.setSelectedRoomId,
+  }));
+
+export const getRoomPresence = (roomId: string) => {
+  const p = useRoomStore.getState().roomPresence[roomId];
+  return { onlineCount: p?.onlineUsers ?? 0, onlineUsers: p?.userIds ?? [] as string[] };
+};

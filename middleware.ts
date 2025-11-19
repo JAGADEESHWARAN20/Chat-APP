@@ -1,3 +1,4 @@
+// middleware.ts (you already have this)
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
@@ -6,7 +7,6 @@ export function middleware(request: NextRequest) {
     request: { headers: request.headers },
   });
 
-  // Create server client WITHOUT refreshing session
   createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -24,13 +24,5 @@ export function middleware(request: NextRequest) {
     }
   );
 
-  // ❌ DO NOT CALL getSession() here
-  // ❌ DO NOT CALL any auth APIs
-  // They will break refresh token flow
-
   return response;
 }
-
-export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
-};

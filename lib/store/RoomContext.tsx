@@ -1,12 +1,13 @@
+// lib/store/roomstore.ts
 "use client";
+
 import { create } from "zustand";
 import { devtools, subscribeWithSelector } from "zustand/middleware";
-import { getSupabaseBrowserClient } from "../supabase/client";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { JoinRoomErrorResponse, JoinRoomSuccessResponse } from "../types/rpc";
+import type { JoinRoomErrorResponse, JoinRoomSuccessResponse } from "@/lib/types/rpc"; // adjust path if needed
 
-
-
+// ---------------------- Types ----------------------
 export interface Room {
   id: string;
   name: string;
@@ -54,9 +55,10 @@ export interface RoomPresence {
   lastUpdated: string;
 }
 
+// -------------------- Store interface --------------------
 interface RoomState {
   user: any | null;
-  selectedRoomId: string | null;
+  selectedRoomId: string | null; // consistent: string | null
 
   availableRooms: Room[];
 
@@ -66,7 +68,7 @@ interface RoomState {
   isLoading: boolean;
   error: string | null;
 
-  setUser: (user: any) => void;
+  setUser: (user: any | null) => void;
   setSelectedRoomId: (id: string | null) => void;
   setAvailableRooms: (rooms: Room[]) => void;
   addRoom: (room: Room) => void;
@@ -83,18 +85,43 @@ interface RoomState {
 
   fetchRooms: () => Promise<void>;
   sendMessage: (roomId: string, text: string) => Promise<boolean>;
-  joinRoom: (roomId: string) => Promise<boolean>;
-  leaveRoom: (roomId: string) => Promise<boolean>;
+
   createRoom: (name: string, isPrivate: boolean) => Promise<Room | null>;
 }
 
+// -------------------- Helpers --------------------
+const normalizeRooms = (data: any): Room[] =>
+  (Array.isArray(data) ? data : []).map((r: any) => ({
+    id: r.id,
+    name: r.name,
+    is_private: !!r.is_private,
+    created_by: r.created_by ?? null,
+    created_at: r.created_at,
+    isMember: !!r.is_member,
+    participationStatus: r.participation_status ?? null,
+    memberCount: Number(r.member_count ?? 0),
+    onlineUsers: r.online_users ?? undefined,
+    unreadCount: r.unread_count ?? undefined,
+    latestMessage: r.latest_message ?? undefined,
+  }));
+
+// safe parse JSON
+const safeJson = async (res: Response) => {
+  try {
+    return await res.json();
+  } catch {
+    return null;
+  }
+};
+
+// -------------------- Store --------------------
 export const useRoomStore = create<RoomState>()(
   devtools(
     subscribeWithSelector((set, get) => ({
       user: null,
       selectedRoomId: null,
       availableRooms: [],
-      
+
       typingUsers: [],
       typingDisplayText: "",
       roomPresence: {},
@@ -105,55 +132,47 @@ export const useRoomStore = create<RoomState>()(
       setSelectedRoomId: (id) => set({ selectedRoomId: id }),
 
       setAvailableRooms: (rooms) => set({ availableRooms: rooms }),
-      addRoom: (room) => set((state) => ({
-        availableRooms: [...state.availableRooms, room]
-      })),
+      addRoom: (room) =>
+        set((state) => ({ availableRooms: [...state.availableRooms, room] })),
 
       updateRoom: (roomId, updates) =>
         set((state) => ({
           availableRooms: state.availableRooms.map((room) =>
             room.id === roomId ? { ...room, ...updates } : room
-          )
+          ),
         })),
-      
+
       mergeRoomMembership: (roomId, updates) =>
         set((state) => ({
           availableRooms: state.availableRooms.map((room) =>
             room.id === roomId ? { ...room, ...updates } : room
           ),
         })),
-      
 
       removeRoom: (roomId) =>
         set((state) => ({
           availableRooms: state.availableRooms.filter((room) => room.id !== roomId),
-          selectedRoomId: state.selectedRoomId === roomId ? null : state.selectedRoomId
+          selectedRoomId: state.selectedRoomId === roomId ? null : state.selectedRoomId,
         })),
-
-    
 
       updateTypingUsers: (users) => set({ typingUsers: users }),
       updateTypingText: (text) => set({ typingDisplayText: text }),
 
       updateRoomPresence: (roomId, presence) =>
-        set((state) => ({
-          roomPresence: {
-            ...state.roomPresence,
-            [roomId]: presence
-          }
-        })),
+        set((state) => ({ roomPresence: { ...state.roomPresence, [roomId]: presence } })),
 
       setLoading: (isLoading) => set({ isLoading }),
       setError: (error) => set({ error }),
       clearError: () => set({ error: null }),
 
+      // ---------------- fetchRooms ----------------
       fetchRooms: async () => {
-        const { user, setAvailableRooms, setLoading, setError } = get();
         const supabase = getSupabaseBrowserClient();
+        const user = (await supabase.auth.getUser()).data.user;
         if (!user) return;
 
         try {
-          setLoading(true);
+          set({ isLoading: true, error: null });
 
           const { data, error } = await supabase.rpc("get_rooms_with_counts", {
             p_user_id: user.id,
@@ -161,129 +180,83 @@ export const useRoomStore = create<RoomState>()(
             p_include_participants: true,
           });
 
-          if (error) throw error;
+          if (error) {
+            console.error("fetchRooms RPC error:", error);
+            set({ error: error.message ?? "Failed to fetch rooms" });
+            toast.error("Failed to fetch rooms");
+            return;
+          }
 
-          const formattedRooms = (data || []).map((room: any): Room => ({
-            id: room.id,
-            name: room.name,
-            is_private: room.is_private,
-            created_by: room.created_by,
-            created_at: room.created_at,
-            isMember: room.is_member,
-            participationStatus: room.participation_status,
-            memberCount: room.member_count
-          }));
+          const formatted = normalizeRooms(data);
+          set({ availableRooms: formatted });
 
-          setAvailableRooms(formattedRooms);
+          // initialize default selected room if none
+          const sel = get().selectedRoomId;
+          if (!sel && formatted.length > 0) {
+            const defaultRoom = formatted.find((r) => r.name === "General Chat") ?? formatted[0];
+            set({ selectedRoomId: defaultRoom.id });
+          }
         } catch (err: any) {
           console.error("fetchRooms error:", err);
-          setError(err.message ?? "Failed to fetch rooms");
+          set({ error: err.message ?? "Failed to fetch rooms" });
+          toast.error("Failed to fetch rooms");
         } finally {
-          setLoading(false);
+          set({ isLoading: false });
         }
       },
 
-   
+      // ---------------- sendMessage ----------------
       sendMessage: async (roomId, text) => {
         try {
           const res = await fetch("/api/messages/send", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ roomId, text })
+            body: JSON.stringify({ roomId, text }),
           });
-      
           return res.ok;
         } catch {
           return false;
         }
       },
-      
-      
-      
-      joinRoom: async (roomId) => {
-        const supabase = getSupabaseBrowserClient();
-        const { fetchRooms, setSelectedRoomId } = get();
-      
-        if (!get().user) return false;
-      
-        try {
-          const response = await fetch(`/api/rooms/${roomId}/join`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-          });
-      
-          if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || "Failed to join room");
-          }
-      
-          const data = await response.json();
-      
-          if (data.status === "accepted") {
-            toast.success("Joined room!");
-            await fetchRooms();
-            setSelectedRoomId(roomId); // ✅ auto-open
-            return true;
-          } else if (data.status === "pending") {
-            toast.info("Join request sent to room owner");
-            await fetchRooms();
-            return true;
-          } else {
-            toast.success(data.message || "Welcome to your private room!");
-            await fetchRooms();
-            setSelectedRoomId(roomId);
-            return true;
-          }
-        } catch (err: any) {
-          toast.error(err.message ?? "Failed to join room");
-          return false;
-        }
-      },
 
-      leaveRoom: async (roomId) => {
-        const supabase = getSupabaseBrowserClient();
-        const { fetchRooms, setSelectedRoomId } = get();
-        try {
-          const { error } = await supabase.rpc("remove_from_room", {
-            p_room_id: roomId,
-            p_user_id: get().user.id
-          });
-          if (error) throw error;
-          if (get().selectedRoomId === roomId) setSelectedRoomId(null);
-          await fetchRooms();
-          return true;
-        } catch {
-          return false;
-        }
-      },
+     
 
+      // ---------------- createRoom ----------------
       createRoom: async (name, isPrivate) => {
         try {
           const res = await fetch("/api/rooms/create", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name, isPrivate })
+            body: JSON.stringify({ name, isPrivate }),
           });
-      
-          const json = await res.json();
-      
-          if (!json.success || !json.room) {
-            toast.error(json.error || "Room creation failed");
+
+          const json = await safeJson(res);
+
+          if (!res.ok || !json?.room) {
+            toast.error(json?.error || "Room creation failed");
             return null;
           }
-      
-          get().addRoom(json.room);
-          return json.room;
+
+          // update cached rooms
+          await get().fetchRooms();
+          // return created room if found
+          const created = get().availableRooms.find((r) => r.name === name) ?? null;
+          if (created) {
+            get().setSelectedRoomId(created.id);
+            return created;
+          }
+          return null;
         } catch (err) {
           console.error("Create room error:", err);
+          toast.error("Room creation failed");
           return null;
         }
-      }
-      
+      },
     }))
   )
 );
 
+// -------------------- Exports / helpers --------------------
 export function RoomProvider({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
@@ -303,12 +276,11 @@ export const useTypingDisplayText = () => useRoomStore((s) => s.typingDisplayTex
 
 export const useRoomActions = () =>
   useRoomStore((state) => ({
-    setSelectedRoomId: state.setSelectedRoomId, // ✅ fixed
+    setSelectedRoomId: state.setSelectedRoomId,
     sendMessage: state.sendMessage,
     fetchRooms: state.fetchRooms,
     createRoom: state.createRoom,
-    leaveRoom: state.leaveRoom,
-    joinRoom: state.joinRoom,
+
     updateTypingUsers: state.updateTypingUsers,
     updateTypingText: state.updateTypingText,
     mergeRoomMembership: state.mergeRoomMembership,
@@ -323,13 +295,11 @@ export const useRoomActions = () =>
     clearError: state.clearError,
   }));
 
-
-
 export const getRoomPresence = (roomId: string) => {
   const presence = useRoomStore.getState().roomPresence[roomId];
   return {
     onlineCount: presence?.onlineUsers ?? 0,
-    onlineUsers: presence?.userIds ?? []
+    onlineUsers: presence?.userIds ?? [],
   };
 };
 
@@ -342,4 +312,3 @@ export const fetchAllUsers = async () => {
     .select("id, username, display_name, avatar_url, created_at");
   return data || [];
 };
-

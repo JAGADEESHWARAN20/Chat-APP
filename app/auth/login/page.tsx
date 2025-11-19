@@ -10,6 +10,7 @@ import { ArrowRight, Github, Mail } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Database } from "@/database.types";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -18,11 +19,7 @@ export default function LoginPage() {
   const router = useRouter();
   
   // FIX: Use createBrowserClient instead of createClientComponentClient
-  const supabase = createBrowserClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
-
+  const supabase = getSupabaseBrowserClient(); // no createBrowserClient per file
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);

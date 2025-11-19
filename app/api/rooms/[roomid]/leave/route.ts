@@ -1,3 +1,4 @@
+// app/api/rooms/[roomId]/leave/route.ts
 import { NextRequest } from "next/server";
 import {
   withAuth,
@@ -6,85 +7,75 @@ import {
   successResponse,
 } from "@/lib/api-utils";
 
-export const PATCH = (req: NextRequest, ctx: { params: { roomId: string } }) =>
+export const PATCH = async (req: NextRequest, ctx?: { params?: { roomId?: string } }) =>
   withAuth(async ({ supabase, user }) => {
-    let actualRoomId = ctx.params.roomId;
-
     try {
-      validateUUID(actualRoomId, "roomId");
-
-      // Fetch room
-      const { data: room, error: roomError } = await supabase
-        .from("rooms")
-        .select("id, name, created_by")
-        .eq("id", actualRoomId)
-        .single();
-
-      if (roomError || !room) {
-        return errorResponse("Room not found", "ROOM_NOT_FOUND", 404);
+      // Resolve roomId (App Router preferred; fallback to URL parse)
+      let roomId = ctx?.params?.roomId ?? null;
+      if (!roomId) {
+        try {
+          const url = new URL(req.url);
+          const parts = url.pathname.split("/").filter(Boolean);
+          const idx = parts.findIndex((p) => p === "rooms");
+          if (idx >= 0 && parts.length > idx + 1) roomId = parts[idx + 1];
+        } catch (e) {
+          roomId = null;
+        }
       }
 
-      // Must be member
-      const { data: member } = await supabase
-        .from("room_members")
-        .select("status")
-        .eq("room_id", actualRoomId)
-        .eq("user_id", user.id)
-        .eq("status", "accepted")
-        .single();
-
-      if (!member) {
-        return errorResponse("Not a member of this room", "NOT_A_MEMBER", 403);
+      if (!roomId) {
+        console.error("[leave] missing roomId - url:", req.url);
+        return errorResponse("Missing room id", "MISSING_ROOM_ID", 400);
       }
 
-      /* -----------------------------------------
-         CREATOR LEAVING (Deleting room)
-      ----------------------------------------- */
-      if (room.created_by === user.id) {
-        const { count } = await supabase
-          .from("room_members")
-          .select("*", { count: "exact", head: true })
-          .eq("room_id", actualRoomId)
-          .eq("status", "accepted");
-
-        if (count && count > 1) {
-          return errorResponse(
-            "Creator must transfer ownership before leaving",
-            "CREATOR_CANNOT_LEAVE",
-            400
-          );
-        }
-
-        // Delete room (now safe with CASCADE)
-        const { error: deleteError } = await supabase
-          .from("rooms")
-          .delete()
-          .eq("id", actualRoomId);
-
-        if (deleteError) {
-          return errorResponse(deleteError.message, "DELETE_ERROR", 500);
-        }
-
-        return successResponse({ deleted: true });
+      // validate uuid - will throw if invalid
+      try {
+        validateUUID(roomId, "roomId");
+      } catch (ve) {
+        console.error("[leave] validateUUID failed:", ve);
+        return errorResponse("Invalid room id", "INVALID_ROOM_ID", 400);
       }
 
-      /* -----------------------------------------
-         MEMBER LEAVING — RPC
-      ----------------------------------------- */
-      const { data: rpcResult, error: rpcError } = await supabase.rpc(
-        "remove_from_room",
-        {
-          p_room_id: actualRoomId,
-          p_user_id: user.id,
-        }
-      );
+      // Call RPC
+      const { data: rpcData, error: rpcError } = await supabase.rpc("remove_from_room", {
+        p_room_id: roomId,
+      });
 
+      // Log everything useful for debugging (server console)
+      console.info("[leave] user:", user?.id, "roomId:", roomId);
+      console.info("[leave] rpcError:", rpcError);
+      console.info("[leave] rpcData:", JSON.stringify(rpcData));
+
+      // If PostgREST returned a PostgREST error object:
       if (rpcError) {
-        return errorResponse(rpcError.message, "LEAVE_FAILED", 500);
+        // include rpcError.message in response so front-end can show it while debugging
+        return errorResponse(rpcError.message || "RPC error", "LEAVE_FAILED", 400);
       }
 
-      return successResponse({ success: true });
-    } catch (error: any) {
+      // Normalize RPC result
+      const result =
+        rpcData && typeof rpcData === "object" && "success" in rpcData
+          ? rpcData
+          : Array.isArray(rpcData) && rpcData.length > 0
+          ? rpcData[0]
+          : rpcData;
+
+      if (!result) {
+        console.error("[leave] invalid rpc result:", rpcData);
+        return errorResponse("Invalid RPC result", "INVALID_RPC_RESULT", 500);
+      }
+
+      // If the RPC itself set success:false -> return its message to client
+      if (result.success === false) {
+        const code = result.error ?? "LEAVE_FAILED";
+        const msg = result.message ?? "Failed to leave room";
+        return errorResponse(msg, code, 400);
+      }
+
+      // Success — return the full result so client knows action/message
+      return successResponse(result);
+    } catch (err: any) {
+      console.error("[leave] unexpected error:", err);
       return errorResponse("Internal server error", "INTERNAL_ERROR", 500);
     }
-  })(req); // ✔ ONLY pass req
+  })(req);
