@@ -1,10 +1,10 @@
 // components/ChatPresence.tsx
 "use client";
-import { useRoomContext } from "@/lib/store/RoomContext";
+import { useUnifiedRoomStore } from "@/lib/store/roomstore";
 import { RoomActiveUsers } from "./reusable/RoomActiveUsers";
 
 export default function ChatPresence() {
-  const { selectedRoomId } = useRoomContext();
+  const { selectedRoomId } = useUnifiedRoomStore();
   if (!selectedRoomId) {
     return null;
   }

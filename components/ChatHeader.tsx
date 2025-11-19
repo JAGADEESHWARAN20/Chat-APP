@@ -12,13 +12,14 @@ import {
 import { Search, ArrowRightLeft, LockIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { useSelectedRoom, useAvailableRooms, useRoomActions } from "@/lib/store/RoomContext";
+// import { useSelectedRoom, useAvailableRooms, useRoomActions } from "@/lib/store/RoomContext";
 import { useMessage, Imessage } from "@/lib/store/messages";
 import { useSearchHighlight } from "@/lib/store/SearchHighlightContext";
 import { RoomActiveUsers } from "@/components/reusable/RoomActiveUsers";
 import { RoomAssistantDialog } from "./AIchatDialog";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
+import { useAvailableRooms, useRoomActions, useSelectedRoom } from "@/lib/store/roomstore";
 
 export default function ChatHeader({ user }: { user: SupabaseUser | undefined }) {
   const { searchMessages } = useMessage();

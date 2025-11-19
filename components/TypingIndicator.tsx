@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { useSelectedRoom, useTypingUsers, useTypingDisplayText } from "@/lib/store/RoomContext";
+import { useSelectedRoom, useTypingUsers, useTypingDisplayText } from "@/lib/store/roomstore";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function TypingIndicator() {

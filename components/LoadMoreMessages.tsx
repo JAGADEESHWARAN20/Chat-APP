@@ -7,14 +7,14 @@ import { LIMIT_MESSAGE } from "@/lib/constant";
 import { getFromAndTo } from "@/lib/utils";
 import { Imessage, useMessage } from "@/lib/store/messages";
 import { toast } from "sonner";
-import { useRoomStore } from "@/lib/store/roomstore";
+import { useUnifiedRoomStore } from "@/lib/store/roomstore";
 import { MESSAGE_WITH_PROFILE_SELECT } from "@/lib/queries/messages";
 
 export default function LoadMoreMessages() {
   const page = useMessage((state) => state.page);
   const setMessages = useMessage((state) => state.setMessages);
   const hasMore = useMessage((state) => state.hasMore);
-  const selectedRoom = useRoomStore((state) => state.selectedRoomId);
+  const selectedRoom = useUnifiedRoomStore((state) => state.selectedRoomId);
   const [loading, setLoading] = useState(false);
 
   const fetchMore = async () => {

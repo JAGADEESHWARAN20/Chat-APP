@@ -4,7 +4,8 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useNotification, Inotification } from "@/lib/store/notifications";
 import { useEffect, useRef } from "react";
 import { useUser } from "@/lib/store/user";
-import { useRoomContext } from "@/lib/store/RoomContext";
+import { useUnifiedRoomStore } from "@/lib/store/roomstore";
+// import { useRoomContext } from "@/lib/store/RoomContext";
 
 
 async function fetchRoomsForUser(userId: string) {
@@ -32,7 +33,7 @@ async function fetchRoomsForUser(userId: string) {
 export function useNotificationHandler() {
   const { user: currentUser, authUser } = useUser();
   const { addNotification } = useNotification();
-  const roomStore = useRoomContext();
+  const roomStore = useUnifiedRoomStore();
 
   const setRooms = roomStore.setAvailableRooms;
   const setSelectedRoomId = roomStore.setSelectedRoomId;

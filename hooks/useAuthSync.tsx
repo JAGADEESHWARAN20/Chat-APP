@@ -3,13 +3,14 @@
 import { useEffect, useRef, useMemo } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useUser } from "@/lib/store/user";
-import { useRoomStore } from "@/lib/store/RoomContext";
+import { useUnifiedRoomStore } from "@/lib/store/roomstore";
+// import { useRoomStore } from "@/lib/store/RoomContext";
 // import { AuthApiError } from "@supabase/supabase-js";
 
 export function useAuthSync() {
   const supabase = getSupabaseBrowserClient();
   const { user, setUser } = useUser();
-  const setRoomUser = useRoomStore((s) => s.setUser);
+  const setRoomUser = useUnifiedRoomStore((s) => s.setUser);
   const lastUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {

@@ -1,10 +1,11 @@
+// hooks/usePresence.ts
 "use client";
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useUser } from "@/lib/store/user";
 import { toast } from "sonner";
 import type { RealtimeChannel, RealtimePresenceState } from "@supabase/supabase-js";
-import { useRoomStore } from "@/lib/store/RoomContext";
+import { useUnifiedRoomStore } from "@/lib/store/roomstore"; // ✅ Use unified store
 
 // Enhanced Type Definitions
 interface PresenceData {
@@ -48,6 +49,9 @@ export function usePresence({
   const timeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
   const presenceDataRef = useRef<Map<string, Map<string, PresenceData>>>(new Map());
   const isSubscribedRef = useRef<boolean>(false);
+
+  // ✅ Get the setRoomPresence method from the store
+  const setRoomPresence = useUnifiedRoomStore((state) => state.setRoomPresence);
 
   // ✅ FIX 1: Memoize roomIds dependency to avoid complex expression
   const roomIdsKey = useMemo(() => roomIds.join(','), [roomIds]);
@@ -131,11 +135,18 @@ export function usePresence({
       setOnlineCounts(prev => new Map(prev).set(roomId, count));
       setOnlineUsers(prev => new Map(prev).set(roomId, usersData));
 
+      // ✅ FIX: Push presence info to Zustand store for UI
+      setRoomPresence(roomId, {
+        onlineUsers: count,
+        userIds: usersData.map(u => u.user_id),
+        lastUpdated: new Date().toISOString(),
+      });
+
     } catch (error) {
       console.error(`Error updating presence for room ${roomId}:`, error);
       setError(`Failed to update presence for room ${roomId}`);
     }
-  }, [user?.id, excludeSelf, offlineTimeout, extractPresenceData]);
+  }, [user?.id, excludeSelf, offlineTimeout, extractPresenceData, setRoomPresence]);
 
   // Clean up stale presence data
   const cleanupStalePresence = useCallback((roomId: string) => {
@@ -155,17 +166,7 @@ export function usePresence({
   const handlePresenceEvent = useCallback((roomId: string) => {
     updateRoomPresence(roomId);
     cleanupStalePresence(roomId);
-  
-    // ✅ Push presence info to Zustand store for UI
-    const count = onlineCounts.get(roomId) || 0;
-    const users = onlineUsers.get(roomId) || [];
-  
-    useRoomStore.getState().updateRoomPresence(roomId, {
-      onlineUsers: count,
-      userIds: users.map(u => u.user_id),
-      lastUpdated: new Date().toISOString(),
-    });
-  }, [updateRoomPresence, cleanupStalePresence, onlineCounts, onlineUsers]);
+  }, [updateRoomPresence, cleanupStalePresence]);
 
   // ✅ FIX 2: Add missing user dependency to subscribeToRoom
   const subscribeToRoom = useCallback(async (roomId: string) => {

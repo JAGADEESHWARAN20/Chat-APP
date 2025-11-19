@@ -10,12 +10,13 @@ import ChatLayout from "@/components/ChatLayout";
 import { ChevronRight, Home, Search, MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
-import { useRoomStore } from "@/lib/store/RoomContext";
+// import { useRoomStore } from "@/lib/store/RoomContext";
 import SecureInitUser from "@/lib/initialization/secureInitUser";
+import { useUnifiedRoomStore } from "@/lib/store/roomstore";
 
 export default function HomePage() {
   const [user, setUser] = useState<any>(null);
-  const setRoomUser = useRoomStore((state) => state.setUser);
+  const setRoomUser = useUnifiedRoomStore((state) => state.setUser);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"home" | "search">("home");
 

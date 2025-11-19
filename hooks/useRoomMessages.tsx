@@ -1,10 +1,11 @@
+// hooks/useRoomMessages.tsx
 "use client";
 import { useMessage } from "@/lib/store/messages";
-import { useSelectedRoom } from "@/lib/store/RoomContext";
+import { useSelectedRoom } from "@/lib/store/roomstore"; // ✅ Use the selector
 import { useMemo } from "react";
 
 export function useRoomMessages(roomId?: string) {
-  const selectedRoom = useSelectedRoom();
+  const selectedRoom = useSelectedRoom(); // ✅ Use the selector, not the whole store
   const messages = useMessage((state) => state.messages);
 
   const roomMessages = useMemo(() => {

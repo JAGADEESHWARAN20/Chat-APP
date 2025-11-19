@@ -45,12 +45,13 @@ import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 
 import { useTheme } from "next-themes";
-import { useRoomContext } from "@/lib/store/RoomContext";
+// import { useRoomContext } from "@/lib/store/RoomContext";
 import { cn } from "@/lib/utils";
 
 import { PairedMessageRenderer } from "./RoomAssistantParts/PairedMessageRenderer";
 import { MessageSkeleton } from "./RoomAssistantParts/MessageSkeleton";
 import { MODELS } from "./RoomAssistantParts/constants";
+import { useUnifiedRoomStore } from "@/lib/store/roomstore";
 
 interface RoomAssistantProps {
   roomId: string;
@@ -94,7 +95,7 @@ function RoomAssistantComponent({
   onToggleExpand,
 }: RoomAssistantProps) {
   const { theme, setTheme } = useTheme();
-  const { user } = useRoomContext();
+  const { user } = useUnifiedRoomStore();
 
   const [prompt, setPrompt] = useState("");
   const [model, setModel] = useState("gpt-4o-mini");

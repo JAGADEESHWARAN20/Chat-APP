@@ -1,11 +1,12 @@
 "use client";
 import { useEffect } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { useRoomActions } from "@/lib/store/RoomContext";
+import { useUnifiedRoomStore } from "@/lib/store/roomstore";
+// import { useRoomActions } from "@/lib/store/RoomContext";
 
 export function useMembershipRealtime(userId: string | null | undefined) {
   const supabase = getSupabaseBrowserClient();
-  const { mergeRoomMembership, setSelectedRoomId } = useRoomActions();
+  const { mergeRoomMembership, setSelectedRoomId } = useUnifiedRoomStore();
 
   useEffect(() => {
     if (!userId) return;

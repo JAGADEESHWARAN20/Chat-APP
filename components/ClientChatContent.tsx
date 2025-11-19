@@ -5,12 +5,13 @@ import React from "react";
 import ChatMessages from "@/components/ChatMessages";
 import ChatInput from "@/components/ChatInput";
 import ChatAbout from "@/components/ChatAbout";
-import { useRoomContext } from "@/lib/store/RoomContext";
+// import { useRoomContext } from "@/lib/store/RoomContext";
 import { User as SupabaseUser } from "@supabase/supabase-js";
 import ChatHeader from "@/components/ChatHeader";
+import { useUnifiedRoomStore } from "@/lib/store/roomstore";
 
 export default function ClientChatContent({ user }: { user: SupabaseUser | undefined }) {
-  const { selectedRoomId } = useRoomContext(); // Direct access, no .state needed
+  const { selectedRoomId } = useUnifiedRoomStore(); // Direct access, no .state needed
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">

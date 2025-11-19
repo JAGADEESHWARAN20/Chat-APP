@@ -1,4 +1,4 @@
-// File: lib/store/roomStore.ts
+// lib/store/unified-room-store.ts
 "use client";
 
 import { create } from "zustand";
@@ -6,15 +6,16 @@ import { devtools, subscribeWithSelector } from "zustand/middleware";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import type { Database } from "@/lib/types/supabase";
+import { useEffect } from "react";
 
 type IRoomRow = Database["public"]["Tables"]["rooms"]["Row"];
 
 export type RoomWithMembership = IRoomRow & {
   isMember: boolean;
-  participationStatus: string | null;
+  participationStatus: "pending" | "accepted" | null;
   memberCount: number;
-  participant_count?: number;
   online_users?: number;
+  unreadCount?: number;
   latestMessage?: string | null;
 };
 
@@ -24,36 +25,61 @@ export interface RoomPresence {
   lastUpdated?: string;
 }
 
+export interface TypingUser {
+  user_id: string;
+  is_typing: boolean;
+  display_name?: string;
+}
+
 interface RoomState {
   user: { id: string } | null;
   rooms: RoomWithMembership[];
-  selectedRoomId: string | null | undefined;
+  selectedRoomId: string | null;
   roomPresence: Record<string, RoomPresence>;
+  typingUsers: TypingUser[];
+  typingDisplayText: string;
   isLoading: boolean;
   error: string | null;
 
-  _pendingJoins: Set<string>;
-  _pendingLeaves: Set<string>;
-
+  // Setters
   setUser: (u: { id: string } | null) => void;
   setRooms: (rooms: RoomWithMembership[]) => void;
-  setSelectedRoomId: (id: string | null | undefined) => void;
+  setSelectedRoomId: (id: string | null) => void;
   setRoomPresence: (roomId: string, p: RoomPresence) => void;
   setLoading: (v: boolean) => void;
   setError: (v: string | null) => void;
+  setAvailableRooms: (rooms: RoomWithMembership[]) => void;
+  addRoom: (room: RoomWithMembership) => void;
+  updateRoom: (roomId: string, updates: Partial<RoomWithMembership>) => void;
+  removeRoom: (roomId: string) => void;
+  updateTypingUsers: (users: TypingUser[]) => void;
+  updateTypingText: (text: string) => void;
+  clearError: () => void;
 
+  // Core operations
   fetchRooms: (opts?: { force?: boolean }) => Promise<RoomWithMembership[] | null>;
   joinRoom: (roomId: string) => Promise<boolean>;
   leaveRoom: (roomId: string) => Promise<boolean>;
   createRoom: (name: string, isPrivate: boolean) => Promise<RoomWithMembership | null>;
+  sendMessage: (roomId: string, text: string) => Promise<boolean>;
+  
+  // Instant sync operations
+  updateRoomMembership: (roomId: string, updates: Partial<RoomWithMembership>) => void;
+  mergeRoomMembership: (roomId: string, updates: Partial<RoomWithMembership>) => void;
+  refreshRooms: () => Promise<void>;
 }
 
 const normalizeRpcRooms = (data: any): RoomWithMembership[] =>
   (Array.isArray(data) ? data : []).map((r: any) => ({
     ...r,
     isMember: Boolean(r.is_member),
-    participationStatus: r.participation_status ?? null,
+    participationStatus: (r.participation_status === "pending" || r.participation_status === "accepted") 
+      ? r.participation_status 
+      : null,
     memberCount: Number(r.member_count ?? 0),
+    online_users: r.online_users ?? undefined,
+    unreadCount: r.unread_count ?? undefined,
+    latestMessage: r.latest_message ?? undefined,
   }));
 
 const safeJson = async (res: Response) => {
@@ -64,43 +90,94 @@ const safeJson = async (res: Response) => {
   }
 };
 
-const apiJoin = (roomId: string) =>
-  fetch(`/api/rooms/${roomId}/join`, { method: "POST", headers: { "Content-Type": "application/json" } });
-
-const apiLeave = (roomId: string) =>
-  fetch(`/api/rooms/${roomId}/leave`, { method: "PATCH", headers: { "Content-Type": "application/json" } });
-
-export const useRoomStore = create<RoomState>()(
+// Create the unified store
+export const useUnifiedRoomStore = create<RoomState>()(
   devtools(
     subscribeWithSelector((set, get) => ({
       user: null,
       rooms: [],
-      selectedRoomId: undefined,
+      selectedRoomId: null,
       roomPresence: {},
+      typingUsers: [],
+      typingDisplayText: "",
       isLoading: false,
       error: null,
 
-      _pendingJoins: new Set<string>(),
-      _pendingLeaves: new Set<string>(),
-
+      // 🎯 SETTERS
       setUser: (u) => set({ user: u }),
+      
       setRooms: (rooms) => {
+        console.log('🚀 setRooms - Updating store with', rooms.length, 'rooms');
         set({ rooms });
         const sel = get().selectedRoomId;
         if (!sel && rooms.length > 0) {
           const defaultRoom = rooms.find((r) => r.name === "General Chat") ?? rooms[0];
-          set({ selectedRoomId: defaultRoom?.id });
+          set({ selectedRoomId: defaultRoom?.id ?? null });
         }
       },
+      
       setSelectedRoomId: (id) => set({ selectedRoomId: id }),
+      
       setRoomPresence: (roomId, p) =>
         set((s) => ({ roomPresence: { ...s.roomPresence, [roomId]: p } })),
+      
       setLoading: (v) => set({ isLoading: v }),
+      
       setError: (v) => set({ error: v }),
+      
+      setAvailableRooms: (rooms) => set({ rooms }),
+      
+      addRoom: (room) =>
+        set((state) => ({ rooms: [...state.rooms, room] })),
+      
+      updateRoom: (roomId, updates) =>
+        set((state) => ({
+          rooms: state.rooms.map((room) =>
+            room.id === roomId ? { ...room, ...updates } : room
+          ),
+        })),
+      
+      removeRoom: (roomId) =>
+        set((state) => ({
+          rooms: state.rooms.filter((room) => room.id !== roomId),
+          selectedRoomId: state.selectedRoomId === roomId ? null : state.selectedRoomId,
+        })),
+      
+      updateTypingUsers: (users) => set({ typingUsers: users }),
+      
+      updateTypingText: (text) => set({ typingDisplayText: text }),
+      
+      clearError: () => set({ error: null }),
 
+      // 🎯 INSTANT OPTIMISTIC UPDATES
+      updateRoomMembership: (roomId, updates) => {
+        console.log('⚡ updateRoomMembership - Instant update for room:', roomId, updates);
+        set((state) => ({
+          rooms: state.rooms.map((room) =>
+            room.id === roomId ? { ...room, ...updates } : room
+          ),
+        }));
+      },
+
+      mergeRoomMembership: (roomId, updates) => {
+        console.log('⚡ mergeRoomMembership - Merging updates for room:', roomId, updates);
+        set((state) => ({
+          rooms: state.rooms.map((room) =>
+            room.id === roomId ? { ...room, ...updates } : room
+          ),
+        }));
+      },
+
+      refreshRooms: async (): Promise<void> => {
+        console.log('🔄 refreshRooms - Forcing refresh');
+        await get().fetchRooms({ force: true });
+      },
+
+      // 🎯 CORE OPERATIONS
       fetchRooms: async ({ force = false } = {}) => {
         const supabase = getSupabaseBrowserClient();
         let userId = get().user?.id;
+        
         try {
           if (!userId) {
             const u = await supabase.auth.getUser();
@@ -108,9 +185,15 @@ export const useRoomStore = create<RoomState>()(
             if (userId) set({ user: { id: userId } });
           }
           if (!userId) return null;
-          if (!force && get().rooms.length > 0) return get().rooms;
+          
+          // Skip if we have data and not forcing refresh
+          if (!force && get().rooms.length > 0) {
+            console.log('📦 fetchRooms - Using cached data');
+            return get().rooms;
+          }
 
           set({ isLoading: true, error: null });
+          console.log('🌐 fetchRooms - Fetching from server');
 
           const { data, error } = await supabase.rpc("get_rooms_with_counts", {
             p_user_id: userId,
@@ -119,16 +202,30 @@ export const useRoomStore = create<RoomState>()(
           });
 
           if (error) {
-            console.error("fetchRooms RPC error:", error);
+            console.error("❌ fetchRooms RPC error:", error);
             set({ error: error.message ?? "Failed to fetch rooms" });
             return null;
           }
 
           const formatted = normalizeRpcRooms(data);
+          console.log('✅ fetchRooms - Success:', {
+            total: formatted.length,
+            joined: formatted.filter(r => r.isMember && r.participationStatus === 'accepted').length,
+            pending: formatted.filter(r => r.participationStatus === 'pending').length
+          });
+          
           set({ rooms: formatted });
+          
+          // Auto-select first room if none selected
+          const sel = get().selectedRoomId;
+          if (!sel && formatted.length > 0) {
+            const defaultRoom = formatted.find((r) => r.name === "General Chat") ?? formatted[0];
+            set({ selectedRoomId: defaultRoom?.id ?? null });
+          }
+          
           return formatted;
         } catch (err: any) {
-          console.error("fetchRooms error:", err);
+          console.error("❌ fetchRooms error:", err);
           set({ error: err.message ?? "Failed to fetch rooms" });
           return null;
         } finally {
@@ -136,144 +233,125 @@ export const useRoomStore = create<RoomState>()(
         }
       },
 
+      sendMessage: async (roomId: string, text: string) => {
+        try {
+          const res = await fetch("/api/messages/send", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ roomId, text }),
+          });
+          return res.ok;
+        } catch {
+          return false;
+        }
+      },
+
       joinRoom: async (roomId) => {
-        if (get()._pendingJoins.has(roomId)) return false;
-        get()._pendingJoins.add(roomId);
+        const room = get().rooms.find(r => r.id === roomId);
+        console.log('🎯 joinRoom - Starting for room:', roomId, 'Current status:', room?.participationStatus);
 
-        const prevRooms = get().rooms;
-        const prevIndex = prevRooms.findIndex((r) => r.id === roomId);
-        const prevRoom = prevIndex >= 0 ? prevRooms[prevIndex] : null;
-
-        const rollback = () => set({ rooms: prevRooms });
+        // INSTANT OPTIMISTIC UPDATE
+        if (room?.is_private) {
+          get().updateRoomMembership(roomId, { participationStatus: "pending" });
+          toast.info("Join request sent — awaiting approval");
+        } else if (room) {
+          get().updateRoomMembership(roomId, { 
+            isMember: true, 
+            participationStatus: "accepted", 
+            memberCount: (room.memberCount || 0) + 1 
+          });
+          toast.success("Joined room successfully!");
+        }
 
         try {
-          // If room known and private -> only mark participationStatus pending locally
-          if (prevRoom?.is_private) {
-            set({
-              rooms: prevRooms.map((r, i) =>
-                i === prevIndex ? { ...r, participationStatus: "pending" } : r
-              ),
-            });
-          } else if (prevRoom) {
-            // public: optimistic member
-            set({
-              rooms: prevRooms.map((r, i) =>
-                i === prevIndex
-                  ? { ...r, isMember: true, participationStatus: "accepted", memberCount: (r.memberCount || 0) + 1 }
-                  : r
-              ),
-            });
-          }
-
-          const res = await apiJoin(roomId);
+          const res = await fetch(`/api/rooms/${roomId}/join`, { 
+            method: "POST", 
+            headers: { "Content-Type": "application/json" } 
+          });
           const json = await safeJson(res);
 
           if (!res.ok) {
-            rollback();
-            const msg = json?.error || json?.message || "Failed to join room";
-            toast.error(msg);
+            // Rollback optimistic update on error
+            if (room) {
+              get().updateRoomMembership(roomId, { 
+                isMember: room.isMember, 
+                participationStatus: room.participationStatus, 
+                memberCount: room.memberCount 
+              });
+            }
+            toast.error(json?.error || "Failed to join room");
             return false;
           }
 
-          const status = json?.status ?? null;
-
-          // Always fetch canonical state after join to sync counts & membership
-          await get().fetchRooms({ force: true });
-
-          if (status === "accepted") {
-            // ensure accepted state
-            set((state) => ({
-              rooms: state.rooms.map((r) =>
-                r.id === roomId ? { ...r, isMember: true, participationStatus: "accepted" } : r
-              ),
-              selectedRoomId: roomId,
-            }));
-            toast.success(json?.message || "Joined room");
-            return true;
-          } else if (status === "pending") {
-            set((state) => ({
-              rooms: state.rooms.map((r) => (r.id === roomId ? { ...r, participationStatus: "pending" } : r)),
-            }));
-            toast.info(json?.message || "Join request sent — awaiting approval");
-            return true;
-          }
-
-          // fallback
-          toast.success(json?.message || "Request processed");
+          // Refresh to get canonical state (but UI is already updated optimistically)
+          setTimeout(() => get().refreshRooms(), 1000);
+          
           return true;
         } catch (err: any) {
-          rollback();
-          console.error("joinRoom error:", err);
+          console.error("❌ joinRoom error:", err);
+          // Rollback on error
+          if (room) {
+            get().updateRoomMembership(roomId, { 
+              isMember: room.isMember, 
+              participationStatus: room.participationStatus, 
+              memberCount: room.memberCount 
+            });
+          }
           toast.error("Failed to join room");
           return false;
-        } finally {
-          get()._pendingJoins.delete(roomId);
         }
       },
 
       leaveRoom: async (roomId) => {
-        if (get()._pendingLeaves.has(roomId)) return false;
-        get()._pendingLeaves.add(roomId);
+        const room = get().rooms.find(r => r.id === roomId);
+        console.log('🚪 leaveRoom - Starting for room:', roomId);
 
-        const prevRooms = get().rooms;
-        const prevIndex = prevRooms.findIndex((r) => r.id === roomId);
-        const prevRoom = prevIndex >= 0 ? prevRooms[prevIndex] : null;
-
-        const rollback = () => set({ rooms: prevRooms });
+        // INSTANT OPTIMISTIC UPDATE
+        if (room) {
+          get().updateRoomMembership(roomId, { 
+            isMember: false, 
+            participationStatus: null, 
+            memberCount: Math.max(0, room.memberCount - 1) 
+          });
+          if (get().selectedRoomId === roomId) set({ selectedRoomId: null });
+          toast.success("Left room successfully");
+        }
 
         try {
-          // optimistic
-          if (prevRoom) {
-            set({
-              rooms: prevRooms.map((r, i) =>
-                i === prevIndex
-                  ? { ...r, isMember: false, participationStatus: null, memberCount: Math.max(0, r.memberCount - 1) }
-                  : r
-              ),
-            });
-            if (get().selectedRoomId === roomId) set({ selectedRoomId: null });
-          }
-
-          const res = await apiLeave(roomId);
+          const res = await fetch(`/api/rooms/${roomId}/leave`, { 
+            method: "PATCH", 
+            headers: { "Content-Type": "application/json" } 
+          });
           const json = await safeJson(res);
 
           if (!res.ok) {
-            rollback();
-            const msg = json?.error || json?.message || "Failed to leave room";
-            toast.error(msg);
+            // Rollback optimistic update on error
+            if (room) {
+              get().updateRoomMembership(roomId, { 
+                isMember: room.isMember, 
+                participationStatus: room.participationStatus, 
+                memberCount: room.memberCount 
+              });
+            }
+            toast.error(json?.error || "Failed to leave room");
             return false;
           }
 
-          const result = json ?? {};
-          if (result.success === false) {
-            rollback();
-            toast.error(result.message || "Failed to leave room");
-            return false;
-          }
-
-          // refresh canonical rooms
-          await get().fetchRooms({ force: true });
-
-          if (result.action === "owner_deleted" || result.deleted === true) {
-            set({ selectedRoomId: null });
-            toast.success(result.message || "Room deleted");
-            return true;
-          }
-
-          if (result.action === "not_member") {
-            toast.info(result.message || "Not a member");
-            return true;
-          }
-
-          toast.success(result.message || "Left room");
+          // Refresh to get canonical state
+          setTimeout(() => get().refreshRooms(), 1000);
           return true;
         } catch (err: any) {
-          rollback();
-          console.error("leaveRoom error:", err);
+          console.error("❌ leaveRoom error:", err);
+          // Rollback on error
+          if (room) {
+            get().updateRoomMembership(roomId, { 
+              isMember: room.isMember, 
+              participationStatus: room.participationStatus, 
+              memberCount: room.memberCount 
+            });
+          }
           toast.error("Failed to leave room");
           return false;
-        } finally {
-          get()._pendingLeaves.delete(roomId);
         }
       },
 
@@ -290,7 +368,7 @@ export const useRoomStore = create<RoomState>()(
             return null;
           }
 
-          await get().fetchRooms({ force: true });
+          await get().refreshRooms();
           const created = get().rooms.find((r) => r.name === name) ?? null;
           if (created) {
             toast.success("Room created");
@@ -298,7 +376,7 @@ export const useRoomStore = create<RoomState>()(
           }
           return null;
         } catch (err: any) {
-          console.error("createRoom error:", err);
+          console.error("❌ createRoom error:", err);
           toast.error("Failed to create room");
           return null;
         }
@@ -307,24 +385,124 @@ export const useRoomStore = create<RoomState>()(
   )
 );
 
-/* selectors & helpers */
-export const useAvailableRooms = () => useRoomStore((s) => s.rooms);
-export const useSelectedRoom = () => useRoomStore((s) => s.rooms.find((r) => r.id === s.selectedRoomId) ?? null);
-export const useRoomLoading = () => useRoomStore((s) => s.isLoading);
-export const useRoomError = () => useRoomStore((s) => s.error);
-export const useRoomPresence = () => useRoomStore((s) => s.roomPresence);
+/* 🚀 HIGH-PERFORMANCE SELECTORS */
+export const useAvailableRooms = () => useUnifiedRoomStore((s) => s.rooms);
+export const useJoinedRooms = () => 
+  useUnifiedRoomStore((s) => s.rooms.filter((r) => r.isMember && r.participationStatus === "accepted"));
+export const useSelectedRoom = () => 
+  useUnifiedRoomStore((s) => s.rooms.find((r) => r.id === s.selectedRoomId) ?? null);
+export const useRoomLoading = () => useUnifiedRoomStore((s) => s.isLoading);
+export const useRoomError = () => useUnifiedRoomStore((s) => s.error);
+export const useRoomPresence = () => useUnifiedRoomStore((s) => s.roomPresence);
+export const useTypingUsers = () => useUnifiedRoomStore((s) => s.typingUsers);
+export const useTypingDisplayText = () => useUnifiedRoomStore((s) => s.typingDisplayText);
 
 export const useRoomActions = () =>
-  useRoomStore((s) => ({
+  useUnifiedRoomStore((s) => ({
+    // Setters
+    setSelectedRoomId: s.setSelectedRoomId,
+    setAvailableRooms: s.setAvailableRooms,
+    setUser: s.setUser,
+    setLoading: s.setLoading,
+    setError: s.setError,
+    clearError: s.clearError,
+    
+    // Room operations
     fetchRooms: s.fetchRooms,
     joinRoom: s.joinRoom,
     leaveRoom: s.leaveRoom,
     createRoom: s.createRoom,
-    setSelectedRoomId: s.setSelectedRoomId,
+    sendMessage: s.sendMessage,
+    
+    // Sync operations
+    refreshRooms: s.refreshRooms,
+    updateRoomMembership: s.updateRoomMembership,
+    mergeRoomMembership: s.mergeRoomMembership,
+    
+    // Typing
+    updateTypingUsers: s.updateTypingUsers,
+    updateTypingText: s.updateTypingText,
+    
+    // Room management
+    addRoom: s.addRoom,
+    updateRoom: s.updateRoom,
+    removeRoom: s.removeRoom,
+    setRoomPresence: s.setRoomPresence,
   }));
 
-export const getRoomPresence = (roomId: string) => {
-  const p = useRoomStore.getState().roomPresence[roomId];
-  return { onlineCount: p?.onlineUsers ?? 0, onlineUsers: p?.userIds ?? [] as string[] };
+// Real-time sync hook
+export const useRoomRealtimeSync = (userId: string | null) => {
+  const { refreshRooms, updateRoomMembership } = useRoomActions();
+  const supabase = getSupabaseBrowserClient();
+
+  useEffect(() => {
+    if (!userId) return;
+
+    console.log('🔌 useRoomRealtimeSync - Setting up for user:', userId);
+    const channel = supabase.channel(`global-room-sync-${userId}`);
+
+    const handleParticipantChange = async (payload: any) => {
+      const { eventType, new: newRecord } = payload;
+      const roomId = newRecord?.room_id;
+      
+      if (!roomId) return;
+
+      console.log('📢 Real-time participant change:', { eventType, roomId, status: newRecord?.status });
+
+      // INSTANT UI UPDATE - No waiting for refresh
+      if (eventType === 'UPDATE' && newRecord?.status === 'accepted') {
+        console.log('⚡ INSTANT UPDATE - User accepted to room:', roomId);
+        updateRoomMembership(roomId, { 
+          isMember: true, 
+          participationStatus: "accepted" 
+        });
+        toast.success("🎉 You're now a member of this room!");
+      }
+      
+      // Also refresh for complete data consistency
+      setTimeout(() => refreshRooms(), 500);
+    };
+
+    const handleNotification = async (payload: any) => {
+      const { new: newRecord } = payload;
+      
+      if (newRecord?.type === 'join_request_accepted' && newRecord.room_id) {
+        console.log('📢 Real-time notification - Join request accepted for room:', newRecord.room_id);
+        // INSTANT UI UPDATE
+        updateRoomMembership(newRecord.room_id, { 
+          isMember: true, 
+          participationStatus: "accepted" 
+        });
+        toast.success("🎉 Your join request was accepted!");
+        
+        // Refresh for complete data
+        setTimeout(() => refreshRooms(), 500);
+      }
+    };
+
+    channel
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'room_participants', filter: `user_id=eq.${userId}` },
+        handleParticipantChange
+      )
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
+        handleNotification
+      );
+
+    channel.subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId, refreshRooms, updateRoomMembership, supabase]);
 };
 
+// Helper function for fetching users
+export const fetchAllUsers = async () => {
+  const supabase = getSupabaseBrowserClient();
+  const { data } = await supabase
+    .from("profiles")
+    .select("id, username, display_name, avatar_url, created_at");
+  return data || [];
+};

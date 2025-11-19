@@ -1,10 +1,10 @@
 "use client";
-import { useRoomStore } from '@/lib/store/RoomContext';
+import { useUnifiedRoomStore } from '@/lib/store/roomstore';
 import { useMemo } from 'react';
 
 export function useActiveUsers(roomId: string | null): number {
-  const roomPresence = useRoomStore((state) => state.roomPresence);
-  const availableRooms = useRoomStore((state) => state.availableRooms);
+  const roomPresence = useUnifiedRoomStore((state) => state.roomPresence);
+  const rooms = useUnifiedRoomStore((state) => state.rooms); // ✅ Use 'rooms' not 'availableRooms'
 
   return useMemo(() => {
     if (!roomId) return 0;
@@ -14,7 +14,7 @@ export function useActiveUsers(roomId: string | null): number {
     if (livePresence) return livePresence.onlineUsers;
 
     // Otherwise fallback to stored room data
-    const room = availableRooms.find((r) => r.id === roomId);
-    return room?.onlineUsers ?? 0;
-  }, [roomId, roomPresence, availableRooms]);
+    const room = rooms.find((r) => r.id === roomId); // ✅ Use 'rooms' here
+    return room?.online_users ?? 0; // ✅ Use 'online_users' (the actual property name)
+  }, [roomId, roomPresence, rooms]);
 }

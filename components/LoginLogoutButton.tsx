@@ -16,7 +16,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import ThemeToggleButton from "@/components/ThemeToggle";
-import { useRoomContext } from "@/lib/store/RoomContext";
+import { useUser } from "@/lib/store/user"; // ✅ Use the user store directly
 import { cn } from "@/lib/utils";
 
 interface LoginLogoutButtonProps {
@@ -42,8 +42,9 @@ export default function LoginLogoutButton({ user }: LoginLogoutButtonProps) {
     []
   );
 
-  const { user: contextUser } = useRoomContext();
-  const currentUser = user || contextUser;
+  // ✅ FIXED: Use the user store directly instead of room store
+  const storeUser = useUser((state) => state.user);
+  const currentUser = user || storeUser;
   const [isSheetOpen, setIsSheetOpen] = useState(false);
 
   const getDisplayName = useMemo(() => {

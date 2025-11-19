@@ -1,8 +1,8 @@
 "use client";
 
-import { useRoomContext, getRoomPresence } from "@/lib/store/RoomContext";
+import { useUnifiedRoomStore, useRoomPresence } from "@/lib/store/roomstore";
 import { Users } from "lucide-react";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 
 interface RoomActiveUsersProps {
   roomId: string;
@@ -15,27 +15,26 @@ export function RoomActiveUsers({
   showZero = false, 
   compact = false 
 }: RoomActiveUsersProps) {
-  const { availableRooms } = useRoomContext(); // ✅ Direct access
+  // ✅ FIXED: Use proper selector - it's 'rooms' not 'availableRooms'
+  const rooms = useUnifiedRoomStore((state) => state.rooms);
+  
+  // ✅ FIXED: useRoomPresence returns the entire presence object, not a hook that takes parameters
+  const roomPresence = useRoomPresence();
+  
   const [onlineUsers, setOnlineUsers] = useState(0);
   
   // Get member count from room data
-  const room = availableRooms.find(r => r.id === roomId);
+  const room = rooms.find(r => r.id === roomId);
   const memberCount = room?.memberCount ?? 0;
 
-  // FIXED: Stable presence update using the utility function
-  const updatePresence = useCallback(() => {
-    const { onlineCount } = getRoomPresence(roomId);
-    setOnlineUsers(onlineCount);
-  }, [roomId]);
-
+  // ✅ FIXED: Extract online count from room presence
   useEffect(() => {
-    updatePresence();
-    
-    // Poll for updates (fallback for real-time issues)
-    const interval = setInterval(updatePresence, 5000);
-    
-    return () => clearInterval(interval);
-  }, [updatePresence]);
+    if (roomId && roomPresence[roomId]) {
+      setOnlineUsers(roomPresence[roomId].onlineUsers || 0);
+    } else {
+      setOnlineUsers(0);
+    }
+  }, [roomId, roomPresence]);
 
   // Don't render if no users and showZero is false
   if (onlineUsers === 0 && !showZero) {

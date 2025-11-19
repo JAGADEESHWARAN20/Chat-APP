@@ -2,7 +2,7 @@
 
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import { useMessage } from "@/lib/store/messages";
-import { useSelectedRoom, useRoomActions } from "@/lib/store/RoomContext";
+// import { useSelectedRoom, useRoomActions } from "@/lib/store/RoomContext";
 import { useUser } from "@/lib/store/user";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { v4 as uuidv4 } from "uuid";
 import { Imessage } from "@/lib/store/messages";
 import { Send, Loader2 } from "lucide-react";
 import { useTypingStatus } from "@/hooks/useTypingStatus";
+import { useRoomActions, useSelectedRoom } from "@/lib/store/roomstore";
 
 export default function ChatInput() {
   const [text, setText] = useState("");

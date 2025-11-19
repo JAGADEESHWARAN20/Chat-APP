@@ -2,10 +2,10 @@
 import { useEffect, useCallback, useRef } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import type { Database } from "@/lib/types/supabase";
-import { useRoomActions, useSelectedRoom, useTypingUsers, useTypingDisplayText } from "@/lib/store/RoomContext";
+import { useRoomActions, useSelectedRoom, useTypingUsers, useTypingDisplayText } from "@/lib/store/roomstore";
 
 // Add missing import for useRoomStore
-import { useRoomStore } from '@/lib/store/RoomContext';
+import { useUnifiedRoomStore } from '@/lib/store/roomstore';
 
 interface TypingUser {
   user_id: string;
@@ -30,7 +30,7 @@ export function useTypingStatus() {
   const typingDisplayText = useTypingDisplayText();
   
   const roomId = selectedRoom?.id ?? null;
-  const user = useRoomStore((state) => state.user);
+  const user = useUnifiedRoomStore((state) => state.user);
   const currentUserId = user?.id ?? null;
 
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);

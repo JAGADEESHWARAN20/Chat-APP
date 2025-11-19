@@ -29,8 +29,8 @@ import {
 } from "lucide-react";
 
 import { useNotification, Inotification, useNotificationSubscription } from "@/lib/store/notifications";
-import { useRoomStore } from "@/lib/store/roomstore"; // ← Single source of truth
-import { useRoomContext } from "@/lib/store/RoomContext";
+import { useUnifiedRoomStore } from "@/lib/store/roomstore"; // ← Single source of truth
+// import { useRoomContext } from "@/lib/store/RoomContext";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Database } from "@/lib/types/supabase";
 import { Swipeable } from "./ui/swipeable";
@@ -51,7 +51,7 @@ interface NotificationsProps {
   onClose?: () => void;
 }
 
-/* ---------- Enhanced transformRoom with memberCount ---------- */
+// In your Notifications component, fix the transformRoom function:
 const transformRoom = async (
   room: Room,
   userId: string,
@@ -80,16 +80,22 @@ const transformRoom = async (
       .eq("room_id", room.id)
       .eq("status", "accepted");
 
-    const participationStatus = membership?.status ?? participant?.status ?? null;
+    const participationStatus = (membership?.status === "pending" || membership?.status === "accepted") 
+      ? membership.status 
+      : (participant?.status === "pending" || participant?.status === "accepted")
+      ? participant.status
+      : null;
+      
     const isMember = participationStatus === "accepted";
 
     return {
       ...room,
       isMember,
       participationStatus,
-      memberCount: count ?? 0, // ← REQUIRED FIELD
-      participant_count: undefined,
+      memberCount: count ?? 0,
       online_users: undefined,
+      unreadCount: undefined,
+      latestMessage: undefined,
     };
   } catch (error) {
     console.error("Error enriching room:", error);
@@ -97,9 +103,10 @@ const transformRoom = async (
       ...room,
       isMember: false,
       participationStatus: null,
-      memberCount: 0, // ← Always include
-      participant_count: 0,
-      online_users: 0,
+      memberCount: 0,
+      online_users: undefined,
+      unreadCount: undefined,
+      latestMessage: undefined,
     };
   }
 };
@@ -273,8 +280,8 @@ export default function Notifications({
     lastFetch,
   } = useNotification();
 
-  const setSelectedRoomId = useRoomStore((s) => s.setSelectedRoomId);
-  const { fetchRooms } = useRoomContext();
+  const setSelectedRoomId = useUnifiedRoomStore((s) => s.setSelectedRoomId);
+  const { fetchRooms } = useUnifiedRoomStore();
   const { userId, isAuthenticated } = useAuthSync();
   const supabase = getSupabaseBrowserClient();
 

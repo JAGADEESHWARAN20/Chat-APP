@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useEffect } from "react";
-import { useRoomStore, RoomWithMembership } from "../store/roomstore"; // ← Import type from store
+import { useUnifiedRoomStore, RoomWithMembership } from "../store/roomstore";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useUser } from "@/lib/store/user";
 import { toast } from "sonner";
@@ -9,7 +9,7 @@ import { Database } from "@/lib/types/supabase";
 
 type Room = Database["public"]["Tables"]["rooms"]["Row"];
 
-// Enhanced transform with memberCount (matches store type exactly)
+// Enhanced transform with proper type safety
 const transformRooms = async (
   rooms: Room[],
   userId: string,
@@ -26,7 +26,7 @@ const transformRooms = async (
       throw new Error("Failed to fetch room participations");
     }
 
-    // For each room, fetch member count (optimized: batch if possible, but single queries for simplicity)
+    // For each room, fetch member count
     const enrichedRooms = await Promise.all(
       rooms.map(async (room) => {
         // Member count from room_members (accepted only)
@@ -36,17 +36,26 @@ const transformRooms = async (
           .eq("room_id", room.id)
           .eq("status", "accepted");
 
-        // Participant status
+        // ✅ FIXED: Properly type the participation status
         const participation = participations?.find((p) => p.room_id === room.id);
-        const isMember = participation?.status === "accepted" || false;
+        const rawStatus = participation?.status;
+        
+        // Convert string status to the specific union type
+        const participationStatus: "pending" | "accepted" | null = 
+          rawStatus === "pending" || rawStatus === "accepted" 
+            ? rawStatus 
+            : null;
+
+        const isMember = participationStatus === "accepted";
 
         return {
           ...room,
           isMember,
-          participationStatus: participation?.status || null,
-          memberCount: memberCount ?? 0, // ← Critical: Include required field
-          participant_count: undefined,
+          participationStatus, // ✅ Now properly typed
+          memberCount: memberCount ?? 0,
           online_users: undefined,
+          unreadCount: undefined,
+          latestMessage: undefined,
         };
       })
     );
@@ -58,10 +67,11 @@ const transformRooms = async (
     return rooms.map((room) => ({
       ...room,
       isMember: false,
-      participationStatus: null,
+      participationStatus: null, // ✅ Proper null type
       memberCount: 0,
-      participant_count: undefined,
       online_users: undefined,
+      unreadCount: undefined,
+      latestMessage: undefined,
     }));
   }
 };
@@ -70,15 +80,16 @@ function InitRoom({ rooms }: { rooms: Room[] }) {
   const initState = useRef(false);
   const user = useUser((state) => state.user);
   const supabase = getSupabaseBrowserClient();
-  const setRooms = useRoomStore((state) => state.setRooms); // ← Use store setter
+  const setRooms = useUnifiedRoomStore((state) => state.setRooms);
 
   useEffect(() => {
     if (!initState.current && user && rooms.length > 0) {
       const initialize = async () => {
         try {
           const transformedRooms = await transformRooms(rooms, user.id, supabase);
-          setRooms(transformedRooms); // ← Now fully typed with memberCount
+          setRooms(transformedRooms);
           initState.current = true;
+          console.log(`✅ Initialized ${transformedRooms.length} rooms`);
         } catch (error) {
           console.error("Error initializing rooms:", error);
           toast.error(error instanceof Error ? error.message : "Failed to initialize rooms");
@@ -87,7 +98,7 @@ function InitRoom({ rooms }: { rooms: Room[] }) {
 
       initialize();
     }
-  }, [rooms, user, supabase, setRooms]); // Added setRooms to deps
+  }, [rooms, user, supabase, setRooms]);
 
   return null;
 }

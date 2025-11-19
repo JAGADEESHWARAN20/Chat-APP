@@ -1,7 +1,7 @@
 import { Space_Grotesk } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ResponsiveToaster } from "@/components/ResponsiveToaster";
-import { RoomProvider } from "@/lib/store/RoomContext";
+// import { RoomProvider } from "@/lib/store/RoomContext";
 import { SearchHighlightProvider } from "@/lib/store/SearchHighlightContext";
 import RoomInitializer from "@/lib/initialization/RoomInitializer";
 // import { supabaseServer } from "@/lib/supabase/server";
@@ -33,14 +33,14 @@ export default async function RootLayout({
             disableTransitionOnChange
           >
             <ThemeTransitionWrapper>
-              <RoomProvider>
+              {/* <RoomProvider> */}
                 <SearchHighlightProvider>
                   <ClientInitializer /> {/* ✅ ensures Zustand store stays synced */}
                   <RoomInitializer />
                   {children}
                   <ResponsiveToaster />
                 </SearchHighlightProvider>
-              </RoomProvider>
+              {/* </RoomProvider> */}
             </ThemeTransitionWrapper>
           </ThemeProvider>
       </body>

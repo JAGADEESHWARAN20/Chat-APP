@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useRoomStore } from "@/lib/store/roomstore";
+import { useUnifiedRoomStore } from "@/lib/store/roomstore";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Button } from "./ui/button";
 import { toast } from "sonner";
@@ -25,7 +25,7 @@ export default function RoomList() {
     selectedRoomId,
     setSelectedRoomId,
     fetchRooms
-  } = useRoomStore((s) => ({
+  } = useUnifiedRoomStore((s) => ({
     rooms: s.rooms,
     selectedRoomId: s.selectedRoomId,
     setSelectedRoomId: s.setSelectedRoomId,
@@ -79,7 +79,7 @@ export default function RoomList() {
 
         // Refresh canonical state then set selected room id
         await fetchRooms({ force: true } as any);
-        const updatedRooms = useRoomStore.getState().rooms;
+        const updatedRooms = useUnifiedRoomStore.getState().rooms;
         const updatedRoom = updatedRooms.find((r) => r.id === room.id);
         if (updatedRoom) {
           setSelectedRoomId(updatedRoom.id);
@@ -155,7 +155,7 @@ export default function RoomList() {
       if (!data?.status || data?.status === "accepted") {
         toast.success(data?.message || "Joined room");
         await fetchRooms({ force: true } as any);
-        const updatedRooms = useRoomStore.getState().rooms;
+        const updatedRooms = useUnifiedRoomStore.getState().rooms;
         const updatedRoom = updatedRooms.find((r) => r.id === roomId);
         if (updatedRoom) {
           // automatically switch into room
@@ -218,7 +218,7 @@ export default function RoomList() {
         return;
       }
 
-      const storeRooms = useRoomStore.getState().rooms;
+      const storeRooms = useUnifiedRoomStore.getState().rooms;
 
       if (!activeRooms?.length) {
         // no active rooms: pick general or clear

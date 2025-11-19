@@ -21,7 +21,7 @@ export default function RoomActionButton({
     return <span className="text-sm text-yellow-400">Pending</span>;
   }
 
-  if (room.participationStatus === "member") {
+  if (room.participationStatus === "accepted") {
     return (
       <Switch
         checked={selectedRoom?.id === room.id}

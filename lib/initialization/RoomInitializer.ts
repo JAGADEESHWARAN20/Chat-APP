@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useRoomStore } from "@/lib/store/RoomContext";
+import { useUnifiedRoomStore } from "@/lib/store/roomstore";
 
 export default function RoomInitializer() {
   const initializedRef = useRef(false);
 
-  const user = useRoomStore((state) => state.user);
-  const fetchRooms = useRoomStore((state) => state.fetchRooms);
+  const user = useUnifiedRoomStore((state) => state.user);
+  const fetchRooms = useUnifiedRoomStore((state) => state.fetchRooms);
 
   useEffect(() => {
     if (!user || initializedRef.current) return;

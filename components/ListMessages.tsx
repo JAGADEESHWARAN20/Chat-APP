@@ -5,14 +5,12 @@ import React, { useEffect, useRef, useState, useCallback, useMemo } from "react"
 import Message from "./Message";
 import { DeleteAlert, EditAlert } from "./MessasgeActions";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-// import { toast } from "sonner";
 import { Database } from "@/lib/types/supabase";
-import { useSelectedRoom } from "@/lib/store/RoomContext";
-import TypingIndicator from "./TypingIndicator";
 import { useUser } from "@/lib/store/user";
+import { useSelectedRoom } from "@/lib/store/roomstore"; // ✅ Use the selector
+import TypingIndicator from "./TypingIndicator";
 
 type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
-// type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 
 export default function ListMessages() {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -20,10 +18,12 @@ export default function ListMessages() {
   const [notification, setNotification] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
 
-  // ✅ FIXED: Use Zustand selector
+  // ✅ FIXED: Use the selector to get the selected room
   const selectedRoom = useSelectedRoom();
   const user = useUser((state) => state.user);
-  console.log(user);
+  
+  console.log('ListMessages - Selected room:', selectedRoom);
+
   const {
     messages,
     setMessages,
@@ -35,7 +35,7 @@ export default function ListMessages() {
 
   const supabase = getSupabaseBrowserClient();
   const messagesLoadedRef = useRef<Set<string>>(new Set());
-  const prevRoomIdRef = useRef<string | null>(null); // ✅ FIXED: Track previous room
+  const prevRoomIdRef = useRef<string | null>(null);
 
   const handleOnScroll = useCallback(() => {
     if (!scrollRef.current) return;
@@ -58,14 +58,16 @@ export default function ListMessages() {
 
   // ✅ FIXED: Load initial messages with proper room change detection
   useEffect(() => {
-    if (!selectedRoom?.id) {
+    const currentRoomId = selectedRoom?.id;
+    
+    if (!currentRoomId) {
       setMessages([]);
       messagesLoadedRef.current.clear();
       prevRoomIdRef.current = null;
       return;
     }
   
-    const roomChanged = selectedRoom.id !== prevRoomIdRef.current;
+    const roomChanged = currentRoomId !== prevRoomIdRef.current;
   
     // ✅ Clear old room messages when switching
     if (roomChanged) {
@@ -73,19 +75,21 @@ export default function ListMessages() {
       messagesLoadedRef.current.delete(prevRoomIdRef.current || "");
     }
   
-    const alreadyLoaded = messagesLoadedRef.current.has(selectedRoom.id);
+    const alreadyLoaded = messagesLoadedRef.current.has(currentRoomId);
     if (alreadyLoaded || isLoading) return;
   
-    prevRoomIdRef.current = selectedRoom.id;
+    prevRoomIdRef.current = currentRoomId;
   
     const loadInitialMessages = async () => {
       setIsLoading(true);
       try {
-        const res = await fetch(`/api/messages/${selectedRoom.id}?t=${Date.now()}`);
+        console.log(`Loading messages for room: ${currentRoomId}`);
+        const res = await fetch(`/api/messages/${currentRoomId}?t=${Date.now()}`);
         const data = await res.json();
         const fetchedMessages = Array.isArray(data.messages) ? data.messages : [];
         setMessages(fetchedMessages.map(transformApiMessage));
-        messagesLoadedRef.current.add(selectedRoom.id);
+        messagesLoadedRef.current.add(currentRoomId);
+        console.log(`Loaded ${fetchedMessages.length} messages for room: ${currentRoomId}`);
       } catch (error) {
         console.error("Load messages error:", error);
         setMessages([]);
@@ -96,13 +100,13 @@ export default function ListMessages() {
   
     loadInitialMessages();
   }, [selectedRoom?.id, setMessages, isLoading]);
-  
 
   // ✅ FIXED: Memoized realtime handler
   const handleRealtimePayload = useCallback(
     (payload: any) => {
       try {
-        if (!selectedRoom || payload.new?.room_id !== selectedRoom.id) {
+        const currentRoomId = selectedRoom?.id;
+        if (!currentRoomId || payload.new?.room_id !== currentRoomId) {
           return;
         }
 
@@ -174,16 +178,17 @@ export default function ListMessages() {
         console.error("[ListMessages] Realtime payload error:", err);
       }
     },
-    [selectedRoom, messages, optimisticIds, addMessage, optimisticUpdateMessage, optimisticDeleteMessage, supabase]
+    [selectedRoom?.id, messages, optimisticIds, addMessage, optimisticUpdateMessage, optimisticDeleteMessage, supabase]
   );
 
   // ✅ FIXED: Real-time subscription with proper cleanup and dependencies
   useEffect(() => {
-    if (!selectedRoom?.id) return;
+    const currentRoomId = selectedRoom?.id;
+    if (!currentRoomId) return;
 
-    console.log(`[ListMessages] Setting up realtime for room: ${selectedRoom.id}`);
+    console.log(`[ListMessages] Setting up realtime for room: ${currentRoomId}`);
 
-    const messageChannel = supabase.channel(`room_messages_${selectedRoom.id}`, {
+    const messageChannel = supabase.channel(`room_messages_${currentRoomId}`, {
       config: {
         broadcast: { self: false }
       }
@@ -196,16 +201,16 @@ export default function ListMessages() {
           event: '*',
           schema: 'public',
           table: 'messages',
-          filter: `room_id=eq.${selectedRoom.id}`
+          filter: `room_id=eq.${currentRoomId}`
         },
         handleRealtimePayload
       )
       .subscribe((status) => {
-        console.log(`[ListMessages] Realtime status for room ${selectedRoom.id}:`, status);
+        console.log(`[ListMessages] Realtime status for room ${currentRoomId}:`, status);
       });
 
     return () => {
-      console.log(`[ListMessages] Cleaning up realtime for room: ${selectedRoom.id}`);
+      console.log(`[ListMessages] Cleaning up realtime for room: ${currentRoomId}`);
       supabase.removeChannel(messageChannel);
     };
   }, [selectedRoom?.id, supabase, handleRealtimePayload]);
@@ -232,10 +237,11 @@ export default function ListMessages() {
 
   // ✅ FIXED: Memoized message filtering
   const filteredMessages = useMemo(() => {
-    if (!messages.length || !selectedRoom?.id) return [];
+    const currentRoomId = selectedRoom?.id;
+    if (!messages.length || !currentRoomId) return [];
     
     return messages
-      .filter(msg => msg.room_id === selectedRoom.id)
+      .filter(msg => msg.room_id === currentRoomId)
       .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
   }, [messages, selectedRoom?.id]);
 
