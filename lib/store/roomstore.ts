@@ -10,7 +10,9 @@ import { useEffect } from "react";
 
 type IRoomRow = Database["public"]["Tables"]["rooms"]["Row"];
 
+// add created_by to the type
 export type RoomWithMembership = IRoomRow & {
+  created_by?: string | null;   // <-- new
   isMember: boolean;
   participationStatus: "pending" | "accepted" | null;
   memberCount: number;
@@ -18,6 +20,7 @@ export type RoomWithMembership = IRoomRow & {
   unreadCount?: number;
   latestMessage?: string | null;
 };
+
 
 export interface RoomPresence {
   onlineUsers: number;
@@ -69,9 +72,12 @@ interface RoomState {
   refreshRooms: () => Promise<void>;
 }
 
+
+// in normalizeRpcRooms - map owner field from RPC payload
 const normalizeRpcRooms = (data: any): RoomWithMembership[] =>
   (Array.isArray(data) ? data : []).map((r: any) => ({
     ...r,
+    created_by: r.created_by ?? r.created_by_id ?? null,
     isMember: Boolean(r.is_member),
     participationStatus: (r.participation_status === "pending" || r.participation_status === "accepted") 
       ? r.participation_status 
@@ -81,6 +87,7 @@ const normalizeRpcRooms = (data: any): RoomWithMembership[] =>
     unreadCount: r.unread_count ?? undefined,
     latestMessage: r.latest_message ?? undefined,
   }));
+
 
 const safeJson = async (res: Response) => {
   try {
@@ -247,60 +254,59 @@ export const useUnifiedRoomStore = create<RoomState>()(
       },
 
       joinRoom: async (roomId) => {
-        const room = get().rooms.find(r => r.id === roomId);
-        console.log('🎯 joinRoom - Starting for room:', roomId, 'Current status:', room?.participationStatus);
+  const room = get().rooms.find(r => r.id === roomId);
+  const currentUserId = get().user?.id;
+  const isOwner = room?.created_by && currentUserId && room.created_by === currentUserId;
 
-        // INSTANT OPTIMISTIC UPDATE
-        if (room?.is_private) {
-          get().updateRoomMembership(roomId, { participationStatus: "pending" });
-          toast.info("Join request sent — awaiting approval");
-        } else if (room) {
-          get().updateRoomMembership(roomId, { 
-            isMember: true, 
-            participationStatus: "accepted", 
-            memberCount: (room.memberCount || 0) + 1 
-          });
-          toast.success("Joined room successfully!");
-        }
+  console.log('🎯 joinRoom - Starting for room:', roomId, 'Current status:', room?.participationStatus, 'isOwner:', isOwner);
 
-        try {
-          const res = await fetch(`/api/rooms/${roomId}/join`, { 
-            method: "POST", 
-            headers: { "Content-Type": "application/json" } 
-          });
-          const json = await safeJson(res);
+  // INSTANT OPTIMISTIC UPDATE
+  if (room?.is_private && !isOwner) {
+    get().updateRoomMembership(roomId, { participationStatus: "pending" });
+    toast.info("Join request sent — awaiting approval");
+  } else if (room) {
+    get().updateRoomMembership(roomId, { 
+      isMember: true, 
+      participationStatus: "accepted", 
+      memberCount: (room.memberCount || 0) + 1 
+    });
+    toast.success("Joined room successfully!");
+  }
 
-          if (!res.ok) {
-            // Rollback optimistic update on error
-            if (room) {
-              get().updateRoomMembership(roomId, { 
-                isMember: room.isMember, 
-                participationStatus: room.participationStatus, 
-                memberCount: room.memberCount 
-              });
-            }
-            toast.error(json?.error || "Failed to join room");
-            return false;
-          }
+  try {
+    const res = await fetch(`/api/rooms/${roomId}/join`, { method: "POST", headers: { "Content-Type": "application/json" } });
+    const json = await safeJson(res);
 
-          // Refresh to get canonical state (but UI is already updated optimistically)
-          setTimeout(() => get().refreshRooms(), 1000);
-          
-          return true;
-        } catch (err: any) {
-          console.error("❌ joinRoom error:", err);
-          // Rollback on error
-          if (room) {
-            get().updateRoomMembership(roomId, { 
-              isMember: room.isMember, 
-              participationStatus: room.participationStatus, 
-              memberCount: room.memberCount 
-            });
-          }
-          toast.error("Failed to join room");
-          return false;
-        }
-      },
+    if (!res.ok) {
+      // rollback to previous room object values
+      if (room) {
+        get().updateRoomMembership(roomId, {
+          isMember: room.isMember,
+          participationStatus: room.participationStatus,
+          memberCount: room.memberCount
+        });
+      }
+      toast.error(json?.error || "Failed to join room");
+      return false;
+    }
+
+    // Refresh canonical state (small delay to allow DB triggers to fire)
+    setTimeout(() => get().refreshRooms(), 500);
+    return true;
+  } catch (err: any) {
+    console.error("❌ joinRoom error:", err);
+    if (room) {
+      get().updateRoomMembership(roomId, {
+        isMember: room.isMember,
+        participationStatus: room.participationStatus,
+        memberCount: room.memberCount
+      });
+    }
+    toast.error("Failed to join room");
+    return false;
+  }
+},
+
 
       leaveRoom: async (roomId) => {
         const room = get().rooms.find(r => r.id === roomId);
