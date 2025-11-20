@@ -16,11 +16,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { cn } from "@/lib/utils";
 
 interface LeftSidebarProps {
   user: { id: string } | null;
   isOpen: boolean;
   onClose?: () => void;
+  className?: string;
 }
 
 // extend RoomWithMembership locally for optional fields returned by RPC
@@ -31,7 +33,7 @@ type RoomLocal = RoomWithMembership & {
   online_users?: number;
 };
 
-const LeftSidebar = React.memo<LeftSidebarProps>(({ user, isOpen, onClose }) => {
+const LeftSidebar = React.memo<LeftSidebarProps>(({ user, isOpen, onClose, className }) => {
   const authUser = useUser((s) => s.user);
   const selectedRoom = useSelectedRoom();
   const availableRooms = useAvailableRooms();
@@ -83,57 +85,81 @@ const LeftSidebar = React.memo<LeftSidebarProps>(({ user, isOpen, onClose }) => 
     }
   }, [newRoomName, createRoom, fetchRooms]);
 
+  const handleRoomClick = useCallback((roomId: string) => {
+    setSelectedRoomId(roomId);
+    // Close sidebar on mobile when a room is selected
+    if (window.innerWidth < 1024 && onClose) {
+      onClose();
+    }
+  }, [setSelectedRoomId, onClose]);
+
   const renderItem = useCallback((item: RoomLocal) => {
     const memberCount = item.memberCount ?? 0;
     const onlineCount = item.online_users ?? 0;
     const unread = (item as any).unreadCount ?? (item as any).unread_count ?? 0;
 
     return (
-      <div
+      <button
         key={item.id}
-        className={`flex items-start p-3 rounded-lg cursor-pointer transition-colors duration-200 ${
-          selectedRoom?.id === item.id ? "bg-primary/10 dark:bg-primary/20" : "hover:bg-muted"
-        }`}
-        onClick={() => setSelectedRoomId(item.id)}
+        onClick={() => handleRoomClick(item.id)}
+        className={cn(
+          "w-full flex items-start p-3 rounded-lg transition-colors duration-200 mb-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-primary",
+          selectedRoom?.id === item.id
+            ? "bg-[hsl(var(--primary))/0.08] border border-[hsl(var(--primary))/0.16]"
+            : "hover:bg-[hsl(var(--muted))/0.4] border border-transparent"
+        )}
       >
-        <Avatar className="h-12 w-12 flex-shrink-0">
-          <AvatarFallback className="bg-muted">{item.name[0]?.toUpperCase()}</AvatarFallback>
+        <Avatar className="h-10 w-10 sm:h-12 sm:w-12 flex-shrink-0">
+          <AvatarFallback className="bg-[hsl(var(--muted))] text-[hsl(var(--foreground))]">
+            {item.name[0]?.toUpperCase()}
+          </AvatarFallback>
         </Avatar>
 
         <div className="ml-3 flex-1 min-w-0">
-          <div className="flex items-center justify-between mb-1">
-            <div className="font-semibold text-foreground truncate">#{item.name}</div>
+          <div className="flex items-center justify-between mb-0.5">
+            <div className="font-semibold text-sm sm:text-base text-[hsl(var(--foreground))] truncate">#{item.name}</div>
             {unread > 0 && (
-              <span className="text-xs bg-primary text-primary-foreground rounded-full px-2 py-1">
+              <span
+                className="text-[10px] font-bold rounded-full px-1.5 py-0.5"
+                style={{
+                  background: "hsl(var(--primary))",
+                  color: "hsl(var(--primary-foreground))",
+                }}
+              >
                 {unread > 99 ? "99+" : unread}
               </span>
             )}
           </div>
 
-          <div className="text-sm text-muted-foreground truncate mb-2">
+          <div className="text-xs sm:text-sm text-[hsl(var(--muted-foreground))] truncate mb-1.5">
             {item.latestMessage ?? "No messages yet"}
           </div>
 
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <div className="flex items-center gap-2 text-[10px] sm:text-xs text-[hsl(var(--muted-foreground))]">
               <Users className="h-3 w-3" />
-              <span>{memberCount} {memberCount === 1 ? "member" : "members"}</span>
-              {onlineCount > 0 && <span className="text-green-600 ml-1">({onlineCount} online)</span>}
+              <span>
+                {memberCount}
+              </span>
+              {onlineCount > 0 && (
+                <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+                  ({onlineCount} online)
+                </span>
+              )}
             </div>
-            <div className="text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300 rounded-full px-2 py-1">
+
+            <div
+              className="text-[10px] font-medium rounded-full px-1.5 py-0.5 bg-emerald-100/50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+            >
               Joined
             </div>
           </div>
-
-          <div className="text-xs text-muted-foreground mt-1">
-            Created: {new Date(item.created_at).toLocaleDateString()}
-          </div>
         </div>
-      </div>
+      </button>
     );
-  }, [selectedRoom?.id, setSelectedRoomId]);
+  }, [selectedRoom?.id, handleRoomClick]);
 
-  // realtime subscriptions (subscribe using async IIFE to avoid returning a Promise from useEffect)
+  // realtime subscriptions
   useEffect(() => {
     if (!authUser?.id) return;
 
@@ -141,7 +167,6 @@ const LeftSidebar = React.memo<LeftSidebarProps>(({ user, isOpen, onClose }) => 
 
     (async () => {
       try {
-        // participants changes: when a participant row becomes accepted/left/rejected => refresh
         channel.on(
           "postgres_changes",
           { event: "*", schema: "public", table: "room_participants" },
@@ -160,7 +185,6 @@ const LeftSidebar = React.memo<LeftSidebarProps>(({ user, isOpen, onClose }) => 
           }
         );
 
-        // notifications: owner acceptance may insert a join_request_accepted notification
         channel.on(
           "postgres_changes",
           { event: "*", schema: "public", table: "notifications" },
@@ -210,113 +234,144 @@ const LeftSidebar = React.memo<LeftSidebarProps>(({ user, isOpen, onClose }) => 
 
   if (authUser === undefined) return null;
 
+  // Not Logged In State
   if (!authUser) {
     return (
       <div
-        className={`fixed lg:static inset-y-0 left-0 w-full lg:w-64 px-4 py-3 bg-card  h-full flex flex-col transition-transform duration-300 ${
-          isOpen ? "translate-x-0 z-50 md:z-50 lg:z-0" : "-translate-x-full lg:translate-x-0"
-        } z-50 md:z-50 lg:z-0`}
+        className={cn(
+          "flex flex-col h-full w-full items-center justify-center p-4 text-center",
+          "bg-background/80 backdrop-blur-sm"
+        )}
       >
-        <div className="flex flex-col items-center justify-center h-full text-center px-4 text-muted-foreground">
-          <Avatar className="h-14 w-14 mb-3 opacity-60">
-            <AvatarFallback>?</AvatarFallback>
-          </Avatar>
-
-          <p className="text-sm mb-2">You are not logged in</p>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => (window.location.href = "/auth/login")}
-            className="mt-1"
-          >
-            Sign In
-          </Button>
-        </div>
+        <Avatar className="h-14 w-14 mb-3 opacity-60">
+          <AvatarFallback className="bg-muted">?</AvatarFallback>
+        </Avatar>
+        <p className="text-sm text-muted-foreground mb-3">Please sign in to view rooms</p>
+        <Button variant="outline" size="sm" onClick={() => (window.location.href = "/auth/login")}>
+          Sign In
+        </Button>
       </div>
     );
   }
 
   return (
     <div
-      className={`fixed lg:static inset-y-0 left-0 w-full lg:w-1/4 px-4 py-3 bg-card border-r border-white/10 h-full flex flex-col transition-transform duration-300 ${
-        isOpen ? "translate-x-0 z-50 md:z-50 lg:z-0" : "-translate-x-full lg:translate-x-0"
-      } z-50 md:z-50 lg:z-0`}
+      className={cn(
+        // Layout & Positioning
+        "flex flex-col h-full w-full",
+        // Mobile: Fixed overlay positioning
+        "fixed inset-y-0 left-0 z-40 w-[85vw] sm:w-[20rem]",
+        // Desktop: Static positioning within grid/flex container
+        "lg:static lg:w-full lg:z-auto",
+        // Transitions (only for mobile slide-in)
+        "transition-transform duration-300 ease-in-out",
+        // Theme & Borders
+        "bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 lg:bg-transparent lg:backdrop-blur-none",
+        "border-r border-border/40",
+        // Visibility State
+        isOpen ? "translate-x-0 shadow-2xl lg:shadow-none" : "-translate-x-full lg:translate-x-0",
+        className
+      )}
     >
-      <Tabs defaultValue="rooms" className="flex flex-col gap-1">
-        <div className="flex items-center justify-between gap-5">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="rooms">My Rooms</TabsTrigger>
-            <TabsTrigger value="chats">Chats</TabsTrigger>
-          </TabsList>
-          {onClose && (
-            <Button variant="ghost" size="icon" onClick={onClose} className="lg:hidden">
-              <ChevronRight className="h-5 w-5 rotate-180" />
-            </Button>
-          )}
-        </div>
-
-        <div className="mb-3">
-          {showCreateRoom ? (
-            <div className="space-y-2 p-3 border rounded-lg bg-muted/50">
-              <div className="flex gap-2 mb-3">
-                <Input placeholder="Search my rooms..." onChange={(e) => handleSearchChange(e.target.value)} className="flex-1" />
-                <Button variant="outline" size="icon" onClick={() => fetchRooms({ force: true })} title="Refresh rooms">
-                  <Loader2 className="h-4 w-4" />
-                </Button>
-              </div>
-              <Input
-                placeholder="Enter room name..."
-                value={newRoomName}
-                onChange={(e) => setNewRoomName(e.target.value)}
-                onKeyPress={(e) => e.key === "Enter" && handleCreateRoom()}
-                disabled={isCreating}
-              />
-              <div className="flex gap-2">
-                <Button size="sm" onClick={handleCreateRoom} disabled={isCreating || !newRoomName.trim()} className="flex-1">
-                  {isCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create"}
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => { setShowCreateRoom(false); setNewRoomName(""); }} disabled={isCreating}>
-                  Cancel
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <Button variant="outline" className="w-full" onClick={() => setShowCreateRoom(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Create New Room
-            </Button>
-          )}
-        </div>
-
-        <TabsContent value="rooms" className="flex-1 overflow-hidden">
-          <div className="space-y-2 overflow-y-auto max-h-[calc(100vh-200px)]">
-            {isLoading ? (
-              <div className="flex justify-center items-center h-32">
-                <Loader2 className="h-8 w-8 animate-spin" />
-              </div>
-            ) : filteredRooms.length === 0 ? (
-              <div className="text-center py-8">
-                <Users className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                <p className="text-muted-foreground mb-2">{searchTerm ? "No matching rooms" : "No rooms joined yet"}</p>
-                <Button variant="outline" onClick={() => setShowCreateRoom(true)}>
-                  Create Your First Room
-                </Button>
-              </div>
-            ) : (
-              filteredRooms.map(renderItem)
+      <Tabs defaultValue="rooms" className="flex flex-col h-full w-full">
+        {/* Header Section */}
+        <div className="flex-none px-4 py-3">
+          <div className="flex items-center justify-between gap-4 mb-4">
+            <TabsList className="grid w-full grid-cols-2 h-9">
+              <TabsTrigger value="rooms" className="text-xs sm:text-sm">Rooms</TabsTrigger>
+              <TabsTrigger value="chats" className="text-xs sm:text-sm">Chats</TabsTrigger>
+            </TabsList>
+            {onClose && (
+              <Button variant="ghost" size="icon" onClick={onClose} className="lg:hidden h-9 w-9 shrink-0">
+                <ChevronRight className="h-5 w-5 rotate-180" />
+              </Button>
             )}
           </div>
-        </TabsContent>
 
-        <TabsContent value="chats" className="flex-1 overflow-hidden">
-          <div className="space-y-2 overflow-y-auto max-h-[calc(100vh-200px)]">
-            <div className="text-center py-8">
-              <MessageSquare className="h-12 w-12 mx-auto mb-3 opacity-50" />
-              <p className="text-muted-foreground">No chats yet</p>
-            </div>
+          {/* Create/Search Area */}
+          <div className="relative">
+            {showCreateRoom ? (
+              <div className="space-y-2 p-3 rounded-lg border bg-[hsl(var(--muted))/0.3]">
+                <div className="flex gap-2">
+                  <Input 
+                    placeholder="Enter room name..."
+                    value={newRoomName}
+                    onChange={(e) => setNewRoomName(e.target.value)}
+                    onKeyPress={(e) => e.key === "Enter" && handleCreateRoom()}
+                    disabled={isCreating}
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={handleCreateRoom} disabled={isCreating || !newRoomName.trim()} className="flex-1 h-8 text-xs">
+                    {isCreating ? <Loader2 className="h-3 w-3 animate-spin" /> : "Create"}
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => { setShowCreateRoom(false); setNewRoomName(""); }} disabled={isCreating} className="h-8 text-xs">
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                 <div className="relative flex-1">
+                    <Input 
+                      placeholder="Search rooms..." 
+                      onChange={(e) => handleSearchChange(e.target.value)} 
+                      className="h-9 pr-8"
+                    />
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      onClick={() => fetchRooms({ force: true })} 
+                      className="absolute right-0 top-0 h-9 w-9 text-muted-foreground hover:text-foreground"
+                      title="Refresh rooms"
+                    >
+                      <Loader2 className={cn("h-3.5 w-3.5", isLoading && "animate-spin")} />
+                    </Button>
+                 </div>
+                <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setShowCreateRoom(true)} title="Create Room">
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
           </div>
-        </TabsContent>
+        </div>
+
+        {/* Content Section (Flex-1 to fill remaining height) */}
+        <div className="flex-1 min-h-0 relative w-full">
+           <TabsContent value="rooms" className="absolute inset-0 m-0 flex flex-col">
+            <div className="flex-1 overflow-y-auto scrollbar-thin px-3 pb-3">
+              {isLoading && !filteredRooms.length ? (
+                <div className="flex justify-center items-center h-32">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : filteredRooms.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-48 text-center px-4">
+                  <Users className="h-10 w-10 mb-3 text-muted-foreground/50" />
+                  <p className="text-sm text-muted-foreground mb-2">{searchTerm ? "No matching rooms" : "No rooms joined"}</p>
+                  {!searchTerm && (
+                    <Button variant="link" size="sm" onClick={() => setShowCreateRoom(true)} className="text-primary">
+                      Create one now
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {filteredRooms.map(renderItem)}
+                </div>
+              )}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="chats" className="absolute inset-0 m-0 flex flex-col">
+            <div className="flex-1 overflow-y-auto scrollbar-thin px-3 pb-3">
+              <div className="flex flex-col items-center justify-center h-48 text-center">
+                <MessageSquare className="h-10 w-10 mb-3 text-muted-foreground/50" />
+                <p className="text-sm text-muted-foreground">Direct messages coming soon</p>
+              </div>
+            </div>
+          </TabsContent>
+        </div>
       </Tabs>
     </div>
   );

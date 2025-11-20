@@ -1,3 +1,4 @@
+// components/PairedMessageRenderer.tsx
 "use client";
 
 import React, { memo, useMemo } from "react";
@@ -16,10 +17,6 @@ import {
 } from "@/components/ui/tooltip";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
-
-const ReactMarkdown = ReactMarkdownImport as unknown as React.FC<
-  React.ComponentPropsWithoutRef<typeof ReactMarkdownImport> & { className?: string }
->;
 
 export interface ChatMessage {
   id: string;
@@ -57,6 +54,8 @@ export const PairedMessageRenderer = memo(
 
     const renderContent = useMemo(() => {
       if (!pair.assistant) return null;
+
+      // sanitize incoming content string (removes scripts etc)
       const safeMarkdown = DOMPurify.sanitize(pair.assistant.content);
 
       const components: Components = {
@@ -79,13 +78,14 @@ export const PairedMessageRenderer = memo(
         ),
       };
 
+      // IMPORTANT: do NOT pass className to ReactMarkdown (v8+ disallows it).
+      // Put styles on this wrapper instead.
       return (
-        <ReactMarkdown
-          className="prose prose-sm max-w-none leading-relaxed text-[hsl(var(--foreground))] dark:prose-invert"
-          components={components}
-        >
-          {safeMarkdown}
-        </ReactMarkdown>
+        <div className="prose prose-sm max-w-none leading-relaxed text-[hsl(var(--foreground))] dark:prose-invert">
+          <ReactMarkdownImport components={components as any}>
+            {safeMarkdown}
+          </ReactMarkdownImport>
+        </div>
       );
     }, [pair.assistant]);
 
@@ -97,7 +97,7 @@ export const PairedMessageRenderer = memo(
         transition={{ duration: 0.25 }}
         className="space-y-3"
       >
-        {/* 🧍 User Message */}
+        {/* User Message */}
         <Card className="bg-[hsl(var(--muted))]/30 border border-border/30 backdrop-blur-sm rounded-xl">
           <CardContent className="px-3 py-2.5 flex gap-2 items-start">
             <div className="w-7 h-7 flex items-center justify-center bg-[hsl(var(--primary))]/70 text-white rounded-full flex-shrink-0">
@@ -161,3 +161,4 @@ export const PairedMessageRenderer = memo(
 );
 
 PairedMessageRenderer.displayName = "PairedMessageRenderer";
+export default PairedMessageRenderer;

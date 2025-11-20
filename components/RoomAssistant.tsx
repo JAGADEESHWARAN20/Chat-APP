@@ -227,7 +227,7 @@ function RoomAssistantComponent({
     <div className={cn("relative w-full h-full", className)}>
       <Card
         className={cn(
-          "flex flex-col h-full rounded-2xl overflow-hidden shadow-lg transition",
+          "flex flex-col h-full justify-between rounded-2xl overflow-hidden shadow-lg transition",
           "backdrop-blur-xl border border-border/30",
           "bg-[hsl(var(--card))]/70 dark:bg-[hsl(var(--card))]/50"
         )}
@@ -387,7 +387,7 @@ function RoomAssistantComponent({
               className={cn(
                 "rounded-xl resize-none pr-12 text-sm",
                 "bg-background/60 dark:bg-background/40 border-border/40",
-                expandedInput ? "h-36" : "h-16"
+                expandedInput ? "h-[20em] " : "h-16"
               )}
             />
 

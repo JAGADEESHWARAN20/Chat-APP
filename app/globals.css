@@ -29,8 +29,12 @@
     --input: 220 13% 91%;
     --ring: 262.1 83.3% 57.8%;
     --radius: 0.5rem;
-    --sidebar-width: 20rem;
+    --sidebar-width: 26rem;
     --sidebar-width-icon: 3rem;
+     --z-mask: 0; /* mask under UI by default */
+  --z-ui: 10;  /* main UI z-level */
+  --z-overlay: 20; /* popovers, modals that should sit above core UI */
+  --z-top: 50; /* toasts/alerts that must always be on top */
 
     --action-bg: hsl(240 80% 95%);
     --action-hover: hsl(240 100% 88%);
@@ -101,7 +105,7 @@
     font-feature-settings: "rlig" 1, "calt" 1;
     height: 100dvh;
     width: 100%;
-    /* Fast transition for theme changes */
+    /* Fast transition for theme changes on body only */
     transition: background-color 0.3s ease, color 0.3s ease;
   }
 
@@ -117,14 +121,9 @@
     color: hsl(var(--foreground));
   }
 
+  /* Removed universal transition to prevent performance issues and conflict with JS animations */
   * {
     border-color: hsl(var(--border));
-    /* Fast transitions for all elements */
-    transition: background-color 0.3s ease, 
-                color 0.3s ease,
-                border-color 0.3s ease,
-                fill 0.3s ease,
-                stroke 0.3s ease;
   }
 }
 
