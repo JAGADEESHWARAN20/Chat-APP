@@ -37,12 +37,14 @@ export default function HomePage() {
   }, [user, setRoomUser]);
 
   return (
-    <div className="h-full flex flex-col overflow-hidden bg-background">
+    /* Ensure the main container takes full viewport height and is locked */
+    <div className="h-full w-full flex flex-col overflow-hidden bg-background">
       <header
         className="
           w-full px-4 py-3 border-b border-border/40
           bg-background/80 backdrop-blur-md supports-[backdrop-filter]:bg-background/60
           sticky top-0 z-20 shadow-sm transition-colors duration-200
+          flex-none /* Don't let header shrink */
         "
       >
         <div className="flex items-center justify-between max-w-7xl mx-auto w-full">
@@ -174,16 +176,16 @@ export default function HomePage() {
       </header>
 
       {/* Main Content - FIXED SCROLLING ISSUE */}
-      <main className="flex-1 flex w-full overflow-hidden">
-        <AnimatePresence mode="sync" initial={false}>
+      <main className="flex-1 flex flex-col w-full overflow-hidden relative">
+        <AnimatePresence mode="wait" initial={false}>
           {activeTab === "home" && (
             <motion.div
               key="home"
-              initial={{ opacity: 0, x: 40, scale: 0.98 }}
-              animate={{ opacity: 1, x: 0, scale: 1 }}
-              exit={{ opacity: 0, x: -40, scale: 0.98 }}
-              transition={{ duration: 0.35, ease: "easeInOut" }}
-              className="flex-1"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.0002 }}
+              className="flex-1 h-full w-full overflow-hidden"
             >
               <ChatLayout
                 user={user}
@@ -196,17 +198,19 @@ export default function HomePage() {
           {activeTab === "search" && (
             <motion.div
               key="search"
-              initial={{ opacity: 0, x: 40, scale: 0.98 }}
-              animate={{ opacity: 1, x: 0, scale: 1 }}
-              exit={{ opacity: 0, x: -40, scale: 0.98 }}
-              transition={{ duration: 0.35, ease: "easeInOut" }}
-              className="flex-1 overflow-hidden" 
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.002 }}
+              className="flex-1 h-full w-full flex flex-col overflow-hidden" 
             >
-              {/* FIXED: This container should NOT scroll */}
-              <div className="w-full h-full flex flex-col">
-                <div className="flex-1 overflow-hidden"> {/* ADDED: This prevents parent scrolling */}
+              {/* Container Logic:
+                  1. flex-1 + h-full ensures it takes remaining space.
+                  2. overflow-hidden prevents THIS container from scrolling.
+                  3. SearchComponent must handle its own internal scrolling.
+              */}
+              <div className="w-full h-full flex flex-col overflow-hidden">
                   <SearchComponent user={user} />
-                </div>
               </div>
             </motion.div>
           )}

@@ -19,10 +19,18 @@
           "scrollbar-width",
           "scrollbar-color",
           "scrollbar-width: thin",
-          "scrollbar-width: none"
+          "scrollbar-width: none",
+          "overscroll-behavior",
+          "overscroll-behavior: contain"
         ]
       }
     ],
-    "button-type": "off"
+    "button-type": "off",
+    "axe/structure": [
+      "default",
+      {
+        "listitem": "off"
+      }
+    ]
   }
 }

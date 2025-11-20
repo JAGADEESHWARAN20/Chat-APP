@@ -8,33 +8,23 @@ import React, {
   useContext,
   useRef,
   useEffect,
+  useCallback,
 } from "react";
 
-interface ThemeTransitionState {
-  active: boolean;
-  nextTheme: string;
-  cx: number;
-  cy: number;
-  radius: number;
-  progress: number; // 0..1
-  colorHsl: string; // e.g., "260 80% 60%"
-}
-
+// Types
 interface ThemeTransitionContextValue {
   triggerTransition: (x: number, y: number, nextTheme: string) => void;
   isDark: boolean;
-  transition: ThemeTransitionState;
+  isTransitioning: boolean;
 }
 
-const ThemeTransitionContext =
-  createContext<ThemeTransitionContextValue | null>(null);
+const ThemeTransitionContext = createContext<ThemeTransitionContextValue | null>(null);
 
 export function useThemeTransition() {
   const ctx = useContext(ThemeTransitionContext);
-  if (!ctx)
-    throw new Error(
-      "useThemeTransition must be used inside ThemeTransitionWrapper"
-    );
+  if (!ctx) {
+    throw new Error("useThemeTransition must be used inside ThemeTransitionWrapper");
+  }
   return ctx;
 }
 
@@ -44,266 +34,248 @@ export default function ThemeTransitionWrapper({
   children: React.ReactNode;
 }) {
   const { theme: currentTheme, setTheme, systemTheme } = useTheme();
+  const [isTransitioning, setIsTransitioning] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const isDark = (currentTheme || "light") === "dark";
 
+  // Refs for animation state and RAF
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rafRef = useRef<number | null>(null);
-  const transitionRef = useRef<ThemeTransitionState>({
-    active: false,
-    nextTheme: "light",
+
+  // Store animation values in ref to avoid state updates during RAF loop
+  const animState = useRef({
     cx: 0,
     cy: 0,
-    radius: 0,
+    maxRadius: 0,
     progress: 0,
     colorHsl: "0 0% 100%",
+    active: false,
   });
-  const [transition, setTransition] = useState<ThemeTransitionState>(
-    transitionRef.current
-  );
 
   useEffect(() => {
     setMounted(true);
-    if (typeof window !== "undefined") {
-      setTransition((s) => ({
-        ...s,
-        cx: window.innerWidth / 2,
-        cy: window.innerHeight / 2,
-      }));
-    }
   }, []);
 
-  const getHSLVar = (name: string) => {
-    if (typeof window === "undefined") return "0 0% 100%";
-    const val = getComputedStyle(document.documentElement)
-      .getPropertyValue(name)
-      .trim();
-    return val || "0 0% 100%";
-  };
+  const isDark = (currentTheme || "light") === "dark";
 
   const getTransitionColor = (nextTheme: string) =>
     nextTheme === "dark" ? "260 80% 60%" : "45 95% 55%";
 
+  // Helper: resize canvas to device pixel ratio
+  const resizeCanvasToDisplaySize = useCallback((canvas: HTMLCanvasElement) => {
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    const displayWidth = width;
+    const displayHeight = height;
+    if (canvas.width !== Math.floor(displayWidth * dpr) || canvas.height !== Math.floor(displayHeight * dpr)) {
+      canvas.width = Math.floor(displayWidth * dpr);
+      canvas.height = Math.floor(displayHeight * dpr);
+      canvas.style.width = `${displayWidth}px`;
+      canvas.style.height = `${displayHeight}px`;
+      const ctx = canvas.getContext("2d");
+      if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // scale drawing operations back to CSS pixels
+    }
+  }, []);
+
   // =============================
-  // Canvas animation loop
+  // Optimized Canvas Drawer (no self-scheduling)
   // =============================
-  useEffect(() => {
+  const draw = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d");
+
+    resizeCanvasToDisplaySize(canvas);
+
+    const ctx = canvas.getContext("2d", { alpha: true });
     if (!ctx) return;
 
-    const drawLoop = () => {
-      const t = transitionRef.current;
-      if (!t.active) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        rafRef.current = null;
-        return;
-      }
+    const state = animState.current;
 
-      // Resize-safe
-      if (
-        canvas.width !== window.innerWidth ||
-        canvas.height !== window.innerHeight
-      ) {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-      }
+    // Clear
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      const chars = "01";
-      const fontSize = 16;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Defensive: ensure progress/maxRadius are finite numbers
+    const progress = Number.isFinite(state.progress) ? state.progress : 0;
+    const maxRadius = Number.isFinite(state.maxRadius) ? state.maxRadius : Math.sqrt(window.innerWidth ** 2 + window.innerHeight ** 2);
+
+    // Custom easing: easeOutQuart
+    const ease = 1 - Math.pow(1 - progress, 4);
+    let currentRadius = ease * maxRadius;
+
+    // Clamp to non-negative finite number
+    if (!Number.isFinite(currentRadius) || currentRadius < 0) currentRadius = 0;
+
+    // If radius is zero, we can skip arc/clip and particle placement (prevents arc negative error)
+    if (currentRadius > 0.0001) {
+      // 1. Clipping Path (The expanding circle)
       ctx.save();
-
-      const safeR = Math.max(0, t.radius);
       ctx.beginPath();
-      ctx.arc(t.cx, t.cy, safeR, 0, Math.PI * 2);
-      ctx.closePath();
+      // guard again with Math.max to ensure arc gets non-negative radius
+      ctx.arc(state.cx, state.cy, Math.max(0, currentRadius), 0, Math.PI * 2);
       ctx.clip();
 
-      // binary digits swirl
-      const digits = 60;
+      // 2. The "Matrix" Binary Effect
+      const fontSize = 16;
+      const digits = 60; // Number of floating characters
+      const chars = "01";
+
       for (let i = 0; i < digits; i++) {
-        const angle = (i / digits) * Math.PI * 2;
-        const x = t.cx + Math.cos(angle) * (safeR - 10);
-        const y = t.cy + Math.sin(angle) * (safeR - 10);
+        const angle = (i / digits) * Math.PI * 2 + state.progress; // Rotate slightly
+        // Particles move outward with the radius
+        // ensure particle radius is not negative
+        const r = Math.max(0, currentRadius - (Math.random() * 20));
+        if (r <= 0) continue;
+
+        const x = state.cx + Math.cos(angle) * r;
+        const y = state.cy + Math.sin(angle) * r;
+
         const char = chars[Math.floor(Math.random() * chars.length)];
-        ctx.fillStyle = `hsla(${t.colorHsl} / ${Math.max(
-          0.05,
-          1 - t.progress * 0.75
-        )})`;
+
+        // Fade out text as it expands
+        const alpha = Math.max(0, 1 - state.progress);
+
+        ctx.fillStyle = `hsla(${state.colorHsl} / ${alpha})`;
         ctx.font = `${fontSize}px monospace`;
         ctx.fillText(char, x, y);
       }
 
-      // radial glow
+      // 3. Radial Glow/Fill
       const gradient = ctx.createRadialGradient(
-        t.cx,
-        t.cy,
-        Math.max(1, safeR * 0.2),
-        t.cx,
-        t.cy,
-        Math.max(1, safeR)
+        state.cx, state.cy, Math.max(0, currentRadius * 0.5),
+        state.cx, state.cy, currentRadius
       );
-      gradient.addColorStop(
-        0,
-        `hsla(${t.colorHsl} / ${0.22 * (1 - t.progress * 0.6)})`
-      );
-      gradient.addColorStop(1, `hsla(${t.colorHsl} / 0)`);
+
+      // Gradient opacity logic
+      gradient.addColorStop(0, `hsla(${state.colorHsl} / ${0.1 * (1 - state.progress)})`);
+      gradient.addColorStop(1, `hsla(${state.colorHsl} / ${0.05 * (1 - state.progress)})`);
+
       ctx.fillStyle = gradient;
+      // fill full canvas (clipped)
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // rim edge
-      ctx.strokeStyle = `hsl(${t.colorHsl})`;
-      ctx.lineWidth = 3;
-      ctx.shadowBlur = 22;
-      ctx.shadowColor = `hsl(${t.colorHsl})`;
+      // 4. The Rim (Edge of the circle)
+      ctx.strokeStyle = `hsla(${state.colorHsl} / ${1 - state.progress})`;
+      ctx.lineWidth = 2;
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = `hsla(${state.colorHsl} / 0.8)`;
+      // stroke the circle path (we already began path earlier, but safe to draw fresh)
       ctx.beginPath();
-      ctx.arc(t.cx, t.cy, safeR, 0, Math.PI * 2);
+      ctx.arc(state.cx, state.cy, Math.max(0, currentRadius), 0, Math.PI * 2);
       ctx.stroke();
 
       ctx.restore();
+    } else {
+      // If radius is essentially zero, optionally draw nothing (safe no-op)
+    }
+  }, [resizeCanvasToDisplaySize]);
 
-      rafRef.current = requestAnimationFrame(drawLoop);
+  // =============================
+  // CSS Variable Sync (Optional - for HTML overlays)
+  // =============================
+  const updateCSSVars = (progress: number, cx: number, cy: number, color: string) => {
+    const root = document.documentElement;
+    root.style.setProperty("--theme-trans-progress", progress.toString());
+    root.style.setProperty("--theme-trans-cx", `${cx}px`);
+    root.style.setProperty("--theme-trans-cy", `${cy}px`);
+    root.style.setProperty("--theme-trans-color", color);
+  };
+
+  // =============================
+  // Trigger Logic (single RAF loop)
+  // =============================
+  const triggerTransition = useCallback((x: number, y: number, nextTheme: string) => {
+    const duration = 800; // Faster, snappier
+    const startTime = performance.now();
+    const maxRadius = Math.sqrt(window.innerWidth ** 2 + window.innerHeight ** 2);
+    const colorHsl = getTransitionColor(nextTheme);
+
+    // Mount the canvas
+    setIsTransitioning(true);
+
+    // Initialize Animation State
+    animState.current = {
+      active: true,
+      cx: x,
+      cy: y,
+      maxRadius,
+      progress: 0,
+      colorHsl,
     };
 
-    if (transitionRef.current.active && !rafRef.current) {
-      rafRef.current = requestAnimationFrame(drawLoop);
+    // Cancel any previous RAF
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
     }
 
+    // Single RAF loop that updates progress and draws
+    const loop = (now: number) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(Math.max(elapsed / duration, 0), 1);
+
+      animState.current.progress = progress;
+
+      // Update CSS vars for any HTML elements listening
+      updateCSSVars(progress, x, y, colorHsl);
+
+      // draw current frame
+      draw();
+
+      if (progress < 1) {
+        rafRef.current = requestAnimationFrame(loop);
+      } else {
+        // Animation Complete
+        // Switch Theme
+        setTheme(nextTheme);
+
+        // Cleanup after a brief timeout to allow theme to paint
+        setTimeout(() => {
+          setIsTransitioning(false);
+          animState.current.active = false;
+
+          // Cleanup CSS vars
+          const root = document.documentElement;
+          ["--theme-trans-progress", "--theme-trans-cx", "--theme-trans-cy", "--theme-trans-color"]
+            .forEach(v => root.style.removeProperty(v));
+        }, 50);
+
+        rafRef.current = null;
+      }
+    };
+
+    rafRef.current = requestAnimationFrame(loop);
+  }, [draw, setTheme]);
+
+  // Cancel RAF on unmount
+  useEffect(() => {
     return () => {
       if (rafRef.current) {
         cancelAnimationFrame(rafRef.current);
         rafRef.current = null;
       }
     };
-  }, [transition.active]);
+  }, []);
 
-  // =============================
-  // CSS variable broadcaster
-  // =============================
-  const writeCSSVars = (t: ThemeTransitionState, elapsed = 0) => {
-    const root = document.documentElement;
-    root.style.setProperty("--theme-trans-active", t.active ? "1" : "0");
-    root.style.setProperty("--theme-trans-cx", `${t.cx}px`);
-    root.style.setProperty("--theme-trans-cy", `${t.cy}px`);
-    root.style.setProperty("--theme-trans-r", `${Math.round(t.radius)}px`);
-    root.style.setProperty("--theme-trans-color", t.colorHsl);
-    root.style.setProperty("--theme-trans-progress", `${t.progress}`);
-    root.style.setProperty("--theme-trans-elapsed", `${elapsed}`);
-  };
-
-  // =============================
-  // Main trigger
-  // =============================
-  const triggerTransition = (cx: number, cy: number, nextTheme: string) => {
-    const duration = 1200;
-    const start = performance.now();
-    const maxRadius = Math.sqrt(
-      window.innerWidth ** 2 + window.innerHeight ** 2
-    );
-    const colorHsl = getTransitionColor(nextTheme);
-
-    const base: ThemeTransitionState = {
-      active: true,
-      nextTheme,
-      cx,
-      cy,
-      radius: 0,
-      progress: 0,
-      colorHsl,
-    };
-
-    transitionRef.current = base;
-    setTransition(base);
-    writeCSSVars(base);
-
-    const step = (now: number) => {
-      const elapsed = now - start;
-      const prog = Math.min(elapsed / duration, 1);
-      const eased = 1 - Math.pow(1 - prog, 3);
-      const radius = eased * maxRadius;
-
-      const t = {
-        active: true,
-        nextTheme,
-        cx,
-        cy,
-        radius,
-        progress: prog,
-        colorHsl,
-      };
-
-      transitionRef.current = t;
-      writeCSSVars(t, elapsed);
-
-      if (prog < 1) {
-        requestAnimationFrame(step);
-      } else {
-        requestAnimationFrame(() => {
-          setTheme(nextTheme);
-          setTimeout(() => {
-            transitionRef.current = {
-              ...t,
-              active: false,
-              radius: 0,
-              progress: 0,
-            };
-            setTransition(transitionRef.current);
-            const root = document.documentElement;
-            [
-              "--theme-trans-active",
-              "--theme-trans-cx",
-              "--theme-trans-cy",
-              "--theme-trans-r",
-              "--theme-trans-color",
-              "--theme-trans-progress",
-              "--theme-trans-elapsed",
-            ].forEach((v) => root.style.removeProperty(v));
-          }, 180);
-        });
-      }
-    };
-
-    requestAnimationFrame(step);
-  };
-
-  const themeToApply = mounted ? currentTheme || systemTheme || "light" : "light";
+  const themeClass = mounted ? (currentTheme || systemTheme || "light") : "light";
 
   return (
-    <ThemeTransitionContext.Provider
-      value={{ triggerTransition, isDark, transition }}
-    >
-      <div className={`transition-colors duration-500 ${themeToApply}`}>
+    <ThemeTransitionContext.Provider value={{ triggerTransition, isDark, isTransitioning }}>
+      <div className={`min-h-screen w-full transition-colors duration-500 ${themeClass}`}>
         {children}
       </div>
 
       <AnimatePresence>
-        {transition.active && (
+        {isTransitioning && (
           <motion.div
-            className="fixed inset-0 z-[99999] pointer-events-none"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
+            className="fixed inset-0 z-[9999] pointer-events-none overflow-hidden"
+            initial={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.22 }}
+            transition={{ duration: 0.3 }}
           >
             <canvas
               ref={canvasRef}
-              className="absolute inset-0 w-full h-full bg-transparent"
-            />
-            <div
-              style={{
-                position: "absolute",
-                left: `${transition.cx}px`,
-                top: `${transition.cy}px`,
-                transform: "translate(-50%, -50%)",
-                width: `${transition.radius * 2}px`,
-                height: `${transition.radius * 2}px`,
-                borderRadius: "50%",
-                pointerEvents: "none",
-                background: `radial-gradient(circle, hsla(${transition.colorHsl} / 0.12) 0%, transparent 60%)`,
-                mixBlendMode: "normal",
-              }}
+              className="absolute inset-0 w-full h-full block"
+              style={{ mixBlendMode: "plus-lighter" }} // Better blending
             />
           </motion.div>
         )}

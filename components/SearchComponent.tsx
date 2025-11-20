@@ -363,7 +363,7 @@ const SearchComponent = memo(function SearchComponent({
   };
 
   return (
-    <div className="w-full mx-auto p-4 md:p-6 h-full flex flex-col overflow-hidden">
+    <div className="w-full h-[90vh] mx-auto p-4 md:p-6 flex flex-col overflow-hidden ">
       {/* Search bar */}
       <div className="flex flex-col sm:flex-row items-center gap-4 mb-6">
         <div className="relative flex-1">
@@ -385,7 +385,7 @@ const SearchComponent = memo(function SearchComponent({
       </div>
 
       {/* Results */}
-      <div className="flex-1 h-[80vh] overflow-y-scroll">
+      <div className="flex-1 h-full overflow-y-scroll scrollbar-thin">
         <AnimatePresence mode="wait">
           {tab === "rooms" && (
             <motion.div key="rooms" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>

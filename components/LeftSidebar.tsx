@@ -213,7 +213,7 @@ const LeftSidebar = React.memo<LeftSidebarProps>(({ user, isOpen, onClose }) => 
   if (!authUser) {
     return (
       <div
-        className={`fixed lg:static inset-y-0 left-0 w-full lg:w-64 px-4 py-3 bg-card  h-screen flex flex-col transition-transform duration-300 ${
+        className={`fixed lg:static inset-y-0 left-0 w-full lg:w-64 px-4 py-3 bg-card  h-full flex flex-col transition-transform duration-300 ${
           isOpen ? "translate-x-0 z-50 md:z-50 lg:z-0" : "-translate-x-full lg:translate-x-0"
         } z-50 md:z-50 lg:z-0`}
       >
@@ -239,7 +239,7 @@ const LeftSidebar = React.memo<LeftSidebarProps>(({ user, isOpen, onClose }) => 
 
   return (
     <div
-      className={`fixed lg:static inset-y-0 left-0 w-full lg:w-1/4 px-4 py-3 bg-card border-r border-white/10 h-screen flex flex-col transition-transform duration-300 ${
+      className={`fixed lg:static inset-y-0 left-0 w-full lg:w-1/4 px-4 py-3 bg-card border-r border-white/10 h-full flex flex-col transition-transform duration-300 ${
         isOpen ? "translate-x-0 z-50 md:z-50 lg:z-0" : "-translate-x-full lg:translate-x-0"
       } z-50 md:z-50 lg:z-0`}
     >

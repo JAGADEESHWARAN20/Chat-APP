@@ -20,12 +20,11 @@ export default async function RootLayout({
   // const { data } = await supabase.auth.getSession();
 
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning className="h-full w-full">
       <head />
       <body
-  className={`${space_Grotesk.className} h-full overflow-x-hidden  bg-background text-foreground antialiased`}
->
-
+        className={`${space_Grotesk.className} h-full w-full overflow-hidden bg-background text-foreground antialiased`}
+      >
         <ThemeProvider
             attribute="class"
             defaultTheme="system"

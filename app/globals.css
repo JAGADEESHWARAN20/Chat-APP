@@ -1,13 +1,9 @@
-/* ========================================================================== */
-/*    TAILWIND BASE + COMPONENTS + UTILITIES                                 */
-/* ========================================================================== */
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 /* ========================================================================== */
-/*    ROOT VARIABLES & GLOBAL BASE                                            */
+/* ROOT VARIABLES & GLOBAL BASE                                            */
 /* ========================================================================== */
 
 @layer base {
@@ -39,6 +35,14 @@
     --action-active: hsl(240 70% 60%);
     --action-ring: hsl(240 80% 70%);
     --action-text: hsl(240 30% 25%);
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
   }
 
   .dark {
@@ -68,12 +72,21 @@
     --action-active: hsl(240 90% 70%);
     --action-ring: hsl(240 100% 80%);
     --action-text: hsl(0 0% 98%);
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
   }
 
   /* Responsive base font */
   html {
     font-size: 16px;
     transition: background-color 0.6s, color 0.6s;
+    height: 100%; /* Ensure HTML allows full height */
 
     @media (max-width: 768px) { font-size: 14px; }
     @media (max-width: 480px) { font-size: 13px; }
@@ -83,9 +96,10 @@
     @apply bg-background text-foreground;
     transition: background-color 0.6s, color 0.6s;
     position: relative;
-    overflow-x: hidden;     /* keep horizontal locked */
+    overflow: hidden;     /* Lock body scroll strictly */
     font-feature-settings: "rlig" 1, "calt" 1;
-    height: 100vh; /* ADDED: Ensure body takes full viewport height */
+    height: 100dvh;       /* Use dynamic viewport height */
+    width: 100%;
   }
 
   /* Theme transition states */
@@ -113,17 +127,12 @@
 }
 
 /* ========================================================================== */
-/*              ENHANCED SCROLLBAR + OVERSCROLL FIXES (FIXED)                */
+/* ENHANCED SCROLLBAR + OVERSCROLL FIXES                          */
 /* ========================================================================== */
 
 @layer utilities {
-  /* FIXED: Remove global overscroll-behavior: none */
-  /* This was preventing nested scrolling */
-  /* * {
-    overscroll-behavior: none !important;
-  } */
-
-  /* Instead, apply overscroll containment to specific containers */
+  
+  /* Scroll containment */
   .scroll-container {
     overscroll-behavior: contain;
   }
@@ -201,7 +210,7 @@
   }
 
   /* ====================================================================== */
-  /*  SCROLL CONTAINMENT FIXES (ADDED)                                     */
+  /* SCROLL CONTAINMENT FIXES                                              */
   /* ====================================================================== */
   
   /* Fix for SearchComponent scrolling */
@@ -225,7 +234,7 @@
   }
 
   /* ====================================================================== */
-  /*  All your original GLASS, TABLE, ASSISTANT, TOAST, PROSE STYLES       */
+  /* GLASS, TABLE, ASSISTANT, TOAST, PROSE STYLES                          */
   /* ====================================================================== */
 
   /* Glass toast notifications */
@@ -235,6 +244,7 @@
       hsl(var(--background) / 0.85),
       hsl(var(--background) / 0.6)
     ) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(180%) !important; /* Added Prefix */
     backdrop-filter: blur(20px) saturate(180%) !important;
     border: 1px solid hsl(var(--border) / 0.25) !important;
     box-shadow: 
@@ -244,20 +254,14 @@
   }
 
   /* Toast variants */
-  .toast-success {
-    color: hsl(142, 76%, 36%);
-  }
-  .toast-error {
-    color: hsl(0, 84%, 60%);
-  }
-  .toast-info {
-    color: hsl(221, 83%, 53%);
-  }
+  .toast-success { color: hsl(142, 76%, 36%); }
+  .toast-error { color: hsl(0, 84%, 60%); }
+  .toast-info { color: hsl(221, 83%, 53%); }
 
   /* Glass buttons */
   .glass-button {
+    -webkit-backdrop-filter: blur(12px); /* Prefix first */
     backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     border-radius: var(--radius);
     padding: 0.5rem 1rem;
@@ -297,9 +301,7 @@
     border-color: hsl(var(--border) / 0.4);
   }
 
-  .glass-button:hover::before {
-    left: 100%;
-  }
+  .glass-button:hover::before { left: 100%; }
 
   .glass-button:active {
     transform: translateY(0) scale(0.98);
@@ -330,11 +332,17 @@
     );
     padding: 1px;
     border-radius: inherit;
+    /* Fixed ordering: -webkit-mask-composite first */
+    -webkit-mask: 
+      linear-gradient(#fff 0 0) content-box,
+      linear-gradient(#fff 0 0);
     mask: 
       linear-gradient(#fff 0 0) content-box,
       linear-gradient(#fff 0 0);
-    mask-composite: exclude;
+      
     -webkit-mask-composite: xor;
+    mask-composite: exclude; 
+    
     pointer-events: none;
   }
 
@@ -344,6 +352,7 @@
     overflow: hidden;
     border-radius: calc(var(--radius) + 4px);
     background: hsl(var(--background) / 0.8);
+    -webkit-backdrop-filter: blur(20px) saturate(150%); /* Added Prefix */
     backdrop-filter: blur(20px) saturate(150%);
   }
 
@@ -359,15 +368,20 @@
       hsl(var(--foreground) / 0.1),
       hsl(var(--background) / 0)
     );
+    /* Fixed ordering */
+    -webkit-mask: 
+      linear-gradient(#fff 0 0) content-box,
+      linear-gradient(#fff 0 0);
     mask: 
       linear-gradient(#fff 0 0) content-box,
       linear-gradient(#fff 0 0);
-    mask-composite: exclude;
+    
     -webkit-mask-composite: xor;
+    mask-composite: exclude;
   }
 
   /* ================================ */
-  /*     AI RESPONSE STYLING          */
+  /* AI RESPONSE STYLING          */
   /* ================================ */
 
   .ai-response-container {
@@ -429,7 +443,7 @@
   }
 
   /* ================================ */
-  /*     ROOM ASSISTANT SCROLL        */
+  /* ROOM ASSISTANT SCROLL        */
   /* ================================ */
 
   .room-assistant-scroll {
@@ -457,7 +471,7 @@
   }
 
   /* ================================ */
-  /*     RESPONSIVE ADJUSTMENTS       */
+  /* RESPONSIVE ADJUSTMENTS       */
   /* ================================ */
 
   @media (max-width: 1024px) {
@@ -496,7 +510,7 @@
   }
 
   /* ================================ */
-  /*           DARK MODE              */
+  /* DARK MODE              */
   /* ================================ */
 
   .dark {
@@ -521,7 +535,7 @@
   }
 
   /* ================================ */
-  /*     ANIMATIONS / EFFECTS         */
+  /* ANIMATIONS / EFFECTS         */
   /* ================================ */
 
   .glass-button,
@@ -576,4 +590,11 @@
     fill: rgba(255, 255, 255, 0.5) !important;
   }
 
-} /* END UTILITIES */
+} /* END UTILITIES */  @layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
