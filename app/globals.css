@@ -29,6 +29,8 @@
     --input: 220 13% 91%;
     --ring: 262.1 83.3% 57.8%;
     --radius: 0.5rem;
+    --sidebar-width: 20rem;
+    --sidebar-width-icon: 3rem;
 
     --action-bg: hsl(240 80% 95%);
     --action-hover: hsl(240 100% 88%);
@@ -85,32 +87,22 @@
   /* Responsive base font */
   html {
     font-size: 16px;
-    transition: background-color 0.6s, color 0.6s;
-    height: 100%; /* Ensure HTML allows full height */
+    height: 100%;
 
     @media (max-width: 768px) { font-size: 14px; }
     @media (max-width: 480px) { font-size: 13px; }
   }
 
   body {
-    @apply bg-background text-foreground;
-    transition: background-color 0.6s, color 0.6s;
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
     position: relative;
-    overflow: hidden;     /* Lock body scroll strictly */
+    overflow: hidden;
     font-feature-settings: "rlig" 1, "calt" 1;
-    height: 100dvh;       /* Use dynamic viewport height */
+    height: 100dvh;
     width: 100%;
-  }
-
-  /* Theme transition states */
-  body.transitioning { transition: none; }
-  body.transitioning.light {
-    --background: 0 0% 100%;
-    --foreground: 224 71.4% 4.1%;
-  }
-  body.transitioning.dark {
-    --background: 224 71.4% 4.1%;
-    --foreground: 210 20% 98%;
+    /* Fast transition for theme changes */
+    transition: background-color 0.3s ease, color 0.3s ease;
   }
 
   /* Focus-visible */
@@ -124,14 +116,23 @@
     background-color: hsl(var(--primary) / 0.2);
     color: hsl(var(--foreground));
   }
+
+  * {
+    border-color: hsl(var(--border));
+    /* Fast transitions for all elements */
+    transition: background-color 0.3s ease, 
+                color 0.3s ease,
+                border-color 0.3s ease,
+                fill 0.3s ease,
+                stroke 0.3s ease;
+  }
 }
 
 /* ========================================================================== */
-/* ENHANCED SCROLLBAR + OVERSCROLL FIXES                          */
+/* SCROLLBAR STYLES                                                          */
 /* ========================================================================== */
 
 @layer utilities {
-  
   /* Scroll containment */
   .scroll-container {
     overscroll-behavior: contain;
@@ -142,7 +143,9 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
-  .scrollbar-none::-webkit-scrollbar { display: none; }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
 
   /* Thin scrollbar (mobile default) */
   .scrollbar-thin {
@@ -156,7 +159,6 @@
   .scrollbar-thin::-webkit-scrollbar-thumb {
     background: hsl(var(--muted-foreground) / 0.3);
     border-radius: 20px;
-    transition: background-color 0.2s;
   }
 
   /* DESKTOP CUSTOM LOOK */
@@ -193,76 +195,18 @@
       );
     }
   }
+}
 
-  /* Transparent track variant */
-  .transparent-scrollbar-track {
-    scrollbar-width: thin;
-    scrollbar-color: hsl(var(--foreground) / 0.5) transparent;
-  }
-  .transparent-scrollbar-track::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-  }
-  .transparent-scrollbar-track::-webkit-scrollbar-thumb {
-    background-color: hsl(var(--foreground) / 0.5);
-    border-radius: 9999px;
-    background-clip: padding-box;
-  }
+/* ========================================================================== */
+/* COMPONENT STYLES                                                          */
+/* ========================================================================== */
 
-  /* ====================================================================== */
-  /* SCROLL CONTAINMENT FIXES                                              */
-  /* ====================================================================== */
-  
-  /* Fix for SearchComponent scrolling */
-  .search-scroll-container {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-  
-  .search-scroll-content {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-  }
-
-  /* Prevent body scroll when search tab is active */
-  body.search-tab-active {
-    overflow: hidden;
-  }
-
-  /* ====================================================================== */
-  /* GLASS, TABLE, ASSISTANT, TOAST, PROSE STYLES                          */
-  /* ====================================================================== */
-
-  /* Glass toast notifications */
-  .glass-toast {
-    background: linear-gradient(
-      to bottom right,
-      hsl(var(--background) / 0.85),
-      hsl(var(--background) / 0.6)
-    ) !important;
-    -webkit-backdrop-filter: blur(20px) saturate(180%) !important; /* Added Prefix */
-    backdrop-filter: blur(20px) saturate(180%) !important;
-    border: 1px solid hsl(var(--border) / 0.25) !important;
-    box-shadow: 
-      0 8px 32px rgba(0, 0, 0, 0.1),
-      inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
-    border-radius: calc(var(--radius) + 2px);
-  }
-
-  /* Toast variants */
-  .toast-success { color: hsl(142, 76%, 36%); }
-  .toast-error { color: hsl(0, 84%, 60%); }
-  .toast-info { color: hsl(221, 83%, 53%); }
-
+@layer components {
   /* Glass buttons */
   .glass-button {
-    -webkit-backdrop-filter: blur(12px); /* Prefix first */
+    -webkit-backdrop-filter: blur(12px);
     backdrop-filter: blur(12px);
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.3s ease;
     border-radius: var(--radius);
     padding: 0.5rem 1rem;
     font-weight: 500;
@@ -277,22 +221,6 @@
     overflow: hidden;
   }
 
-  .glass-button::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(
-      90deg,
-      transparent,
-      rgba(255, 255, 255, 0.1),
-      transparent
-    );
-    transition: left 0.5s ease;
-  }
-
   .glass-button:hover {
     transform: translateY(-2px) scale(1.02);
     box-shadow: 
@@ -301,49 +229,13 @@
     border-color: hsl(var(--border) / 0.4);
   }
 
-  .glass-button:hover::before { left: 100%; }
-
   .glass-button:active {
     transform: translateY(0) scale(0.98);
-    transition-duration: 0.1s;
   }
 
   .glass-button:focus-visible {
     outline: 2px solid hsl(var(--ring));
     outline-offset: 2px;
-  }
-
-  /* Gradient border */
-  .gradient-border {
-    background: transparent;
-    border-radius: var(--radius);
-    position: relative;
-    overflow: hidden;
-  }
-
-  .gradient-border::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(
-      135deg,
-      hsl(var(--foreground) / 0.15),
-      hsl(var(--background) / 0)
-    );
-    padding: 1px;
-    border-radius: inherit;
-    /* Fixed ordering: -webkit-mask-composite first */
-    -webkit-mask: 
-      linear-gradient(#fff 0 0) content-box,
-      linear-gradient(#fff 0 0);
-    mask: 
-      linear-gradient(#fff 0 0) content-box,
-      linear-gradient(#fff 0 0);
-      
-    -webkit-mask-composite: xor;
-    mask-composite: exclude; 
-    
-    pointer-events: none;
   }
 
   /* Glass gradient header */
@@ -352,128 +244,37 @@
     overflow: hidden;
     border-radius: calc(var(--radius) + 4px);
     background: hsl(var(--background) / 0.8);
-    -webkit-backdrop-filter: blur(20px) saturate(150%); /* Added Prefix */
+    -webkit-backdrop-filter: blur(20px) saturate(150%);
     backdrop-filter: blur(20px) saturate(150%);
   }
+}
 
-  .glass-gradient-header::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    border-radius: inherit;
-    padding: 1px;
-    background: linear-gradient(
-      135deg,
-      hsl(var(--foreground) / 0.1),
-      hsl(var(--background) / 0)
-    );
-    /* Fixed ordering */
-    -webkit-mask: 
-      linear-gradient(#fff 0 0) content-box,
-      linear-gradient(#fff 0 0);
-    mask: 
-      linear-gradient(#fff 0 0) content-box,
-      linear-gradient(#fff 0 0);
-    
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
+/* ========================================================================== */
+/* ANIMATIONS & EFFECTS                                                      */
+/* ========================================================================== */
+
+@layer utilities {
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
-  /* ================================ */
-  /* AI RESPONSE STYLING          */
-  /* ================================ */
+  .animate-fade-in {
+    animation: fade-in 0.3s ease-out;
+  }
+}
 
-  .ai-response-container {
-    scrollbar-width: thin;
-    scrollbar-color: rgba(155, 155, 155, 0.5) transparent;
-    width: 100%;
-  }
-  .ai-response-container::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-  .ai-response-container::-webkit-scrollbar-thumb {
-    background-color: rgba(155, 155, 155, 0.5);
-    border-radius: 3px;
-  }
-  .ai-response-container::-webkit-scrollbar-thumb:hover {
-    background-color: rgba(155, 155, 155, 0.7);
-  }
+/* ========================================================================== */
+/* RESPONSIVE ADJUSTMENTS                                                    */
+/* ========================================================================== */
 
-  .ai-response-container table {
-    display: block;
-    overflow-x: auto;
-    white-space: nowrap;
-    font-size: 0.875rem;
-  }
-
-  .ai-response-container table th,
-  .ai-response-container table td {
-    padding: 0.5rem;
-    text-align: left;
-    border: 1px solid hsl(var(--border));
-  }
-
-  /* Prose styling */
-  .prose table {
-    width: 100%;
-    overflow-x: auto;
-    white-space: nowrap;
-    margin: 1rem 0;
-  }
-
-  .prose th,
-  .prose td {
-    padding: 0.75rem;
-    border: 1px solid hsl(var(--border));
-  }
-
-  .prose pre {
-    white-space: pre-wrap;
-    border-radius: var(--radius);
-    background: hsl(var(--muted));
-    padding: 1rem;
-  }
-
-  .prose code {
-    background: hsl(var(--muted));
-    padding: 0.2rem 0.4rem;
-    border-radius: calc(var(--radius) - 2px);
-  }
-
-  /* ================================ */
-  /* ROOM ASSISTANT SCROLL        */
-  /* ================================ */
-
-  .room-assistant-scroll {
-    max-height: calc(100vh - 180px);
-    overflow-y: auto;
-    overflow-x: hidden;
-    padding-right: 6px;
-    scrollbar-width: thin;
-  }
-  .room-assistant-scroll::-webkit-scrollbar {
-    width: 6px;
-  }
-  .room-assistant-scroll::-webkit-scrollbar-thumb {
-    background-color: rgba(155, 155, 155, 0.2);
-    border-radius: 10px;
-  }
-
-  .room-assistant-ai-content {
-    overflow-x: auto;
-    width: 100%;
-  }
-  .room-assistant-ai-content table {
-    display: block;
-    white-space: nowrap;
-  }
-
-  /* ================================ */
-  /* RESPONSIVE ADJUSTMENTS       */
-  /* ================================ */
-
+@layer utilities {
   @media (max-width: 1024px) {
     .glass-button {
       min-width: 90px;
@@ -483,21 +284,10 @@
   }
 
   @media (max-width: 768px) {
-    .room-assistant-scroll {
-      max-height: calc(100vh - 160px);
-      padding-right: 4px;
-    }
     .glass-button {
       min-width: 80px;
       padding: 0.4rem 0.8rem;
       font-size: 0.875rem;
-    }
-  }
-
-  @media (max-width: 640px) {
-    .room-assistant-scroll {
-      max-height: calc(100vh - 140px);
-      padding-right: 3px;
     }
   }
 
@@ -507,94 +297,5 @@
       padding: 0.35rem 0.7rem;
       font-size: 0.85rem;
     }
-  }
-
-  /* ================================ */
-  /* DARK MODE              */
-  /* ================================ */
-
-  .dark {
-    .ai-response-container {
-      background-color: hsl(var(--background) / 0.5);
-      border-color: hsl(var(--border) / 0.5);
-    }
-    .ai-response-container table,
-    .prose table {
-      color: hsl(var(--foreground));
-    }
-    .ai-response-container::-webkit-scrollbar-thumb {
-      background-color: rgba(255, 255, 255, 0.18);
-    }
-    .glass-toast {
-      background: linear-gradient(
-        to bottom right,
-        hsl(var(--background) / 0.9),
-        hsl(var(--background) / 0.7)
-      ) !important;
-    }
-  }
-
-  /* ================================ */
-  /* ANIMATIONS / EFFECTS         */
-  /* ================================ */
-
-  .glass-button,
-  .glass-toast,
-  .gradient-border,
-  .glass-gradient-header {
-    animation: fadeIn 0.3s ease-out;
-  }
-
-  @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-
-  @keyframes fade-in {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-  @keyframes slide-in {
-    from { opacity: 0; transform: translateX(-20px); }
-    to { opacity: 1; transform: translateX(0); }
-  }
-
-  .animate-fade-in { animation: fade-in 0.5s ease-out; }
-  .animate-slide-in { animation: slide-in 0.3s ease-out; }
-
-  /* Premium slider */
-  .premium-slider::-webkit-slider-thumb {
-    appearance: none;
-    height: 20px;
-    width: 20px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)));
-    cursor: pointer;
-    box-shadow: 0 4px 12px hsl(var(--primary)/0.3);
-    border: 2px solid hsl(var(--background));
-  }
-  .premium-slider::-moz-range-thumb {
-    height: 20px;
-    width: 20px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)));
-  }
-
-  .group:hover .group-hover\:scale-105 { transform: scale(1.05); }
-
-  /* Cropper customizations */
-  .reactEasyCrop_Container .reactEasyCrop_Grid_line {
-    stroke: rgba(255, 255, 255, 0.3) !important;
-  }
-  .reactEasyCrop_Container .reactEasyCrop_Grid_dot {
-    fill: rgba(255, 255, 255, 0.5) !important;
-  }
-
-} /* END UTILITIES */  @layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
   }
 }

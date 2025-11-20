@@ -1,13 +1,15 @@
+// app/layout.tsx (your RootLayout)
 import { Space_Grotesk } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ResponsiveToaster } from "@/components/ResponsiveToaster";
-// import { RoomProvider } from "@/lib/store/RoomContext";
 import { SearchHighlightProvider } from "@/lib/store/SearchHighlightContext";
 import RoomInitializer from "@/lib/initialization/RoomInitializer";
-// import { supabaseServer } from "@/lib/supabase/server";
-import ThemeTransitionWrapper from "@/components/ThemeTransitionWrapper";
+
 import "@/app/globals.css";
 import ClientInitializer from "@/lib/initialization/clientinitializer";
+
+// <-- add this import
+import SidebarLayout from "@/components/layouts/SidebarLayout";
 
 const space_Grotesk = Space_Grotesk({ subsets: ["latin"] });
 
@@ -16,9 +18,6 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // const supabase = await supabaseServer();
-  // const { data } = await supabase.auth.getSession();
-
   return (
     <html lang="en" suppressHydrationWarning className="h-full w-full">
       <head />
@@ -26,22 +25,25 @@ export default async function RootLayout({
         className={`${space_Grotesk.className} h-full w-full overflow-hidden bg-background text-foreground antialiased`}
       >
         <ThemeProvider
-            attribute="class"
-            defaultTheme="system"
-            enableSystem
-            disableTransitionOnChange
-          >
-            <ThemeTransitionWrapper>
-              {/* <RoomProvider> */}
-                <SearchHighlightProvider>
-                  <ClientInitializer /> {/* ✅ ensures Zustand store stays synced */}
-                  <RoomInitializer />
-                  {children}
-                  <ResponsiveToaster />
-                </SearchHighlightProvider>
-              {/* </RoomProvider> */}
-            </ThemeTransitionWrapper>
-          </ThemeProvider>
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+
+            <SearchHighlightProvider>
+              <ClientInitializer /> {/* ensures Zustand store stays synced */}
+              <RoomInitializer />
+
+              {/* Wrap the entire app in SidebarLayout which includes SidebarProvider */}
+              <SidebarLayout>
+                {children}
+              </SidebarLayout>
+
+              <ResponsiveToaster />
+            </SearchHighlightProvider>
+
+        </ThemeProvider>
       </body>
     </html>
   );

@@ -31,6 +31,7 @@
       {
         "listitem": "off"
       }
-    ]
+    ],
+    "css-prefix-order": "off"
   }
 }

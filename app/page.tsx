@@ -1,13 +1,11 @@
-"use client";
+// app/(with-sidebar)/page.tsx  (or inside that page component file)
 
-import React from "react";
-// import { RoomProvider } from "@/lib/store/RoomContext";
 import HomePage from "@/components/HomePage";
 
 export default function Page() {
   return (
-   
+
       <HomePage />
-   
+
   );
 }

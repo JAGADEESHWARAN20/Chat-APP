@@ -2,28 +2,32 @@
 
 import React, { useState, useEffect } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import LoginLogoutButton from "@/components/LoginLogoutButton";
 import SearchComponent from "@/components/SearchComponent";
 import CreateRoomDialog from "@/components/CreateRoomDialog";
 import NotificationsWrapper from "@/components/NotificationsWrapper";
 import ChatLayout from "@/components/ChatLayout";
-import { ChevronRight, Home, Search, MessageCircle } from "lucide-react";
+import { SidebarTrigger } from "@/components/sidebar";
+import { Home, Search as SearchIcon, MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
-// import { useRoomStore } from "@/lib/store/RoomContext";
 import SecureInitUser from "@/lib/initialization/secureInitUser";
 import { useUnifiedRoomStore } from "@/lib/store/roomstore";
 
-export default function HomePage() {
+interface HomePageProps {
+  sidebarState?: "expanded" | "collapsed";
+}
+
+export default function HomePage({ sidebarState = "collapsed" }: HomePageProps) {
   const [user, setUser] = useState<any>(null);
   const setRoomUser = useUnifiedRoomStore((state) => state.setUser);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"home" | "search">("home");
 
   const tabs: { id: "home" | "search"; icon: any; label: string }[] = [
     { id: "home", icon: Home, label: "Home" },
-    { id: "search", icon: Search, label: "Search" },
+    { id: "search", icon: SearchIcon, label: "Search" },
   ];
+
+  const isSidebarOpen = sidebarState === "collapsed";
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
@@ -37,49 +41,36 @@ export default function HomePage() {
   }, [user, setRoomUser]);
 
   return (
-    /* Ensure the main container takes full viewport height and is locked */
-    <div className="h-full w-full flex flex-col overflow-hidden bg-background">
+    <div className={cn(
+      "h-screen w-full flex flex-col overflow-hidden bg-background transition-all duration-300 ease-in-out",
+      // Let the sidebar handle the layout shifts naturally
+      "lg:transition-all lg:duration-300 lg:ease-in-out"
+    )}>
+      {/* Header with sidebar-aware styling */}
       <header
-        className="
-          w-full px-4 py-3 border-b border-border/40
-          bg-background/80 backdrop-blur-md supports-[backdrop-filter]:bg-background/60
-          sticky top-0 z-20 shadow-sm transition-colors duration-200
-          flex-none /* Don't let header shrink */
-        "
+        className={cn(
+          "w-full px-4 py-3 border-b border-border/40",
+          "bg-background/95 backdrop-blur-md supports-[backdrop-filter]:bg-background/80",
+          "sticky top-0 z-40 shadow-sm transition-all duration-300",
+          "flex-none",
+          // Remove backdrop blur on mobile to fix transparency issues
+          "max-lg:bg-background max-lg:backdrop-blur-0"
+        )}
       >
-        <div className="flex items-center justify-between max-w-7xl mx-auto w-full">
-          
+        <div className="flex items-center justify-between w-full">
           {/* Left Section */}
           <div className="flex items-center gap-3 md:gap-6">
-            {/* Sidebar Toggle */}
-            <button
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="
-                lg:hidden w-10 h-10 flex items-center justify-center
-                rounded-xl transition-all duration-300
-                hover:bg-[hsl(var(--muted))]/40 focus:ring-2 focus:ring-[hsl(var(--action-ring))]/50
-                active:scale-95
-              "
-              aria-label={isSidebarOpen ? "Close sidebar" : "Open sidebar"}
-            >
-              <ChevronRight
-                className={cn(
-                  "w-5 h-5 transition-transform duration-300",
-                  isSidebarOpen ? "rotate-180" : "rotate-0"
-                )}
-              />
-            </button>
-
             {/* Logo */}
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-xl bg-gradient-to-r from-blue-500 to-green-500 flex items-center justify-center shadow-inner">
                 <MessageCircle className="w-4 h-4 text-white" />
               </div>
               <h1
-                className="
-                  text-xl md:text-2xl font-bold bg-gradient-to-r from-blue-500 to-green-500
-                  bg-clip-text text-transparent hidden sm:block
-                "
+                className={cn(
+                  "text-xl md:text-2xl font-bold bg-gradient-to-r from-blue-500 to-green-500",
+                  "bg-clip-text text-transparent hidden sm:block transition-all duration-300",
+                  isSidebarOpen && "lg:opacity-90 lg:scale-95"
+                )}
               >
                 FlyChat
               </h1>
@@ -111,17 +102,21 @@ export default function HomePage() {
             <div
               className={cn(
                 "relative flex md:hidden items-center justify-center gap-1 px-2 py-1 rounded-2xl",
-                "bg-[hsl(var(--muted))]/40 backdrop-blur-md shadow-inner overflow-hidden"
+                "bg-[hsl(var(--muted))] backdrop-blur-md shadow-inner overflow-hidden",
+                // Solid background on mobile
+                "max-lg:bg-[hsl(var(--muted))] max-lg:backdrop-blur-0"
               )}
             >
-              {/* Animated Morph Background */}
               <AnimatePresence mode="popLayout">
                 <motion.div
                   key={activeTab}
                   layoutId="tabGlow"
                   className="absolute rounded-xl backdrop-blur-xl"
                   style={{
-                    inset: activeTab === "home" ? "4px 52% 4px 4px" : "4px 4px 4px 52%",
+                    inset:
+                      activeTab === "home"
+                        ? "4px 52% 4px 4px"
+                        : "4px 4px 4px 52%",
                     background: "hsl(var(--action-active))",
                     filter: "blur(8px)",
                     opacity: 0.25,
@@ -154,7 +149,6 @@ export default function HomePage() {
                     <motion.div
                       animate={{
                         scale: isActive ? 1.2 : 1,
-                        rotate: isActive ? 0 : 0,
                       }}
                       transition={{ type: "spring", stiffness: 300, damping: 18 }}
                     >
@@ -169,13 +163,21 @@ export default function HomePage() {
             <div className="flex items-center gap-1 sm:gap-2">
               <CreateRoomDialog user={user} />
               <NotificationsWrapper />
-              <LoginLogoutButton user={user} />
+
+              {/* Sidebar trigger */}
+              <SidebarTrigger
+                className={cn(
+                  "w-10 h-10 flex items-center justify-center rounded-xl transition-all duration-300 hover:bg-[hsl(var(--muted))]/40 focus:ring-2 focus:ring-[hsl(var(--action-ring))]/50 active:scale-95",
+                  isSidebarOpen && "bg-[hsl(var(--muted))]/30"
+                )}
+                aria-label="Toggle sidebar"
+              />
             </div>
           </div>
         </div>
       </header>
 
-      {/* Main Content - FIXED SCROLLING ISSUE */}
+      {/* Main Content */}
       <main className="flex-1 flex flex-col w-full overflow-hidden relative">
         <AnimatePresence mode="wait" initial={false}>
           {activeTab === "home" && (
@@ -184,14 +186,10 @@ export default function HomePage() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.0002 }}
+              transition={{ duration: 0.2 }}
               className="flex-1 h-full w-full overflow-hidden"
             >
-              <ChatLayout
-                user={user}
-                isOpen={isSidebarOpen}
-                onClose={() => setIsSidebarOpen(false)}
-              />
+              <ChatLayout user={user} isOpen={false} onClose={() => {}} />
             </motion.div>
           )}
 
@@ -201,16 +199,11 @@ export default function HomePage() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.002 }}
-              className="flex-1 h-full w-full flex flex-col overflow-hidden" 
+              transition={{ duration: 0.2 }}
+              className="flex-1 h-full w-full flex flex-col overflow-hidden"
             >
-              {/* Container Logic:
-                  1. flex-1 + h-full ensures it takes remaining space.
-                  2. overflow-hidden prevents THIS container from scrolling.
-                  3. SearchComponent must handle its own internal scrolling.
-              */}
               <div className="w-full h-full flex flex-col overflow-hidden">
-                  <SearchComponent user={user} />
+                <SearchComponent user={user} />
               </div>
             </motion.div>
           )}
