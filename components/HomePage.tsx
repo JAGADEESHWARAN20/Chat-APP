@@ -14,45 +14,61 @@ import ChatHeader from "@/components/ChatHeader";
 import SearchComponent from "@/components/SearchComponent";
 import CreateRoomDialog from "@/components/CreateRoomDialog";
 import NotificationsWrapper from "@/components/NotificationsWrapper";
-import { SidebarTrigger } from "@/components/sidebar";
 
-import { Home, Search as SearchIcon, MessageCircle } from "lucide-react";
+import { Home, Search as SearchIcon, Menu, PanelLeft } from "lucide-react";
 import SecureInitUser from "@/lib/initialization/secureInitUser";
 import { Button } from "@/components/ui/button";
-
-/**
- * UnifiedHome
- *
- * Single unified UI container:
- * - keeps all major UI elements in the same stacking context (z controlled via CSS vars)
- * - uses CSS variables for sizes, colors (reads --sidebar-width from globals.css)
- * - uses em/vw/vh for local sizing to keep proportions consistent
- *
- * Notes:
- * - ThemeTransitionWrapper sits above the document but underneath UI (it should be z < --z-ui).
- * - This component sets --z-ui locally so you can control z-ordering from globals as needed.
- */
+import { useMediaQuery } from "@/hooks/use-media-query";
 
 interface UnifiedHomeProps {
   initialSidebarState?: "expanded" | "collapsed";
+  onSidebarToggle?: () => void;
+  sidebarState?: any;
+  onSettingsSidebarToggle?: () => void;
 }
 
-export default function UnifiedHome({ initialSidebarState = "collapsed" }: UnifiedHomeProps) {
+export default function UnifiedHome({
+  initialSidebarState = "collapsed",
+  onSidebarToggle,
+  sidebarState,
+  onSettingsSidebarToggle
+}: UnifiedHomeProps) {
   const [user, setUser] = useState<any>(null);
   const setRoomUser = useUnifiedRoomStore((s) => s.setUser);
 
-  // local sidebar control (keeps LeftSidebar inside same stacking context)
-  const [isSidebarOpen, setIsSidebarOpen] = useState(initialSidebarState === "expanded");
-  const toggleSidebar = () => setIsSidebarOpen((v) => !v);
+  const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(initialSidebarState === "expanded");
 
-  // tabs state
-  const [activeTab, setActiveTab] = useState<"home" | "search">("home");
+  const toggleLeftSidebar = () => {
+    if (onSidebarToggle) {
+      onSidebarToggle();
+    } else {
+      setIsLeftSidebarOpen(prev => !prev);
+    }
+  };
+
+  const toggleSettingsSidebar = () => {
+    if (onSettingsSidebarToggle) {
+      onSettingsSidebarToggle();
+    } else {
+      window.dispatchEvent(new CustomEvent('toggle-settings-sidebar'));
+    }
+  };
+
+  React.useEffect(() => {
+    if (sidebarState !== undefined) {
+      setIsLeftSidebarOpen(sidebarState === "expanded");
+    }
+  }, [sidebarState]);
+
+  const [activeTab, setActiveTab] = useState<"home" | "search" | "settings">("home");
+
   const tabs = useMemo(
     () => [
-      { id: "home" as const, icon: Home, label: "Home" },
-      { id: "search" as const, icon: SearchIcon, label: "Search" },
+      { id: "home" as const, icon: Home, label: "Home", onClick: () => setActiveTab("home") },
+      { id: "search" as const, icon: SearchIcon, label: "Search", onClick: () => setActiveTab("search") },
+      { id: "settings" as const, icon: PanelLeft, label: "Settings", onClick: toggleSettingsSidebar },
     ],
-    []
+    [toggleSettingsSidebar]
   );
 
   useEffect(() => {
@@ -66,167 +82,144 @@ export default function UnifiedHome({ initialSidebarState = "collapsed" }: Unifi
     if (user) setRoomUser(user);
   }, [user, setRoomUser]);
 
-  // sizing variables (use em/vw/vh for consistent scaling)
   const headerHeight = "3.6em";
   const inputHeight = "4em";
-  // fallback for var in inline styles — we'll read CSS var at runtime for width usage
-  const sidebarWidthVar = "var(--sidebar-width, 20rem)";
-
-  // z layers (expose these via inline style so you can tweak)
-  const zUi = 10; // UI sits above background mask (mask should be < 10)
+  const mobileSidebarWidth = "82dvw"; // Perfect on all phones
+  const zUi = 10;
+  const isMobile = useMediaQuery('(max-width: 768px)');
 
   return (
-    <div
-      className={cn(
-        "min-h-screen w-full flex bg-[hsl(var(--background))] text-[hsl(var(--foreground))] overflow-hidden",
-        "transition-all duration-300 ease-in-out"
-      )}
-      style={{
-        // Expose CSS variables locally so this container remains the single stacking context.
-        // You can override these variables in globals.css.
-        // --z-ui is used to make sure theme mask (which you set to z lower than this) stays underneath.
-        ["--z-ui" as any]: zUi,
-        ["--header-h" as any]: headerHeight,
-        ["--input-h" as any]: inputHeight,
-        ["--sidebar-w" as any]: sidebarWidthVar,
-        // font smoothing: use em-based sizing inside
-        WebkitFontSmoothing: "antialiased",
-      }}
-    >
-      {/* Left Sidebar (kept inside same stacking context) */}
-      <div
-        className="relative z-[var(--z-ui)]"
+    <div className="min-h-screen w-full flex bg-[hsl(var(--background))] text-[hsl(var(--foreground))] overflow-hidden">
+      {/* ===== LEFT SIDEBAR (Now Works Perfectly) ===== */}
+      <motion.div
+        className={cn(
+          "fixed inset-y-0 left-0 z-50 bg-[hsl(var(--background))] border-r border-[hsl(var(--border))]",
+          "shadow-2xl md:shadow-none md:relative md:z-0",
+          "flex flex-col"
+        )}
+        initial={false}
+        animate={{
+          width: isLeftSidebarOpen ? (isMobile ? mobileSidebarWidth : "var(--sidebar-width, 20rem)") : 0,
+          x: isLeftSidebarOpen ? 0 : (isMobile ? "-100%" : 0),
+        }}
+        transition={{
+          type: "spring",
+          stiffness: 300,
+          damping: 30,
+        }}
         style={{
-          width: isSidebarOpen ? sidebarWidthVar : "0px",
-          minWidth: isSidebarOpen ? sidebarWidthVar : "0px",
-          transition: "width 280ms ease, min-width 280ms ease",
           overflow: "hidden",
         }}
       >
-        {/* render LeftSidebar as a fixed/slide-in on small screens but visually inside same container */}
-        <LeftSidebar user={user ? { id: user.id } : null} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
-      </div>
+        <LeftSidebar
+          user={user ? { id: user.id } : null}
+          isOpen={isLeftSidebarOpen}
+          onClose={toggleLeftSidebar}
+        />
+      </motion.div>
 
-      {/* Main column (header + content) */}
-      <div className="flex-1 min-w-0 flex flex-col relative z-[var(--z-ui)]">
+      {/* ===== MAIN CONTENT (Shifts on Mobile) ===== */}
+      <motion.div
+        className="flex-1 flex flex-col min-w-0 relative"
+        animate={{
+          x: isMobile && isLeftSidebarOpen ? mobileSidebarWidth : 0,
+        }}
+        transition={{
+          type: "spring",
+          stiffness: 300,
+          damping: 30,
+        }}
+      >
         {/* Header */}
         <header
           className={cn(
-            "w-full px-[1em] py-[0.5em] border-b",
-            "bg-[hsl(var(--background))]/0.96 supports-[backdrop-filter]:bg-[hsl(var(--background))]/0.88",
-            "backdrop-blur-md",
-            "flex-none"
+            "w-full px-4 py-3 border-b flex-none",
+            "bg-[hsl(var(--background))]/0.96 supports-[backdrop-filter]:bg-[hsl(var(--background))]/0.88 backdrop-blur-md"
           )}
           style={{
             height: headerHeight,
-            borderColor: "hsl(var(--border) / 0.12)",
+            borderColor: "hsl(var(--border)/0.12)",
             zIndex: zUi,
           }}
         >
-          <div className="flex items-center justify-between w-full">
-            {/* left: logo + tabs */}
-            <div className="flex items-center gap-3 md:gap-6">
-              <div
-                className="rounded-xl flex items-center justify-center"
-                style={{
-                  width: "2.2em",
-                  height: "2.2em",
-                  background: "linear-gradient(90deg, hsl(var(--primary)), hsl(var(--accent)))",
-                }}
-              >
-                <MessageCircle className="w-4 h-4 text-white" />
-              </div>
+          <div className="flex items-center justify-between h-full w-full">
+            {/* Mobile Menu Button */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleLeftSidebar}
+              className="w-10 h-10 rounded-xl hover:bg-[hsl(var(--muted))]/40"
+            >
+              <Menu className="w-5 h-5" />
+            </Button>
 
-              <h1 className="text-lg md:text-xl font-bold bg-clip-text text-transparent hidden sm:block" style={{ background: "linear-gradient(90deg, hsl(var(--primary)), hsl(var(--accent)))" }}>
-                FlyChat
-              </h1>
+            {/* Logo */}
+            <h1 className="text-lg md:text-xl font-bold text-[hsl(var(--text-color))]">
+              FlyChat
+            </h1>
 
-              {/* Desktop tabs */}
-              <div className="hidden md:flex items-center gap-2 p-1 rounded-2xl bg-[hsl(var(--muted))]/0.5 backdrop-blur-md">
-                {tabs.map(({ id, label, icon: Icon }) => (
-                  <button
-                    key={id}
-                    onClick={() => setActiveTab(id)}
-                    className={cn(
-                      "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200",
-                      activeTab === id
-                        ? "bg-[hsl(var(--action-active))]/20 text-[hsl(var(--action-active))] shadow-inner"
-                        : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))]/50"
-                    )}
-                  >
-                    <Icon className="w-4 h-4" />
-                    {label}
-                  </button>
-                ))}
-              </div>
+            {/* Desktop Tabs */}
+            <div className="hidden md:flex items-center gap-2 p-1 rounded-2xl bg-[hsl(var(--muted))]/50 backdrop-blur-md mx-4 flex-1 max-w-2xl justify-center">
+              {tabs.map(({ id, icon: Icon, label, onClick }) => (
+                <button
+                  key={id}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onClick();
+                  }}
+                  className={cn(
+                    "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200",
+                    activeTab === id && id !== "settings"
+                      ? "bg-[hsl(var(--action-active))]/20 text-[hsl(var(--action-active))] shadow-inner"
+                      : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))]/50"
+                  )}
+                >
+                  <Icon className="w-4 h-4" />
+                  <span className="hidden lg:inline">{label}</span>
+                </button>
+              ))}
             </div>
 
-            {/* right: actions + mobile tabs + sidebar trigger */}
-            <div className="flex items-center gap-2 sm:gap-3">
+            {/* Right Actions */}
+            <div className="flex items-center gap-2">
               <div className="hidden sm:flex items-center gap-2">
                 <CreateRoomDialog user={user} />
                 <NotificationsWrapper />
               </div>
 
-              {/* mobile tabs and trigger */}
-              <div className="flex items-center gap-2">
-                {/* mobile tabs (glow uses layoutId so framer animates it nicely) */}
-                <div className="relative md:hidden">
-                  <AnimatePresence>
-                    <motion.div
-                      key={activeTab}
-                      layoutId="mobile-tab-glow"
-                      className="absolute rounded-xl"
-                      style={{
-                        inset: activeTab === "home" ? "6px 52% 6px 6px" : "6px 6px 6px 52%",
-                        background: "hsl(var(--action-active))",
-                        filter: "blur(6px)",
-                        opacity: 0.22,
-                      }}
-                      transition={{ type: "spring", stiffness: 220, damping: 20 }}
-                    />
-                  </AnimatePresence>
-
-                  <div className="flex items-center gap-1 p-1 rounded-2xl bg-[hsl(var(--muted))] backdrop-blur-md">
-                    {tabs.map(({ id, icon: Icon }) => {
-                      const isActive = activeTab === id;
-                      return (
-                        <Button
-                          key={id}
-                          onClick={() => setActiveTab(id)}
-                          className={cn(
-                            "relative z-10 w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200",
-                            isActive ? "bg-[hsl(var(--action-active))]/25 text-[hsl(var(--action-active))] shadow-inner" : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))]/40"
-                          )}
-                          aria-pressed={isActive}
-                          aria-label={id}
-                        >
-                          <Icon className="w-4 h-4" />
-                        </Button>
-                      );
-                    })}
-                  </div>
+              {/* Mobile Bottom Tabs */}
+              <div className="flex items-center gap-1 sm:hidden">
+                <div className="flex items-center gap-1 p-1 rounded-2xl bg-[hsl(var(--muted))] backdrop-blur-md">
+                  {tabs.map(({ id, icon: Icon, onClick }) => {
+                    const isActive = activeTab === id && id !== "settings";
+                    return (
+                      <Button
+                        key={id}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onClick();
+                        }}
+                        variant="ghost"
+                        size="icon"
+                        className={cn(
+                          "w-9 h-9 rounded-xl transition-all duration-200",
+                          isActive
+                            ? "bg-[hsl(var(--accent))] text-[hsl(var(--accent-foreground))]"
+                            : "text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))]/60"
+                        )}
+                      >
+                        <Icon className="w-4 h-4" />
+                      </Button>
+                    );
+                  })}
                 </div>
-
-                {/* sidebar trigger sits here so it can toggle the left rail */}
-                <SidebarTrigger
-                  className={cn(
-                    "w-10 h-10 flex items-center justify-center rounded-xl transition-all duration-200 hover:bg-[hsl(var(--muted))]/40 focus:ring-2 focus:ring-[hsl(var(--action-ring))]/50 active:scale-95",
-                    isSidebarOpen && "bg-[hsl(var(--muted))]/30"
-                  )}
-                  aria-label="Toggle sidebar"
-                  onClick={(e: any) => {
-                    e?.stopPropagation?.();
-                    toggleSidebar();
-                  }}
-                />
               </div>
             </div>
           </div>
         </header>
 
-        {/* main body */}
-        <main className="flex-1 flex min-h-0 overflow-hidden relative" style={{ zIndex: zUi }}>
+        {/* Main Content */}
+        <main className="flex-1 overflow-hidden relative flex flex-col">
           <AnimatePresence mode="wait" initial={false}>
             {activeTab === "home" && (
               <motion.section
@@ -235,33 +228,38 @@ export default function UnifiedHome({ initialSidebarState = "collapsed" }: Unifi
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
                 transition={{ duration: 0.18 }}
-                className="flex-1 flex min-h-0 overflow-hidden"
+                className="flex-1 flex w-full"
               >
-                {/* content column: header (chat header) + messages + input */}
-                <div className="flex-1 flex min-h-0 flex-col mx-auto w-full" style={{ maxWidth: "100vw" }}>
-                  {/* chat header */}
-                  <div style={{ height: headerHeight, borderBottom: "1px solid hsl(var(--border) / 0.12)" }} className="flex-shrink-0 z-[var(--z-ui)]">
+                <div className="flex-1 flex flex-col md:w-[60vw] w-full ">
+                  <div style={{ height: headerHeight }} className="flex-shrink-0 px-4 border-b border-[hsl(var(--border)/0.12)]">
                     <ChatHeader user={user} />
                   </div>
 
-                  {/* messages + input */}
-                  <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                  <div className="flex-1 flex flex-col  md:w-[60vw] w-full">
                     {user && useUnifiedRoomStore.getState().selectedRoomId ? (
-                      <div className="flex-1 min-h-0 flex flex-col">
-                        <div className="flex-1 overflow-auto min-h-0">
+                      <>
+                        <div className="flex-1 overflow-y-auto scrollbar-thin px-2 sm:px-4">
                           <ChatMessages />
                         </div>
-
-                        <div className="flex-shrink-0" style={{ height: "4em", borderTop: "1px solid hsl(var(--border) / 0.12)" }}>
+                        <div style={{ height: inputHeight }} className="flex-shrink-0 px-2 sm:px-4 border-t border-[hsl(var(--border)/0.12)]">
                           <ChatInput />
                         </div>
-                      </div>
+                      </>
                     ) : (
-                      <div className="flex-1 flex items-center justify-center min-h-0 overflow-hidden">
+                      <div className="flex-1 flex items-center justify-center">
                         <ChatAbout />
                       </div>
                     )}
                   </div>
+                </div>
+                <div className="relative md:w-[40vw] w-full hidden md:block">
+                  
+                {/* Coming Soon Overlay */}
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+                  <span className="text-custom-color text-custom-size font-bold opacity-80">
+                    Coming Soon
+                  </span>
+                </div>
                 </div>
               </motion.section>
             )}
@@ -273,18 +271,16 @@ export default function UnifiedHome({ initialSidebarState = "collapsed" }: Unifi
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
                 transition={{ duration: 0.18 }}
-                className="flex-1 flex flex-col min-h-0 overflow-hidden"
+                className="flex-1 flex flex-col overflow-hidden"
               >
-                <div className="w-full h-full flex flex-col overflow-hidden">
-                  <SearchComponent user={user} />
-                </div>
+                <SearchComponent user={user} />
               </motion.section>
             )}
           </AnimatePresence>
         </main>
 
         <SecureInitUser />
-      </div>
+      </motion.div>
     </div>
   );
 }

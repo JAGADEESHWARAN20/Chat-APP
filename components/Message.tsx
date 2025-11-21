@@ -16,12 +16,10 @@ import { useUser } from "@/lib/store/user";
 
 export default function Message({ message }: { message: Imessage }) {
   const user = useUser((state) => state.user);
-  // console.log("message from Message component and", user)
   const { highlightedMessageId } = useSearchHighlight();
 
-  // Add safety check for message
   if (!message) {
-    return <div className="p-2 text-gray-500">Message not available</div>;
+    return <div className="p-2" style={{ color: 'hsl(var(--no-messages-color))', fontSize: 'var(--no-messages-size)' }}>Message not available</div>;
   }
 
   const isHighlighted = highlightedMessageId === message.id;
@@ -39,7 +37,6 @@ export default function Message({ message }: { message: Imessage }) {
             className="rounded-full ring-2 ring-indigo-500/50"
             priority
             onError={(e) => {
-              // Fallback to placeholder if image fails to load
               const target = e.target as HTMLImageElement;
               target.style.display = 'none';
               target.nextElementSibling?.classList.remove('hidden');
@@ -57,21 +54,37 @@ export default function Message({ message }: { message: Imessage }) {
       <div className="flex-1 flex-col">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <h1 className="font-semibold text-foreground text-sm sm:text-base">
+            <h1 
+              className="font-semibold text-sm sm:text-base"
+              style={{ 
+                color: 'hsl(var(--message-sender-color))',
+                fontSize: 'var(--message-sender-size)' 
+              }}
+            >
               {message.profiles?.display_name || message.profiles?.username || "Unknown User"}
             </h1>
 
-            <h1 className="text-xs text-muted-foreground truncate">
+            <h1 
+              className="text-xs truncate"
+              style={{ 
+                color: 'hsl(var(--message-date-color))',
+                fontSize: 'var(--message-date-size)' 
+              }}
+            >
               {message.created_at ? new Date(message.created_at).toDateString() : "Unknown date"}
             </h1>
-
-
           </div>
           {message.profiles?.id && user?.id && message.profiles.id === user.id && (
             <MessageMenu message={message} />
           )}
         </div>
-        <p className="dark:text-gray-200 text-black   text-[1.22em]   break-words">
+        <p 
+          className="break-words"
+          style={{ 
+            color: 'hsl(var(--message-text-color))',
+            fontSize: 'var(--message-text-size)' 
+          }}
+        >
           {message.text || "Message content not available"}
         </p>
       </div>

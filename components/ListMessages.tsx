@@ -257,22 +257,27 @@ export default function ListMessages() {
 
   SkeletonMessage.displayName = "SkeletonMessage";
 
-  if (!selectedRoom?.id) {
+   if (!selectedRoom?.id) {
     return (
-      <div className="flex items-center justify-center h-full text-gray-500 overflow-hidden">
+      <div 
+        className="flex items-center justify-center h-full overflow-hidden"
+        style={{ 
+          color: 'hsl(var(--no-messages-color))',
+          fontSize: 'var(--no-messages-size)' 
+        }}
+      >
         <p>Select a room to start chatting</p>
       </div>
     );
   }
 
   return (
-    <div className="h-full flex flex-col min-h-0 overflow-hidden">
+    <div className="h-[80vh] w-full flex flex-col  overflow-hidden">
       {/* Messages Scroll Area */}
       <div
         ref={scrollRef}
         onScroll={handleOnScroll}
-        className="flex-1 overflow-y-auto px-4 py-2 space-y-2 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent"
-        
+        className="flex-1 overflow-y-scroll  px-4  py-2 space-y-2 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent"
       >
         <div className="w-full max-w-full">
           {isLoading ? (
@@ -286,7 +291,13 @@ export default function ListMessages() {
               <Message key={message.id} message={message} />
             ))
           ) : (
-            <div className="flex items-center justify-center h-full text-gray-500">
+            <div 
+              className="flex items-center justify-center h-full"
+              style={{ 
+                color: 'hsl(var(--no-messages-color))',
+                fontSize: 'var(--no-messages-size)' 
+              }}
+            >
               <p>No messages yet. Start a conversation!</p>
             </div>
           )}

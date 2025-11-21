@@ -9,6 +9,14 @@
 @layer base {
   :root {
     /* Light theme */
+     --message-text-color: 224 71.4% 4.1%; /* Same as foreground */
+    --message-text-size: 1.22em; /* Your existing text size */
+    --message-sender-color: 224 71.4% 4.1%; /* Same as foreground */
+    --message-sender-size: 0.875rem; /* 14px for sender name */
+    --message-date-color: 220 8.9% 46.1%; /* Same as muted-foreground */
+    --message-date-size: 0.75rem; /* 12px for date */
+    --no-messages-color: 220 8.9% 46.1%; /* Same as muted-foreground */
+    --no-messages-size: 1em;
     --background: 0 0% 100%;
     --foreground: 224 71.4% 4.1%;
     --card: 0 0% 100%;
@@ -31,28 +39,38 @@
     --radius: 0.5rem;
     --sidebar-width: 26rem;
     --sidebar-width-icon: 3rem;
-     --z-mask: 0; /* mask under UI by default */
-  --z-ui: 10;  /* main UI z-level */
-  --z-overlay: 20; /* popovers, modals that should sit above core UI */
-  --z-top: 50; /* toasts/alerts that must always be on top */
-
+    --text-color-sidebar:#fff;
+    --z-mask: 0; /* mask under UI by default */
+    --z-ui: 10;  /* main UI z-level */
+    --z-overlay: 20; /* popovers, modals that should sit above core UI */
+    --z-top: 50; /* toasts/alerts that must always be on top */
+     --text-color: 224 71.4% 4.1%; /* Change from #000 to HSL format */
+    --text-size: 4em;
     --action-bg: hsl(240 80% 95%);
     --action-hover: hsl(240 100% 88%);
     --action-active: hsl(240 70% 60%);
     --action-ring: hsl(240 80% 70%);
     --action-text: hsl(240 30% 25%);
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
+    --sidebar-background: hsl(240, 60%, 96%);     /* Softer, warmer light blue-gray */
+    --sidebar-foreground: 240, 10%, 20%;         /* Deep readable text */
+    --sidebar-primary: 240, 80%, 45%;             /* Vibrant blue for active states */
+    --sidebar-primary-foreground: 0, 0%, 100%;    /* Pure white on active */
+    --sidebar-accent: 240, 50%, 92%;              /* Subtle hover background */
+    --sidebar-accent-foreground: 240, 10%, 15%;   /* Strong text on hover */
+    --sidebar-border: 240, 30%, 88%;              /* Soft divider */
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
 
   .dark {
     /* Dark theme */
+     --message-text-color: 210 20% 98%; /* Same as foreground */
+    --message-text-size: 1.22em; /* Your existing text size */
+    --message-sender-color: 210 20% 98%; /* Same as foreground */
+    --message-sender-size: 0.875rem; /* 14px for sender name */
+    --message-date-color: 217.9 10.6% 64.9%; /* Same as muted-foreground */
+    --message-date-size: 0.75rem; /* 12px for date */
+    --no-messages-color: 217.9 10.6% 64.9%; /* Same as muted-foreground */
+    --no-messages-size: 1em;
     --background: 224 71.4% 4.1%;
     --foreground: 210 20% 98%;
     --card: 224 71.4% 4.1%;
@@ -72,22 +90,45 @@
     --border: 215 27.9% 16.9%;
     --input: 215 27.9% 16.9%;
     --ring: 263.4 70% 50.4%;
+    --text-color: 210 20% 98%; /* Change from #fff to HSL format */
+    --text-size: 4em;
+      --sidebar-width: 26rem;
+    --sidebar-width-icon: 3rem;
+     --z-mask: 0; /* mask under UI by default */
+  --z-ui: 10;  /* main UI z-level */
+  --z-overlay: 20; /* popovers, modals that should sit above core UI */
+  --z-top: 50; /* toasts/alerts that must always be on top */
+  --text-color:#000;
+  --text-color-sidebar:#fff;
 
     --action-bg: hsl(240 35% 20%);
     --action-hover: hsl(240 50% 25%);
     --action-active: hsl(240 90% 70%);
     --action-ring: hsl(240 100% 80%);
     --action-text: hsl(0 0% 98%);
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-background: hsl(240, 25%, 8%);      /* Deep blue-black (not pure black = easier on eyes) */
+    --sidebar-foreground: 240, 15%, 94%;          /* Crisp off-white */
+    --sidebar-primary: 240, 90%, 65%;             /* Electric blue accent (pops beautifully) */
+    --sidebar-primary-foreground: 240, 10%, 10%;  /* Near-black for perfect contrast on active */
+    --sidebar-accent: 240, 20%, 14%;              /* Slightly lighter than bg for depth */
+    --sidebar-accent-foreground: 240, 15%, 90%;   /* Bright text on hover */
+    --sidebar-border: 240, 15%, 18%;
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
-
+@layer utilities {
+  .text-custom-size {
+    font-size: var(--text-size);
+  }
+  .text-custom-color {
+    color: hsl(var(--text-color));
+  }
+  .sidebar-background{
+    background-color: var(--sidebar-background);
+  }
+  .sidebar-text{
+    color: var(--text-color-sidebar);
+  }
+}
   /* Responsive base font */
   html {
     font-size: 16px;
@@ -295,6 +336,28 @@
       min-width: 70px;
       padding: 0.35rem 0.7rem;
       font-size: 0.85rem;
+    }
+  }
+}
+
+@layer utilities {
+  @keyframes shimmer {
+    0% {
+      transform: translateX(-150%) skewX(-30deg);
+    }
+    100% {
+      transform: translateX(150%) skewX(-30deg);
+    }
+  }
+
+  .animate-ping {
+    animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+
+  @keyframes ping {
+    75%, 100% {
+      transform: scale(2);
+      opacity: 0;
     }
   }
 }

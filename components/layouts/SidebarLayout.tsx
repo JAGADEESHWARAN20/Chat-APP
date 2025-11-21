@@ -1,8 +1,10 @@
+// components/sidebar/SidebarLayout.tsx
 "use client";
 
-import React, { ReactNode, useMemo } from "react";
+import React, { ReactNode, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
+
 import {
   Sidebar,
   SidebarProvider,
@@ -30,6 +32,7 @@ import {
   MessageCircle,
   AlertCircle,
   LogOut,
+  LucideIcon,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -42,9 +45,12 @@ import { ThemeTransitionWrapper } from "@/components/ThemeTransitionWrapper";
 type Props = {
   children: ReactNode;
   side?: "left" | "right";
+  onSidebarToggle?: () => void;
+  sidebarState?: any;
 };
 
-const mainItems = [
+// FIXED: Fully typed array (no more TS error)
+const mainItems: { title: string; url: string; icon: LucideIcon }[] = [
   { title: "Home", url: "#", icon: Home },
   { title: "Inbox", url: "#", icon: Inbox },
   { title: "Calendar", url: "#", icon: Calendar },
@@ -52,8 +58,16 @@ const mainItems = [
   { title: "Settings", url: "#", icon: Settings },
 ];
 
-function LayoutContents({ children, side = "right" }: Props) {
+// FIXED: Support section typed properly
+const supportItems: { label: string; url: string; icon: LucideIcon }[] = [
+  { label: "Help Center", url: "/help", icon: LifeBuoy },
+  { label: "Support", url: "/support", icon: MessageCircle },
+  { label: "Report a problem", url: "/report", icon: AlertCircle },
+];
+
+function LayoutContents({ children, side = "right", onSidebarToggle }: Props) {
   const router = useRouter();
+
   const supabase = useMemo(
     () =>
       createBrowserClient<Database>(
@@ -64,11 +78,12 @@ function LayoutContents({ children, side = "right" }: Props) {
   );
 
   const storeUser = useUser((s) => s.user);
-  const displayName = storeUser
-    ? (storeUser.user_metadata as any)?.display_name ||
-      (storeUser.user_metadata as any)?.username ||
-      storeUser.email?.split("@")[0]
-    : "User";
+
+  const displayName =
+    storeUser?.user_metadata?.display_name ||
+    storeUser?.user_metadata?.username ||
+    storeUser?.email?.split("@")[0] ||
+    "User";
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -77,175 +92,160 @@ function LayoutContents({ children, side = "right" }: Props) {
 
   const { state, toggleSidebar } = useSidebar();
 
+  useEffect(() => {
+    const toggle = () => toggleSidebar();
+    window.addEventListener("toggle-settings-sidebar", toggle);
+    return () =>
+      window.removeEventListener("toggle-settings-sidebar", toggle);
+  }, [toggleSidebar]);
+
+  const handleToggle = () => {
+    if (onSidebarToggle) onSidebarToggle();
+    else toggleSidebar();
+  };
+
   return (
-    <div className={cn(
-      "min-h-screen flex bg-background flex-row-reverse",
-      "transition-all duration-300 ease-in-out"
-    )}>
-      {/* Sidebar */}
+<div className={cn("min-h-screen flex flex-row-reverse bg-[hsl(var(--background))]")}>
       <Sidebar side={side}>
-        <SidebarContent className="w-[var(--sidebar-width)]">
-          <SidebarGroup>
-            <SidebarGroupLabel>Application</SidebarGroupLabel>
+        <SidebarContent
+          className="w-[var(--sidebar-width)] bg-[hsl(var(--sidebar-background))] text-[hsl(var(--sidebar-foreground))] border-none"
+          style={{
+            background: "linear-gradient(145deg, hsl(var(--sidebar-background)) 0%, hsl(var(--sidebar-background)/0.95) 100%)",
+            backdropFilter: "blur(20px)",
+          }}
+        >
+          {/* Application Menu */}
+          <SidebarGroup className="px-3 ">
+            <SidebarGroupLabel className="text-xs uppercase tracking-wider opacity-70 px-3 mb-1">Application</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {mainItems.map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild tooltip={item.title}>
-                      <a
-                        href={item.url}
-                        className="flex items-center gap-3 py-2 px-3 rounded-md transition-colors duration-200 hover:bg-[hsl(var(--muted))]/40"
-                      >
-                        <item.icon className="w-5 h-5" />
-                        <span className="text-sm">{item.title}</span>
-                      </a>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
+                {mainItems.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton asChild>
+                        <a
+                          href={item.url}
+                          onClick={handleToggle}
+                          className={cn(
+                            "flex items-center gap-4 px-4 py-[1.4em] rounded-xl text-base font-medium transition-all duration-300 group",
+                            "hover:bg-[hsl(var(--sidebar-accent))] hover:text-[hsl(var(--sidebar-accent-foreground))]",
+                            "hover:shadow-lg ",
+                            "[&.active]:bg-[hsl(var(--sidebar-primary)/0.15)] [&.active]:text-[hsl(var(--sidebar-primary))]"
+                          )}
+                        >
+                          <div className="relative">
+                            <Icon className="w-5 h-5 transition-transform group-hover:scale-110" />
+                            <span className="absolute inset-0 rounded-full blur-xl opacity-0 group-hover:opacity-30 bg-current" />
+                          </div>
+                          <span>{item.title}</span>
+                        </a>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
 
-          <SidebarGroup>
-            <SidebarGroupLabel>Account</SidebarGroupLabel>
+          {/* Account Section */}
+          <SidebarGroup className="mt-2 px-3">
+            <SidebarGroupLabel className="text-xs uppercase tracking-wider opacity-70 px-3 mb-3">Account</SidebarGroupLabel>
             <SidebarGroupContent>
-              <div className="flex flex-col gap-2 px-3">
-               
-<div
-  role="button"
-  tabIndex={0}
-  onClick={() => router.push(`/profile/${storeUser?.id}`)}
-  onKeyDown={(e) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      router.push(`/profile/${storeUser?.id}`);
-    }
-  }}
-  className="flex items-center gap-3 p-3 w-full rounded-md hover:bg-[hsl(var(--muted))]/40 transition-colors duration-200 cursor-pointer"
->
-  <div className="flex items-center justify-between gap-2 w-full">
-    <div className="flex items-center gap-3">
-      <div className="w-10 h-10 rounded-full ...">
-        {displayName?.charAt(0)?.toUpperCase()}
-      </div>
-      <div className="flex flex-col">
-        <span className="text-sm font-medium">{displayName}</span>
-        <span className="text-xs text-muted-foreground">{storeUser?.email}</span>
-      </div>
-    </div>
+              <div className="space-y-3">
+                {/* Profile Card */}
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => { router.push(`/profile/${storeUser?.id}`); handleToggle(); }}
+                  className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 hover:bg-white/10 transition-all duration-300 group cursor-pointer"
+                >
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[hsl(var(--sidebar-primary))] to-[hsl(var(--sidebar-primary)/0.7)] flex items-center justify-center text-white font-bold text-lg shadow-lg">
+                    {displayName.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-semibold">{displayName}</p>
+                    <p className="text-xs opacity-70">{storeUser?.email}</p>
+                  </div>
+                  <ChevronsUpDown className="w-5 h-5 opacity-50 group-hover:opacity-100 transition-opacity" />
+                </div>
 
-    <div className="flex items-center gap-2">
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={(e) => {
-          e.stopPropagation();
-          // existing behavior for that button
-        }}
-      >
-        <ChevronsUpDown className="w-4 h-4" />
-      </Button>
-    </div>
-  </div>
-</div>
-
-
-                <div className="border-t border-border/30 mt-1" />
-
-                <nav className="flex flex-col gap-1">
-                  <a
-                    className="flex items-center gap-3 px-2 py-2 rounded-md hover:bg-[hsl(var(--muted))]/40 transition-colors duration-200"
-                    href={`/profile/${storeUser?.id}`}
-                  >
-                    <User className="w-4 h-4" />
-                    <span className="text-sm">Profile</span>
-                  </a>
-
-                  <a
-                    className="flex items-center gap-3 px-2 py-2 rounded-md hover:bg-[hsl(var(--muted))]/40 transition-colors duration-200"
-                    href={`/profile/${storeUser?.id}/edit`}
-                  >
-                    <Settings className="w-4 h-4" />
-                    <span className="text-sm">Settings</span>
-                  </a>
-                </nav>
+                <div className="flex flex-col gap-1 pt-2">
+                  {[
+                    { icon: User, label: "Profile", href: `/profile/${storeUser?.id}` },
+                    { icon: Settings, label: "Settings", href: `/profile/${storeUser?.id}/edit` },
+                  ].map((item) => (
+                    <a
+                      key={item.label}
+                      href={item.href}
+                      onClick={handleToggle}
+                      className="flex items-center gap-4 px-4 py-3 rounded-xl hover:bg-white/5 transition-all duration-200 group"
+                    >
+                      <item.icon className="w-5 h-5 opacity-70 group-hover:opacity-100" />
+                      <span className="text-sm">{item.label}</span>
+                    </a>
+                  ))}
+                </div>
               </div>
             </SidebarGroupContent>
           </SidebarGroup>
 
-          <SidebarGroup>
-            <SidebarGroupLabel>Support</SidebarGroupLabel>
+          {/* Support */}
+          <SidebarGroup className="mt-8 px-3">
+            <SidebarGroupLabel className="text-xs uppercase tracking-wider opacity-70 px-3 mb-2">Support</SidebarGroupLabel>
             <SidebarGroupContent>
-              <div className="flex flex-col gap-1 px-2">
-                <a
-                  className="flex items-center gap-3 px-2 py-2 rounded-md hover:bg-[hsl(var(--muted))]/40 transition-colors duration-200"
-                  href="/help"
-                >
-                  <LifeBuoy className="w-4 h-4" />
-                  <span className="text-sm">Help Center</span>
-                </a>
-
-                <a
-                  className="flex items-center gap-3 px-2 py-2 rounded-md hover:bg-[hsl(var(--muted))]/40 transition-colors duration-200"
-                  href="/support"
-                >
-                  <MessageCircle className="w-4 h-4" />
-                  <span className="text-sm">Support</span>
-                </a>
-
-                <a
-                  className="flex items-center gap-3 px-2 py-2 rounded-md hover:bg-[hsl(var(--muted))]/40 transition-colors duration-200"
-                  href="/report"
-                >
-                  <AlertCircle className="w-4 h-4" />
-                  <span className="text-sm">Report a problem</span>
-                </a>
+              <div className="space-y-1">
+                {supportItems.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <a
+                      key={item.label}
+                      href={item.url}
+                      onClick={handleToggle}
+                      className="flex items-center gap-4 px-4 py-3 rounded-xl hover:bg-white/5 transition-all duration-200 group"
+                    >
+                      <Icon className="w-5 h-5 opacity-60 group-hover:opacity-100" />
+                      <span className="text-sm">{item.label}</span>
+                    </a>
+                  );
+                })}
               </div>
             </SidebarGroupContent>
           </SidebarGroup>
 
-          {/* Theme Toggle in Sidebar Footer */}
-          <SidebarFooter>
-            <div className="px-3 py-2">
-              <div className="mb-3">
-                <ThemeToggleButton />
-              </div>
-              <div className="mt-3">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="w-full justify-start gap-2 transition-colors duration-200"
-                  onClick={handleSignOut}
-                >
-                  <LogOut className="w-4 h-4" />
-                  <span>Sign Out</span>
-                </Button>
-              </div>
-            </div>
+          {/* Footer */}
+          <SidebarFooter className="mt-auto p-4 space-y-4 border-t border-white/10">
+            <ThemeToggleButton />
+            <Button
+              variant="ghost"
+              className="w-full justify-start gap-3 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+              onClick={handleSignOut}
+            >
+              <LogOut className="w-5 h-5" />
+              <span>Sign Out</span>
+            </Button>
           </SidebarFooter>
         </SidebarContent>
       </Sidebar>
 
-      {/* Main area */}
-      <SidebarInset className="flex-1 min-w-0 flex flex-col transition-all duration-300 ease-in-out">
-        <div className="flex-1 overflow-hidden flex flex-col">
-          {React.isValidElement(children)
-            ? React.cloneElement(children as any, { 
-                sidebarState: state,
-                onSidebarToggle: toggleSidebar
-              })
-            : children}
+      <SidebarInset className="flex-1">
+        <div className="flex-1 overflow-auto">
+          {children}
         </div>
       </SidebarInset>
     </div>
   );
 }
 
-export default function SidebarLayout({ children, side = "right" }: Props) {
+export default function SidebarLayout({
+  children,
+  side = "right",
+  onSidebarToggle,
+}: Props) {
   return (
     <ThemeTransitionWrapper>
       <SidebarProvider>
-        <LayoutContents side={side}>
+        <LayoutContents side={side} onSidebarToggle={onSidebarToggle}>
           {children}
         </LayoutContents>
       </SidebarProvider>

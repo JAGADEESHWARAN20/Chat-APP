@@ -389,7 +389,7 @@ export default function Notifications({
   if (!isAuthenticated) {
     return (
       <Sheet open={isOpen} onOpenChange={handleClose}>
-        <SheetContent side="right" className="w-full sm:max-w-sm">
+        <SheetContent side="right" className="w-full  sm:max-w-sm">
           <SheetHeader className="p-4 border-b">
             <div className="flex items-center gap-3">
               <Button variant="ghost" size="icon" onClick={handleClose}><ArrowRight /></Button>
@@ -409,7 +409,7 @@ export default function Notifications({
 
   return (
     <Sheet open={isOpen} onOpenChange={handleClose}>
-      <SheetContent side="right" className="flex flex-col w-full sm:max-w-sm p-0">
+      <SheetContent side="right" className="flex flex-col w-full sm:max-w-sm p-0" hideCloseButton>
         <SheetHeader className="p-4 border-b">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">

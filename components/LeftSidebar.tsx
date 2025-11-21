@@ -10,7 +10,7 @@ import {
   type RoomWithMembership,
 } from "@/lib/store/roomstore";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Loader2, ChevronRight, MessageSquare, Users, Plus } from "lucide-react";
+import { Loader2,  MessageSquare, Users, Plus, ChevronLeft } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -260,7 +260,7 @@ const LeftSidebar = React.memo<LeftSidebarProps>(({ user, isOpen, onClose, class
         // Layout & Positioning
         "flex flex-col h-full w-full",
         // Mobile: Fixed overlay positioning
-        "fixed inset-y-0 left-0 z-40 w-[85vw] sm:w-[20rem]",
+        "fixed inset-y-0 left-0 z-40 w-full sm:w-[20rem]",
         // Desktop: Static positioning within grid/flex container
         "lg:static lg:w-full lg:z-auto",
         // Transitions (only for mobile slide-in)
@@ -269,24 +269,34 @@ const LeftSidebar = React.memo<LeftSidebarProps>(({ user, isOpen, onClose, class
         "bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 lg:bg-transparent lg:backdrop-blur-none",
         "border-r border-border/40",
         // Visibility State
-        isOpen ? "translate-x-0 shadow-2xl lg:shadow-none" : "-translate-x-full lg:translate-x-0",
+        isOpen ? "translate-x-0  lg:shadow-none" : "-translate-x-full hidden lg:translate-x-0",
         className
       )}
     >
       <Tabs defaultValue="rooms" className="flex flex-col h-full w-full">
         {/* Header Section */}
         <div className="flex-none px-4 py-3">
-          <div className="flex items-center justify-between gap-4 mb-4">
-            <TabsList className="grid w-full grid-cols-2 h-9">
-              <TabsTrigger value="rooms" className="text-xs sm:text-sm">Rooms</TabsTrigger>
-              <TabsTrigger value="chats" className="text-xs sm:text-sm">Chats</TabsTrigger>
-            </TabsList>
-            {onClose && (
-              <Button variant="ghost" size="icon" onClick={onClose} className="lg:hidden h-9 w-9 shrink-0">
-                <ChevronRight className="h-5 w-5 rotate-180" />
-              </Button>
-            )}
-          </div>
+
+
+<div className="flex items-center justify-between gap-4 mb-4">
+  <TabsList className="grid w-full grid-cols-2 h-9">
+    <TabsTrigger value="rooms" className="text-xs sm:text-sm">Rooms</TabsTrigger>
+    <TabsTrigger value="chats" className="text-xs sm:text-sm">Chats</TabsTrigger>
+  </TabsList>
+  
+  {/* Only show close button on mobile when sidebar is open */}
+  {onClose && isOpen && (
+    <Button 
+      variant="ghost" 
+      size="icon" 
+      onClick={onClose} 
+      className=" h-9 w-9 shrink-0"
+      aria-label="Close sidebar"
+    >
+      <ChevronLeft className="h-5 w-5" />
+    </Button>
+  )}
+</div>
 
           {/* Create/Search Area */}
           <div className="relative">
