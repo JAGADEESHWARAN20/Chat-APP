@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUnifiedRoomStore } from "@/lib/store/roomstore";
+import { useSidebar } from "@/components/sidebar"; // ⭐ NEW: detect right sidebar state
 
 import LeftSidebar from "@/components/LeftSidebar";
 import ChatMessages from "@/components/ChatMessages";
@@ -29,39 +30,40 @@ interface UnifiedHomeProps {
 
 export default function UnifiedHome({
   initialSidebarState = "collapsed",
-  onSidebarToggle,
   sidebarState,
-  onSettingsSidebarToggle
+  onSettingsSidebarToggle,
 }: UnifiedHomeProps) {
   const [user, setUser] = useState<any>(null);
   const setRoomUser = useUnifiedRoomStore((s) => s.setUser);
+  
+  // ⭐ LEFT SIDEBAR STATE
+  const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(
+    initialSidebarState === "expanded"
+  );
 
-  const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(initialSidebarState === "expanded");
+  const toggleLeftSidebar = useCallback(() => {
+    setIsLeftSidebarOpen((prev) => !prev);
+  }, []);
 
-  const toggleLeftSidebar = () => {
-    if (onSidebarToggle) {
-      onSidebarToggle();
-    } else {
-      setIsLeftSidebarOpen(prev => !prev);
-    }
-  };
-
+  // ⭐ Detect RIGHT SIDEBAR (SidebarLayout)
+  const { state: rightSidebarState } = useSidebar();
+  const isRightSidebarOpen = rightSidebarState === "expanded";
+  
   const toggleSettingsSidebar = () => {
-    if (onSettingsSidebarToggle) {
-      onSettingsSidebarToggle();
-    } else {
-      window.dispatchEvent(new CustomEvent('toggle-settings-sidebar'));
-    }
+    if (onSettingsSidebarToggle) onSettingsSidebarToggle();
+    else window.dispatchEvent(new CustomEvent("toggle-settings-sidebar"));
   };
-
-  React.useEffect(() => {
+  
+  useEffect(() => {
     if (sidebarState !== undefined) {
       setIsLeftSidebarOpen(sidebarState === "expanded");
     }
   }, [sidebarState]);
-
-  const [activeTab, setActiveTab] = useState<"home" | "search" | "settings">("home");
-
+  
+  const [activeTab, setActiveTab] = useState<"home" | "search" | "settings">(
+    "home"
+  );
+  
   const tabs = useMemo(
     () => [
       { id: "home" as const, icon: Home, label: "Home", onClick: () => setActiveTab("home") },
@@ -77,39 +79,49 @@ export default function UnifiedHome({
       setUser(data.session?.user ?? null);
     });
   }, []);
-
+  
   useEffect(() => {
     if (user) setRoomUser(user);
   }, [user, setRoomUser]);
-
+  
   const headerHeight = "3.6em";
   const inputHeight = "4em";
-  const mobileSidebarWidth = "82dvw"; // Perfect on all phones
-  const zUi = 10;
-  const isMobile = useMediaQuery('(max-width: 768px)');
-
+  
+  const isMobile = useMediaQuery("(max-width: 768px)");
+  
+  
+  const sidebarWidth = isMobile ? 260 : 420;
+  const shiftX = useMemo(() => {
+    if (isLeftSidebarOpen) return sidebarWidth;
+    if (isRightSidebarOpen) return -sidebarWidth;
+    return 0;
+  }, [isLeftSidebarOpen, isRightSidebarOpen, sidebarWidth]);
+  
   return (
     <div className="min-h-screen w-full flex bg-[hsl(var(--background))] text-[hsl(var(--foreground))] overflow-hidden">
-      {/* ===== LEFT SIDEBAR (Now Works Perfectly) ===== */}
+
+      {/* ========== LEFT SIDEBAR ========== */}
       <motion.div
         className={cn(
-          "fixed inset-y-0 left-0 z-50 bg-[hsl(var(--background))] border-r border-[hsl(var(--border))]",
-          "shadow-2xl md:shadow-none md:relative md:z-0",
-          "flex flex-col"
+          "fixed top-0 left-0 bottom-0",
+          "bg-[hsl(var(--background))] border-r border-[hsl(var(--border))] shadow-2xl",
+          "flex flex-col will-change-transform",
+          "z-[300]"
         )}
         initial={false}
         animate={{
-          width: isLeftSidebarOpen ? (isMobile ? mobileSidebarWidth : "var(--sidebar-width, 20rem)") : 0,
-          x: isLeftSidebarOpen ? 0 : (isMobile ? "-100%" : 0),
-        }}
-        transition={{
-          type: "spring",
-          stiffness: 300,
-          damping: 30,
+          x: isLeftSidebarOpen ? 0 : -sidebarWidth,
         }}
         style={{
-          overflow: "hidden",
+          width: sidebarWidth,
         }}
+        
+        transition={{
+          type: "spring",
+          stiffness: 260,
+          damping: 30,
+        }}
+      
       >
         <LeftSidebar
           user={user ? { id: user.id } : null}
@@ -118,48 +130,46 @@ export default function UnifiedHome({
         />
       </motion.div>
 
-      {/* ===== MAIN CONTENT (Shifts on Mobile) ===== */}
+      {/* ========== MAIN CONTENT (NOW RESPONDS TO BOTH SIDEBARS) ========== */}
       <motion.div
-        className="flex-1 flex flex-col min-w-0 relative"
-        animate={{
-          x: isMobile && isLeftSidebarOpen ? mobileSidebarWidth : 0,
-        }}
+        className="flex-1 flex flex-col min-w-0 relative z-[0]"
+        animate={{ x: shiftX }}
+
         transition={{
           type: "spring",
-          stiffness: 300,
+          stiffness: 260,
           damping: 30,
         }}
       >
-        {/* Header */}
+
+        {/* ========== HEADER ========== */}
         <header
           className={cn(
-            "w-full px-4 py-3 border-b flex-none",
-            "bg-[hsl(var(--background))]/0.96 supports-[backdrop-filter]:bg-[hsl(var(--background))]/0.88 backdrop-blur-md"
+            "w-full px-4 py-3 border-b flex-none sticky top-0 z-[200]",
+            "bg-[hsl(var(--background))]/90 backdrop-blur-xl"
           )}
           style={{
             height: headerHeight,
             borderColor: "hsl(var(--border)/0.12)",
-            zIndex: zUi,
           }}
         >
           <div className="flex items-center justify-between h-full w-full">
-            {/* Mobile Menu Button */}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleLeftSidebar}
-              className="w-10 h-10 rounded-xl hover:bg-[hsl(var(--muted))]/40"
-            >
-              <Menu className="w-5 h-5" />
-            </Button>
 
-            {/* Logo */}
-            <h1 className="text-lg md:text-xl font-bold text-[hsl(var(--text-color))]">
+            {/* Left Menu Button + Logo */}
+            <h1 className="text-lg md:text-xl font-bold text-[hsl(var(--text-color))] flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={toggleLeftSidebar}
+                className="w-10 h-10 rounded-xl hover:bg-[hsl(var(--muted))]/40 active:scale-95 transition"
+              >
+                <Menu className="w-5 h-5" />
+              </Button>
               FlyChat
             </h1>
 
             {/* Desktop Tabs */}
-            <div className="hidden md:flex items-center gap-2 p-1 rounded-2xl bg-[hsl(var(--muted))]/50 backdrop-blur-md mx-4 flex-1 max-w-2xl justify-center">
+            <div className="hidden md:flex items-center gap-2 p-1 rounded-2xl backdrop-blur-md mx-4 flex-1 max-w-2xl justify-center">
               {tabs.map(({ id, icon: Icon, label, onClick }) => (
                 <button
                   key={id}
@@ -170,7 +180,7 @@ export default function UnifiedHome({
                   className={cn(
                     "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200",
                     activeTab === id && id !== "settings"
-                      ? "bg-[hsl(var(--action-active))]/20 text-[hsl(var(--action-active))] shadow-inner"
+                      ? "bg-[hsl(var(--action-active))]/20 text-[hsl(var(--action-active))]"
                       : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))]/50"
                   )}
                 >
@@ -187,8 +197,8 @@ export default function UnifiedHome({
                 <NotificationsWrapper />
               </div>
 
-              {/* Mobile Bottom Tabs */}
-              <div className="flex items-center gap-1 sm:hidden">
+              {/* Mobile Action Tabs */}
+              <div className="flex items-center gap-1 lg:hidden">
                 <div className="flex items-center gap-1 p-1 rounded-2xl bg-[hsl(var(--muted))] backdrop-blur-md">
                   {tabs.map(({ id, icon: Icon, onClick }) => {
                     const isActive = activeTab === id && id !== "settings";
@@ -218,7 +228,7 @@ export default function UnifiedHome({
           </div>
         </header>
 
-        {/* Main Content */}
+        {/* ========== MAIN AREA ========== */}
         <main className="flex-1 overflow-hidden relative flex flex-col">
           <AnimatePresence mode="wait" initial={false}>
             {activeTab === "home" && (
@@ -230,18 +240,24 @@ export default function UnifiedHome({
                 transition={{ duration: 0.18 }}
                 className="flex-1 flex w-full"
               >
-                <div className="flex-1 flex flex-col md:w-[60vw] w-full ">
-                  <div style={{ height: headerHeight }} className="flex-shrink-0 px-4 border-b border-[hsl(var(--border)/0.12)]">
+                <div className="flex-1 flex flex-col h-[90vh] md:h-full md:w-[60vw] w-full">
+                  <div
+                    style={{ height: headerHeight }}
+                    className="flex-shrink-0 px-4 border-b border-[hsl(var(--border)/0.12)]"
+                  >
                     <ChatHeader user={user} />
                   </div>
 
-                  <div className="flex-1 flex flex-col  md:w-[60vw] w-full">
+                  <div className="flex-1 flex flex-col md:w-[60vw] w-full">
                     {user && useUnifiedRoomStore.getState().selectedRoomId ? (
                       <>
                         <div className="flex-1 overflow-y-auto scrollbar-thin px-2 sm:px-4">
                           <ChatMessages />
                         </div>
-                        <div style={{ height: inputHeight }} className="flex-shrink-0 px-2 sm:px-4 border-t border-[hsl(var(--border)/0.12)]">
+                        <div
+                          style={{ height: inputHeight }}
+                          className="flex-shrink-0 px-2 sm:px-4 border-t border-[hsl(var(--border)/0.12)]"
+                        >
                           <ChatInput />
                         </div>
                       </>
@@ -252,14 +268,13 @@ export default function UnifiedHome({
                     )}
                   </div>
                 </div>
+
                 <div className="relative md:w-[40vw] w-full hidden md:block">
-                  
-                {/* Coming Soon Overlay */}
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-                  <span className="text-custom-color text-custom-size font-bold opacity-80">
-                    Coming Soon
-                  </span>
-                </div>
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none -z-10">
+                    <span className="text-custom-color text-custom-size font-bold opacity-80">
+                      Coming Soon
+                    </span>
+                  </div>
                 </div>
               </motion.section>
             )}

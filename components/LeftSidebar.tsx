@@ -260,7 +260,7 @@ const LeftSidebar = React.memo<LeftSidebarProps>(({ user, isOpen, onClose, class
         // Layout & Positioning
         "flex flex-col h-full w-full",
         // Mobile: Fixed overlay positioning
-        "fixed inset-y-0 left-0 z-40 w-full sm:w-[20rem]",
+        "fixed inset-y-0 left-0 z-40 w-full ",
         // Desktop: Static positioning within grid/flex container
         "lg:static lg:w-full lg:z-auto",
         // Transitions (only for mobile slide-in)

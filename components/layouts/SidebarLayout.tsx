@@ -41,6 +41,7 @@ import type { Database } from "@/database.types";
 import { cn } from "@/lib/utils";
 import ThemeToggleButton from "@/components/ThemeToggle";
 import { ThemeTransitionWrapper } from "@/components/ThemeTransitionWrapper";
+import { motion } from "framer-motion";
 
 type Props = {
   children: ReactNode;
@@ -67,7 +68,11 @@ const supportItems: { label: string; url: string; icon: LucideIcon }[] = [
 
 function LayoutContents({ children, side = "right", onSidebarToggle }: Props) {
   const router = useRouter();
+  const isMobile = typeof window !== "undefined"
+  ? window.matchMedia("(max-width: 768px)").matches
+  : false;
 
+const sidebarWidth = isMobile ? 260 : 320; 
   const supabase = useMemo(
     () =>
       createBrowserClient<Database>(
@@ -105,10 +110,30 @@ function LayoutContents({ children, side = "right", onSidebarToggle }: Props) {
   };
 
   return (
-<div className={cn("min-h-screen flex flex-row-reverse bg-[hsl(var(--background))]")}>
-      <Sidebar side={side}>
+<div className={cn("min-h-screen flex flex-row-reverse  bg-[hsl(var(--background))]")}>
+<Sidebar
+  side={side}
+  className={cn(
+    "fixed top-0 bottom-0 z-[400]",      // behaves like LeftSidebar
+    side === "right" ? "right-0" : "left-0"
+  )}
+>
+<motion.div
+  initial={false}
+  animate={{
+    x: state === "expanded"
+      ? (isMobile ? sidebarWidth: 0)
+      : side === "right"
+      ? 0  
+      : 0  // slide OFF screen to the left
+  }}
+  transition={{ type: "spring", stiffness: 260, damping: 30 }}
+  style={{ width: sidebarWidth }}
+  className="h-full"
+>
+
         <SidebarContent
-          className="w-[var(--sidebar-width)] bg-[hsl(var(--sidebar-background))] text-[hsl(var(--sidebar-foreground))] border-none"
+          className="w-[var(--sidebar-width)]  bg-[hsl(var(--sidebar-background))] text-[hsl(var(--sidebar-foreground))] border-none"
           style={{
             background: "linear-gradient(145deg, hsl(var(--sidebar-background)) 0%, hsl(var(--sidebar-background)/0.95) 100%)",
             backdropFilter: "blur(20px)",
@@ -226,6 +251,7 @@ function LayoutContents({ children, side = "right", onSidebarToggle }: Props) {
             </Button>
           </SidebarFooter>
         </SidebarContent>
+        </motion.div>
       </Sidebar>
 
       <SidebarInset className="flex-1">
@@ -237,14 +263,10 @@ function LayoutContents({ children, side = "right", onSidebarToggle }: Props) {
   );
 }
 
-export default function SidebarLayout({
-  children,
-  side = "right",
-  onSidebarToggle,
-}: Props) {
+export default function SidebarLayout({ children, side = "right", onSidebarToggle }: Props) {
   return (
     <ThemeTransitionWrapper>
-      <SidebarProvider>
+      <SidebarProvider defaultOpen={false}>   {/* 👈 force collapsed */}
         <LayoutContents side={side} onSidebarToggle={onSidebarToggle}>
           {children}
         </LayoutContents>
