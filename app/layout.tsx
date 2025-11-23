@@ -8,8 +8,7 @@ import RoomInitializer from "@/lib/initialization/RoomInitializer";
 import "@/app/globals.css";
 import ClientInitializer from "@/lib/initialization/clientinitializer";
 
-// <-- add this import
-import SidebarLayout from "@/components/layouts/SidebarLayout";
+
 
 const space_Grotesk = Space_Grotesk({ subsets: ["latin"] });
 
@@ -36,9 +35,9 @@ export default async function RootLayout({
               <RoomInitializer />
 
               {/* Wrap the entire app in SidebarLayout which includes SidebarProvider */}
-              <SidebarLayout>
+             
                 {children}
-              </SidebarLayout>
+             
 
               <ResponsiveToaster />
             </SearchHighlightProvider>

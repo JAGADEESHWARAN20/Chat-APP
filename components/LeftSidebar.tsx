@@ -10,7 +10,7 @@ import {
   type RoomWithMembership,
 } from "@/lib/store/roomstore";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Loader2,  MessageSquare, Users, Plus, ChevronLeft } from "lucide-react";
+import { Loader2,  MessageSquare, Users, Plus, ChevronLeft } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,7 @@ interface LeftSidebarProps {
   isOpen: boolean;
   onClose?: () => void;
   className?: string;
+handleToggleLeft?: () => void;
 }
 
 // extend RoomWithMembership locally for optional fields returned by RPC
@@ -33,7 +34,7 @@ type RoomLocal = RoomWithMembership & {
   online_users?: number;
 };
 
-const LeftSidebar = React.memo<LeftSidebarProps>(({ user, isOpen, onClose, className }) => {
+const LeftSidebar = React.memo<LeftSidebarProps>(({ user, isOpen, onClose, className, handleToggleLeft }) => {
   const authUser = useUser((s) => s.user);
   const selectedRoom = useSelectedRoom();
   const availableRooms = useAvailableRooms();
@@ -88,7 +89,8 @@ const LeftSidebar = React.memo<LeftSidebarProps>(({ user, isOpen, onClose, class
   const handleRoomClick = useCallback((roomId: string) => {
     setSelectedRoomId(roomId);
     // Close sidebar on mobile when a room is selected
-    if (window.innerWidth < 1024 && onClose) {
+    // Note: The logic in UnifiedHome now handles closing based on mobile width (<= 768px)
+    if (onClose) {
       onClose();
     }
   }, [setSelectedRoomId, onClose]);
@@ -257,19 +259,11 @@ const LeftSidebar = React.memo<LeftSidebarProps>(({ user, isOpen, onClose, class
   return (
     <div
       className={cn(
-        // Layout & Positioning
+        // The parent (UnifiedHome) controls the width/position/visibility. 
+        // This component just fills the space it is given.
         "flex flex-col h-full w-full",
-        // Mobile: Fixed overlay positioning
-        "fixed inset-y-0 left-0 z-40 w-full ",
-        // Desktop: Static positioning within grid/flex container
-        "lg:static lg:w-full lg:z-auto",
-        // Transitions (only for mobile slide-in)
-        "transition-transform duration-300 ease-in-out",
-        // Theme & Borders
         "bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 lg:bg-transparent lg:backdrop-blur-none",
-        "border-r border-border/40",
-        // Visibility State
-        isOpen ? "translate-x-0  lg:shadow-none" : "-translate-x-full hidden lg:translate-x-0",
+        "border-r-0", 
         className
       )}
     >
@@ -283,19 +277,32 @@ const LeftSidebar = React.memo<LeftSidebarProps>(({ user, isOpen, onClose, class
     <TabsTrigger value="rooms" className="text-xs sm:text-sm">Rooms</TabsTrigger>
     <TabsTrigger value="chats" className="text-xs sm:text-sm">Chats</TabsTrigger>
   </TabsList>
-  
-  {/* Only show close button on mobile when sidebar is open */}
-  {onClose && isOpen && (
-    <Button 
-      variant="ghost" 
-      size="icon" 
-      onClick={onClose} 
-      className=" h-9 w-9 shrink-0"
-      aria-label="Close sidebar"
-    >
-      <ChevronLeft className="h-5 w-5" />
-    </Button>
-  )}
+
+{handleToggleLeft && (
+  <Button
+    variant="ghost"
+    size="icon"
+    onClick={() => handleToggleLeft?.()}
+    aria-label={isOpen ? "Collapse sidebar" : "Expand sidebar"}
+    className="h-9 w-9 shrink-0 hidden md:inline-flex"
+  >
+    <ChevronLeft className="h-5 w-5" />
+  </Button>
+)}
+
+
+{onClose && isOpen && (
+  <Button
+    variant="ghost"
+    size="icon"
+    onClick={() => onClose?.()}
+    className="h-9 w-9 shrink-0 md:hidden"
+    aria-label="Close sidebar"
+  >
+    <ChevronLeft className="h-5 w-5" />
+  </Button>
+)}
+
 </div>
 
           {/* Create/Search Area */}
@@ -323,7 +330,7 @@ const LeftSidebar = React.memo<LeftSidebarProps>(({ user, isOpen, onClose, class
               </div>
             ) : (
               <div className="flex gap-2">
-                 <div className="relative flex-1">
+                  <div className="relative flex-1">
                     <Input 
                       placeholder="Search rooms..." 
                       onChange={(e) => handleSearchChange(e.target.value)} 
@@ -338,7 +345,7 @@ const LeftSidebar = React.memo<LeftSidebarProps>(({ user, isOpen, onClose, class
                     >
                       <Loader2 className={cn("h-3.5 w-3.5", isLoading && "animate-spin")} />
                     </Button>
-                 </div>
+                  </div>
                 <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setShowCreateRoom(true)} title="Create Room">
                   <Plus className="h-4 w-4" />
                 </Button>
@@ -366,7 +373,7 @@ const LeftSidebar = React.memo<LeftSidebarProps>(({ user, isOpen, onClose, class
                   )}
                 </div>
               ) : (
-                <div className="space-y-1">
+                <div className="space-y-1 z-[99999]">
                   {filteredRooms.map(renderItem)}
                 </div>
               )}
