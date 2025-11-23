@@ -4,53 +4,13 @@
 import { createBrowserClient } from "@supabase/ssr";
 import type { Database } from "@/lib/types/supabase";
 
-type SupabaseBrowserClient = ReturnType<typeof createBrowserClient<Database>>;
+export const getSupabaseBrowserClient = () => 
+  createBrowserClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
 
-class SupabaseClient {
-  private static instance: SupabaseBrowserClient | null = null;
-
-  private constructor() {}
-
-  public static getInstance(): SupabaseBrowserClient {
-    if (this.instance) return this.instance;
-
-    this.instance = createBrowserClient<Database>(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        auth: {
-          // critical: don't persist session to localStorage — rely on server cookies
-          persistSession: false,
-          // detectSessionInUrl: false // optional
-        },
-      }
-    );
-
-    try {
-      this.instance.auth.onAuthStateChange((event) => {
-        if (event === "SIGNED_OUT") {
-          SupabaseClient.clearInstance();
-        }
-      });
-    } catch {
-      // noop
-    }
-
-    return this.instance;
-  }
-
-  public static clearInstance() {
-    try {
-      this.instance?.auth.signOut().catch(() => {});
-    } finally {
-      this.instance = null;
-    }
-  }
-}
-
-export const getSupabaseBrowserClient = () => SupabaseClient.getInstance();
-export const clearSupabaseClient = () => SupabaseClient.clearInstance();
-
+  
 // // lib/supabase/client.ts
 // "use client";
 

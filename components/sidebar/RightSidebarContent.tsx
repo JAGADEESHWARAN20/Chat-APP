@@ -31,6 +31,7 @@ import ThemeToggleButton from "@/components/ThemeToggle";
 import { cn } from "@/lib/utils";
 import { useUser } from "@/lib/store/user";
 import { useRouter } from "next/navigation";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client"; // Import this
 
 type RightSidebarProps = {
   width: number;
@@ -67,10 +68,21 @@ export default function RightSidebarContent({ width, onClose }: RightSidebarProp
   };
 
   const handleSignOut = async () => {
-    // If you use supabase signOut here, keep it — otherwise you can wire in via prop
-    // For safety, we only route to "/" here and expect sign out handled elsewhere if needed.
+    // 1. Initialize client
+    const supabase = getSupabaseBrowserClient();
+    
+    // 2. Actually sign out from Supabase (clears cookies)
+    const { error } = await supabase.auth.signOut();
+    
+    if (error) {
+      console.error("Error signing out:", error);
+    }
+
     if (onClose) onClose();
-    router.replace("/");
+    
+    // 3. Refresh router to clear client cache and redirect
+    router.refresh(); 
+    router.replace("/auth/login");
   };
 
   return (
