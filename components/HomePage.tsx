@@ -5,6 +5,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUnifiedRoomStore } from "@/lib/store/roomstore";
+import RightSidebarContent from "@/components/sidebar/RightSidebarContent"; // new import
 import { useSidebar } from "@/components/sidebar"; // ⭐ NEW: detect right sidebar state
 
 import LeftSidebar from "@/components/LeftSidebar";
@@ -46,7 +47,7 @@ export default function UnifiedHome({
   }, []);
 
   // ⭐ Detect RIGHT SIDEBAR (SidebarLayout)
-  const { state: rightSidebarState } = useSidebar();
+   const { state: rightSidebarState, toggleSidebar } = useSidebar();
   const isRightSidebarOpen = rightSidebarState === "expanded";
   
   const toggleSettingsSidebar = () => {
@@ -91,12 +92,12 @@ export default function UnifiedHome({
   
   
   const sidebarWidth = isMobile ? 260 : 420;
-  const shiftX = useMemo(() => {
-    if (isLeftSidebarOpen) return sidebarWidth;
-    if (isRightSidebarOpen) return -sidebarWidth;
+    const shiftX = useMemo(() => {
+    if (isLeftSidebarOpen) return sidebarWidth;       // left open -> push right
+    if (isRightSidebarOpen) return -sidebarWidth;     // right open -> push left
     return 0;
   }, [isLeftSidebarOpen, isRightSidebarOpen, sidebarWidth]);
-  
+
   return (
     <div className="min-h-screen w-full flex bg-[hsl(var(--background))] text-[hsl(var(--foreground))] overflow-hidden">
 
@@ -296,6 +297,26 @@ export default function UnifiedHome({
 
         <SecureInitUser />
       </motion.div>
+
+       <div
+          aria-hidden={!isRightSidebarOpen ? "true" : "false"}
+          className="absolute top-0 right-0 h-full z-[30] pointer-events-auto"
+          style={{
+            width: sidebarWidth,
+            transform: isRightSidebarOpen ? "translateX(0)" : `translateX(${sidebarWidth}px)`,
+            transition: "transform 260ms cubic-bezier(.2,.9,.2,1)",
+          }}
+        >
+          <RightSidebarContent
+            width={sidebarWidth}
+            onClose={() => {
+              // toggleSidebar will collapse the sidebar inside SidebarProvider
+              toggleSettingsSidebar?.(); // if you pass a handler, or call toggleSidebar()
+              // fallback:
+              if (toggleSidebar) toggleSidebar();
+            }}
+          />
+        </div>
     </div>
   );
 }
