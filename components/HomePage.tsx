@@ -4,9 +4,10 @@ import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
-import { useUnifiedRoomStore } from "@/lib/store/roomstore";
+import {  useUnifiedRoomStore } from "@/lib/store/roomstore";
+
 import RightSidebarContent from "@/components/sidebar/RightSidebarContent";
-import { useSidebar, SidebarProvider } from "@/components/sidebar";
+import {  SidebarProvider } from "@/components/sidebar";
 import LeftSidebar from "@/components/LeftSidebar";
 import ChatMessages from "@/components/ChatMessages";
 import ChatInput from "@/components/ChatInput";
@@ -16,10 +17,11 @@ import SearchComponent from "@/components/SearchComponent";
 import CreateRoomDialog from "@/components/CreateRoomDialog";
 import NotificationsWrapper from "@/components/NotificationsWrapper";
 import SecureInitUser from "@/lib/initialization/secureInitUser";
-import { Home, Search as SearchIcon, Menu, PanelLeft, Settings } from "lucide-react";
+import { Home, Search as SearchIcon,  PanelLeft, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { ThemeTransitionWrapper } from "./ThemeTransitionWrapper";
+import { PresenceConnector } from "./PresenceConnector";
 
 interface UnifiedHomeProps {
   initialSidebarState?: "expanded" | "collapsed";
@@ -153,6 +155,11 @@ function UnifiedHomeContent({
   }, [isMobile, manualRightOpen, SIDEBAR_WIDTH]);
 
   const selectedRoomId = useUnifiedRoomStore((s) => s.selectedRoomId);
+const currentUser = useUnifiedRoomStore((s) => s.user);
+
+
+
+
   // MAIN CONTENT STYLE
   const mainStyle: React.CSSProperties = useMemo(() => {
     if (isMobile) {
@@ -190,7 +197,12 @@ function UnifiedHomeContent({
   );
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground relative">
+    <div className="flex h-[100vh] w-screen overflow-hidden bg-background text-foreground relative">
+      <PresenceConnector 
+  roomId={selectedRoomId} 
+  userId={currentUser?.id ?? null} 
+/>
+
       <SecureInitUser />
 
       {/* --- LEFT SIDEBAR --- */}
@@ -222,15 +234,16 @@ function UnifiedHomeContent({
           style={{ height: HEADER_HEIGHT }}
         >
           <div className="flex items-center gap-3">
-            <Button
+            {activeTab !== "search" && <Button
               variant="ghost"
               size="icon"
               onClick={handleToggleLeft}
-              className={cn("hover:bg-accent rounded-xl", isLeftSidebarOpen && isMobile && "hidden ")}
+              className={cn("hover:bg-accent opacity-60 rounded-xl", isLeftSidebarOpen && isMobile && "hidden ")}
             >
-              {isLeftSidebarOpen ? "" : <Menu className="w-5 h-5" />}
+              {isLeftSidebarOpen ?"":<PanelLeft className="w-[2em] h-[2em]" />}
             </Button>
-            <h1 className="text-lg font-bold block pl-2">FlyChat</h1>
+            }
+            <h1 className="text-[2em] font-bold block pl-2">FlyChat</h1>
           </div>
 
           <div className="flex items-center gap-1 bg-muted/30 p-1 rounded-2xl">
@@ -246,7 +259,7 @@ function UnifiedHomeContent({
                   activeTab === id ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                 )}
               >
-                <Icon className="w-4 h-4" />
+                <Icon className="w-[2em] h-[2em]" />
                 <span className="hidden sm:inline">{label}</span>
               </button>
             ))}
@@ -261,7 +274,7 @@ function UnifiedHomeContent({
               onClick={handleToggleRight}
               className={cn("flex", manualRightOpen && "bg-accent/50")}
             >
-              <Settings className="w-5 h-5" />
+              <Settings className="w-[2em] h-[2em]" />
             </Button>
           </div>
         </header>
@@ -282,16 +295,16 @@ function UnifiedHomeContent({
                 className="flex-1 flex flex-col h-full w-full"
               >
                 <div className="flex-1 flex flex-col h-full pb-[3em] w-full">
-                  <div className="flex-none px-4 py-2 border-b bg-background/50">
+                  <div className="flex-none px-4 pb-[1em] border-b bg-background/50">
                     <ChatHeader user={user} />
                   </div>
-                  <div className="flex-1 flex flex-col w-full overflow-hidden relative">
+                  <div className="flex-1 flex flex-col w-full relative">
                     <div className="absolute inset-0 flex flex-col">
                     {user && selectedRoomId ? (
                         <div className="w-full h-full flex flex-col lg:flex-row">
                           {/* Chat Container */}
-                          <div className="flex-1 flex flex-col h-full">
-                            <div className="flex-1 px-2 sm:px-4 overflow-y-auto">
+                          <div className="flex-1  flex flex-col ">
+                            <div className="flex-1 px-2  ">
                               <ChatMessages />
                             </div>
                             <div className="flex-none border-t bg-background">

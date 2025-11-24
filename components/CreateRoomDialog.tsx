@@ -60,13 +60,13 @@ export default function CreateRoomDialog({ user }: { user: SupabaseUser | undefi
           whileTap={{ scale: 1 }}
           title="Create Room"
           className={cn(
-            "flex items-center justify-center rounded-full w-[2.6em] h-[2.6em]",
+            "flex items-center justify-center rounded-full w-[3.6em] h-[3.6em]",
             "bg-[var(--action-bg)] border border-[var(--action-ring)] shadow-sm",
             "transition-all duration-200 hover:bg-[var(--action-hover)] hover:shadow-lg"
           )}
         >
           <PlusCircle
-            className="h-[1.6em] w-[1.6em] text-[var(--action-active)] transition-colors duration-200 group-hover:fill-[var(--action-active)]"
+            className="h-[2em] w-[2em] text-[var(--action-active)] transition-colors duration-200 group-hover:fill-[var(--action-active)]"
           />
         </motion.button>
       </DialogTrigger>

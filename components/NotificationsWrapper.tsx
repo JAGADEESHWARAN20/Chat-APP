@@ -54,7 +54,7 @@ export default function NotificationsWrapper() {
         whileHover={{ scale: 1 }}
         className={cn(
           "relative flex items-center justify-center rounded-full",
-          "w-[2.6em] h-[2.6em] transition-all duration-300 shadow-sm",
+          "w-[3.6em] h-[3.6em] transition-all duration-300 shadow-sm",
           "bg-[var(--action-bg)] border border-[var(--action-ring)] hover:bg-[var(--action-hover)] hover:shadow-lg",
           !userId && "opacity-50 cursor-not-allowed"
         )}
@@ -76,7 +76,7 @@ export default function NotificationsWrapper() {
         {/* 🔔 Bell Icon */}
         <Bell
           className={cn(
-            "relative z-10 h-5 w-5 transition-colors   duration-200",
+            "relative z-10 h-[2em] w-[2em] transition-colors   duration-200",
             unreadCount > 0
               ? "stroke-[var(--action-active)] fill-[var(--action-active)]"
               : "stroke-[var(--action-text)] group-hover:stroke-[var(--action-active)]"

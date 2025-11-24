@@ -485,6 +485,8 @@ export const useRoomRealtimeSync = (userId: string | null) => {
         setTimeout(() => refreshRooms(), 500);
       }
     };
+    // Real-time Presence Sync For Each Room
+
 
     channel
       .on('postgres_changes', 
@@ -503,6 +505,7 @@ export const useRoomRealtimeSync = (userId: string | null) => {
     };
   }, [userId, refreshRooms, updateRoomMembership, supabase]);
 };
+
 
 // Helper function for fetching users
 export const fetchAllUsers = async () => {
