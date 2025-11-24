@@ -18,6 +18,8 @@ import {
   MoreVertical,
   Maximize2,
   Minimize2,
+  Minimize,
+  Maximize,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -200,10 +202,10 @@ function RoomAssistantComponent(props: RoomAssistantProps) {
  
 
   return (
-    <div className={cn("relative w-full h-full border-none", className)}>
+    <div className={cn("relative w-full h-full ", className)}>
       <Card
         className={cn(
-          "flex flex-col h-full justify-between  rounded-2xl overflow-hidden  transition",
+          "flex flex-col h-full justify-between   rounded-lg overflow-hidden  transition",
           "backdrop-blur-xl ",
           ""
         )}
@@ -388,9 +390,9 @@ function RoomAssistantComponent(props: RoomAssistantProps) {
               className="absolute bottom-2 left-2 text-muted-foreground hover:text-foreground"
             >
               {expandedInput ? (
-                <Minimize2 className="h-4 w-4" />
+                <Minimize className="h-4 w-4 " />
               ) : (
-                <Maximize2 className="h-4 w-4" />
+                <Maximize className="h-4 w-4" />
               )}
             </button>
           </div>

@@ -75,10 +75,10 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 
       <div className="flex items-center space-x-[1.2vw]">
         {/* Message Search */}
-        <div className="relative">
+        <div className="relative ">
           {isMessageSearchOpen && (
             <div
-              className="fixed inset-0 z-[40] backdrop-blur-[0.6em] bg-[hsl(var(--background))]/30 transition-all duration-300 ease-in-out"
+              className="fixed inset-0 z-[40]   bg-[hsl(var(--background))]/30 transition-all duration-300 ease-in-out"
               onClick={() => setIsMessageSearchOpen(false)}
             />
           )}
@@ -103,10 +103,11 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
             </PopoverTrigger>
 
             <PopoverContent
+            side="bottom"
               sideOffset={8}
               align="end"
               className={`
-                relative z-[50] w-[22rem] sm:w-[24rem] p-4 pt-1 pl-1 pr-1 rounded-2xl
+                relative z-[50] w-[24rem] p-4 mr-[-2em]  rounded-2xl
                 border border-[hsl(var(--border))/40]
                 bg-[hsl(var(--background))]/75 
                 backdrop-blur-2xl

@@ -61,7 +61,7 @@ export function RoomAssistantDialog({ roomId, roomName, triggerButton }: any) {
       <DialogContent
         hideCloseButton
         className={cn(
-          "p-0 overflow-hidden flex flex-col transition-all border-none  duration-300",
+          "overflow-hidden flex flex-col transition-all border-transparent border-0 rounded-lg  duration-300",
           isExpanded
             ? "w-[95vw] h-[90vh]"
             : "w-[85vw] h-[58vh]"

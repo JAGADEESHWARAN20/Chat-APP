@@ -23,7 +23,7 @@ export default function Message({ message }: { message: Imessage }) {
   }
 
   const isHighlighted = highlightedMessageId === message.id;
-  const highlightClass = isHighlighted ? "bg-slate-300 dark:bg-slate-300/40 border-l-[.5vw] border-slate-900 dark:border-white duration-100" : "duration-100";
+  const highlightClass = isHighlighted ? " border-l-[.5vw] border-slate-900 dark:border-white duration-100" : "duration-100";
 
   return (
     <div id={`msg-${message.id}`} className={`flex gap-2 items-center p-[.3em] ${highlightClass}`}>
@@ -102,7 +102,7 @@ const MessageMenu = ({ message }: { message: Imessage }) => {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="text-gray-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-full p-1 transition-colors">
+      <DropdownMenuTrigger className="text-gray-400 hover:text-white  rounded-full p-1 transition-colors">
         <MoreHorizontal className="h-5 w-5" />
       </DropdownMenuTrigger>
       <DropdownMenuContent

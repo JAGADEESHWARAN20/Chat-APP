@@ -121,6 +121,25 @@
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
 @layer utilities {
+
+  /* Remove ALL focus outlines from Radix DropdownMenu components */
+[data-radix-dropdown-menu-trigger]:focus,
+[data-radix-dropdown-menu-trigger]:focus-visible,
+[data-radix-popup-content]:focus,
+[data-radix-popup-content]:focus-visible,
+[data-radix-dropdown-menu-item]:focus,
+[data-radix-dropdown-menu-item]:focus-visible,
+[data-radix-dropdown-menu-subtrigger]:focus,
+[data-radix-dropdown-menu-subtrigger]:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+.no-focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
   .text-room {
     color: hsl(var(--room-text));
   }
