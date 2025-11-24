@@ -27,7 +27,7 @@ export default function ThemeToggleButton() {
   };
 
   return (
-    <div className="flex items-center gap-4 select-none">
+    <div className="flex items-center gap-4 pl-[1.3em] select-none">
       {/* Elegant Label */}
       <motion.div
         key={isDark ? "dark" : "light"}
@@ -50,7 +50,7 @@ export default function ThemeToggleButton() {
           relative group p-0 w-16 h-16 rounded-2xl overflow-hidden
           border border-white/10 shadow-2xl
           backdrop-blur-2xl
-          hover:scale-110 active:scale-95
+           active:scale-[1.2]
           transition-all duration-400
         "
         style={{
@@ -65,7 +65,7 @@ export default function ThemeToggleButton() {
         {/* Subtle Inner Glow Orb (no solid bg) */}
         <div className="absolute inset-0 opacity-40 pointer-events-none">
           <div
-            className="absolute inset-2 rounded-2xl blur-2xl"
+            className="absolute inset-0 rounded-2xl blur-2xl"
             style={{
               background: isDark
                 ? "radial-gradient(circle at 30% 30%, hsl(240 90% 70% / 0.4), transparent 70%)"
@@ -78,25 +78,15 @@ export default function ThemeToggleButton() {
         <AnimatePresence mode="wait">
           <motion.div
             key={isDark ? "moon" : "sun"}
-            initial={{ rotateY: 180, opacity: 0, scale: 0.8 }}
+            initial={{ rotateY: 180, opacity: 0, scale: 1 }}
             animate={{ rotateY: 0, opacity: 1, scale: 1 }}
-            exit={{ rotateY: -180, opacity: 0, scale: 0.8 }}
+            exit={{ rotateY: -180, opacity: 0, scale: 1 }}
             transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
             className="relative z-10 flex items-center justify-center w-full h-full"
           >
             {isDark ? (
               // MOON — Dark Mode (clean blue glow)
-              <Moon
-                className="w-9 h-9"
-                strokeWidth={2}
-                style={{
-                  color: "hsl(var(--sidebar-foreground))",
-                  filter: "drop-shadow(0 0 16px hsl(240 90% 70% / 0.6))",
-                }}
-              />
-            ) : (
-              // SUN — Light Mode (warm golden glow)
-              <div className="relative">
+               <div className="relative">
                 <Sun
                   className="w-10 h-10"
                   strokeWidth={2.2}
@@ -105,11 +95,19 @@ export default function ThemeToggleButton() {
                     filter: "drop-shadow(0 0 20px hsl(48 100% 67% / 0.7))",
                   }}
                 />
-                {/* Pulsing aura — no background */}
-                <div className="absolute -inset-6 animate-ping opacity-60">
-                  <div className="h-full w-full rounded-full border-4 border-orange-400/30" />
-                </div>
+               
               </div>
+             
+            ) : (
+              // SUN — Light Mode (warm golden glow)
+              <Moon
+                className="w-9 h-9"
+                strokeWidth={2}
+                style={{
+                  color: "hsl(var(--sidebar-foreground))",
+                  filter: "drop-shadow(0 0 16px hsl(240 90% 70% / 0.6))",
+                }}
+              />
             )}
           </motion.div>
         </AnimatePresence>

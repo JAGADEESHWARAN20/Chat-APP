@@ -21,10 +21,7 @@ import {
   AlertCircle,
   LogOut,
   LucideIcon,
-  Home,
-  Inbox,
-  Calendar,
-  Search,
+ 
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import ThemeToggleButton from "@/components/ThemeToggle";
@@ -38,13 +35,13 @@ type RightSidebarProps = {
   onClose?: () => void;
 };
 
-const mainItems: { title: string; url: string; icon: LucideIcon }[] = [
-  { title: "Home", url: "#", icon: Home },
-  { title: "Inbox", url: "#", icon: Inbox },
-  { title: "Calendar", url: "#", icon: Calendar },
-  { title: "Search", url: "#", icon: Search },
-  { title: "Settings", url: "#", icon: Settings },
-];
+// const mainItems: { title: string; url: string; icon: LucideIcon }[] = [
+//   { title: "Home", url: "#", icon: Home },
+//   { title: "Inbox", url: "#", icon: Inbox },
+//   { title: "Calendar", url: "#", icon: Calendar },
+//   { title: "Search", url: "#", icon: Search },
+//   { title: "Settings", url: "#", icon: Settings },
+// ];
 
 const supportItems: { label: string; url: string; icon: LucideIcon }[] = [
   { label: "Help Center", url: "/help", icon: LifeBuoy },
@@ -92,13 +89,13 @@ export default function RightSidebarContent({ width, onClose }: RightSidebarProp
         width,
         background:
           "linear-gradient(145deg, hsl(var(--sidebar-background)) 0%, hsl(var(--sidebar-background)/0.95) 100%)",
-        backdropFilter: "blur(20px)",
+       
         minHeight: "100vh",
       }}
     >
       <SidebarContent className="w-full border-none" style={{ height: "100%" }}>
         {/* Application Menu */}
-        <SidebarGroup className="px-3 ">
+        {/* <SidebarGroup className="px-3 ">
           <SidebarGroupLabel className="text-xs uppercase tracking-wider opacity-70 px-3 mb-1">
             Application
           </SidebarGroupLabel>
@@ -134,7 +131,7 @@ export default function RightSidebarContent({ width, onClose }: RightSidebarProp
               })}
             </SidebarMenu>
           </SidebarGroupContent>
-        </SidebarGroup>
+        </SidebarGroup> */}
 
         {/* Account Section */}
         <SidebarGroup className="mt-2 px-3">
@@ -150,7 +147,7 @@ export default function RightSidebarContent({ width, onClose }: RightSidebarProp
                 onClick={() => handleItemClick(`/profile/${storeUser?.id}`)}
                 className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 hover:bg-white/10 transition-all duration-300 group cursor-pointer"
               >
-                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[hsl(var(--sidebar-primary))] to-[hsl(var(--sidebar-primary)/0.7)] flex items-center justify-center text-white font-bold text-lg shadow-lg">
+                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[hsl(var(--sidebar-primary))] to-[hsl(var(--sidebar-primary)/0.7)] flex items-center justify-center text-[hsl(var(--room-text))] font-bold text-lg ">
                   {displayName.charAt(0).toUpperCase()}
                 </div>
                 <div className="flex-1">
@@ -184,7 +181,7 @@ export default function RightSidebarContent({ width, onClose }: RightSidebarProp
         </SidebarGroup>
 
         {/* Support */}
-        <SidebarGroup className="mt-8 px-3">
+        <SidebarGroup className="mt-2 px-3">
           <SidebarGroupLabel className="text-xs uppercase tracking-wider opacity-70 px-3 mb-2">
             Support
           </SidebarGroupLabel>
@@ -208,12 +205,7 @@ export default function RightSidebarContent({ width, onClose }: RightSidebarProp
                 );
               })}
             </div>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        {/* Footer */}
-        <SidebarFooter className="mt-auto p-4 space-y-4 border-t border-white/10">
-          <ThemeToggleButton />
+            <ThemeToggleButton />
           <Button
             variant="ghost"
             className="w-full justify-start gap-3 text-red-400 hover:text-red-300 hover:bg-red-500/10"
@@ -222,7 +214,10 @@ export default function RightSidebarContent({ width, onClose }: RightSidebarProp
             <LogOut className="w-5 h-5" />
             <span>Sign Out</span>
           </Button>
-        </SidebarFooter>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+       
       </SidebarContent>
     </div>
   );

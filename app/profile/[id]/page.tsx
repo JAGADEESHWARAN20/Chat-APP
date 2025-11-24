@@ -54,7 +54,7 @@ export default function ProfilePage() {
   }, [supabase])
 
   if (!profile) return (
-     <div className="max-w-xl mx-auto mt-8 p-8 bg-card text-card-foreground shadow-xl rounded-2xl border border-border">
+     <div className=" mx-auto mt-8 p-8 bg-card text-card-foreground shadow-xl rounded-2xl border border-border">
       {/* Skeleton for the Back Button */}
       <Skeleton className="h-6 w-24 mb-6" />
       <hr className="mb-6 border-border" />
@@ -85,7 +85,7 @@ export default function ProfilePage() {
   )
 
   return (
-    <div className="max-w-xl mx-auto  p-3 bg-card text-card-foreground shadow-xl rounded-2xl border border-border">
+    <div className=" mx-[1em] my-[1em]  p-3 bg-card text-card-foreground  rounded-2xl border border-border">
       {/* Back Button */}
       <Button
         onClick={() => router.back()}
@@ -95,8 +95,8 @@ export default function ProfilePage() {
         
       </Button>
       <hr className="mb-6 border-border"/>
-
-      <div className="flex items-center gap-6">
+<div className="px-[2em]">
+      <div className="flex items-center gap-6 ">
         {profile.avatar_url ? (
           <Image
             src={profile.avatar_url}
@@ -131,6 +131,7 @@ export default function ProfilePage() {
             : "Unknown"}
         </div>
       </div>
+            </div>
 
       {/* ✅ Edit Profile Button */}
       <div className="mt-8">

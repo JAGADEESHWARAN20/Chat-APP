@@ -425,7 +425,7 @@ useEffect(() => {
   /* ---------- UI: loading skeleton ---------- */
   if (loading) {
     return (
-      <div className="max-w-2xl mx-auto p-4 md:p-6 space-y-6 animate-fade-in">
+      <div className="mx-[1em] my-[1em]  p-4 md:p-6 space-y-6 animate-fade-in">
         <div className="flex items-center justify-between">
           <Skeleton className="h-8 w-24 rounded-md" />
           <Skeleton className="h-6 w-32 rounded-full" />
@@ -464,7 +464,7 @@ useEffect(() => {
 
   /* ---------- main UI ---------- */
   return (
-    <div className="max-w-2xl mx-auto p-4 md:p-6 space-y-6 animate-fade-in">
+    <div className=" mx-[1em] my-[1em] p-4 md:p-6 space-y-6 animate-fade-in ">
       <div className="flex items-center justify-between animate-slide-in">
         <Button
           onClick={() => router.back()}
@@ -480,7 +480,7 @@ useEffect(() => {
         </Badge>
       </div>
 
-      <Card className="border-0 shadow-xl overflow-hidden">
+      <Card className="overflow-y-scroll h-[85vh] scrollbar-thin ">
         <CardHeader className="bg-gradient-to-r from-primary/5 to-secondary/5 pb-6">
           <CardTitle className="text-3xl font-bold flex items-center gap-3">
             <User className="w-8 h-8 text-primary" />
