@@ -87,13 +87,13 @@ export default function ProfilePage() {
   return (
     <div className="max-w-xl mx-auto  p-3 bg-card text-card-foreground shadow-xl rounded-2xl border border-border">
       {/* Back Button */}
-      <button
+      <Button
         onClick={() => router.back()}
-        className="flex items-center text-muted-foreground hover:text-foreground transition-colors mb-6"
+        className="flex items-center text-muted-foreground  transition-colors mb-6"
       >
-        <ChevronLeft className="w-5 h-5 mr-1" />
-        <span className="text-base font-medium">Back</span>
-      </button>
+        <ChevronLeft className="w-full h-full stroke-white" />
+        
+      </Button>
       <hr className="mb-6 border-border"/>
 
       <div className="flex items-center gap-6">

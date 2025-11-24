@@ -60,14 +60,19 @@ interface RoomAssistantProps {
   dialogMode?: boolean;
   isExpanded?: boolean;
   onToggleExpand?: () => void;
+  messages: ChatMessage[];
+  setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
+  loadingHistory: boolean;
 }
 
-interface ChatMessage {
+
+export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
   timestamp: Date;
   model?: string;
+  structuredData?: any;
 }
 
 interface SummarizeResponse {
@@ -86,22 +91,27 @@ interface HistoryResponse {
   error?: string;
 }
 
-function RoomAssistantComponent({
-  roomId,
-  roomName,
-  className,
-  dialogMode = false,
-  isExpanded: externalExpand,
-  onToggleExpand,
-}: RoomAssistantProps) {
+function RoomAssistantComponent(props: RoomAssistantProps) {
+  const {
+    roomId,
+    roomName,
+    className,
+    
+    isExpanded: externalExpand,
+    onToggleExpand,
+    messages,
+    setMessages,
+    loadingHistory,
+  } = props;
+
   const { theme, setTheme } = useTheme();
   const { user } = useUnifiedRoomStore();
 
   const [prompt, setPrompt] = useState("");
   const [model, setModel] = useState("gpt-4o-mini");
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+
   const [loading, setLoading] = useState(false);
-  const [historyLoading, setHistoryLoading] = useState(true);
+
 
   const [, startTransition] = useTransition();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -110,32 +120,7 @@ function RoomAssistantComponent({
 
   const isExpanded = externalExpand ?? expandedInput;
 
-  /* ------------------ Fetch History ------------------ */
-  useEffect(() => {
-    let mount = true;
-    
-    const fetchHistory = async () => {
-      if (!roomId) return;
-      setHistoryLoading(true);
-
-      try {
-        const res = await fetch(`/api/ai-chat/history?roomId=${roomId}`);
-        const data: HistoryResponse = await res.json();
-        
-        if (mount && data.success && data.messages) {
-          setMessages(data.messages);
-        }
-      } catch (error) {
-        console.error("Failed to fetch history:", error);
-      } finally { 
-        if (mount) setHistoryLoading(false); 
-      }
-    };
-
-    fetchHistory();
-
-    return () => { mount = false; };
-  }, [roomId]);
+  
 
   /* ------------------ Auto Scroll ------------------ */
   useEffect(() => {
@@ -212,24 +197,15 @@ function RoomAssistantComponent({
     }
   };
 
-  /* ------------------ Loading UI ------------------ */
-  if (historyLoading) {
-    return (
-      <div className="w-full h-full flex flex-col gap-2 justify-center px-6">
-        <MessageSkeleton />
-        <MessageSkeleton />
-        
-      </div>
-    );
-  }
+ 
 
   return (
-    <div className={cn("relative w-full h-full", className)}>
+    <div className={cn("relative w-full h-full border-none", className)}>
       <Card
         className={cn(
-          "flex flex-col h-full justify-between rounded-2xl overflow-hidden shadow-lg transition",
-          "backdrop-blur-xl border border-border/30",
-          "bg-[hsl(var(--card))]/70 dark:bg-[hsl(var(--card))]/50"
+          "flex flex-col h-full justify-between  rounded-2xl overflow-hidden  transition",
+          "backdrop-blur-xl ",
+          ""
         )}
       >
         {/* HEADER */}
@@ -292,21 +268,16 @@ function RoomAssistantComponent({
               </PopoverTrigger>
 
               <PopoverContent
+              side="left"
                 className={cn(
-                  "w-52 p-3 shadow-md rounded-xl",
+                  "w-52 mt-[6em] shadow-md rounded-xl",
                   "bg-[hsl(var(--popover))] border border-border/30"
                 )}
               >
                 <div className="space-y-2 text-xs">
-                  <div className="flex justify-between items-center">
-                    <span>Dark Mode</span>
-                    <Switch
-                      checked={theme === "dark"}
-                      onCheckedChange={(v: boolean) => setTheme(v ? "dark" : "light")}
-                    />
-                  </div>
+                  
 
-                  <Separator className="my-2" />
+                
 
                   <Button
                     variant="ghost"
@@ -351,7 +322,12 @@ function RoomAssistantComponent({
           )}
         >
           <AnimatePresence mode="popLayout">
-            {messages.length > 0 ? (
+          {loadingHistory ? (
+  <div className="w-full h-full flex flex-col gap-2 justify-center px-6">
+    <MessageSkeleton />
+    <MessageSkeleton />
+  </div>
+) : messages.length > 0 ? (
               messages.map((msg, i) => {
                 if (msg.role !== "user") return null;
                 const next = messages[i + 1];

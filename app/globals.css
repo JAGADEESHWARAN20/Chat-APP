@@ -9,7 +9,10 @@
 @layer base {
   :root {
     /* Light theme */
-     --message-text-color: 224 71.4% 4.1%; /* Same as foreground */
+    --room-text: 224 71.4% 4.1%;                 /* Normal text */
+    --room-text-active: 262.1 83.3% 57.8%;       /* Primary color when active */
+
+    --message-text-color: 224 71.4% 4.1%; /* Same as foreground */
     --message-text-size: 1.22em; /* Your existing text size */
     --message-sender-color: 224 71.4% 4.1%; /* Same as foreground */
     --message-sender-size: 0.875rem; /* 14px for sender name */
@@ -44,7 +47,7 @@
     --z-ui: 10;  /* main UI z-level */
     --z-overlay: 20; /* popovers, modals that should sit above core UI */
     --z-top: 50; /* toasts/alerts that must always be on top */
-     --text-color: 224 71.4% 4.1%; /* Change from #000 to HSL format */
+    --text-color: 224 71.4% 4.1%; /* Change from #000 to HSL format */
     --text-size: 4em;
     --action-bg: hsl(240 80% 95%);
     --action-hover: hsl(240 100% 88%);
@@ -63,7 +66,9 @@
 
   .dark {
     /* Dark theme */
-     --message-text-color: 210 20% 98%; /* Same as foreground */
+    --room-text: 217.9 10.6% 64.9%;              /* Muted foreground */
+    --room-text-active: 263.4 70% 50.4%;         /* Primary accent */
+    --message-text-color: 210 20% 98%; /* Same as foreground */
     --message-text-size: 1.22em; /* Your existing text size */
     --message-sender-color: 210 20% 98%; /* Same as foreground */
     --message-sender-size: 0.875rem; /* 14px for sender name */
@@ -92,14 +97,14 @@
     --ring: 263.4 70% 50.4%;
     --text-color: 210 20% 98%; /* Change from #fff to HSL format */
     --text-size: 4em;
-      --sidebar-width: 26rem;
+    --sidebar-width: 26rem;
     --sidebar-width-icon: 3rem;
-     --z-mask: 0; /* mask under UI by default */
-  --z-ui: 10;  /* main UI z-level */
-  --z-overlay: 20; /* popovers, modals that should sit above core UI */
-  --z-top: 50; /* toasts/alerts that must always be on top */
-  --text-color:#000;
-  --text-color-sidebar:#fff;
+    --z-mask: 0; /* mask under UI by default */
+    --z-ui: 10;  /* main UI z-level */
+    --z-overlay: 20; /* popovers, modals that should sit above core UI */
+    --z-top: 50; /* toasts/alerts that must always be on top */
+    --text-color:#000;
+    --text-color-sidebar:#fff;
 
     --action-bg: hsl(240 35% 20%);
     --action-hover: hsl(240 50% 25%);
@@ -116,6 +121,14 @@
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
 @layer utilities {
+  .text-room {
+    color: hsl(var(--room-text));
+  }
+  
+  .text-room-active {
+    color: hsl(var(--room-text-active));
+  }
+  
   .text-custom-size {
     font-size: var(--text-size);
   }

@@ -17,15 +17,8 @@ import {
 } from "@/components/ui/tooltip";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
+import { ChatMessage } from "../RoomAssistant";
 
-export interface ChatMessage {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  timestamp: string | Date;
-  model?: string;
-  structuredData?: any;
-}
 
 function formatTimestamp(value?: string | Date): string {
   if (!value) return "";

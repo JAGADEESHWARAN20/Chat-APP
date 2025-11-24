@@ -68,7 +68,7 @@ function UnifiedHomeContent({
 
   // --- 2. Layout Constants ---
   const isMobile = useMediaQuery("(max-width: 768px)");
-  const SIDEBAR_WIDTH = isMobile ? 280 : 420; // 280px is standard mobile sidebar width
+  const SIDEBAR_WIDTH = isMobile ? 280 : 520; // 280px is standard mobile sidebar width
   const HEADER_HEIGHT = "60px";
 
   // --- 3. State Management ---
@@ -117,7 +117,7 @@ function UnifiedHomeContent({
         transform: isLeftSidebarOpen ? "translateX(0%)" : "translateX(-100%)",
         transition: "transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
         zIndex: 50, // Above header
-        boxShadow: isLeftSidebarOpen ? "5px 0 15px rgba(0,0,0,0.1)" : "none",
+        
       };
     }
     // Desktop: Flex resizing
@@ -141,18 +141,18 @@ function UnifiedHomeContent({
         transform: manualRightOpen ? "translateX(0%)" : "translateX(100%)",
         transition: "transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
         zIndex: 50, // Above header
-        boxShadow: manualRightOpen ? "-5px 0 15px rgba(0,0,0,0.1)" : "none",
+        
       };
     }
     // Desktop: Flex resizing
     return {
-      width: manualRightOpen ? `${SIDEBAR_WIDTH - 120}px` : "0px",
+      width: manualRightOpen ? `${SIDEBAR_WIDTH - 20}px` : "0px",
       transform: "none",
       transition: "width 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
     };
   }, [isMobile, manualRightOpen, SIDEBAR_WIDTH]);
 
-  // MAIN CONTENT STYLE
+  const selectedRoomId = useUnifiedRoomStore((s) => s.selectedRoomId);
   // MAIN CONTENT STYLE
   const mainStyle: React.CSSProperties = useMemo(() => {
     if (isMobile) {
@@ -173,8 +173,8 @@ function UnifiedHomeContent({
 
     // Desktop: Push content using Margins (layout reflow)
     return {
-      marginLeft: isLeftSidebarOpen ? `${SIDEBAR_WIDTH-420}px` : "0px",
-      marginRight: manualRightOpen ? `${SIDEBAR_WIDTH - 420}px` : "0px",
+      marginLeft: isLeftSidebarOpen ? `${SIDEBAR_WIDTH-520}px` : "0px",
+      marginRight: manualRightOpen ? `${SIDEBAR_WIDTH - 520}px` : "0px",
       transition: "margin 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
     };
   }, [isMobile, isLeftSidebarOpen, manualRightOpen, SIDEBAR_WIDTH]);
@@ -226,11 +226,11 @@ function UnifiedHomeContent({
               variant="ghost"
               size="icon"
               onClick={handleToggleLeft}
-              className={cn("hover:bg-accent rounded-xl", isLeftSidebarOpen && !isMobile && "bg-accent/50")}
+              className={cn("hover:bg-accent rounded-xl", isLeftSidebarOpen && isMobile && "hidden ")}
             >
-              {isLeftSidebarOpen ? <PanelLeft className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              {isLeftSidebarOpen ? "" : <Menu className="w-5 h-5" />}
             </Button>
-            <h1 className="text-lg font-bold hidden sm:block">FlyChat</h1>
+            <h1 className="text-lg font-bold block pl-2">FlyChat</h1>
           </div>
 
           <div className="flex items-center gap-1 bg-muted/30 p-1 rounded-2xl">
@@ -267,17 +267,9 @@ function UnifiedHomeContent({
         </header>
 
         {/* Content Body */}
-        <div className="flex-1 overflow-hidden relative flex flex-col">
-          {/* Optional: Simple click mask to close sidebar on mobile if user clicks main content */}
-          {isMobile && (isLeftSidebarOpen || manualRightOpen) && (
-            <div 
-              className="absolute inset-0 z-30 bg-black/20"
-              onClick={() => {
-                setIsLeftSidebarOpen(false);
-                setManualRightOpen(false);
-              }}
-            />
-          )}
+        <div className="flex-1 overflow-hidden  relative flex flex-col">
+         
+          
 
           <AnimatePresence mode="wait" initial={false}>
             {activeTab === "home" && (
@@ -289,13 +281,13 @@ function UnifiedHomeContent({
                 transition={{ duration: 0.2 }}
                 className="flex-1 flex flex-col h-full w-full"
               >
-                <div className="flex-1 flex flex-col h-full w-full">
+                <div className="flex-1 flex flex-col h-full pb-[3em] w-full">
                   <div className="flex-none px-4 py-2 border-b bg-background/50">
                     <ChatHeader user={user} />
                   </div>
                   <div className="flex-1 flex flex-col w-full overflow-hidden relative">
                     <div className="absolute inset-0 flex flex-col">
-                      {user && useUnifiedRoomStore.getState().selectedRoomId ? (
+                    {user && selectedRoomId ? (
                         <div className="w-full h-full flex flex-col lg:flex-row">
                           {/* Chat Container */}
                           <div className="flex-1 flex flex-col h-full">

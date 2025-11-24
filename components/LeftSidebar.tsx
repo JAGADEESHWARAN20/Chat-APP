@@ -262,7 +262,7 @@ const LeftSidebar = React.memo<LeftSidebarProps>(({ user, isOpen, onClose, class
         // The parent (UnifiedHome) controls the width/position/visibility. 
         // This component just fills the space it is given.
         "flex flex-col h-full w-full",
-        "bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 lg:bg-transparent lg:backdrop-blur-none",
+        "  z-[50]  lg:bg-transparent lg:backdrop-blur-none",
         "border-r-0", 
         className
       )}
@@ -356,7 +356,7 @@ const LeftSidebar = React.memo<LeftSidebarProps>(({ user, isOpen, onClose, class
 
         {/* Content Section (Flex-1 to fill remaining height) */}
         <div className="flex-1 min-h-0 relative w-full">
-           <TabsContent value="rooms" className="absolute inset-0 m-0 flex flex-col">
+           <TabsContent value="rooms" className="absolute inset-0 z-[50] m-0 flex flex-col">
             <div className="flex-1 overflow-y-auto scrollbar-thin px-3 pb-3">
               {isLoading && !filteredRooms.length ? (
                 <div className="flex justify-center items-center h-32">

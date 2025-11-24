@@ -208,22 +208,28 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                       className={cn(
                         "flex justify-between items-center gap-3 p-3 rounded-xl border transition-all duration-300 cursor-pointer",
                         isActive
-                          ? "bg-[hsl(var(--action-active))]/10 border-[hsl(var(--action-active))]/40"
+                          ? "bg-[hsl(240,70%,60%)]/10 border-[hsl(var(--action-active))]/40"
                           : "bg-[hsl(var(--muted))]/30 border-[hsl(var(--border))/30] hover:bg-[hsl(var(--action-active))]/5"
                       )}
                       onClick={() => handleRoomSwitch(room.id)}
                     >
                       <div className="flex flex-col truncate">
-                        <span className={cn("font-semibold text-sm truncate", isActive ? "text-[hsl(var(--action-active))]" : "text-[hsl(var(--foreground))]")}>
+                      <span
+                          className={cn(
+                            "font-bold text-sm truncate",
+                            isActive ? "text-room-active" : "text-room",
+                          )}
+                        >
                           {room.name}
                         </span>
+
                         <RoomActiveUsers roomId={room.id} />
                       </div>
 
                       <Switch
                         checked={isActive}
                         onCheckedChange={() => handleRoomSwitch(room.id)}
-                        className={cn("data-[state=checked]:bg-[hsl(var(--action-active))] data-[state=unchecked]:bg-[hsl(var(--muted))]/40")}
+                        className={cn("data-[state=checked]:bg-[hsl(240,70%,60%)] data-[state=unchecked]:bg-[hsl(var(--muted))]/40")}
                       />
                     </motion.div>
                   );

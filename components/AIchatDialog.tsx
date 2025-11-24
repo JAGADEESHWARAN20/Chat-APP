@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -12,17 +12,48 @@ import {
 import { Bot, X } from "lucide-react";
 import RoomAssistantComponent from "./RoomAssistant";
 import { cn } from "@/lib/utils";
+import { ChatMessage } from "./RoomAssistant";
+
+
+import { MessageSkeleton } from "./RoomAssistantParts/MessageSkeleton";
 
 export function RoomAssistantDialog({ roomId, roomName, triggerButton }: any) {
   const [open, setOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
-
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  useEffect(() => {
+    if (!open || !roomId) return;
+  
+    let active = true;
+  
+    async function loadHistory() {
+      setHistoryLoading(true);
+      try {
+        const res = await fetch(`/api/ai-chat/history?roomId=${roomId}`);
+        const data = await res.json();
+  
+        if (active && data.success) {
+          setMessages(data.messages || []);
+        }
+      } catch (err) {
+        console.error("Failed to load AI history", err);
+      } finally {
+        if (active) setHistoryLoading(false);
+      }
+    }
+  
+    loadHistory();
+  
+    return () => { active = false; };
+  }, [open, roomId]);
+    
   const defaultTrigger = (
     <Button variant="ghost" size="icon">
       <Bot className="h-5 w-5" />
     </Button>
   );
-
+  
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{triggerButton || defaultTrigger}</DialogTrigger>
@@ -30,7 +61,7 @@ export function RoomAssistantDialog({ roomId, roomName, triggerButton }: any) {
       <DialogContent
         hideCloseButton
         className={cn(
-          "p-0 overflow-hidden flex flex-col transition-all duration-300",
+          "p-0 overflow-hidden flex flex-col transition-all border-none  duration-300",
           isExpanded
             ? "w-[95vw] h-[90vh]"
             : "w-[85vw] h-[58vh]"
@@ -46,12 +77,16 @@ export function RoomAssistantDialog({ roomId, roomName, triggerButton }: any) {
         </DialogClose>
 
         <RoomAssistantComponent
-          roomId={roomId}
-          roomName={roomName}
-          dialogMode
-          isExpanded={isExpanded}
-          onToggleExpand={() => setIsExpanded(!isExpanded)}
-        />
+  roomId={roomId}
+  roomName={roomName}
+  dialogMode
+  isExpanded={isExpanded}
+  onToggleExpand={() => setIsExpanded(!isExpanded)}
+  messages={messages}
+  setMessages={setMessages}
+  loadingHistory={historyLoading}
+/>
+
       </DialogContent>
     </Dialog>
   );

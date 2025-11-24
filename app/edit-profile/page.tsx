@@ -466,15 +466,15 @@ useEffect(() => {
   return (
     <div className="max-w-2xl mx-auto p-4 md:p-6 space-y-6 animate-fade-in">
       <div className="flex items-center justify-between animate-slide-in">
-        <button
+        <Button
           onClick={() => router.back()}
-          className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-all duration-200 hover:scale-105"
+          className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-all duration-200 scale-135"
           disabled={saving || uploading}
           aria-label="Go back"
         >
-          <ChevronLeft className="w-4 h-4" />
-          Back
-        </button>
+          <ChevronLeft className="w-full h-full stroke-white " />
+          
+        </Button>
         <Badge variant="outline" className="text-sm border-primary/50 bg-gradient-to-r from-primary/5 to-secondary/5">
           Premium Editor
         </Badge>
