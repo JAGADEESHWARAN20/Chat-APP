@@ -265,6 +265,7 @@ export type Database = {
           created_at: string | null
           display_name: string | null
           id: string
+          last_login: string | null
           updated_at: string | null
           username: string | null
         }
@@ -274,6 +275,7 @@ export type Database = {
           created_at?: string | null
           display_name?: string | null
           id: string
+          last_login?: string | null
           updated_at?: string | null
           username?: string | null
         }
@@ -283,6 +285,7 @@ export type Database = {
           created_at?: string | null
           display_name?: string | null
           id?: string
+          last_login?: string | null
           updated_at?: string | null
           username?: string | null
         }
@@ -560,14 +563,6 @@ export type Database = {
           participation_status: string
         }[]
       }
-      get_typing_users: {
-        Args: { p_room_id: string; p_stale_threshold?: unknown }
-        Returns: {
-          is_typing: boolean
-          updated_at: string
-          user_id: string
-        }[]
-      }
       handle_notification_action: {
         Args: {
           p_action: string
@@ -605,15 +600,6 @@ export type Database = {
           member_count: number
           name: string
           participation_status: string
-        }[]
-      }
-      search_users: {
-        Args: { p_query?: string }
-        Returns: {
-          avatar_url: string
-          display_name: string
-          id: string
-          username: string
         }[]
       }
       send_message_with_notify: {

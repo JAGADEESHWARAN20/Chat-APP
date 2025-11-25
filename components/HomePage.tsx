@@ -22,7 +22,7 @@ import { Button } from "@/components/ui/button";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { ThemeTransitionWrapper } from "./ThemeTransitionWrapper";
 import { PresenceConnector } from "./PresenceConnector";
-
+import { useUser } from "@/lib/store/user";
 interface UnifiedHomeProps {
   initialSidebarState?: "expanded" | "collapsed";
   onSidebarToggle?: () => void;
@@ -34,35 +34,12 @@ function UnifiedHomeContent({
   initialSidebarState = "collapsed",
   sidebarState,
 }: UnifiedHomeProps) {
-  const [user, setUser] = useState<any>(null);
+  const { user } = useUser();
+
   const setRoomUser = useUnifiedRoomStore((s) => s.setUser);
 
   // --- 1. Init Data ---
-  useEffect(() => {
-  const supabase = getSupabaseBrowserClient();
 
-  // 1. Get initial session
-  supabase.auth.getSession().then(({ data }) => {
-    setUser(data.session?.user ?? null);
-  });
-
-  // 2. Listen for background updates (e.g. token refresh, sign out in another tab)
-  const {
-    data: { subscription },
-  } = supabase.auth.onAuthStateChange((event, session) => {
-    if (session?.user) {
-      setUser(session.user);
-    } else if (event === 'SIGNED_OUT') {
-      setUser(null);
-      // Optional: Force reload to ensure middleware catches the logout
-      window.location.href = '/auth/login'; 
-    }
-  });
-
-  return () => {
-    subscription.unsubscribe();
-  };
-}, []);
 
   useEffect(() => {
     if (user) setRoomUser(user);
