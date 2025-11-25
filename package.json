@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "types": "dotenv -- npx supabase gen types typescript --schema public > lib/types/supabase.ts"
+    "types": "npx supabase gen types typescript --project-id ejdxofntajrkrmgmikkr --schema public > lib/types/supabase.ts"
   },
   "dependencies": {
     "@openrouter/sdk": "^0.1.10",
@@ -62,6 +62,7 @@
     "@types/react-dom": "^18",
     "@types/uuid": "^9.0.7",
     "autoprefixer": "^10.0.1",
+    "dotenv-cli": "^11.0.0",
     "eslint": "^8",
     "eslint-config-next": "14.0.4",
     "postcss": "^8",
