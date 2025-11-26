@@ -533,35 +533,37 @@ useEffect(() => {
   return (
     <div className="h-[75dvh] w-full flex flex-col overflow-hidden relative">
       {/* Search Drawer */}
-      <Drawer
+     {/* Search Drawer */}
+<Drawer
   open={isMessageSearchOpen}
   onOpenChange={setIsMessageSearchOpen}
 >
+  <DrawerTrigger asChild>
+    <Button
+      variant="ghost"
+      size="icon"
+      className={cn(
+        "absolute top-4 right-4 z-30 w-[2.5em] h-[2.5em] flex items-center justify-center rounded-full",
+        "bg-[hsl(var(--background))]/60 backdrop-blur-md shadow-sm",
+        "transition-all duration-300 ease-in-out group hover:bg-[hsl(var(--action-active))]/15 active:scale-95",
+        "focus-visible:ring-[hsl(var(--action-ring))]/50 focus-visible:ring-2",
+        "text-[hsl(var(--foreground))]"
+      )}
+      title="Search Messages"
+    >
+      <Search className="h-5 w-5 transition-all duration-300 stroke-[hsl(var(--muted-foreground))]" />
+    </Button>
+  </DrawerTrigger>
 
-        <DrawerTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className={cn(
-              "absolute top-4 right-4 z-30 w-[2.5em] h-[2.5em] flex items-center justify-center rounded-full",
-              "bg-[hsl(var(--background))]/60 backdrop-blur-md shadow-sm",
-              "transition-all duration-300 ease-in-out group hover:bg-[hsl(var(--action-active))]/15 active:scale-95",
-              "focus-visible:ring-[hsl(var(--action-ring))]/50 focus-visible:ring-2",
-              "text-[hsl(var(--foreground))]"
-            )}
-            title="Search Messages"
-          >
-            <Search className="h-5 w-5 transition-all duration-300 stroke-[hsl(var(--muted-foreground))]" />
-          </Button>
-        </DrawerTrigger>
-        
-        
-        <DrawerContent
-  className="fixed bottom-0 inset-x-0 z-50 flex flex-col 
-             !h-[26vh] min-h-[26vh] max-h-[26vh] 
-             overflow-hidden rounded-t-xl border bg-background"
->
-
+  {/* UPDATED DrawerContent */}
+  <DrawerContent
+    className="
+      fixed bottom-0 inset-x-0 z-50 
+      flex flex-col 
+      h-[26vh] min-h-[26vh] max-h-[26vh]
+      overflow-hidden border-t bg-background
+    "
+  >
     <div className="mx-auto w-full max-w-2xl">
       <DrawerHeader className="text-left">
         <DrawerTitle>Search Messages</DrawerTitle>
@@ -570,25 +572,21 @@ useEffect(() => {
         </DrawerDescription>
       </DrawerHeader>
 
-      <div className="p-4 pb-8">
+      <div className="p-4 pb-6">
         <div className="relative mb-4">
+
+          {/* INPUT PATCHED FOR KEYBOARD */}
           <Input
             placeholder="Type to navigate messages..."
             value={messageSearchQuery}
             onChange={(e) => handleSearch(e.target.value)}
-            style={{ touchAction: "none" }}
-            inputMode="text"
-            onFocus={() => {
-              document.body.style.height = "100vh";
-              document.body.style.overflow = "hidden";
-            }}
-            onBlur={() => {
-              document.body.style.height = "";
-              document.body.style.overflow = "";
-            }}
-            className="w-full px-4 py-3 text-base rounded-xl pr-12 bg-[hsl(var(--muted))]/40"
             autoFocus
+            className="
+              w-full px-4 py-3 text-base rounded-xl pr-12
+              bg-[hsl(var(--muted))]/40
+            "
           />
+
           {messageSearchQuery && (
             <Button
               onClick={() => handleSearch("")}
@@ -602,8 +600,10 @@ useEffect(() => {
         </div>
       </div>
     </div>
+
   </DrawerContent>
-      </Drawer>
+</Drawer>
+
 
       {/* Messages Scroll Area */}
       <div
