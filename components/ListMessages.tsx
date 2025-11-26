@@ -532,9 +532,9 @@ useEffect(() => {
 
   return (
     <div className="h-[75dvh] w-full flex flex-col overflow-hidden relative">
-      {/* Search Drawer */}
+
      {/* Search Drawer */}
-<Drawer
+     <Drawer
   open={isMessageSearchOpen}
   onOpenChange={setIsMessageSearchOpen}
 >
@@ -555,15 +555,22 @@ useEffect(() => {
     </Button>
   </DrawerTrigger>
 
-  {/* UPDATED DrawerContent */}
   <DrawerContent
-    className="
-      fixed bottom-0 inset-x-0 z-50 
-      flex flex-col 
-      h-[26vh] min-h-[26vh] max-h-[26vh]
-      overflow-hidden border-t bg-background
-    "
+    id="drawer-fixed-container"
+    className="relative z-50 flex flex-col overflow-hidden border-t bg-background"
   >
+
+    {/* ❌ Close Button */}
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={() => setIsMessageSearchOpen(false)}
+      className="absolute top-3 right-3 z-50 p-2 rounded-full hover:bg-muted/50"
+      title="Close"
+    >
+      <X className="h-5 w-5" />
+    </Button>
+
     <div className="mx-auto w-full max-w-2xl">
       <DrawerHeader className="text-left">
         <DrawerTitle>Search Messages</DrawerTitle>
@@ -575,16 +582,12 @@ useEffect(() => {
       <div className="p-4 pb-6">
         <div className="relative mb-4">
 
-          {/* INPUT PATCHED FOR KEYBOARD */}
           <Input
             placeholder="Type to navigate messages..."
             value={messageSearchQuery}
             onChange={(e) => handleSearch(e.target.value)}
             autoFocus
-            className="
-              w-full px-4 py-3 text-base rounded-xl pr-12
-              bg-[hsl(var(--muted))]/40
-            "
+            className="w-full px-4 py-3 text-base rounded-xl pr-12 bg-[hsl(var(--muted))]/40"
           />
 
           {messageSearchQuery && (
@@ -603,6 +606,7 @@ useEffect(() => {
 
   </DrawerContent>
 </Drawer>
+
 
 
       {/* Messages Scroll Area */}

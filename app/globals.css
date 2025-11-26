@@ -161,6 +161,24 @@
     color: var(--text-color-sidebar);
   }
 }
+
+
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-feature-settings: "rlig" 1, "calt" 1;
+
+  /* Fix drawer movement on mobile keyboard */
+  height: 100vh;
+  min-height: 100vh;
+  max-height: 100vh;
+  position: fixed;
+  width: 100%;
+  overflow: hidden;
+
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
   /* Responsive base font */
   html {
     font-size: 16px;
@@ -170,17 +188,6 @@
     @media (max-width: 480px) { font-size: 13px; }
   }
 
-  body {
-    background-color: hsl(var(--background));
-    color: hsl(var(--foreground));
-    position: relative;
-    overflow: hidden;
-    font-feature-settings: "rlig" 1, "calt" 1;
-    height: 100dvh;
-    width: 100%;
-    /* Fast transition for theme changes on body only */
-    transition: background-color 0.3s ease, color 0.3s ease;
-  }
 
   /* Focus-visible */
   *:focus-visible {
@@ -199,6 +206,18 @@
     border-color: hsl(var(--border));
   }
 }
+#drawer-fixed-container {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 26vh;
+  max-height: 26vh;
+  min-height: 26vh;
+  transform: translateY(0) !important;
+  touch-action: none;
+}
+
 
 /* ========================================================================== */
 /* SCROLLBAR STYLES                                                          */
