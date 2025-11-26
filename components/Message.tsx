@@ -1,3 +1,5 @@
+"use client";
+
 import { Imessage, useMessage } from "@/lib/store/messages";
 import React from "react";
 import Image from "next/image";
@@ -11,10 +13,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal } from "lucide-react";
+import { MoreHorizontal, Navigation } from "lucide-react";
 import { useUser } from "@/lib/store/user";
 
-export default function Message({ message }: { message: Imessage }) {
+interface MessageProps {
+  message: Imessage;
+  isNavigated?: boolean;
+  searchQuery?: string;
+}
+
+export default function Message({ message, isNavigated = false, searchQuery = "" }: MessageProps) {
   const user = useUser((state) => state.user);
   const { highlightedMessageId } = useSearchHighlight();
 
@@ -24,9 +32,31 @@ export default function Message({ message }: { message: Imessage }) {
 
   const isHighlighted = highlightedMessageId === message.id;
   const highlightClass = isHighlighted ? " border-l-[.5vw] border-slate-900 dark:border-white duration-100" : "duration-100";
+  const navigationClass = isNavigated ? "ring-2 ring-green-500 bg-green-50 dark:bg-green-900/20" : "";
+
+  // Highlight search terms in message text
+  const highlightSearchTerms = (text: string, query: string) => {
+    if (!query.trim()) return text;
+    
+    const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    const parts = text.split(regex);
+    
+    return parts.map((part, index) => 
+      regex.test(part) ? (
+        <mark key={index} className="bg-yellow-300 dark:bg-yellow-600 px-1 rounded">
+          {part}
+        </mark>
+      ) : (
+        part
+      )
+    );
+  };
 
   return (
-    <div id={`msg-${message.id}`} className={`flex gap-2 items-center p-[.3em] ${highlightClass}`}>
+    <div 
+      id={`msg-${message.id}`} 
+      className={`flex gap-2 items-center p-[.3em] ${highlightClass} ${navigationClass} transition-all duration-300`}
+    >
       <div className="flex-shrink-0">
         {message.profiles?.avatar_url ? (
           <Image
@@ -74,9 +104,20 @@ export default function Message({ message }: { message: Imessage }) {
               {message.created_at ? new Date(message.created_at).toDateString() : "Unknown date"}
             </h1>
           </div>
-          {message.profiles?.id && user?.id && message.profiles.id === user.id && (
-            <MessageMenu message={message} />
-          )}
+          
+          <div className="flex items-center gap-2">
+            {/* Navigation Indicator */}
+            {isNavigated && (
+              <div className="flex items-center gap-1 text-green-500 bg-green-100 dark:bg-green-900/30 px-2 py-1 rounded-full">
+                <Navigation className="h-3 w-3" />
+                <span className="text-xs font-medium">Live</span>
+              </div>
+            )}
+            
+            {message.profiles?.id && user?.id && message.profiles.id === user.id && (
+              <MessageMenu message={message} />
+            )}
+          </div>
         </div>
         <p 
           className="break-words"
@@ -85,7 +126,7 @@ export default function Message({ message }: { message: Imessage }) {
             fontSize: 'var(--message-text-size)' 
           }}
         >
-          {message.text || "Message content not available"}
+          {searchQuery ? highlightSearchTerms(message.text || "Message content not available", searchQuery) : message.text || "Message content not available"}
         </p>
       </div>
     </div>
@@ -102,7 +143,7 @@ const MessageMenu = ({ message }: { message: Imessage }) => {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="text-gray-400 hover:text-white  rounded-full p-1 transition-colors">
+      <DropdownMenuTrigger className="text-gray-400 hover:text-white rounded-full p-1 transition-colors">
         <MoreHorizontal className="h-5 w-5" />
       </DropdownMenuTrigger>
       <DropdownMenuContent

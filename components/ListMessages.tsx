@@ -12,14 +12,13 @@ import TypingIndicator from "./TypingIndicator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Search, X } from "lucide-react";
+import { Search, X, Navigation } from "lucide-react";
 import { useSearchHighlight } from "@/lib/store/SearchHighlightContext";
 import { cn } from "@/lib/utils";
 
 type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
 
-// Fixed Search Algorithm - Inverted Index with string IDs
-// Fixed Search Algorithm - Inverted Index with string IDs
+// Search Algorithm - Inverted Index with string IDs
 class MessageSearchEngine {
   private invertedIndex: Map<string, Set<string>> = new Map();
   private messages: Map<string, Imessage> = new Map();
@@ -46,37 +45,38 @@ class MessageSearchEngine {
       }
     }
   }
-search(query: string): Imessage[] {
-  const queryWords = this.tokenize(query);
-  if (queryWords.length === 0) return [];
 
-  // Find messages containing ALL query words (AND logic)
-  let results: Set<string> | null = null;
-  
-  for (const word of queryWords) {
-    const wordResults = this.invertedIndex.get(word);
-    if (!wordResults) return []; // One word not found
+  search(query: string): Imessage[] {
+    const queryWords = this.tokenize(query);
+    if (queryWords.length === 0) return [];
+
+    // Find messages containing ALL query words (AND logic)
+    let results: Set<string> | null = null;
     
-    if (results === null) {
-      results = new Set(wordResults);
-    } else {
-      results = new Set([...results].filter((id: string) => wordResults.has(id)));
+    for (const word of queryWords) {
+      const wordResults = this.invertedIndex.get(word);
+      if (!wordResults) return []; // One word not found
+      
+      if (results === null) {
+        results = new Set(wordResults);
+      } else {
+        results = new Set([...results].filter((id: string) => wordResults.has(id)));
+      }
     }
-  }
 
-  if (!results) return [];
-  
-  // Convert to array and rank by relevance
-  return Array.from(results)
-    .map(id => this.messages.get(id))
-    .filter((msg): msg is Imessage => msg !== undefined)
-    .sort((a, b) => {
-      // Simple ranking: count occurrences of query words
-      const aScore = this.calculateRelevance(a.text, queryWords);
-      const bScore = this.calculateRelevance(b.text, queryWords);
-      return bScore - aScore;
-    });
-}
+    if (!results) return [];
+    
+    // Convert to array and rank by relevance with sequence priority
+    return Array.from(results)
+      .map(id => this.messages.get(id))
+      .filter((msg): msg is Imessage => msg !== undefined)
+      .sort((a, b) => {
+        // Enhanced ranking: prioritize sequence matches and recency
+        const aScore = this.calculateSequenceRelevance(a, query);
+        const bScore = this.calculateSequenceRelevance(b, query);
+        return bScore - aScore;
+      });
+  }
 
   private tokenize(text: string): string[] {
     return text.toLowerCase()
@@ -85,11 +85,55 @@ search(query: string): Imessage[] {
       .filter(word => word.length > 0);
   }
 
-  private calculateRelevance(text: string, queryWords: string[]): number {
-    const lowerText = text.toLowerCase();
-    return queryWords.reduce((score, word) => {
-      return score + (lowerText.split(word).length - 1);
-    }, 0);
+  private calculateSequenceRelevance(message: Imessage, query: string): number {
+    const text = message.text.toLowerCase();
+    const lowerQuery = query.toLowerCase();
+    let score = 0;
+    
+    // Exact sequence match (highest priority)
+    if (text.includes(lowerQuery)) {
+      score += 1000;
+      
+      // Bonus for sequence at the beginning of words
+      const words = text.split(/\s+/);
+      for (const word of words) {
+        if (word.startsWith(lowerQuery)) {
+          score += 500;
+          break;
+        }
+      }
+    }
+    
+    // Word-by-word matching
+    const queryWords = lowerQuery.split(/\s+/).filter(w => w.length > 0);
+    let allWordsFound = true;
+    
+    queryWords.forEach(word => {
+      if (text.includes(word)) {
+        const occurrences = (text.split(word).length - 1);
+        score += occurrences * 100;
+        
+        // Bonus for word at beginning
+        if (text.startsWith(word)) {
+          score += 200;
+        }
+      } else {
+        allWordsFound = false;
+      }
+    });
+    
+    // All words found bonus
+    if (allWordsFound) {
+      score += 300;
+    }
+    
+    // Recency bonus (newer messages are more relevant)
+    const messageAge = Date.now() - new Date(message.created_at).getTime();
+    const daysOld = messageAge / (1000 * 60 * 60 * 24);
+    const recencyBonus = Math.max(0, 50 - daysOld); // Messages up to 50 days old get bonus
+    score += recencyBonus;
+    
+    return score;
   }
 
   clear() {
@@ -109,6 +153,7 @@ export default function ListMessages() {
   const [messageSearchQuery, setMessageSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Imessage[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [currentNavigatedMessageId, setCurrentNavigatedMessageId] = useState<string | null>(null);
 
   const selectedRoom = useSelectedRoom();
   const user = useUser((state) => state.user);
@@ -162,7 +207,7 @@ export default function ListMessages() {
     }
   }, [messages, selectedRoom?.id]);
 
-  // Optimized search handler
+  // Real-time navigation search handler
   const handleSearch = useCallback(
     async (query: string) => {
       setMessageSearchQuery(query);
@@ -173,6 +218,7 @@ export default function ListMessages() {
       if (query.trim().length === 0) {
         setSearchResults([]);
         setHighlightedMessageId(null);
+        setCurrentNavigatedMessageId(null);
         return;
       }
 
@@ -183,9 +229,39 @@ export default function ListMessages() {
         try {
           const results = searchEngineRef.current.search(query);
           setSearchResults(results);
+          
+          // Auto-navigate to first result in real-time as user types
+          if (results.length > 0) {
+            const bestMatch = results[0];
+            setHighlightedMessageId(bestMatch.id);
+            setCurrentNavigatedMessageId(bestMatch.id);
+            
+            // Scroll to the matched message
+            setTimeout(() => {
+              const messageElement = document.getElementById(`msg-${bestMatch.id}`);
+              if (messageElement) {
+                messageElement.scrollIntoView({ 
+                  behavior: "smooth", 
+                  block: "center" 
+                });
+                
+                // Add highlight effect
+                messageElement.classList.add("bg-yellow-100", "dark:bg-yellow-900");
+                setTimeout(() => {
+                  messageElement.classList.remove("bg-yellow-100", "dark:bg-yellow-900");
+                }, 1500);
+              }
+            }, 100);
+          } else {
+            // No results found, clear highlights
+            setHighlightedMessageId(null);
+            setCurrentNavigatedMessageId(null);
+          }
         } catch (error) {
           console.error("Search error:", error);
           setSearchResults([]);
+          setHighlightedMessageId(null);
+          setCurrentNavigatedMessageId(null);
         } finally {
           setIsSearching(false);
         }
@@ -197,6 +273,7 @@ export default function ListMessages() {
   // Handle message click from search results
   const handleSearchResultClick = useCallback((message: Imessage) => {
     setHighlightedMessageId(message.id);
+    setCurrentNavigatedMessageId(message.id);
     const messageElement = document.getElementById(`msg-${message.id}`);
     if (messageElement) {
       messageElement.scrollIntoView({ 
@@ -210,8 +287,18 @@ export default function ListMessages() {
       }, 2000);
     }
     setIsMessageSearchOpen(false);
-    setTimeout(() => setHighlightedMessageId(null), 3000);
+    setTimeout(() => {
+      setHighlightedMessageId(null);
+      setCurrentNavigatedMessageId(null);
+    }, 3000);
   }, [setHighlightedMessageId]);
+
+  // Clear navigation when search popover closes
+  useEffect(() => {
+    if (!isMessageSearchOpen) {
+      setCurrentNavigatedMessageId(null);
+    }
+  }, [isMessageSearchOpen]);
 
   // Load initial messages
   useEffect(() => {
@@ -478,7 +565,7 @@ export default function ListMessages() {
         >
           <div className="relative">
             <Input
-              placeholder="Search messages..."
+              placeholder="Type to navigate messages in real-time..."
               value={messageSearchQuery}
               onChange={(e) => handleSearch(e.target.value)}
               className={cn(
@@ -506,7 +593,7 @@ export default function ListMessages() {
             {isSearching ? (
               <p className="text-[hsl(var(--muted-foreground))] text-sm">Searching...</p>
             ) : searchResults.length > 0 ? (
-              searchResults.map((msg) => (
+              searchResults.map((msg, index) => (
                 <div
                   key={msg.id}
                   className={cn(
@@ -515,18 +602,27 @@ export default function ListMessages() {
                     "hover:bg-[hsl(var(--action-active))]/15",
                     "text-[hsl(var(--foreground))]",
                     "border border-[hsl(var(--border))/20]",
+                    index === 0 && "ring-2 ring-green-500", // Highlight auto-navigated result
                     "transition-all duration-200"
                   )}
                   onClick={() => handleSearchResultClick(msg)}
                 >
-                  <p className="font-semibold text-sm">{msg.profiles?.display_name || msg.profiles?.username}</p>
+                  <div className="flex items-center justify-between">
+                    <p className="font-semibold text-sm">{msg.profiles?.display_name || msg.profiles?.username}</p>
+                    {index === 0 && (
+                      <div className="flex items-center gap-1 text-green-500">
+                        <Navigation className="h-3 w-3" />
+                        <span className="text-xs">Navigating</span>
+                      </div>
+                    )}
+                  </div>
                   <p className="text-[hsl(var(--muted-foreground))] text-xs line-clamp-2">{msg.text}</p>
                 </div>
               ))
             ) : messageSearchQuery ? (
-              <p className="text-[hsl(var(--muted-foreground))] text-sm">No results found.</p>
+              <p className="text-[hsl(var(--muted-foreground))] text-sm">No matching messages found.</p>
             ) : (
-              <p className="text-[hsl(var(--muted-foreground))] text-sm">Type to search messages...</p>
+              <p className="text-[hsl(var(--muted-foreground))] text-sm">Start typing to navigate messages...</p>
             )}
           </div>
         </PopoverContent>
@@ -547,7 +643,12 @@ export default function ListMessages() {
             </div>
           ) : filteredMessages.length > 0 ? (
             filteredMessages.map((message) => (
-              <Message key={message.id} message={message} />
+              <Message 
+                key={message.id} 
+                message={message} 
+                isNavigated={currentNavigatedMessageId === message.id}
+                searchQuery={messageSearchQuery}
+              />
             ))
           ) : (
             <div 
