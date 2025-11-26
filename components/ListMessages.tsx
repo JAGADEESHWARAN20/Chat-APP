@@ -533,7 +533,13 @@ useEffect(() => {
   return (
     <div className="h-[75dvh] w-full flex flex-col overflow-hidden relative">
       {/* Search Drawer */}
-      <Drawer open={isMessageSearchOpen} onOpenChange={setIsMessageSearchOpen}>
+      <Drawer
+  open={isMessageSearchOpen}
+  onOpenChange={setIsMessageSearchOpen}
+  modal={false}
+  dismissible={false}
+>
+
         <DrawerTrigger asChild>
           <Button
             variant="ghost"

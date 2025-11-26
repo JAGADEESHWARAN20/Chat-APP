@@ -186,12 +186,7 @@ export default function Message({ message, isNavigated = false, searchQuery = ""
           </div>
           
           <div className="flex items-center gap-2">
-            {isNavigated && (
-              <div className="flex items-center gap-1 text-green-600 dark:text-green-400 bg-green-200 dark:bg-green-800/50 px-2 py-1 rounded-full">
-                <Navigation className="h-3 w-3" />
-                <span className="text-xs font-medium">Live</span>
-              </div>
-            )}
+            
             
             {message.profiles?.id && user?.id && message.profiles.id === user.id && (
               <MessageMenu message={message} />
