@@ -11,10 +11,18 @@ import { useSelectedRoom } from "@/lib/store/roomstore";
 import TypingIndicator from "./TypingIndicator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Search, X, Navigation } from "lucide-react";
 import { useSearchHighlight } from "@/lib/store/SearchHighlightContext";
 import { cn } from "@/lib/utils";
+import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+} from "@/components/ui/drawer";
 
 type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
 
@@ -293,10 +301,12 @@ export default function ListMessages() {
     }, 3000);
   }, [setHighlightedMessageId]);
 
-  // Clear navigation when search popover closes
+  // Clear navigation when search drawer closes
   useEffect(() => {
     if (!isMessageSearchOpen) {
       setCurrentNavigatedMessageId(null);
+      setMessageSearchQuery("");
+      setSearchResults([]);
     }
   }, [isMessageSearchOpen]);
 
@@ -524,17 +534,9 @@ export default function ListMessages() {
 
   return (
     <div className="h-[75dvh] w-full flex flex-col overflow-hidden relative">
-      {/* Search Overlay */}
-      {isMessageSearchOpen && (
-        <div
-          className="fixed inset-0 z-[40] backdrop-blur-lg bg-[hsl(var(--background))]/30 transition-all duration-300 ease-in-out"
-          onClick={() => setIsMessageSearchOpen(false)}
-        />
-      )}
-
-      {/* Search Popover */}
-      <Popover open={isMessageSearchOpen} onOpenChange={setIsMessageSearchOpen}>
-        <PopoverTrigger asChild>
+      {/* Search Drawer */}
+      <Drawer open={isMessageSearchOpen} onOpenChange={setIsMessageSearchOpen}>
+        <DrawerTrigger asChild>
           <Button
             variant="ghost"
             size="icon"
@@ -549,84 +551,104 @@ export default function ListMessages() {
           >
             <Search className="h-5 w-5 transition-all duration-300 stroke-[hsl(var(--muted-foreground))]" />
           </Button>
-        </PopoverTrigger>
-
-        <PopoverContent
-          side="bottom"
-          align="end"
-          sideOffset={8}
-          className={cn(
-            "relative z-[50] w-[24rem] p-4 rounded-2xl",
-            "border border-[hsl(var(--border))/40]",
-            "bg-[hsl(var(--background))]/75 backdrop-blur-2xl",
-            "shadow-[0_8px_30px_rgb(0,0,0,0.12)]",
-            "transition-all duration-300"
-          )}
-        >
-          <div className="relative">
-            <Input
-              placeholder="Type to navigate messages in real-time..."
-              value={messageSearchQuery}
-              onChange={(e) => handleSearch(e.target.value)}
-              className={cn(
-                "w-full px-3 py-2 text-sm rounded-xl pr-10",
-                "bg-[hsl(var(--muted))]/40",
-                "text-[hsl(var(--foreground))]",
-                "border border-[hsl(var(--border))/20]",
-                "placeholder:text-[hsl(var(--muted-foreground))]/70",
-                "focus-visible:ring-[hsl(var(--action-ring))]/60 focus-visible:ring-2",
-                "transition-all duration-200"
-              )}
-            />
-            {messageSearchQuery && (
-              <Button
-                onClick={() => handleSearch("")}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
-                title="Clear search"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            )}
-          </div>
-
-          <div className="max-h-64 mt-3 overflow-y-auto space-y-2 pr-3 pl-2 scrollbar-thin scrollbar-thumb-[hsl(var(--muted-foreground))]/30">
-            {isSearching ? (
-              <p className="text-[hsl(var(--muted-foreground))] text-sm">Searching...</p>
-            ) : searchResults.length > 0 ? (
-              searchResults.map((msg, index) => (
-                <div
-                  key={msg.id}
+        </DrawerTrigger>
+        
+        <DrawerContent className="h-[85vh]">
+          <div className="mx-auto w-full max-w-2xl">
+            <DrawerHeader className="text-left">
+              <DrawerTitle>Search Messages</DrawerTitle>
+              <DrawerDescription>
+                Type to search and navigate messages in real-time
+              </DrawerDescription>
+            </DrawerHeader>
+            
+            <div className="p-4 pb-8">
+              <div className="relative mb-4">
+                <Input
+                  placeholder="Type to navigate messages in real-time..."
+                  value={messageSearchQuery}
+                  onChange={(e) => handleSearch(e.target.value)}
                   className={cn(
-                    "p-3 rounded-lg cursor-pointer",
-                    "bg-[hsl(var(--muted))]/30",
-                    "hover:bg-[hsl(var(--action-active))]/15",
+                    "w-full px-4 py-3 text-base rounded-xl pr-12",
+                    "bg-[hsl(var(--muted))]/40",
                     "text-[hsl(var(--foreground))]",
                     "border border-[hsl(var(--border))/20]",
-                    index === 0 && "ring-2 ring-green-500", // Highlight auto-navigated result
+                    "placeholder:text-[hsl(var(--muted-foreground))]/70",
+                    "focus-visible:ring-[hsl(var(--action-ring))]/60 focus-visible:ring-2",
                     "transition-all duration-200"
                   )}
-                  onClick={() => handleSearchResultClick(msg)}
-                >
-                  <div className="flex items-center justify-between">
-                    <p className="font-semibold text-sm">{msg.profiles?.display_name || msg.profiles?.username}</p>
-                    {index === 0 && (
-                      <div className="flex items-center gap-1 text-green-500">
-                        <Navigation className="h-3 w-3" />
-                        <span className="text-xs">Navigating</span>
-                      </div>
-                    )}
+                  autoFocus
+                />
+                {messageSearchQuery && (
+                  <Button
+                    onClick={() => handleSearch("")}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
+                    title="Clear search"
+                    variant="ghost"
+                    size="icon"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+
+              {/* Search Results */}
+              <div className="max-h-[60vh] overflow-y-auto space-y-3 pr-2 scrollbar-thin scrollbar-thumb-[hsl(var(--muted-foreground))]/30">
+                {isSearching ? (
+                  <div className="text-center py-8">
+                    <p className="text-[hsl(var(--muted-foreground))] text-sm">Searching messages...</p>
                   </div>
-                  <p className="text-[hsl(var(--muted-foreground))] text-xs line-clamp-2">{msg.text}</p>
-                </div>
-              ))
-            ) : messageSearchQuery ? (
-              <p className="text-[hsl(var(--muted-foreground))] text-sm">No matching messages found.</p>
-            ) : (
-              <p className="text-[hsl(var(--muted-foreground))] text-sm">Start typing to navigate messages...</p>
-            )}
+                ) : searchResults.length > 0 ? (
+                  searchResults.map((msg, index) => (
+                    <div
+                      key={msg.id}
+                      className={cn(
+                        "p-4 rounded-lg cursor-pointer border transition-all duration-200",
+                        "bg-[hsl(var(--muted))]/20 hover:bg-[hsl(var(--action-active))]/10",
+                        "text-[hsl(var(--foreground))]",
+                        "border-[hsl(var(--border))/30]",
+                        index === 0 && "ring-2 ring-green-500 border-green-500/50", // Highlight auto-navigated result
+                      )}
+                      onClick={() => handleSearchResultClick(msg)}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-sm">{msg.profiles?.display_name || msg.profiles?.username}</p>
+                          <span className="text-xs text-[hsl(var(--muted-foreground))]">
+                            {msg.created_at ? new Date(msg.created_at).toLocaleDateString() : "Unknown date"}
+                          </span>
+                        </div>
+                        {index === 0 && (
+                          <div className="flex items-center gap-1 text-green-500 bg-green-100 dark:bg-green-900/30 px-2 py-1 rounded-full">
+                            <Navigation className="h-3 w-3" />
+                            <span className="text-xs font-medium">Navigating</span>
+                          </div>
+                        )}
+                      </div>
+                      <p className="text-[hsl(var(--muted-foreground))] text-sm line-clamp-3">{msg.text}</p>
+                    </div>
+                  ))
+                ) : messageSearchQuery ? (
+                  <div className="text-center py-8">
+                    <p className="text-[hsl(var(--muted-foreground))] text-sm">No matching messages found.</p>
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-[hsl(var(--muted-foreground))] text-sm">Start typing to search and navigate messages...</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Close Button */}
+              <div className="mt-6 flex justify-end">
+                <DrawerClose asChild>
+                  <Button variant="outline">Close</Button>
+                </DrawerClose>
+              </div>
+            </div>
           </div>
-        </PopoverContent>
-      </Popover>
+        </DrawerContent>
+      </Drawer>
 
       {/* Messages Scroll Area */}
       <div
