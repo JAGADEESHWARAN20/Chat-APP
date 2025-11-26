@@ -551,51 +551,54 @@ useEffect(() => {
           </Button>
         </DrawerTrigger>
         
-        <DrawerContent className="h-[20vh]">
-          <div className="mx-auto w-full max-w-2xl">
-            <DrawerHeader className="text-left">
-              <DrawerTitle>Search Messages</DrawerTitle>
-              <DrawerDescription>
-                Type to search and navigate messages in real-time
-              </DrawerDescription>
-            </DrawerHeader>
-            
-            <div className="p-4 pb-8">
-              <div className="relative mb-4">
-                <Input
-                  placeholder="Type to navigate messages in real-time..."
-                  value={messageSearchQuery}
-                  onChange={(e) => handleSearch(e.target.value)}
-                  className={cn(
-                    "w-full px-4 py-3 text-base rounded-xl pr-12",
-                    "bg-[hsl(var(--muted))]/40",
-                    "text-[hsl(var(--foreground))]",
-                    "border border-[hsl(var(--border))/20]",
-                    "placeholder:text-[hsl(var(--muted-foreground))]/70",
-                    "focus-visible:ring-[hsl(var(--action-ring))]/60 focus-visible:ring-2",
-                    "transition-all duration-200"
-                  )}
-                  autoFocus
-                />
-                {messageSearchQuery && (
-                  <Button
-                    onClick={() => handleSearch("")}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
-                    title="Clear search"
-                    variant="ghost"
-                    size="icon"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
+        
+        <DrawerContent
+  className="fixed bottom-0 inset-x-0 z-50 flex flex-col 
+             !h-[26vh] min-h-[26vh] max-h-[26vh] 
+             overflow-hidden rounded-t-xl border bg-background"
+>
 
-            
-            
-             
-            </div>
-          </div>
-        </DrawerContent>
+    <div className="mx-auto w-full max-w-2xl">
+      <DrawerHeader className="text-left">
+        <DrawerTitle>Search Messages</DrawerTitle>
+        <DrawerDescription>
+          Type to search and navigate messages in real-time
+        </DrawerDescription>
+      </DrawerHeader>
+
+      <div className="p-4 pb-8">
+        <div className="relative mb-4">
+          <Input
+            placeholder="Type to navigate messages..."
+            value={messageSearchQuery}
+            onChange={(e) => handleSearch(e.target.value)}
+            style={{ touchAction: "none" }}
+            inputMode="text"
+            onFocus={() => {
+              document.body.style.height = "100vh";
+              document.body.style.overflow = "hidden";
+            }}
+            onBlur={() => {
+              document.body.style.height = "";
+              document.body.style.overflow = "";
+            }}
+            className="w-full px-4 py-3 text-base rounded-xl pr-12 bg-[hsl(var(--muted))]/40"
+            autoFocus
+          />
+          {messageSearchQuery && (
+            <Button
+              onClick={() => handleSearch("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2"
+              variant="ghost"
+              size="icon"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  </DrawerContent>
       </Drawer>
 
       {/* Messages Scroll Area */}
