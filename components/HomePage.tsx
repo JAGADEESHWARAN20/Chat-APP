@@ -217,7 +217,7 @@ const currentUser = useUnifiedRoomStore((s) => s.user);
               onClick={handleToggleLeft}
               className={cn("hover:bg-accent opacity-60 rounded-xl")}
             >
-              {isLeftSidebarOpen ? "" : <PanelLeft className={`w-[2em] h-[2em] `} />}
+              {isLeftSidebarOpen ? <PanelLeft className={`w-[2em] h-[2em] ${isLeftSidebarOpen && isMobile && "hidden "}`} /> : <PanelLeft className={`w-[2em] h-[2em] ${isLeftSidebarOpen && isMobile && "block "}`} />}
             </Button>
             }
             <h1 className="text-[2em] font-bold block pl-2">FlyChat</h1>
