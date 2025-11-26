@@ -271,14 +271,14 @@ const currentUser = useUnifiedRoomStore((s) => s.user);
                 transition={{ duration: 0.2 }}
                 className="flex-1 flex flex-col h-full w-full"
               >
-                <div className="flex-1 flex flex-col h-full pb-[3em] w-full">
+                <div className="flex-1 flex flex-col h-[95dvh] pb-[3em] w-full">
                   <div className="flex-none px-4 pb-[1em] border-b bg-background/50">
                     <ChatHeader user={user} />
                   </div>
                   <div className="flex-1 flex flex-col w-full relative">
                     <div className="absolute inset-0 flex flex-col">
                     {user && selectedRoomId ? (
-                        <div className="w-full h-full flex flex-col lg:flex-row">
+                        <div className="w-full h-auto flex flex-col lg:flex-row">
                           {/* Chat Container */}
                           <div className="flex-1  flex flex-col ">
                             <div className="flex-1 px-2  ">

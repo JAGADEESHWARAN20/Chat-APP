@@ -272,7 +272,7 @@ export default function ListMessages() {
   }
 
   return (
-    <div className="h-[75vh] w-full flex flex-col  overflow-hidden">
+    <div className="h-[75dvh] w-full flex flex-col  overflow-hidden">
       {/* Messages Scroll Area */}
       <div
         ref={scrollRef}
