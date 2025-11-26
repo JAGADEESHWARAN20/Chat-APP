@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
 
 // Fixed Search Algorithm - Inverted Index with string IDs
+// Fixed Search Algorithm - Inverted Index with string IDs
 class MessageSearchEngine {
   private invertedIndex: Map<string, Set<string>> = new Map();
   private messages: Map<string, Imessage> = new Map();
@@ -45,37 +46,37 @@ class MessageSearchEngine {
       }
     }
   }
+search(query: string): Imessage[] {
+  const queryWords = this.tokenize(query);
+  if (queryWords.length === 0) return [];
 
-  search(query: string): Imessage[] {
-    const queryWords = this.tokenize(query);
-    if (queryWords.length === 0) return [];
-
-    // Find messages containing ALL query words (AND logic)
-    let results: Set<string> | null = null;
+  // Find messages containing ALL query words (AND logic)
+  let results: Set<string> | null = null;
+  
+  for (const word of queryWords) {
+    const wordResults = this.invertedIndex.get(word);
+    if (!wordResults) return []; // One word not found
     
-    for (const word of queryWords) {
-      const wordResults = this.invertedIndex.get(word);
-      if (!wordResults) return []; // One word not found
-      
-      if (results === null) {
-        results = new Set(wordResults);
-      } else {
-        results = new Set([...results].filter(id => wordResults.has(id)));
-      }
+    if (results === null) {
+      results = new Set(wordResults);
+    } else {
+      results = new Set([...results].filter((id: string) => wordResults.has(id)));
     }
-    if (!results) return [];
-    
-    // Convert to array and rank by relevance
-    return Array.from(results)
-      .map(id => this.messages.get(id))
-      .filter((msg): msg is Imessage => msg !== undefined)
-      .sort((a, b) => {
-        // Simple ranking: count occurrences of query words
-        const aScore = this.calculateRelevance(a.text, queryWords);
-        const bScore = this.calculateRelevance(b.text, queryWords);
-        return bScore - aScore;
-      });
   }
+
+  if (!results) return [];
+  
+  // Convert to array and rank by relevance
+  return Array.from(results)
+    .map(id => this.messages.get(id))
+    .filter((msg): msg is Imessage => msg !== undefined)
+    .sort((a, b) => {
+      // Simple ranking: count occurrences of query words
+      const aScore = this.calculateRelevance(a.text, queryWords);
+      const bScore = this.calculateRelevance(b.text, queryWords);
+      return bScore - aScore;
+    });
+}
 
   private tokenize(text: string): string[] {
     return text.toLowerCase()
