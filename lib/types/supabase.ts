@@ -602,6 +602,25 @@ export type Database = {
           participation_status: string
         }[]
       }
+      search_users: {
+        Args: { p_query: string }
+        Returns: {
+          avatar_url: string | null
+          bio: string | null
+          created_at: string | null
+          display_name: string | null
+          id: string
+          last_login: string | null
+          updated_at: string | null
+          username: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "profiles"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       send_message_with_notify: {
         Args: {
           p_direct_chat_id: string

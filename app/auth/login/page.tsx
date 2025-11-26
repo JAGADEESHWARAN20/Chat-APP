@@ -5,21 +5,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-// import { createBrowserClient } from "@supabase/ssr";
 import { ArrowRight, Github, Mail } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-// import { Database } from "@/database.types";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
   const router = useRouter();
-  
-  // FIX: Use createBrowserClient instead of createClientComponentClient
-  const supabase = getSupabaseBrowserClient(); // no createBrowserClient per file
+  const supabase = getSupabaseBrowserClient();
+
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -32,12 +30,29 @@ export default function LoginPage() {
 
       if (error) {
         toast.error(error.message);
-        setIsLoading(false);
+        return;
+      }
+
+      // Load user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error("Failed to load user session");
+        return;
+      }
+
+      // Load profile
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("display_name, username")
+        .eq("id", user.id)
+        .single();
+
+      if (!profile?.display_name || !profile?.username) {
+        router.push("/edit-profile");
         return;
       }
 
       toast.success("Logged in successfully!");
-      router.refresh();
       router.push("/");
     } catch (error) {
       console.error("Error:", error);
@@ -47,18 +62,14 @@ export default function LoginPage() {
     }
   };
 
-  const handleOAuthLogin = async (provider: 'github' | 'google') => {
+  const handleOAuthLogin = async (provider: "github" | "google") => {
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
-        options: {
-          redirectTo: `${location.origin}/auth/callback`,
-        },
+        options: { redirectTo: `${location.origin}/auth/callback` },
       });
 
-      if (error) {
-        toast.error(error.message);
-      }
+      if (error) toast.error(error.message);
     } catch (error) {
       console.error("Error:", error);
       toast.error(`An error occurred during ${provider} login`);
@@ -75,42 +86,30 @@ export default function LoginPage() {
 
         <form onSubmit={handleEmailLogin} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <Label>Email</Label>
             <Input
-              id="email"
               type="email"
               placeholder="Enter your email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full px-4 py-2 bg-black/20 text-white border border-gray-600 rounded focus:ring-2 focus:ring-blue-500"
+              className="bg-black/20 text-white border-gray-600"
             />
           </div>
 
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="password">Password</Label>
-              <Link href="/auth/forgot-password" className="text-sm text-blue-500 hover:text-blue-400">
-                Forgot password?
-              </Link>
-            </div>
+            <Label>Password</Label>
             <Input
-              id="password"
               type="password"
               placeholder="Enter your password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              minLength={6}
-              className="w-full px-4 py-2 bg-black/20 text-white border border-gray-600 rounded focus:ring-2 focus:ring-blue-500"
+              className="bg-black/20 text-white border-gray-600"
             />
           </div>
 
-          <Button
-            type="submit"
-            disabled={isLoading}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-          >
+          <Button disabled={isLoading} className="w-full bg-blue-600 text-white">
             {isLoading ? "Signing in..." : "Sign in"}
             <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
@@ -118,7 +117,7 @@ export default function LoginPage() {
 
         <div className="relative">
           <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-gray-600"></div>
+            <div className="w-full border-t border-gray-600" />
           </div>
           <div className="relative flex justify-center text-xs uppercase">
             <span className="bg-black/30 px-2 text-gray-400">Or continue with</span>
@@ -126,29 +125,17 @@ export default function LoginPage() {
         </div>
 
         <div className="grid grid-cols-2 gap-4">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => handleOAuthLogin('github')}
-            className="w-full border border-gray-600 hover:bg-gray-800"
-          >
-            <Github className="mr-2 h-4 w-4" />
-            GitHub
+          <Button variant="outline" onClick={() => handleOAuthLogin("github")}>
+            <Github className="mr-2 h-4 w-4" /> GitHub
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => handleOAuthLogin('google')}
-            className="w-full border border-gray-600 hover:bg-gray-800"
-          >
-            <Mail className="mr-2 h-4 w-4" />
-            Google
+          <Button variant="outline" onClick={() => handleOAuthLogin("google")}>
+            <Mail className="mr-2 h-4 w-4" /> Google
           </Button>
         </div>
 
         <p className="text-center text-gray-400">
-          Don&apos;t have an account?{" "}
-          <Link href="/auth/register" className="text-blue-500 hover:text-blue-400">
+          Don’t have an account?{" "}
+          <Link href="/auth/register" className="text-blue-500">
             Sign up
           </Link>
         </p>

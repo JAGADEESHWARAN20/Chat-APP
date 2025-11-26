@@ -1,4 +1,3 @@
-// app/auth/callback/route.ts
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { type CookieOptions, createServerClient } from "@supabase/ssr";
@@ -10,10 +9,10 @@ export async function GET(request: Request) {
   const code = searchParams.get("code");
   const next = searchParams.get("next") ?? "/";
 
-  // Quick fail
-  if (!code) return NextResponse.redirect(`${origin}/auth/auth-code-error`);
+  if (!code) {
+    return NextResponse.redirect(`${origin}/auth/auth-code-error`);
+  }
 
-  // server client to set session cookie on the browser
   const cookieStore = cookies();
   const supabase = createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -33,7 +32,7 @@ export async function GET(request: Request) {
     }
   );
 
-  // exchange code for session
+  // Exchange Supabase auth code
   const { data: exchangeData, error: exchangeError } =
     await supabase.auth.exchangeCodeForSession(code);
 
@@ -42,41 +41,44 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}/auth/auth-code-error`);
   }
 
-  // The server-side "service" client to upsert profile (use service role)
+  const user = exchangeData?.session?.user;
+  if (!user) {
+    return NextResponse.redirect(`${origin}/auth/auth-code-error`);
+  }
+
+  // Service client
   const service = createClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { persistSession: false } }
   );
 
-  // get the user from the session returned by exchange
-  const user = exchangeData?.session?.user;
-  if (!user) {
-    console.error("No user returned from exchangeData");
-    return NextResponse.redirect(`${origin}/auth/auth-code-error`);
-  }
-
   try {
-    // upsert profile (id must match auth.users.id)
-    await service.from("profiles").upsert(
-      {
+    // Check if profile exists
+    const { data: existing } = await service
+      .from("profiles")
+      .select("id, display_name, username")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    // Create empty profile (first login only)
+    if (!existing) {
+      await service.from("profiles").insert({
         id: user.id,
-        display_name: user.user_metadata?.full_name ?? user.email ?? "User",
-        avatar_url:
-          user.user_metadata?.avatar_url ??
-          `https://api.dicebear.com/9.x/thumbs/svg?seed=${encodeURIComponent(
-            user.email ?? user.id
-          )}`,
         created_at: new Date().toISOString(),
-      },
-      { onConflict: "id" }
-    );
+      });
+
+      return NextResponse.redirect(`${origin}/edit-profile`);
+    }
+
+    // If profile exists but incomplete → force setup
+    if (!existing.display_name || !existing.username) {
+      return NextResponse.redirect(`${origin}/edit-profile`);
+    }
   } catch (err) {
-    console.error("Failed to upsert profile:", err);
-    // We do not block login flow for profile upsert failure — send to error page instead
-    // return NextResponse.redirect(`${origin}/auth/auth-code-error`);
+    console.error("Profile check failed:", err);
   }
 
-  // success: redirect to next (origin + next)
+  // Existing, valid user → continue
   return NextResponse.redirect(`${origin}${next}`);
 }
