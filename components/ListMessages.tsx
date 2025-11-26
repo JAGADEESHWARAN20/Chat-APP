@@ -536,8 +536,6 @@ useEffect(() => {
       <Drawer
   open={isMessageSearchOpen}
   onOpenChange={setIsMessageSearchOpen}
-  modal={false}
-  
 >
 
         <DrawerTrigger asChild>
