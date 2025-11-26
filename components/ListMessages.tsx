@@ -11,12 +11,12 @@ import { useSelectedRoom } from "@/lib/store/roomstore";
 import TypingIndicator from "./TypingIndicator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, X, Navigation } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { useSearchHighlight } from "@/lib/store/SearchHighlightContext";
 import { cn } from "@/lib/utils";
 import {
   Drawer,
-  DrawerClose,
+  
   DrawerContent,
   DrawerDescription,
   DrawerHeader,
@@ -253,11 +253,7 @@ export default function ListMessages() {
                   block: "center" 
                 });
                 
-                // Add highlight effect
-                messageElement.classList.add("bg-yellow-100", "dark:bg-yellow-900");
-                setTimeout(() => {
-                  messageElement.classList.remove("bg-yellow-100", "dark:bg-yellow-900");
-                }, 1500);
+                
               }
             }, 100);
           } else {
@@ -279,36 +275,38 @@ export default function ListMessages() {
   );
 
   // Handle message click from search results
-  const handleSearchResultClick = useCallback((message: Imessage) => {
-    setHighlightedMessageId(message.id);
-    setCurrentNavigatedMessageId(message.id);
-    const messageElement = document.getElementById(`msg-${message.id}`);
-    if (messageElement) {
-      messageElement.scrollIntoView({ 
-        behavior: "smooth", 
-        block: "center" 
-      });
-      // Add highlight effect
-      messageElement.classList.add("bg-yellow-100", "dark:bg-yellow-900");
-      setTimeout(() => {
-        messageElement.classList.remove("bg-yellow-100", "dark:bg-yellow-900");
-      }, 2000);
-    }
-    setIsMessageSearchOpen(false);
-    setTimeout(() => {
-      setHighlightedMessageId(null);
-      setCurrentNavigatedMessageId(null);
-    }, 3000);
-  }, [setHighlightedMessageId]);
+  // const handleSearchResultClick = useCallback((message: Imessage) => {
+  //   setHighlightedMessageId(message.id);
+  //   setCurrentNavigatedMessageId(message.id);
+  //   const messageElement = document.getElementById(`msg-${message.id}`);
+  //   if (messageElement) {
+  //     messageElement.scrollIntoView({ 
+  //       behavior: "smooth", 
+  //       block: "center" 
+  //     });
+  //     // Add highlight effect
+  //     messageElement.classList.add("bg-slate-900", "dark:bg-white");
+  //     setTimeout(() => {
+  //       messageElement.classList.remove("bg-slate-900", "dark:bg-white");
+  //     }, 2000);
+  //   }
+  //   setIsMessageSearchOpen(false);
+  //   setTimeout(() => {
+  //     setHighlightedMessageId(null);
+  //     setCurrentNavigatedMessageId(null);
+  //   }, 3000);
+  // }, [setHighlightedMessageId]);
 
   // Clear navigation when search drawer closes
-  useEffect(() => {
-    if (!isMessageSearchOpen) {
-      setCurrentNavigatedMessageId(null);
-      setMessageSearchQuery("");
-      setSearchResults([]);
-    }
-  }, [isMessageSearchOpen]);
+// Clear all highlights when search drawer closes
+useEffect(() => {
+  if (!isMessageSearchOpen) {
+    setCurrentNavigatedMessageId(null);
+    setMessageSearchQuery("");
+    setSearchResults([]);
+    setHighlightedMessageId(null); // Add this line
+  }
+}, [isMessageSearchOpen]);
 
   // Load initial messages
   useEffect(() => {
@@ -553,7 +551,7 @@ export default function ListMessages() {
           </Button>
         </DrawerTrigger>
         
-        <DrawerContent className="h-[85vh]">
+        <DrawerContent className="h-[20vh]">
           <div className="mx-auto w-full max-w-2xl">
             <DrawerHeader className="text-left">
               <DrawerTitle>Search Messages</DrawerTitle>
@@ -592,59 +590,9 @@ export default function ListMessages() {
                 )}
               </div>
 
-              {/* Search Results */}
-              <div className="max-h-[60vh] overflow-y-auto space-y-3 pr-2 scrollbar-thin scrollbar-thumb-[hsl(var(--muted-foreground))]/30">
-                {isSearching ? (
-                  <div className="text-center py-8">
-                    <p className="text-[hsl(var(--muted-foreground))] text-sm">Searching messages...</p>
-                  </div>
-                ) : searchResults.length > 0 ? (
-                  searchResults.map((msg, index) => (
-                    <div
-                      key={msg.id}
-                      className={cn(
-                        "p-4 rounded-lg cursor-pointer border transition-all duration-200",
-                        "bg-[hsl(var(--muted))]/20 hover:bg-[hsl(var(--action-active))]/10",
-                        "text-[hsl(var(--foreground))]",
-                        "border-[hsl(var(--border))/30]",
-                        index === 0 && "ring-2 ring-green-500 border-green-500/50", // Highlight auto-navigated result
-                      )}
-                      onClick={() => handleSearchResultClick(msg)}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <p className="font-semibold text-sm">{msg.profiles?.display_name || msg.profiles?.username}</p>
-                          <span className="text-xs text-[hsl(var(--muted-foreground))]">
-                            {msg.created_at ? new Date(msg.created_at).toLocaleDateString() : "Unknown date"}
-                          </span>
-                        </div>
-                        {index === 0 && (
-                          <div className="flex items-center gap-1 text-green-500 bg-green-100 dark:bg-green-900/30 px-2 py-1 rounded-full">
-                            <Navigation className="h-3 w-3" />
-                            <span className="text-xs font-medium">Navigating</span>
-                          </div>
-                        )}
-                      </div>
-                      <p className="text-[hsl(var(--muted-foreground))] text-sm line-clamp-3">{msg.text}</p>
-                    </div>
-                  ))
-                ) : messageSearchQuery ? (
-                  <div className="text-center py-8">
-                    <p className="text-[hsl(var(--muted-foreground))] text-sm">No matching messages found.</p>
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <p className="text-[hsl(var(--muted-foreground))] text-sm">Start typing to search and navigate messages...</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Close Button */}
-              <div className="mt-6 flex justify-end">
-                <DrawerClose asChild>
-                  <Button variant="outline">Close</Button>
-                </DrawerClose>
-              </div>
+            
+            
+             
             </div>
           </div>
         </DrawerContent>
@@ -654,7 +602,7 @@ export default function ListMessages() {
       <div
         ref={scrollRef}
         onScroll={handleOnScroll}
-        className="flex-1 overflow-y-scroll px-4 py-2 space-y-2 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent"
+        className="flex-1 overflow-y-scroll px-3 py-2 space-y-2 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent"
       >
         <div className="w-full max-w-full">
           {isLoading ? (

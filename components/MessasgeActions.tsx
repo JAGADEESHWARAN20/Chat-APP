@@ -18,6 +18,42 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { useEffect, useRef } from "react";
 
+// CSS Variables from your theme
+const CSS_VARS = {
+  // Background colors
+  background: 'hsl(var(--background))',
+  card: 'hsl(var(--card))',
+  popover: 'hsl(var(--popover))',
+  
+  // Text colors
+  foreground: 'hsl(var(--foreground))',
+  cardForeground: 'hsl(var(--card-foreground))',
+  popoverForeground: 'hsl(var(--popover-foreground))',
+  mutedForeground: 'hsl(var(--muted-foreground))',
+  destructive: 'hsl(var(--destructive))',
+  destructiveForeground: 'hsl(var(--destructive-foreground))',
+  
+  // Border colors
+  border: 'hsl(var(--border))',
+  input: 'hsl(var(--input))',
+  
+  // Primary colors
+  primary: 'hsl(var(--primary))',
+  primaryForeground: 'hsl(var(--primary-foreground))',
+  
+  // Secondary colors
+  secondary: 'hsl(var(--secondary))',
+  secondaryForeground: 'hsl(var(--secondary-foreground))',
+  
+  // Action colors
+  actionBg: 'var(--action-bg)',
+  actionHover: 'var(--action-hover)',
+  actionActive: 'var(--action-active)',
+  actionText: 'var(--action-text)',
+  
+
+  zTop: 'var(--z-top)',
+} as const;
 
 function focusMessageContainerSafely() {
   const tryFocus = () => {
@@ -72,24 +108,39 @@ export function DeleteAlert() {
       }}
     >
       <AlertDialogContent
-        className="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+        style={{
+          backgroundColor: CSS_VARS.background,
+          color: CSS_VARS.foreground,
+          
+        }}
         onOpenAutoFocus={(e: Event) => e.preventDefault()}
         onCloseAutoFocus={(e: Event) => e.preventDefault()}
       >
         <AlertDialogHeader>
-          <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-          <AlertDialogDescription>
+          <AlertDialogTitle style={{ color: CSS_VARS.foreground }}>
+            Are you absolutely sure?
+          </AlertDialogTitle>
+          <AlertDialogDescription style={{ color: CSS_VARS.mutedForeground }}>
             This action cannot be undone. This will permanently delete the message from the chat.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          {/* AlertDialogCancel will call onOpenChange(false) automatically */}
-          <AlertDialogCancel className="dark:bg-gray-800 dark:text-gray-100">
+          <AlertDialogCancel 
+            style={{
+              backgroundColor: CSS_VARS.secondary,
+              color: CSS_VARS.secondaryForeground,
+              borderColor: CSS_VARS.border,
+            }}
+          >
             Cancel
           </AlertDialogCancel>
           <AlertDialogAction
-            className="bg-red-600 text-white hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800"
+            style={{
+              backgroundColor: CSS_VARS.destructive,
+              color: CSS_VARS.destructiveForeground,
+            }}
             onClick={handleDeleteMessage}
+            className="hover:opacity-90 transition-opacity"
           >
             Continue
           </AlertDialogAction>
@@ -166,7 +217,10 @@ export function EditAlert() {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div 
+      className="fixed inset-0 flex items-center justify-center"
+      style={{ zIndex: CSS_VARS.zTop }}
+    >
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-black/50 backdrop-blur-sm"
@@ -174,14 +228,27 @@ export function EditAlert() {
       />
 
       {/* Modal */}
-      <div className="relative bg-white dark:bg-gray-900 rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
+      <div 
+        className="relative rounded-lg shadow-xl p-6 w-full max-w-md mx-4"
+        style={{
+          backgroundColor: CSS_VARS.background,
+          color: CSS_VARS.foreground,
+        }}
+      >
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+          <h2 
+            className="text-xl font-semibold"
+            style={{ color: CSS_VARS.foreground }}
+          >
             Edit Message
           </h2>
           <Button
             onClick={handleCancel}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+            style={{
+              backgroundColor: 'transparent',
+              color: CSS_VARS.mutedForeground,
+            }}
+            className="hover:opacity-70 transition-opacity"
           >
             <X className="h-5 w-5" />
           </Button>
@@ -190,7 +257,12 @@ export function EditAlert() {
         <Input
           defaultValue={actionMessage?.text || ""}
           ref={inputRef}
-          className="mb-4 dark:bg-gray-800 dark:text-gray-100"
+          style={{
+            backgroundColor: CSS_VARS.input,
+            color: CSS_VARS.foreground,
+            borderColor: CSS_VARS.border,
+          }}
+          className="mb-4"
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               handleEdit();
@@ -204,13 +276,21 @@ export function EditAlert() {
           <Button
             variant="outline"
             onClick={handleCancel}
-            className="dark:bg-gray-800 dark:text-gray-100"
+            style={{
+              backgroundColor: CSS_VARS.secondary,
+              color: CSS_VARS.secondaryForeground,
+              borderColor: CSS_VARS.border,
+            }}
           >
             Cancel
           </Button>
           <Button
             onClick={handleEdit}
-            className="bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800"
+            style={{
+              backgroundColor: CSS_VARS.primary,
+              color: CSS_VARS.primaryForeground,
+            }}
+            className="hover:opacity-90 transition-opacity"
           >
             Save changes
           </Button>

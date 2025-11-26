@@ -211,15 +211,23 @@ const currentUser = useUnifiedRoomStore((s) => s.user);
           style={{ height: HEADER_HEIGHT }}
         >
           <div className="flex items-center gap-3">
-            {activeTab !== "search" && <Button
+          <Button
               variant="ghost"
               size="icon"
-              onClick={handleToggleLeft}
-              className={cn("hover:bg-accent opacity-60 rounded-xl")}
+              onClick={activeTab !== "search" ? handleToggleLeft : undefined}
+              className={cn(
+                "hover:bg-accent opacity-60 rounded-xl",
+                activeTab === "search" && "pointer-events-none opacity-30"
+              )}
+              disabled={activeTab === "search"}
             >
-              {isLeftSidebarOpen ? <PanelLeft className={`w-[2em] h-[2em] ${isLeftSidebarOpen && isMobile && "hidden "}`} /> : <PanelLeft className={`w-[2em] h-[2em] ${isLeftSidebarOpen && isMobile && "block "}`} />}
+              {isLeftSidebarOpen ? (
+                <PanelLeft className="w-[2em] h-[2em] hidden" />
+              ) : (
+                <PanelLeft className={`w-[2em] h-[2em] ${activeTab === "search" ? "hidden" : "block"}`} />
+              )}
             </Button>
-            }
+            
             <h1 className="text-[2em] font-bold block pl-2">FlyChat</h1>
           </div>
 
