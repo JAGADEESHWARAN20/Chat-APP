@@ -113,6 +113,7 @@ export function DeleteAlert() {
           color: CSS_VARS.foreground,
           
         }}
+        className="w-[70vw] rounded-md"
         onOpenAutoFocus={(e: Event) => e.preventDefault()}
         onCloseAutoFocus={(e: Event) => e.preventDefault()}
       >
@@ -124,12 +125,12 @@ export function DeleteAlert() {
             This action cannot be undone. This will permanently delete the message from the chat.
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter>
+        <AlertDialogFooter className="flex flex-row items-center justify-center gap-[.51em] ">
           <AlertDialogCancel 
             style={{
               backgroundColor: CSS_VARS.secondary,
               color: CSS_VARS.secondaryForeground,
-              borderColor: CSS_VARS.border,
+              
             }}
           >
             Cancel
