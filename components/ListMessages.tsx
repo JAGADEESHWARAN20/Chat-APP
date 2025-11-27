@@ -10,21 +10,18 @@ import { useUser } from "@/lib/store/user";
 import { useSelectedRoom } from "@/lib/store/roomstore";
 import TypingIndicator from "./TypingIndicator";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Search, X } from "lucide-react";
-import { useSearchHighlight } from "@/lib/store/SearchHighlightContext";
+import { Search } from "lucide-react";
 import { cn } from "@/lib/utils";
-import {
-  Drawer,
-  
-  DrawerContent,
-  DrawerDescription,
-  DrawerHeader,
-  DrawerTitle,
-  DrawerTrigger,
-} from "@/components/ui/drawer";
+import { useSearchHighlight } from "@/lib/store/SearchHighlightContext";
 
 type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
+
+interface ListMessagesProps {
+  searchQuery?: string;
+  isSearching?: boolean;
+  onSearchStateChange?: (searching: boolean) => void;
+  onSearchTrigger?: () => void; // New prop to trigger search in parent
+}
 
 // Search Algorithm - Inverted Index with string IDs
 class MessageSearchEngine {
@@ -45,7 +42,6 @@ class MessageSearchEngine {
 
   removeMessage(messageId: string) {
     this.messages.delete(messageId);
-    // Remove from inverted index
     for (const [word, messageIds] of this.invertedIndex.entries()) {
       messageIds.delete(messageId);
       if (messageIds.size === 0) {
@@ -58,12 +54,11 @@ class MessageSearchEngine {
     const queryWords = this.tokenize(query);
     if (queryWords.length === 0) return [];
 
-    // Find messages containing ALL query words (AND logic)
     let results: Set<string> | null = null;
     
     for (const word of queryWords) {
       const wordResults = this.invertedIndex.get(word);
-      if (!wordResults) return []; // One word not found
+      if (!wordResults) return [];
       
       if (results === null) {
         results = new Set(wordResults);
@@ -74,12 +69,10 @@ class MessageSearchEngine {
 
     if (!results) return [];
     
-    // Convert to array and rank by relevance with sequence priority
     return Array.from(results)
       .map(id => this.messages.get(id))
       .filter((msg): msg is Imessage => msg !== undefined)
       .sort((a, b) => {
-        // Enhanced ranking: prioritize sequence matches and recency
         const aScore = this.calculateSequenceRelevance(a, query);
         const bScore = this.calculateSequenceRelevance(b, query);
         return bScore - aScore;
@@ -98,11 +91,9 @@ class MessageSearchEngine {
     const lowerQuery = query.toLowerCase();
     let score = 0;
     
-    // Exact sequence match (highest priority)
     if (text.includes(lowerQuery)) {
       score += 1000;
       
-      // Bonus for sequence at the beginning of words
       const words = text.split(/\s+/);
       for (const word of words) {
         if (word.startsWith(lowerQuery)) {
@@ -112,7 +103,6 @@ class MessageSearchEngine {
       }
     }
     
-    // Word-by-word matching
     const queryWords = lowerQuery.split(/\s+/).filter(w => w.length > 0);
     let allWordsFound = true;
     
@@ -121,7 +111,6 @@ class MessageSearchEngine {
         const occurrences = (text.split(word).length - 1);
         score += occurrences * 100;
         
-        // Bonus for word at beginning
         if (text.startsWith(word)) {
           score += 200;
         }
@@ -130,15 +119,13 @@ class MessageSearchEngine {
       }
     });
     
-    // All words found bonus
     if (allWordsFound) {
       score += 300;
     }
     
-    // Recency bonus (newer messages are more relevant)
     const messageAge = Date.now() - new Date(message.created_at).getTime();
     const daysOld = messageAge / (1000 * 60 * 60 * 24);
-    const recencyBonus = Math.max(0, 50 - daysOld); // Messages up to 50 days old get bonus
+    const recencyBonus = Math.max(0, 50 - daysOld);
     score += recencyBonus;
     
     return score;
@@ -150,17 +137,17 @@ class MessageSearchEngine {
   }
 }
 
-export default function ListMessages() {
+export default function ListMessages({ 
+  searchQuery = "", 
+  isSearching = false, 
+  onSearchStateChange,
+  onSearchTrigger // New prop
+}: ListMessagesProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [userScrolled, setUserScrolled] = useState(false);
   const [notification, setNotification] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   
-  // Search states
-  const [isMessageSearchOpen, setIsMessageSearchOpen] = useState(false);
-  const [messageSearchQuery, setMessageSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<Imessage[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
   const [currentNavigatedMessageId, setCurrentNavigatedMessageId] = useState<string | null>(null);
 
   const selectedRoom = useSelectedRoom();
@@ -175,12 +162,11 @@ export default function ListMessages() {
     optimisticUpdateMessage,
   } = useMessage((state) => state);
 
-  const { setHighlightedMessageId, setSearchQuery } = useSearchHighlight();
+  const { setHighlightedMessageId } = useSearchHighlight();
   const supabase = getSupabaseBrowserClient();
   const messagesLoadedRef = useRef<Set<string>>(new Set());
   const prevRoomIdRef = useRef<string | null>(null);
   
-  // Search engine instance
   const searchEngineRef = useRef<MessageSearchEngine>(new MessageSearchEngine());
 
   const handleOnScroll = useCallback(() => {
@@ -202,10 +188,14 @@ export default function ListMessages() {
     });
   }, []);
 
+  // Search trigger handler
+  const handleSearchTrigger = useCallback(() => {
+    onSearchTrigger?.();
+  }, [onSearchTrigger]);
+
   // Index messages for search when they load
   useEffect(() => {
     if (messages.length > 0 && selectedRoom?.id) {
-      // Clear previous index and re-index all messages
       searchEngineRef.current.clear();
       messages.forEach(msg => {
         if (msg.room_id === selectedRoom.id) {
@@ -215,98 +205,58 @@ export default function ListMessages() {
     }
   }, [messages, selectedRoom?.id]);
 
-  // Real-time navigation search handler
-  const handleSearch = useCallback(
-    async (query: string) => {
-      setMessageSearchQuery(query);
-      setSearchQuery(query);
-      
-      if (!selectedRoom?.id) return;
+  // Handle search from header input
+  useEffect(() => {
+    if (searchQuery.trim().length === 0) {
+      setHighlightedMessageId(null);
+      setCurrentNavigatedMessageId(null);
+      onSearchStateChange?.(false);
+      return;
+    }
 
-      if (query.trim().length === 0) {
-        setSearchResults([]);
-        setHighlightedMessageId(null);
-        setCurrentNavigatedMessageId(null);
-        return;
-      }
-
-      setIsSearching(true);
-      
-      // Use setTimeout to prevent blocking the UI thread
-      setTimeout(() => {
-        try {
-          const results = searchEngineRef.current.search(query);
-          setSearchResults(results);
+    onSearchStateChange?.(true);
+    
+    setTimeout(() => {
+      try {
+        const results = searchEngineRef.current.search(searchQuery);
+        
+        // Auto-navigate to first result in real-time as user types
+        if (results.length > 0) {
+          const bestMatch = results[0];
+          setHighlightedMessageId(bestMatch.id);
+          setCurrentNavigatedMessageId(bestMatch.id);
           
-          // Auto-navigate to first result in real-time as user types
-          if (results.length > 0) {
-            const bestMatch = results[0];
-            setHighlightedMessageId(bestMatch.id);
-            setCurrentNavigatedMessageId(bestMatch.id);
-            
-            // Scroll to the matched message
-            setTimeout(() => {
-              const messageElement = document.getElementById(`msg-${bestMatch.id}`);
-              if (messageElement) {
-                messageElement.scrollIntoView({ 
-                  behavior: "smooth", 
-                  block: "center" 
-                });
-                
-                
-              }
-            }, 100);
-          } else {
-            // No results found, clear highlights
-            setHighlightedMessageId(null);
-            setCurrentNavigatedMessageId(null);
-          }
-        } catch (error) {
-          console.error("Search error:", error);
-          setSearchResults([]);
+          // Scroll to the matched message
+          setTimeout(() => {
+            const messageElement = document.getElementById(`msg-${bestMatch.id}`);
+            if (messageElement) {
+              messageElement.scrollIntoView({ 
+                behavior: "smooth", 
+                block: "center" 
+              });
+            }
+          }, 100);
+        } else {
           setHighlightedMessageId(null);
           setCurrentNavigatedMessageId(null);
-        } finally {
-          setIsSearching(false);
         }
-      }, 0);
-    },
-    [selectedRoom?.id, setSearchQuery, setHighlightedMessageId]
-  );
+      } catch (error) {
+        console.error("Search error:", error);
+        setHighlightedMessageId(null);
+        setCurrentNavigatedMessageId(null);
+      } finally {
+        onSearchStateChange?.(false);
+      }
+    }, 0);
+  }, [searchQuery, setHighlightedMessageId, onSearchStateChange]);
 
-  // Handle message click from search results
-  // const handleSearchResultClick = useCallback((message: Imessage) => {
-  //   setHighlightedMessageId(message.id);
-  //   setCurrentNavigatedMessageId(message.id);
-  //   const messageElement = document.getElementById(`msg-${message.id}`);
-  //   if (messageElement) {
-  //     messageElement.scrollIntoView({ 
-  //       behavior: "smooth", 
-  //       block: "center" 
-  //     });
-  //     // Add highlight effect
-  //     messageElement.classList.add("bg-slate-900", "dark:bg-white");
-  //     setTimeout(() => {
-  //       messageElement.classList.remove("bg-slate-900", "dark:bg-white");
-  //     }, 2000);
-  //   }
-  //   setIsMessageSearchOpen(false);
-  //   setTimeout(() => {
-  //     setHighlightedMessageId(null);
-  //     setCurrentNavigatedMessageId(null);
-  //   }, 3000);
-  // }, [setHighlightedMessageId]);
-
-  // Clear navigation when search drawer closes
-// Clear all highlights when search drawer closes
-useEffect(() => {
-  if (!isMessageSearchOpen) {
-    setCurrentNavigatedMessageId(null);
-    setMessageSearchQuery("");
-    setSearchResults([]);
-    setHighlightedMessageId(null); // Add this line
-  }
-}, [isMessageSearchOpen]);
+  // Clear navigation when search query is cleared
+  useEffect(() => {
+    if (!searchQuery) {
+      setCurrentNavigatedMessageId(null);
+      setHighlightedMessageId(null);
+    }
+  }, [searchQuery, setHighlightedMessageId]);
 
   // Load initial messages
   useEffect(() => {
@@ -406,7 +356,6 @@ useEffect(() => {
               };
 
               addMessage(newMessage);
-              // Index the new message for search
               searchEngineRef.current.indexMessage(newMessage);
 
               if (scrollRef.current) {
@@ -424,7 +373,6 @@ useEffect(() => {
             text: messagePayload.text,
             is_edited: messagePayload.is_edited,
           });
-          // Re-index the updated message
           const updatedMessage = messages.find(m => m.id === messagePayload.id);
           if (updatedMessage) {
             searchEngineRef.current.removeMessage(messagePayload.id);
@@ -532,82 +480,22 @@ useEffect(() => {
 
   return (
     <div className="h-[75dvh] w-full flex flex-col overflow-hidden relative">
-
-     {/* Search Drawer */}
-     <Drawer
-  open={isMessageSearchOpen}
-  onOpenChange={setIsMessageSearchOpen}
->
-  <DrawerTrigger asChild>
-    <Button
-      variant="ghost"
-      size="icon"
-      className={cn(
-        "absolute top-4 right-4 z-30 w-[2.5em] h-[2.5em] flex items-center justify-center rounded-full",
-        "bg-[hsl(var(--background))]/60 backdrop-blur-md shadow-sm",
-        "transition-all duration-300 ease-in-out group hover:bg-[hsl(var(--action-active))]/15 active:scale-95",
-        "focus-visible:ring-[hsl(var(--action-ring))]/50 focus-visible:ring-2",
-        "text-[hsl(var(--foreground))]"
-      )}
-      title="Search Messages"
-    >
-      <Search className="h-5 w-5 transition-all duration-300 stroke-[hsl(var(--muted-foreground))]" />
-    </Button>
-  </DrawerTrigger>
-
-  <DrawerContent
-    id="drawer-fixed-container"
-    className="relative z-50 flex flex-col overflow-hidden border-t bg-background"
-  >
-
-    {/* ❌ Close Button */}
-    <Button
-      variant="ghost"
-      size="icon"
-      onClick={() => setIsMessageSearchOpen(false)}
-      className="absolute top-3 right-3 z-50 p-2 rounded-full hover:bg-muted/50"
-      title="Close"
-    >
-      <X className="h-5 w-5" />
-    </Button>
-
-    <div className="mx-auto w-full max-w-2xl">
-      <DrawerHeader className="text-left">
-        <DrawerTitle>Search Messages</DrawerTitle>
-        <DrawerDescription>
-          Type to search and navigate messages in real-time
-        </DrawerDescription>
-      </DrawerHeader>
-
-      <div className="p-4 pb-6">
-        <div className="relative mb-4">
-
-          <Input
-            placeholder="Type to navigate messages..."
-            value={messageSearchQuery}
-            onChange={(e) => handleSearch(e.target.value)}
-            autoFocus
-            className="w-full px-4 py-3 text-base rounded-xl pr-12 bg-[hsl(var(--muted))]/40"
-          />
-
-          {messageSearchQuery && (
-            <Button
-              onClick={() => handleSearch("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2"
-              variant="ghost"
-              size="icon"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          )}
-        </div>
-      </div>
-    </div>
-
-  </DrawerContent>
-</Drawer>
-
-
+      {/* Search Trigger Button - Top Right Corner */}
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={handleSearchTrigger}
+        className={cn(
+          "absolute top-4 right-4 z-30 w-[2.5em] h-[2.5em] flex items-center justify-center rounded-full",
+          "bg-[hsl(var(--background))]/60 backdrop-blur-md shadow-sm",
+          "transition-all duration-300 ease-in-out group hover:bg-[hsl(var(--action-active))]/15 active:scale-95",
+          "focus-visible:ring-[hsl(var(--action-ring))]/50 focus-visible:ring-2",
+          "text-[hsl(var(--foreground))]"
+        )}
+        title="Search Messages"
+      >
+        <Search className="h-5 w-5 transition-all duration-300 stroke-[hsl(var(--muted-foreground))]" />
+      </Button>
 
       {/* Messages Scroll Area */}
       <div
@@ -628,7 +516,7 @@ useEffect(() => {
                 key={message.id} 
                 message={message} 
                 isNavigated={currentNavigatedMessageId === message.id}
-                searchQuery={messageSearchQuery}
+                searchQuery={searchQuery}
               />
             ))
           ) : (

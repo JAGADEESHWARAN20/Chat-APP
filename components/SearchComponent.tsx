@@ -17,7 +17,13 @@ import {
   LogOut,
 } from "lucide-react";
 
-import { useRoomPresence, useAvailableRooms, useRoomActions, type RoomWithMembership } from "@/lib/store/roomstore";
+import {
+  useRoomPresence,
+  useAvailableRooms,
+  useRoomActions,
+  type RoomWithMembership,
+} from "@/lib/store/roomstore";
+
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useDebounce } from "use-debounce";
 import { toast } from "sonner";
@@ -73,133 +79,129 @@ const SearchComponent = memo(function SearchComponent({
 
   const [debounced] = useDebounce(query, 300);
 
-  // Use unified store
+  // session guard
+  const [sessionReady, setSessionReady] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session?.user?.id) {
+        setSessionReady(true);
+      }
+    });
+  }, [supabase]);
+
+  // Store
   const presence = useRoomPresence();
   const availableRooms = useAvailableRooms();
-  const { joinRoom, leaveRoom, refreshRooms } = useRoomActions();
+  const { joinRoom, leaveRoom, refreshRooms, updateRoomMembership } =
+    useRoomActions();
 
-  // Debug: Log when availableRooms changes
+  // Log for debugging
   useEffect(() => {
-    console.log('🔍 SearchComponent - availableRooms updated:', {
-      totalRooms: availableRooms.length,
-      joinedRooms: availableRooms.filter(r => r.isMember && r.participationStatus === 'accepted').length,
-      pendingRooms: availableRooms.filter(r => r.participationStatus === 'pending').length
-    });
+    console.log("🔍 availableRooms =", availableRooms);
   }, [availableRooms]);
 
-  // Initial data load
+  // initial room fetch
   useEffect(() => {
-    if (user?.id) {
-      console.log('🔍 SearchComponent - Initial data load for user:', user.id);
+    if (sessionReady && user?.id) {
       refreshRooms().catch(console.error);
     }
-  }, [user?.id, refreshRooms]);
+  }, [sessionReady, user?.id, refreshRooms]);
 
-  // Filter rooms based on search
+  // search filter
   const filteredRooms = useMemo(() => {
     if (!debounced) return availableRooms;
-    return availableRooms.filter(room => 
+    return availableRooms.filter((room) =>
       room.name.toLowerCase().includes(debounced.toLowerCase())
     );
   }, [availableRooms, debounced]);
 
-  // Real-time subscription for membership updates
+  // ───────────────────────────────────────────────
+  // REALTIME PATCH WITH sessionReady BLOCK
+  // ───────────────────────────────────────────────
   useEffect(() => {
-    if (!user?.id) {
-      console.log('❌ SearchComponent - No user ID, skipping realtime setup');
-      return;
-    }
+    if (!sessionReady || !user?.id) return;
 
-    console.log('🔌 SearchComponent - Setting up realtime subscriptions for user:', user.id);
-    const channel = supabase.channel(`search-sync-${user.id}`);
+    console.log("🔌 Realtime enabled for user:", user.id);
 
-    const subscribe = async () => {
-      try {
-        // Listen for room participant changes
-        channel.on(
-          "postgres_changes",
-          { 
-            event: "*", 
-            schema: "public", 
-            table: "room_participants",
-            filter: `user_id=eq.${user.id}`
-          },
-          async (payload: RealtimePayload) => {
-            console.log('📢 SearchComponent - room_participants event:', payload);
-            try {
-              const { eventType, new: newRecord, old: oldRecord } = payload;
-              const record = newRecord || oldRecord;
-              
-              if (!record?.room_id) {
-                console.log('❌ No room_id in payload');
-                return;
-              }
+    const channel = supabase.channel(`search-sync-${user.id}`, {
+      config: { broadcast: { self: false } },
+    });
 
-              console.log('🔄 Processing participant change for room:', record.room_id, 'status:', newRecord?.status);
+    // room_participants realtime
+    channel.on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "room_participants",
+        filter: `user_id=eq.${user.id}`,
+      },
+      async (payload: RealtimePayload) => {
+        const { eventType, new: newRec, old: oldRec } = payload;
+        const record = newRec || oldRec;
 
-              // Refresh rooms when participation status changes
-              if (eventType === 'INSERT' || eventType === 'UPDATE' || eventType === 'DELETE') {
-                console.log('🔄 Refreshing rooms due to participant change');
-                await refreshRooms();
-                
-                if (eventType === 'UPDATE' && newRecord?.status === 'accepted') {
-                  console.log('🎉 User accepted into room:', record.room_id);
-                  toast.success("Your request was accepted! You can now access the room.");
-                }
-              }
-            } catch (error) {
-              console.error('❌ Error handling participant update:', error);
-            }
-          }
-        );
+        if (!record?.room_id) return;
 
-        // Listen for notifications
-        channel.on(
-          "postgres_changes",
-          { 
-            event: "*", 
-            schema: "public", 
-            table: "notifications",
-            filter: `user_id=eq.${user.id}`
-          },
-          async (payload: NotificationPayload) => {
-            console.log('📢 SearchComponent - notifications event:', payload);
-            try {
-              const { new: newRecord } = payload;
-              
-              if (newRecord?.type === 'join_request_accepted' && newRecord.room_id) {
-                console.log('🎉 Join request accepted for room:', newRecord.room_id);
-                // Refresh to show the user they're now a member
-                await refreshRooms();
-                toast.success("Your join request was accepted!");
-              }
-            } catch (error) {
-              console.error('❌ Error handling notification update:', error);
-            }
-          }
-        );
+        if (eventType === "UPDATE" && newRec?.status === "accepted") {
+          updateRoomMembership(record.room_id, {
+            isMember: true,
+            participationStatus: "accepted",
+          });
 
-        await channel.subscribe();
-        console.log('✅ SearchComponent - Realtime subscriptions active');
-      } catch (err) {
-        console.error('❌ SearchComponent - Subscription error:', err);
+          toast.success("Your join request was accepted!");
+        }
       }
-    };
+    );
 
-    subscribe();
+    // notifications realtime
+    channel.on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "notifications",
+        filter: `user_id=eq.${user.id}`,
+      },
+      async (payload: NotificationPayload) => {
+        const rec = payload.new;
+        if (!rec) return;
+
+        if (rec.type === "join_request_accepted" && rec.room_id) {
+          updateRoomMembership(rec.room_id, {
+            isMember: true,
+            participationStatus: "accepted",
+          });
+
+          toast.success("Your join request was accepted!");
+          setTimeout(() => refreshRooms(), 300);
+        }
+      }
+    );
+
+    channel.subscribe((status) => {
+      console.log("Realtime status:", status);
+    });
 
     return () => {
-      console.log('🔌 SearchComponent - Cleaning up realtime subscriptions');
-      supabase.removeChannel(channel).catch(console.error);
+      console.log("🔌 Cleaning realtime channel");
+      supabase.removeChannel(channel);
     };
-  }, [supabase, user?.id, refreshRooms]);
+  }, [
+    sessionReady,
+    user?.id,
+    supabase,
+    updateRoomMembership,
+    refreshRooms,
+  ]);
 
-  // Fetch users when tab changes to users
+  // fetch users
   const fetchUsersRPC = useCallback(async () => {
     if (tab !== "users") return;
-    
+
     try {
       setLoading(true);
+
       const { data, error } = await supabase.rpc("search_users", {
         p_query: debounced || "",
       });
@@ -207,7 +209,6 @@ const SearchComponent = memo(function SearchComponent({
       if (error) throw error;
       setUserResults(data || []);
     } catch (err) {
-      console.error("fetchUsersRPC error:", err);
       toast.error("Failed loading users");
     } finally {
       setLoading(false);
@@ -215,52 +216,39 @@ const SearchComponent = memo(function SearchComponent({
   }, [supabase, debounced, tab]);
 
   useEffect(() => {
-    if (tab === "users") {
-      fetchUsersRPC();
-    }
+    if (tab === "users") fetchUsersRPC();
   }, [tab, fetchUsersRPC]);
 
-  const handleJoin = useCallback(async (roomId: string) => {
-    console.log('🔍 SearchComponent - Joining room:', roomId);
-    const success = await joinRoom(roomId);
-    if (success) {
-      console.log('✅ SearchComponent - Join request successful');
-      // The store will handle optimistic updates and real-time sync
-    } else {
-      console.log('❌ SearchComponent - Join request failed');
-    }
-  }, [joinRoom]);
+  // join & leave
+  const handleJoin = useCallback(
+    async (roomId: string) => {
+      await joinRoom(roomId);
+    },
+    [joinRoom]
+  );
 
-  const handleLeave = useCallback(async (roomId: string) => {
-    console.log('🔍 SearchComponent - Leaving room:', roomId);
-    const success = await leaveRoom(roomId);
-    if (success) {
-      console.log('✅ SearchComponent - Leave request successful');
-      // Store handles the state updates
-    } else {
-      console.log('❌ SearchComponent - Leave request failed');
-    }
-  }, [leaveRoom]);
+  const handleLeave = useCallback(
+    async (roomId: string) => {
+      await leaveRoom(roomId);
+    },
+    [leaveRoom]
+  );
 
+  // Card components unchanged
   const RoomCard = ({ room }: { room: RoomWithMembership }) => {
     const online = presence?.[room.id]?.onlineUsers ?? 0;
-    const isMember = room.isMember && room.participationStatus === 'accepted';
-    const isPending = room.participationStatus === 'pending';
-
-    console.log('🔍 RoomCard rendering:', {
-      id: room.id,
-      name: room.name,
-      isMember,
-      isPending,
-      participationStatus: room.participationStatus
-    });
+    const isMember =
+      room.isMember && room.participationStatus === "accepted";
+    const isPending = room.participationStatus === "pending";
 
     return (
       <Card className="flex flex-col h-full rounded-2xl bg-card/80 border shadow-sm hover:shadow-md transition-all">
         <CardHeader className="h-20 p-4 bg-gradient-to-br from-indigo-600/20 to-indigo-800/40 rounded-t-2xl">
           <p className="text-base md:text-lg font-semibold flex items-center gap-2 truncate">
             #{highlight(room.name, debounced)}
-            {room.is_private && <LockIcon className="h-4 w-4 text-muted-foreground" />}
+            {room.is_private && (
+              <LockIcon className="h-4 w-4 text-muted-foreground" />
+            )}
           </p>
         </CardHeader>
 
@@ -283,7 +271,7 @@ const SearchComponent = memo(function SearchComponent({
                 Pending approval
               </span>
             )}
-            
+
             {isMember && (
               <span className="text-xs bg-green-500/20 text-green-700 px-2 py-1 rounded-md">
                 Member
@@ -294,18 +282,18 @@ const SearchComponent = memo(function SearchComponent({
           <div className="flex flex-col gap-2 mt-4">
             {isMember ? (
               <>
-                <Button 
-                  size="sm" 
-                  className="bg-indigo-600 hover:bg-indigo-700" 
+                <Button
+                  size="sm"
+                  className="bg-indigo-600 hover:bg-indigo-700"
                   onClick={() => router.push(`/rooms/${room.id}`)}
                 >
                   Open Room
                 </Button>
 
-                <Button 
-                  size="sm" 
-                  variant="outline" 
-                  className="text-red-600 hover:text-red-700" 
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-red-600 hover:text-red-700"
                   onClick={() => handleLeave(room.id)}
                 >
                   <LogOut className="h-4 w-4 mr-2" />
@@ -313,9 +301,9 @@ const SearchComponent = memo(function SearchComponent({
                 </Button>
               </>
             ) : (
-              <Button 
-                size="sm" 
-                className="bg-indigo-600 hover:bg-indigo-700 text-white" 
+              <Button
+                size="sm"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white"
                 onClick={() => handleJoin(room.id)}
                 disabled={isPending}
               >
@@ -329,13 +317,17 @@ const SearchComponent = memo(function SearchComponent({
   };
 
   const UserCard = (u: PartialProfile) => {
-    const initial = (u.display_name ?? u.username ?? "?")[0]?.toUpperCase();
+    const initial =
+      (u.display_name ?? u.username ?? "?")[0]?.toUpperCase();
 
     return (
       <Card className="flex flex-col items-center justify-between p-4 rounded-xl bg-card/80 border aspect-[3/4]">
         <Avatar className="h-16 w-16 rounded-xl mb-3">
           {u.avatar_url ? (
-            <AvatarImage src={u.avatar_url} alt={u.display_name ?? "User"} />
+            <AvatarImage
+              src={u.avatar_url}
+              alt={u.display_name ?? "User"}
+            />
           ) : (
             <AvatarFallback className="bg-indigo-600 text-white text-lg">
               {initial}
@@ -350,10 +342,10 @@ const SearchComponent = memo(function SearchComponent({
           <p className="text-xs text-muted-foreground">@{u.username}</p>
         </div>
 
-        <Button 
-          size="sm" 
-          variant="secondary" 
-          className="w-full mt-3" 
+        <Button
+          size="sm"
+          variant="secondary"
+          className="w-full mt-3"
           onClick={() => router.push(`/profile/${u.id}`)}
         >
           View
@@ -367,11 +359,11 @@ const SearchComponent = memo(function SearchComponent({
       {/* Search bar */}
       <div className="flex flex-col sm:flex-row items-center gap-4 mb-6">
         <div className="relative flex-1">
-          <Input 
-            className="pl-10 h-12 rounded-xl" 
-            placeholder="Search rooms or users…" 
-            value={query} 
-            onChange={(e) => setQuery(e.target.value)} 
+          <Input
+            className="pl-10 h-12 rounded-xl"
+            placeholder="Search rooms or users…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
           />
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-5 w-5" />
         </div>
@@ -388,9 +380,15 @@ const SearchComponent = memo(function SearchComponent({
       <div className="flex-1 h-full overflow-y-scroll scrollbar-thin">
         <AnimatePresence mode="wait">
           {tab === "rooms" && (
-            <motion.div key="rooms" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            <motion.div
+              key="rooms"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+            >
               {loading ? (
-                <div className="h-full flex items-center justify-center">Loading…</div>
+                <div className="h-full flex items-center justify-center">
+                  Loading…
+                </div>
               ) : filteredRooms.length === 0 ? (
                 <div className="h-full flex items-center justify-center text-muted-foreground">
                   {debounced ? "No rooms found" : "No rooms available"}
@@ -406,9 +404,15 @@ const SearchComponent = memo(function SearchComponent({
           )}
 
           {tab === "users" && (
-            <motion.div key="users" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            <motion.div
+              key="users"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+            >
               {loading ? (
-                <div className="h-full flex items-center justify-center">Loading…</div>
+                <div className="h-full flex items-center justify-center">
+                  Loading…
+                </div>
               ) : userResults.length === 0 ? (
                 <div className="h-full flex items-center justify-center text-muted-foreground">
                   No users found

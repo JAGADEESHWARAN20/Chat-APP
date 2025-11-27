@@ -4,10 +4,10 @@ import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
-import {  useUnifiedRoomStore } from "@/lib/store/roomstore";
+import { useUnifiedRoomStore } from "@/lib/store/roomstore";
 
 import RightSidebarContent from "@/components/sidebar/RightSidebarContent";
-import {  SidebarProvider } from "@/components/sidebar";
+import { SidebarProvider } from "@/components/sidebar";
 import LeftSidebar from "@/components/LeftSidebar";
 import ChatMessages from "@/components/ChatMessages";
 import ChatInput from "@/components/ChatInput";
@@ -17,12 +17,14 @@ import SearchComponent from "@/components/SearchComponent";
 import CreateRoomDialog from "@/components/CreateRoomDialog";
 import NotificationsWrapper from "@/components/NotificationsWrapper";
 import SecureInitUser from "@/lib/initialization/secureInitUser";
-import { Home, Search as SearchIcon,  PanelLeft, Settings } from "lucide-react";
+import { Home, Search as SearchIcon, PanelLeft, Settings, X, ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { ThemeTransitionWrapper } from "./ThemeTransitionWrapper";
 import { PresenceConnector } from "./PresenceConnector";
 import { useUser } from "@/lib/store/user";
+
 interface UnifiedHomeProps {
   initialSidebarState?: "expanded" | "collapsed";
   onSidebarToggle?: () => void;
@@ -35,25 +37,27 @@ function UnifiedHomeContent({
   sidebarState,
 }: UnifiedHomeProps) {
   const { user } = useUser();
-
   const setRoomUser = useUnifiedRoomStore((s) => s.setUser);
 
+  // --- Search State ---
+  const [isSearchExpanded, setIsSearchExpanded] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
+
   // --- 1. Init Data ---
-
-
   useEffect(() => {
     if (user) setRoomUser(user);
   }, [user, setRoomUser]);
 
   // --- 2. Layout Constants ---
   const isMobile = useMediaQuery("(max-width: 768px)");
-  const SIDEBAR_WIDTH = isMobile ? 280 : 520; // 280px is standard mobile sidebar width
+  const SIDEBAR_WIDTH = isMobile ? 280 : 520;
   const HEADER_HEIGHT = "60px";
 
   // --- 3. State Management ---
   const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(initialSidebarState === "expanded");
   const [manualRightOpen, setManualRightOpen] = useState(false);
-  
+
   // Sync prop state if provided
   useEffect(() => {
     if (sidebarState !== undefined) {
@@ -62,11 +66,9 @@ function UnifiedHomeContent({
   }, [sidebarState]);
 
   // --- 4. Toggles (Strict Mutual Exclusion) ---
-  
   const handleToggleLeft = useCallback(() => {
     setIsLeftSidebarOpen((prev) => {
       const willOpen = !prev;
-      // If opening left, MUST close right to prevent collision
       if (willOpen) setManualRightOpen(false);
       return willOpen;
     });
@@ -75,18 +77,50 @@ function UnifiedHomeContent({
   const handleToggleRight = useCallback(() => {
     setManualRightOpen((prev) => {
       const willOpen = !prev;
-      // If opening right, MUST close left to prevent collision
       if (willOpen) setIsLeftSidebarOpen(false);
       return willOpen;
     });
   }, []);
 
-  // --- 5. Dynamic Styles (The Refactor) ---
+  // --- 5. Search Handlers ---
+  const handleSearchToggle = useCallback(() => {
+    setIsSearchExpanded((prev) => {
+      const willOpen = !prev;
+      if (willOpen) {
+        // When expanding search, close other sidebars and switch to home tab
+        setIsLeftSidebarOpen(false);
+        setManualRightOpen(false);
+        setActiveTab("home");
+      }
+      return willOpen;
+    });
+  }, []);
 
-  // LEFT SIDEBAR STYLE
+  const handleSearchBack = useCallback(() => {
+    setIsSearchExpanded(false);
+    setSearchQuery("");
+    setIsSearching(false);
+  }, []);
+
+  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchQuery(value);
+
+    if (value.trim()) {
+      setIsSearching(true);
+    } else {
+      setIsSearching(false);
+    }
+  }, []);
+
+  const handleSearchClear = useCallback(() => {
+    setSearchQuery("");
+    setIsSearching(false);
+  }, []);
+
+  // --- 6. Dynamic Styles ---
   const leftSidebarStyle: React.CSSProperties = useMemo(() => {
     if (isMobile) {
-      // Mobile: Absolute positioning + Translate
       return {
         position: "absolute",
         left: 0,
@@ -95,11 +129,9 @@ function UnifiedHomeContent({
         width: `${SIDEBAR_WIDTH}px`,
         transform: isLeftSidebarOpen ? "translateX(0%)" : "translateX(-100%)",
         transition: "transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-        zIndex: 50, // Above header
-        
+        zIndex: 50,
       };
     }
-    // Desktop: Flex resizing
     return {
       width: isLeftSidebarOpen ? `${SIDEBAR_WIDTH}px` : "0px",
       transform: "none",
@@ -107,10 +139,8 @@ function UnifiedHomeContent({
     };
   }, [isMobile, isLeftSidebarOpen, SIDEBAR_WIDTH]);
 
-  // RIGHT SIDEBAR STYLE
   const rightSidebarStyle: React.CSSProperties = useMemo(() => {
     if (isMobile) {
-      // Mobile: Absolute positioning + Translate
       return {
         position: "absolute",
         right: 0,
@@ -119,11 +149,9 @@ function UnifiedHomeContent({
         width: `${SIDEBAR_WIDTH}px`,
         transform: manualRightOpen ? "translateX(0%)" : "translateX(100%)",
         transition: "transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-        zIndex: 50, // Above header
-        
+        zIndex: 50,
       };
     }
-    // Desktop: Flex resizing
     return {
       width: manualRightOpen ? `${SIDEBAR_WIDTH - 20}px` : "0px",
       transform: "none",
@@ -131,39 +159,28 @@ function UnifiedHomeContent({
     };
   }, [isMobile, manualRightOpen, SIDEBAR_WIDTH]);
 
-  const selectedRoomId = useUnifiedRoomStore((s) => s.selectedRoomId);
-const currentUser = useUnifiedRoomStore((s) => s.user);
-
-
-
-
-  // MAIN CONTENT STYLE
   const mainStyle: React.CSSProperties = useMemo(() => {
     if (isMobile) {
-      // Mobile: Translate the WHOLE content area based on which sidebar is open.
-      // If Left is open -> Move Right (+Width)
-      // If Right is open -> Move Left (-Width)
-      // If Closed -> Stay at 0
-      const xOffset = isLeftSidebarOpen 
-        ? SIDEBAR_WIDTH 
+      const xOffset = isLeftSidebarOpen
+        ? SIDEBAR_WIDTH
         : (manualRightOpen ? -SIDEBAR_WIDTH : 0);
-
       return {
         transform: `translateX(${xOffset}px)`,
         transition: "transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-        width: "100%", // Ensure content maintains full width even when pushed off-screen
+        width: "100%",
       };
     }
-
-    // Desktop: Push content using Margins (layout reflow)
     return {
-      marginLeft: isLeftSidebarOpen ? `${SIDEBAR_WIDTH-520}px` : "0px",
+      marginLeft: isLeftSidebarOpen ? `${SIDEBAR_WIDTH - 520}px` : "0px",
       marginRight: manualRightOpen ? `${SIDEBAR_WIDTH - 520}px` : "0px",
       transition: "margin 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
     };
   }, [isMobile, isLeftSidebarOpen, manualRightOpen, SIDEBAR_WIDTH]);
 
-  // --- 6. Tabs Logic ---
+  const selectedRoomId = useUnifiedRoomStore((s) => s.selectedRoomId);
+  const currentUser = useUnifiedRoomStore((s) => s.user);
+
+  // --- 7. Tabs Logic ---
   const [activeTab, setActiveTab] = useState<"home" | "search">("home");
   const tabs = useMemo(
     () => [
@@ -175,10 +192,10 @@ const currentUser = useUnifiedRoomStore((s) => s.user);
 
   return (
     <div className="flex h-[100vh] w-screen overflow-hidden bg-background text-foreground relative">
-      <PresenceConnector 
-  roomId={selectedRoomId} 
-  userId={currentUser?.id ?? null} 
-/>
+      <PresenceConnector
+        roomId={selectedRoomId}
+        userId={currentUser?.id ?? null}
+      />
 
       <SecureInitUser />
 
@@ -207,68 +224,117 @@ const currentUser = useUnifiedRoomStore((s) => s.user);
       >
         {/* Header */}
         <header
-          className="w-full border-b flex-none sticky top-0 z-20 bg-background/95 backdrop-blur-xl flex items-center justify-between"
+          className="w-full border-b flex-none sticky top-0 z-20 bg-background/95 backdrop-blur-xl flex items-center justify-between px-4"
           style={{ height: HEADER_HEIGHT }}
         >
-          <div className="flex items-center gap-3">
-          <Button
-              variant="ghost"
-              size="icon"
-              onClick={activeTab !== "search" ? handleToggleLeft : undefined}
-              className={cn(
-                "hover:bg-accent opacity-60 rounded-xl",
-                activeTab === "search" && "pointer-events-none opacity-30"
-              )}
-              disabled={activeTab === "search"}
-            >
-              {isLeftSidebarOpen ? (
-                <PanelLeft className="w-[2em] h-[2em] hidden" />
-              ) : (
-                <PanelLeft className={`w-[2em] h-[2em] ${activeTab === "search" ? "hidden" : "block"}`} />
-              )}
-            </Button>
-            
-            <h1 className="text-[2em] font-bold block pl-2">FlyChat</h1>
-          </div>
+          {/* Normal Header Layout */}
+          {!isSearchExpanded ? (
+            <>
+              {/* Left Section - Logo and Left Sidebar Toggle */}
+              <div className="flex items-center gap-3 flex-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleToggleLeft}
+                  className="hover:bg-accent opacity-60 rounded-xl"
+                >
+                  <PanelLeft className="w-[2em] h-[2em]" />
+                </Button>
 
-          <div className="flex items-center gap-1 bg-muted/30 p-1 rounded-2xl">
-            {tabs.map(({ id, icon: Icon, label, onClick }) => (
-              <button
-                key={id}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onClick();
-                }}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-1.5 rounded-xl text-sm font-medium transition-all duration-200",
-                  activeTab === id ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                )}
-              >
-                <Icon className="w-[2em] h-[2em]" />
-                <span className="hidden sm:inline">{label}</span>
-              </button>
-            ))}
-          </div>
+                <h1 className="text-[2em] font-bold pl-2">FlyChat</h1>
+              </div>
 
-          <div className="flex items-center gap-1 pr-3">
-            <CreateRoomDialog user={user} />
-            <NotificationsWrapper />
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleToggleRight}
-              className={cn("flex", manualRightOpen && "bg-accent/50")}
-            >
-              <Settings className="w-[2em] h-[2em]" />
-            </Button>
-          </div>
+              {/* Center Section - Tabs */}
+              <div className="flex items-center justify-center flex-1 max-w-2xl">
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="flex items-center gap-1 bg-muted/30 p-1 rounded-2xl"
+                >
+                  {tabs.map(({ id, icon: Icon, label, onClick }) => (
+                    <button
+                      key={id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onClick();
+                      }}
+                      className={cn(
+                        "flex items-center gap-2 px-4 py-1.5 rounded-xl text-sm font-medium transition-all duration-200",
+                        activeTab === id ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                      )}
+                    >
+                      <Icon className="w-[2em] h-[2em]" />
+                      <span className="hidden sm:inline">{label}</span>
+                    </button>
+                  ))}
+                </motion.div>
+              </div>
+
+              {/* Right Section - Actions */}
+              <div className="flex items-center gap-1 flex-1 justify-end">
+                <CreateRoomDialog user={user} />
+                <NotificationsWrapper />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleToggleRight}
+                  className={cn("flex", manualRightOpen && "bg-accent/50")}
+                >
+                  <Settings className="w-[2em] h-[2em]" />
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center flex-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleSearchBack}
+                  className="hover:bg-accent rounded-xl mr-2 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <ChevronLeft className="w-6 h-6" />
+                </Button>
+              </div>
+
+              {/* Center Section - Search Input */}
+              <div className="flex items-center justify-center flex-[2] max-w-2xl">
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.2 }}
+                  className="flex items-center gap-2 w-[80vw] max-w-md"
+                >
+                  <div className="relative  flex-1">
+                    <Input
+                      placeholder="Search messages..."
+                      value={searchQuery}
+                      onChange={handleSearchChange}
+                      autoFocus
+                      className="w-full   rounded-xl py-2 px-4 pr-10 focus:border-none focus:outline-none transition-all duration-200"
+                    />
+                    {searchQuery && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={handleSearchClear}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 hover:bg-muted/50 rounded-lg transition-colors"
+                      >
+                        <X className="w-4 h-4 text-muted-foreground" />
+                      </Button>
+                    )}
+                  </div>
+                </motion.div>
+              </div>
+
+              {/* Right Section - Empty space for balance */}
+              <div className="flex-1" />
+            </>
+          )}
         </header>
 
         {/* Content Body */}
-        <div className="flex-1 overflow-hidden  relative flex flex-col">
-         
-          
-
+        <div className="flex-1 overflow-hidden relative flex flex-col">
           <AnimatePresence mode="wait" initial={false}>
             {activeTab === "home" && (
               <motion.section
@@ -285,12 +351,17 @@ const currentUser = useUnifiedRoomStore((s) => s.user);
                   </div>
                   <div className="flex-1 flex flex-col w-full relative">
                     <div className="absolute inset-0 flex flex-col">
-                    {user && selectedRoomId ? (
+                      {user && selectedRoomId ? (
                         <div className="w-full h-auto flex flex-col lg:flex-row">
                           {/* Chat Container */}
-                          <div className="flex-1  flex flex-col ">
-                            <div className="flex-1 px-2  ">
-                              <ChatMessages />
+                          <div className="flex-1 flex flex-col">
+                            <div className="flex-1 px-2">
+                              <ChatMessages
+                                searchQuery={searchQuery}
+                                isSearching={isSearching}
+                                onSearchStateChange={setIsSearching}
+                                onSearchTrigger={handleSearchToggle}
+                              />
                             </div>
                             <div className="flex-none border-t bg-background">
                               <ChatInput />

@@ -442,49 +442,63 @@ export default function Notifications({
   // ─────────────────────────────────────────────────────────────
   // Accept
   // ─────────────────────────────────────────────────────────────
-  const handleAccept = useCallback(
-    async (id: string, roomId: string | null, type: string) => {
-      if (!userId || !roomId || loadingIds.has(id)) return;
+  // ─────────────────────────────────────────────────────────────
+// Accept (fixed)
+// ─────────────────────────────────────────────────────────────
+const handleAccept = useCallback(
+  async (id: string, roomId: string | null, type: string) => {
+    if (!userId || !roomId || loadingIds.has(id)) return;
 
-      addLoading(id);
-      removeNotification(id);
+    addLoading(id);
+    removeNotification(id);
 
-      try {
-        const res = await fetch(`/api/notifications/${id}/accept`, {
-          method: "POST",
-        });
-        if (!res.ok) throw new Error(await res.text());
+    try {
+      const res = await fetch(`/api/notifications/${id}/accept`, {
+        method: "POST",
+      });
 
-        await markAsRead(id);
-        await fetchRooms(); // refresh
+      if (!res.ok) throw new Error(await res.text());
 
-        const { data: room } = await supabase
-          .from("rooms")
-          .select("*")
-          .eq("id", roomId)
-          .single();
+      await markAsRead(id);
 
-        if (room) {
-          const enriched = await transformRoom(room, userId, supabase);
-          setSelectedRoomId(enriched.id);
-          toast.success(`Joined "${room.name}" 🎉`);
-        }
-      } catch (err: any) {
-        toast.error(err.message || "Failed to accept");
-      } finally {
-        removeLoading(id);
+      // Always refresh room list globally
+      await fetchRooms();
+
+      // Fetch the room from DB
+      const { data: room } = await supabase
+        .from("rooms")
+        .select("*")
+        .eq("id", roomId)
+        .single();
+
+      if (!room) {
+        toast.error("Room not found");
+        return;
       }
-    },
-    [
-      userId,
-      loadingIds,
-      removeNotification,
-      markAsRead,
-      fetchRooms,
-      supabase,
-      setSelectedRoomId,
-    ]
-  );
+
+      // Enrich room data (no navigation)
+      await transformRoom(room, userId, supabase);
+
+      // 🔥 Always show this — applies to requester or owner
+      toast.success("Request accepted successfully!");
+
+      // ❌ Removed setSelectedRoomId → no auto navigation for anyone
+    } catch (err: any) {
+      toast.error(err.message || "Failed to accept");
+    } finally {
+      removeLoading(id);
+    }
+  },
+  [
+    userId,
+    loadingIds,
+    removeNotification,
+    markAsRead,
+    fetchRooms,
+    supabase,
+  ]
+);
+
 
   // ─────────────────────────────────────────────────────────────
   // Reject

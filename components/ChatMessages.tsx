@@ -3,17 +3,34 @@
 import { Suspense } from "react";
 import ListMessages from "./ListMessages";
 
-export default function ChatMessages() {
+interface ChatMessagesProps {
+  searchQuery?: string;
+  isSearching?: boolean;
+  onSearchStateChange?: (searching: boolean) => void;
+  onSearchTrigger?: () => void; // New prop
+}
+
+export default function ChatMessages({ 
+  searchQuery = "", 
+  isSearching = false, 
+  onSearchStateChange,
+  onSearchTrigger 
+}: ChatMessagesProps) {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center h-full text-gray-400">
-      Loading messages...
-    </div>}>
-      <ListMessages />
+    <Suspense fallback={
+      <div className="flex items-center justify-center h-full text-gray-400">
+        Loading messages...
+      </div>
+    }>
+      <ListMessages 
+        searchQuery={searchQuery}
+        isSearching={isSearching}
+        onSearchStateChange={onSearchStateChange}
+        onSearchTrigger={onSearchTrigger} // Pass the trigger prop
+      />
     </Suspense>
   );
 }
-
-
 // "use client";
 // import { Suspense, useEffect, useCallback } from "react";
 // import ListMessages from "./ListMessages";
