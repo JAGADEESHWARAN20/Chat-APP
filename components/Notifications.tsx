@@ -1,3 +1,4 @@
+// components/Notifications.tsx
 "use client";
 
 import React, {
@@ -31,6 +32,9 @@ import {
   LogOut,
   Bell,
   Loader2,
+  Wifi,
+  WifiOff,
+  RefreshCw,
 } from "lucide-react";
 
 import {
@@ -54,6 +58,7 @@ import {
   AccordionContent,
 } from "@/components/ui/accordion";
 import { useAuthSync } from "@/hooks/useAuthSync";
+import { useConnectionManager } from "@/hooks/useConnectionManager";
 
 // ─────────────────────────────────────────────────────────────
 // Type from DB rooms
@@ -200,7 +205,7 @@ function shouldShowNotificationActions(n: Inotification) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// 📌 Notification Item Component
+// 📌 Notification Item Component Props
 // ─────────────────────────────────────────────────────────────
 type NotificationItemProps = {
   notification: Inotification;
@@ -214,6 +219,9 @@ type NotificationItemProps = {
   isLoading?: boolean;
 };
 
+// ─────────────────────────────────────────────────────────────
+// 📌 Enhanced Notification Item Component
+// ─────────────────────────────────────────────────────────────
 export const NotificationItem = memo(function NotificationItem({
   notification,
   onAccept,
@@ -227,8 +235,15 @@ export const NotificationItem = memo(function NotificationItem({
   );
 
   const showActions = shouldShowNotificationActions(notification);
-
   const [open, setOpen] = useState(false);
+
+  // Enhanced keyboard navigation
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      setOpen(prev => !prev);
+    }
+  }, []);
 
   return (
     <Swipeable
@@ -243,7 +258,7 @@ export const NotificationItem = memo(function NotificationItem({
       }
       swipeThreshold={120}
       enableMouseEvents
-      className="select-none"
+      className="select-none touch-manipulation"
     >
       <Accordion
         type="single"
@@ -256,32 +271,44 @@ export const NotificationItem = memo(function NotificationItem({
           className="border-b border-border/50"
         >
           <div
+            role="button"
+            tabIndex={0}
+            aria-expanded={open}
+            aria-label={`Notification: ${text}. ${open ? 'Expanded' : 'Collapsed'}. Click to ${open ? 'collapse' : 'expand'}`}
+            onKeyDown={handleKeyDown}
             className={`p-4 flex items-start gap-3 rounded-lg mx-2 my-1 cursor-pointer transition-all
+              hover:bg-muted/60 focus:bg-muted/60 focus:outline-none focus:ring-2 focus:ring-primary/50
               ${notification.status === "read" ? "opacity-70" : "bg-muted/40"}
+              min-h-[80px] md:min-h-[70px]
             `}
             onClick={() => setOpen((o) => !o)}
           >
-            <Avatar className="h-10 w-10">
-              <AvatarImage src={notification.users?.avatar_url || ""} />
-              <AvatarFallback>
+            <Avatar className="h-10 w-10 flex-shrink-0">
+              <AvatarImage 
+                src={notification.users?.avatar_url || ""} 
+                alt={`${notification.users?.username || 'User'} avatar`}
+              />
+              <AvatarFallback aria-hidden="true">
                 {notification.users?.username?.[0]?.toUpperCase() ?? "?"}
               </AvatarFallback>
             </Avatar>
 
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 text-sm font-medium">
-                {icon}
-                <span className="line-clamp-2">{text}</span>
+                <span aria-hidden="true">{icon}</span>
+                <span className="line-clamp-2 break-words">{text}</span>
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                {notification.created_at
-                  ? new Date(notification.created_at).toLocaleString()
-                  : "Just now"}
+                <time dateTime={notification.created_at || new Date().toISOString()}>
+                  {notification.created_at
+                    ? new Date(notification.created_at).toLocaleString()
+                    : "Just now"}
+                </time>
               </p>
             </div>
 
             {showActions && (
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1 flex-shrink-0">
                 <Button
                   size="icon"
                   variant="ghost"
@@ -295,6 +322,7 @@ export const NotificationItem = memo(function NotificationItem({
                     );
                   }}
                   className="h-8 w-8 hover:bg-destructive/20"
+                  aria-label="Reject request"
                 >
                   <X className="h-4 w-4" />
                 </Button>
@@ -312,6 +340,7 @@ export const NotificationItem = memo(function NotificationItem({
                     );
                   }}
                   className="h-8 w-8 hover:bg-green-500/20 text-green-600"
+                  aria-label="Accept request"
                 >
                   <Check className="h-4 w-4" />
                 </Button>
@@ -320,7 +349,7 @@ export const NotificationItem = memo(function NotificationItem({
           </div>
 
           <AccordionContent>
-            <div className="px-4 pb-4 flex gap-2">
+            <div className="px-4 pb-4 flex gap-2 flex-wrap">
               {showActions && (
                 <>
                   <Button
@@ -333,6 +362,7 @@ export const NotificationItem = memo(function NotificationItem({
                         notification.room_id
                       )
                     }
+                    className="flex-1 min-w-[120px]"
                   >
                     <X className="h-4 w-4 mr-1" /> Reject
                   </Button>
@@ -346,6 +376,7 @@ export const NotificationItem = memo(function NotificationItem({
                         notification.type
                       )
                     }
+                    className="flex-1 min-w-[120px]"
                   >
                     <Check className="h-4 w-4 mr-1" /> Accept
                   </Button>
@@ -355,7 +386,7 @@ export const NotificationItem = memo(function NotificationItem({
               <Button
                 size="sm"
                 variant="outline"
-                className="ml-auto"
+                className="ml-auto flex-1 min-w-[120px]"
                 onClick={() => onDelete(notification.id)}
               >
                 <Trash2 className="h-4 w-4 mr-1" /> Delete
@@ -367,6 +398,44 @@ export const NotificationItem = memo(function NotificationItem({
     </Swipeable>
   );
 });
+
+// ─────────────────────────────────────────────────────────────
+// Connection Status Indicator
+// ─────────────────────────────────────────────────────────────
+function ConnectionStatus({ connectionState, onRetry }: {
+  connectionState: 'connected' | 'connecting' | 'disconnected';
+  onRetry: () => void;
+}) {
+  const statusConfig = {
+    connected: { icon: Wifi, text: 'Connected', color: 'text-green-500' },
+    connecting: { icon: Loader2, text: 'Connecting...', color: 'text-yellow-500' },
+    disconnected: { icon: WifiOff, text: 'Disconnected', color: 'text-red-500' },
+  };
+
+  const { icon: Icon, text, color } = statusConfig[connectionState];
+
+  return (
+    <div 
+      className="flex items-center gap-2 px-4 py-2 text-sm border-b bg-background/80 backdrop-blur-sm"
+      role="status"
+      aria-live="polite"
+    >
+      <Icon className={`h-4 w-4 ${color} ${connectionState === 'connecting' ? 'animate-spin' : ''}`} />
+      <span>{text}</span>
+      {connectionState === 'disconnected' && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onRetry}
+          className="ml-auto h-6 px-2 text-xs"
+        >
+          <RefreshCw className="h-3 w-3 mr-1" />
+          Retry
+        </Button>
+      )}
+    </div>
+  );
+}
 
 // ─────────────────────────────────────────────────────────────
 // Main Component
@@ -403,12 +472,14 @@ export default function Notifications({
   const supabase = getSupabaseBrowserClient();
   const { userId, isAuthenticated } = useAuthSync();
 
+  const { connectionState, attemptReconnection } = useConnectionManager(userId);
+
   useNotificationSubscription(userId ?? null);
 
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
 
   // Cache TTL
-  const CACHE_TTL = 20_000;
+  const CACHE_TTL = 30_000;
   const lastFetchRef = useRef(lastFetch);
   useEffect(() => {
     lastFetchRef.current = lastFetch;
@@ -440,65 +511,53 @@ export default function Notifications({
     });
 
   // ─────────────────────────────────────────────────────────────
-  // Accept
+  // Accept (fixed)
   // ─────────────────────────────────────────────────────────────
-  // ─────────────────────────────────────────────────────────────
-// Accept (fixed)
-// ─────────────────────────────────────────────────────────────
-const handleAccept = useCallback(
-  async (id: string, roomId: string | null, type: string) => {
-    if (!userId || !roomId || loadingIds.has(id)) return;
+  const handleAccept = useCallback(
+    async (id: string, roomId: string | null, type: string) => {
+      if (!userId || !roomId || loadingIds.has(id)) return;
 
-    addLoading(id);
-    removeNotification(id);
+      addLoading(id);
+      removeNotification(id);
 
-    try {
-      const res = await fetch(`/api/notifications/${id}/accept`, {
-        method: "POST",
-      });
+      try {
+        const res = await fetch(`/api/notifications/${id}/accept`, {
+          method: "POST",
+        });
 
-      if (!res.ok) throw new Error(await res.text());
+        if (!res.ok) throw new Error(await res.text());
 
-      await markAsRead(id);
+        await markAsRead(id);
+        await fetchRooms();
 
-      // Always refresh room list globally
-      await fetchRooms();
+        const { data: room } = await supabase
+          .from("rooms")
+          .select("*")
+          .eq("id", roomId)
+          .single();
 
-      // Fetch the room from DB
-      const { data: room } = await supabase
-        .from("rooms")
-        .select("*")
-        .eq("id", roomId)
-        .single();
+        if (!room) {
+          toast.error("Room not found");
+          return;
+        }
 
-      if (!room) {
-        toast.error("Room not found");
-        return;
+        await transformRoom(room, userId, supabase);
+        toast.success("Request accepted successfully!");
+      } catch (err: any) {
+        toast.error(err.message || "Failed to accept");
+      } finally {
+        removeLoading(id);
       }
-
-      // Enrich room data (no navigation)
-      await transformRoom(room, userId, supabase);
-
-      // 🔥 Always show this — applies to requester or owner
-      toast.success("Request accepted successfully!");
-
-      // ❌ Removed setSelectedRoomId → no auto navigation for anyone
-    } catch (err: any) {
-      toast.error(err.message || "Failed to accept");
-    } finally {
-      removeLoading(id);
-    }
-  },
-  [
-    userId,
-    loadingIds,
-    removeNotification,
-    markAsRead,
-    fetchRooms,
-    supabase,
-  ]
-);
-
+    },
+    [
+      userId,
+      loadingIds,
+      removeNotification,
+      markAsRead,
+      fetchRooms,
+      supabase,
+    ]
+  );
 
   // ─────────────────────────────────────────────────────────────
   // Reject
@@ -585,6 +644,42 @@ const handleAccept = useCallback(
     [sorted, handleAccept, handleReject, handleDelete, loadingIds]
   );
 
+  // Connection-aware empty states
+  const renderEmptyState = () => {
+    if (connectionState === 'disconnected') {
+      return (
+        <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+          <WifiOff className="h-16 w-16 text-muted-foreground/30 mb-4" />
+          <h3 className="text-lg font-semibold mb-2">Connection Lost</h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            Unable to load notifications. Please check your connection.
+          </p>
+          <Button onClick={attemptReconnection}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Try Again
+          </Button>
+        </div>
+      );
+    }
+
+    if (isLoading && notifications.length === 0) {
+      return (
+        <div className="flex items-center justify-center h-32">
+          <Loader2 className="h-6 w-6 animate-spin" />
+          <span className="ml-2 text-sm text-muted-foreground">Loading notifications...</span>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex flex-col items-center justify-center h-full p-8 text-center text-muted-foreground">
+        <Bell className="h-12 w-12 mb-4 opacity-50" />
+        <p className="text-lg font-medium">All caught up!</p>
+        <p className="text-sm">No new notifications</p>
+      </div>
+    );
+  };
+
   // ─────────────────────────────────────────────────────────────
   // If not authenticated
   // ─────────────────────────────────────────────────────────────
@@ -641,17 +736,18 @@ const handleAccept = useCallback(
           </div>
         </SheetHeader>
 
+        <ConnectionStatus 
+          connectionState={connectionState} 
+          onRetry={attemptReconnection}
+        />
+
         <div className="flex-1 overflow-y-auto scrollbar-thin">
           {isLoading && notifications.length === 0 ? (
             <div className="flex items-center justify-center h-32">
               <Loader2 className="h-6 w-6 animate-spin" />
             </div>
           ) : notifications.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full p-8 text-center text-muted-foreground">
-              <Bell className="h-12 w-12 mb-4 opacity-50" />
-              <p className="text-lg font-medium">All caught up!</p>
-              <p className="text-sm">No new notifications</p>
-            </div>
+            renderEmptyState()
           ) : (
             <div className="py-2">{list}</div>
           )}

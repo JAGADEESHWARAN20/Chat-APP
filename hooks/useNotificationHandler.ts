@@ -1,4 +1,4 @@
-// hooks/useNotificationHandler.ts
+// hooks/useNotificationHandler.ts - ENHANCED VERSION
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";

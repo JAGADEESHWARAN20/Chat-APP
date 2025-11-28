@@ -1,15 +1,14 @@
-// lib/store/notifications.ts
+// lib/store/enhanced-notifications.ts
 "use client";
-
+import React from "react";
 import { create } from "zustand";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { Database } from "@/lib/types/supabase";
+import type { Database } from "@/lib/types/supabase";
 import { RealtimeChannel } from "@supabase/supabase-js";
 import { SafeSupabaseQuery } from "@/lib/utils/supabase-queries";
-import { useEffect } from "react";
 
-// ---- Types ----
+// ---- Enhanced Types ----
 type ProfileType = {
   id: string;
   username: string | null;
@@ -51,6 +50,44 @@ type NotificationWithRelations = RawNotification & {
   room?: RoomType | null;
 };
 
+type ConnectionHealth = 'healthy' | 'degraded' | 'offline';
+
+interface EnhancedNotificationState {
+  notifications: Inotification[];
+  unreadCount: number;
+  isLoading: boolean;
+  hasError: boolean;
+  lastFetch: number | null;
+  subscriptionActive: boolean;
+  connectionHealth: ConnectionHealth;
+  lastSuccessfulFetch: number | null;
+
+  // Core actions
+  setNotifications: (notifications: Inotification[]) => void;
+  addNotification: (notification: Inotification) => void;
+  markAsRead: (notificationId: string) => Promise<void>;
+  markAllAsRead: (userId: string) => Promise<void>;
+  removeNotification: (notificationId: string) => void;
+  fetchNotifications: (userId: string) => Promise<void>;
+  subscribeToNotifications: (userId: string) => void;
+  unsubscribeFromNotifications: () => void;
+  clearError: () => void;
+  retrySubscription: (userId: string) => void;
+  
+  // Enhanced actions
+  setConnectionHealth: (health: ConnectionHealth) => void;
+  setLastSuccessfulFetch: (timestamp: number) => void;
+}
+
+// Constants
+const MAX_RETRY_ATTEMPTS = 3;
+const CACHE_TTL = 30000; // 30 seconds
+const STALE_TTL = 60000; // 1 minute
+
+let notificationChannel: RealtimeChannel | null = null;
+let subscriptionRetryCount = 0;
+
+// Utility functions
 const normalizeNotificationType = (dbType: string): string => {
   const typeMap: Record<string, string> = {
     join_request: "join_request",
@@ -117,103 +154,84 @@ const transformNotification = (
   };
 };
 
-interface NotificationState {
-  notifications: Inotification[];
-  unreadCount: number;
-  isLoading: boolean;
-  hasError: boolean;
-  lastFetch: number | null;
-  subscriptionActive: boolean;
-
-  setNotifications: (notifications: Inotification[]) => void;
-  addNotification: (notification: Inotification) => void;
-  markAsRead: (notificationId: string) => Promise<void>;
-  markAllAsRead: (userId: string) => Promise<void>;
-  removeNotification: (notificationId: string) => void;
-  fetchNotifications: (userId: string) => Promise<void>;
-  subscribeToNotifications: (userId: string) => void;
-  unsubscribeFromNotifications: () => void;
-  clearError: () => void;
-  retrySubscription: (userId: string) => void;
-}
-
-let notificationChannel: RealtimeChannel | null = null;
-let subscriptionRetryCount = 0;
-const MAX_RETRY_ATTEMPTS = 3;
-
-export const useNotification = create<NotificationState>((set, get) => {
+// Safe query functions
+const safeFetchNotifications = async (userId: string) => {
   const supabase = getSupabaseBrowserClient();
-
-  const safeFetchNotifications = async (userId: string) => {
-    try {
-      const queryPromise = supabase
-        .from("notifications")
-        .select(
-          `
-          *,
-          sender:profiles!notifications_sender_id_fkey(
-            id, username, display_name, avatar_url, created_at
-          ),
-          recipient:profiles!notifications_user_id_fkey(
-            id, username, display_name, avatar_url, created_at
-          ),
-          room:rooms!notifications_room_id_fkey(
-            id, name, created_at, created_by, is_private
-          )
+  
+  try {
+    const queryPromise = supabase
+      .from("notifications")
+      .select(
         `
+        *,
+        sender:profiles!notifications_sender_id_fkey(
+          id, username, display_name, avatar_url, created_at
+        ),
+        recipient:profiles!notifications_user_id_fkey(
+          id, username, display_name, avatar_url, created_at
+        ),
+        room:rooms!notifications_room_id_fkey(
+          id, name, created_at, created_by, is_private
         )
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false })
-        .limit(50);
+      `
+      )
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(50);
 
-      const result = await queryPromise;
+    const result = await queryPromise;
 
-      return SafeSupabaseQuery.array<NotificationWithRelations>(
-        Promise.resolve({
-          data: result.data as NotificationWithRelations[] | null,
-          error: result.error,
-        })
-      );
-    } catch (error) {
-      console.error("Error in safeFetchNotifications:", error);
-      return { data: [], error };
-    }
-  };
+    return SafeSupabaseQuery.array<NotificationWithRelations>(
+      Promise.resolve({
+        data: result.data as NotificationWithRelations[] | null,
+        error: result.error,
+      })
+    );
+  } catch (error) {
+    console.error("Error in safeFetchNotifications:", error);
+    return { data: [], error };
+  }
+};
 
-  const safeFetchSingleNotification = async (notificationId: string) => {
-    try {
-      const queryPromise = supabase
-        .from("notifications")
-        .select(
-          `
-          *,
-          sender:profiles!notifications_sender_id_fkey(
-            id, username, display_name, avatar_url, created_at
-          ),
-          recipient:profiles!notifications_user_id_fkey(
-            id, username, display_name, avatar_url, created_at
-          ),
-          room:rooms!notifications_room_id_fkey(
-            id, name, created_at, created_by, is_private
-          )
+const safeFetchSingleNotification = async (notificationId: string) => {
+  const supabase = getSupabaseBrowserClient();
+  
+  try {
+    const queryPromise = supabase
+      .from("notifications")
+      .select(
         `
+        *,
+        sender:profiles!notifications_sender_id_fkey(
+          id, username, display_name, avatar_url, created_at
+        ),
+        recipient:profiles!notifications_user_id_fkey(
+          id, username, display_name, avatar_url, created_at
+        ),
+        room:rooms!notifications_room_id_fkey(
+          id, name, created_at, created_by, is_private
         )
-        .eq("id", notificationId)
-        .limit(1);
+      `
+      )
+      .eq("id", notificationId)
+      .limit(1);
 
-      const result = await queryPromise;
+    const result = await queryPromise;
 
-      return SafeSupabaseQuery.array<NotificationWithRelations>(
-        Promise.resolve({
-          data: result.data as NotificationWithRelations[] | null,
-          error: result.error,
-        })
-      );
-    } catch (error) {
-      console.error("Error in safeFetchSingleNotification:", error);
-      return { data: [], error };
-    }
-  };
+    return SafeSupabaseQuery.array<NotificationWithRelations>(
+      Promise.resolve({
+        data: result.data as NotificationWithRelations[] | null,
+        error: result.error,
+      })
+    );
+  } catch (error) {
+    console.error("Error in safeFetchSingleNotification:", error);
+    return { data: [], error };
+  }
+};
+
+export const useEnhancedNotification = create<EnhancedNotificationState>((set, get) => {
+  const supabase = getSupabaseBrowserClient();
 
   return {
     notifications: [],
@@ -222,6 +240,8 @@ export const useNotification = create<NotificationState>((set, get) => {
     hasError: false,
     lastFetch: null,
     subscriptionActive: false,
+    connectionHealth: 'healthy',
+    lastSuccessfulFetch: null,
 
     setNotifications: (notifications) => {
       const unreadCount = notifications.filter(
@@ -326,6 +346,7 @@ export const useNotification = create<NotificationState>((set, get) => {
 
         if (error) {
           console.error("❌ Notification fetch error:", error);
+          get().setConnectionHealth('degraded');
           throw error;
         }
 
@@ -339,19 +360,21 @@ export const useNotification = create<NotificationState>((set, get) => {
           unreadCount,
           isLoading: false,
           lastFetch: Date.now(),
+          lastSuccessfulFetch: Date.now(),
           hasError: false,
+          connectionHealth: 'healthy',
         });
       } catch (error: any) {
         console.error("💥 Error fetching notifications:", error);
         set({ hasError: true, isLoading: false });
+        get().setConnectionHealth('offline');
 
         if (error.code === "406" || error.message?.includes("406")) {
           toast.error("Failed to load notifications - please refresh");
-        } else if (
-          error.code === "PGRST301" ||
-          error.message?.includes("relation")
-        ) {
-          toast.error("Permission error - please check database setup");
+        } else if (error.code === "PGRST116") {
+          // Connection timeout
+          toast.error("Connection timeout - retrying...");
+          get().setConnectionHealth('degraded');
         } else {
           toast.error("Failed to load notifications");
         }
@@ -385,32 +408,24 @@ export const useNotification = create<NotificationState>((set, get) => {
           },
           async (payload) => {
             try {
+              get().setConnectionHealth('healthy');
+              
               const { data: newNotifications, error } =
                 await safeFetchSingleNotification(payload.new.id);
 
               if (error) {
-                console.error(
-                  "❌ Error fetching new notification details:",
-                  error
-                );
+                console.error("❌ Error fetching new notification details:", error);
+                get().setConnectionHealth('degraded');
                 return;
               }
 
               if (newNotifications.length > 0) {
-                const transformed =
-                  transformNotification(newNotifications[0]);
+                const transformed = transformNotification(newNotifications[0]);
                 get().addNotification(transformed);
-
-                // Optional consistency refresh (quiet)
-                setTimeout(() => {
-                  get().fetchNotifications(userId);
-                }, 1000);
               }
             } catch (error) {
-              console.error(
-                "💥 Error processing real-time notification:",
-                error
-              );
+              console.error("💥 Error processing real-time notification:", error);
+              get().setConnectionHealth('degraded');
             }
           }
         )
@@ -454,27 +469,39 @@ export const useNotification = create<NotificationState>((set, get) => {
             get().removeNotification(payload.old.id);
           }
         )
+        .on('system', { event: 'disconnect' }, () => {
+          console.log('🔌 Realtime connection lost');
+          get().setConnectionHealth('offline');
+        })
+        .on('system', { event: 'reconnect' }, () => {
+          console.log('🔌 Realtime connection restored');
+          get().setConnectionHealth('healthy');
+          // Resubscribe to ensure we don't miss any notifications
+          setTimeout(() => {
+            get().fetchNotifications(userId);
+          }, 1000);
+        })
         .subscribe((status) => {
           console.log("📡 Notification subscription status:", status);
           set({ subscriptionActive: status === "SUBSCRIBED" });
 
-          if (status === "CHANNEL_ERROR") {
+          if (status === "SUBSCRIBED") {
+            get().setConnectionHealth('healthy');
+            subscriptionRetryCount = 0;
+          } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
             console.error("Notification channel error");
-            set({ subscriptionActive: false });
+            get().setConnectionHealth('offline');
 
-            // Quiet retry – no user-facing toast
             if (subscriptionRetryCount < MAX_RETRY_ATTEMPTS) {
               subscriptionRetryCount++;
               setTimeout(() => {
-                get().subscribeToNotifications(userId);
+                if (get().connectionHealth === 'offline') {
+                  get().subscribeToNotifications(userId);
+                }
               }, 2000 * subscriptionRetryCount);
             } else {
-              console.error(
-                "Max retry attempts reached for notification subscription"
-              );
+              console.error("Max retry attempts reached for notification subscription");
             }
-          } else if (status === "SUBSCRIBED") {
-            subscriptionRetryCount = 0;
           }
         });
     },
@@ -498,6 +525,10 @@ export const useNotification = create<NotificationState>((set, get) => {
         get().subscribeToNotifications(userId);
       }, 500);
     },
+
+    setConnectionHealth: (health) => set({ connectionHealth: health }),
+
+    setLastSuccessfulFetch: (timestamp) => set({ lastSuccessfulFetch: timestamp }),
   };
 });
 
@@ -507,15 +538,16 @@ export const useNotificationSubscription = (userId: string | null) => {
     subscribeToNotifications,
     unsubscribeFromNotifications,
     fetchNotifications,
-  } = useNotification();
+  } = useEnhancedNotification();
 
-  useEffect(() => {
+  // Use useEffect for subscription management
+  React.useEffect(() => {
     if (!userId) return;
 
-    // initial fetch
+    // Initial fetch
     fetchNotifications(userId);
 
-    // subscribe realtime
+    // Subscribe realtime
     subscribeToNotifications(userId);
 
     return () => {
@@ -524,6 +556,49 @@ export const useNotificationSubscription = (userId: string | null) => {
   }, [userId, fetchNotifications, subscribeToNotifications, unsubscribeFromNotifications]);
 
   return {};
+};
+
+// Enhanced hook with connection management
+export const useEnhancedNotificationSubscription = (userId: string | null) => {
+  const {
+    subscribeToNotifications,
+    unsubscribeFromNotifications,
+    fetchNotifications,
+    connectionHealth,
+    retrySubscription,
+  } = useEnhancedNotification();
+
+  React.useEffect(() => {
+    if (!userId) return;
+
+    const initializeNotifications = async () => {
+      try {
+        await fetchNotifications(userId);
+        subscribeToNotifications(userId);
+      } catch (error) {
+        console.error('Failed to initialize notifications:', error);
+      }
+    };
+
+    initializeNotifications();
+
+    return () => {
+      unsubscribeFromNotifications();
+    };
+  }, [userId, fetchNotifications, subscribeToNotifications, unsubscribeFromNotifications]);
+
+  // Auto-retry when connection is lost
+  React.useEffect(() => {
+    if (connectionHealth === 'offline' && userId) {
+      const retryTimer = setTimeout(() => {
+        retrySubscription(userId);
+      }, 5000);
+
+      return () => clearTimeout(retryTimer);
+    }
+  }, [connectionHealth, userId, retrySubscription]);
+
+  return { connectionHealth };
 };
 
 // Utility function to check if notification service is healthy
@@ -548,3 +623,57 @@ export const checkNotificationHealth = async (): Promise<boolean> => {
     return false;
   }
 };
+
+// Smart cache management hook
+export const useNotificationCache = (userId: string | null) => {
+  const {
+    notifications,
+    lastFetch,
+    lastSuccessfulFetch,
+    fetchNotifications,
+    connectionHealth,
+  } = useEnhancedNotification();
+
+  React.useEffect(() => {
+    if (!userId) return;
+
+    const now = Date.now();
+    const shouldRefresh = !lastFetch || (now - lastFetch > CACHE_TTL);
+    const hasStaleData = lastSuccessfulFetch && (now - lastSuccessfulFetch <= STALE_TTL);
+
+    if (shouldRefresh && connectionHealth === 'healthy') {
+      if (hasStaleData && notifications.length > 0) {
+        // Background refresh with stale data
+        fetchNotifications(userId);
+      } else {
+        // Immediate refresh needed
+        fetchNotifications(userId);
+      }
+    }
+  }, [userId, lastFetch, lastSuccessfulFetch, notifications.length, fetchNotifications, connectionHealth]);
+
+  return { shouldUseCache: !!lastSuccessfulFetch && (Date.now() - lastSuccessfulFetch <= STALE_TTL) };
+};
+
+// Performance-optimized selectors
+export const useUnreadNotifications = () => 
+  useEnhancedNotification((state) => 
+    state.notifications.filter(n => n.status === 'unread')
+  );
+
+export const useNotificationCounts = () => 
+  useEnhancedNotification((state) => ({
+    total: state.notifications.length,
+    unread: state.unreadCount,
+    hasUnread: state.unreadCount > 0,
+  }));
+
+export const useNotificationByType = (type: string) =>
+  useEnhancedNotification((state) =>
+    state.notifications.filter(n => n.type === type)
+  );
+
+// Import React for hooks
+
+// Export the main store as useNotification for backward compatibility
+export const useNotification = useEnhancedNotification;
