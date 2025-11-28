@@ -13,9 +13,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 
 export default function ProfilePage() {
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  // FIX: Use useState with a function to create the client once and keep it stable
+  const [supabase] = useState(() => 
+    createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
   );
 
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -46,7 +49,7 @@ export default function ProfilePage() {
     };
 
     getProfile();
-  }, []);
+  }, [supabase]); // FIX: Added supabase to dependency array
 
   // ---------- LOADING ----------
   if (!profile)

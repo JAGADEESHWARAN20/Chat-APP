@@ -605,34 +605,36 @@ export default function ListMessages({
   SkeletonMessage.displayName = "SkeletonMessage";
 
   // Enhanced empty state with search context
-  const renderEmptyState = () => {
-    if (searchQuery && displayMessages.length === 0) {
-      return (
-        <div className="flex flex-col items-center justify-center h-full p-8 text-center">
-          <Search className="h-16 w-16 text-muted-foreground/30 mb-4" />
-          <h3 className="text-lg font-semibold mb-2">No messages found</h3>
-          <p className="text-sm text-muted-foreground mb-4">
-            No messages match "{searchQuery}"
-          </p>
-          <Button variant="outline" onClick={handleClearSearch}>
-            Clear Search
-          </Button>
-        </div>
-      );
-    }
-
+// Enhanced empty state with search context
+const renderEmptyState = () => {
+  if (searchQuery && displayMessages.length === 0) {
     return (
-      <div 
-        className="flex items-center justify-center h-full"
-        style={{ 
-          color: 'hsl(var(--no-messages-color))',
-          fontSize: 'var(--no-messages-size)' 
-        }}
-      >
-        <p>No messages yet. Start a conversation!</p>
+      <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+        <Search className="h-16 w-16 text-muted-foreground/30 mb-4" />
+        <h3 className="text-lg font-semibold mb-2">No messages found</h3>
+        <p className="text-sm text-muted-foreground mb-4">
+          {/* FIX: Replaced " with &quot; */}
+          No messages match &quot;{searchQuery}&quot;
+        </p>
+        <Button variant="outline" onClick={handleClearSearch}>
+          Clear Search
+        </Button>
       </div>
     );
-  };
+  }
+
+  return (
+    <div 
+      className="flex items-center justify-center h-full"
+      style={{ 
+        color: 'hsl(var(--no-messages-color))',
+        fontSize: 'var(--no-messages-size)' 
+      }}
+    >
+      <p>No messages yet. Start a conversation!</p>
+    </div>
+  );
+};
 
   if (!selectedRoom?.id) {
     return (
@@ -667,14 +669,15 @@ export default function ListMessages({
         <Search className="h-5 w-5 transition-all duration-300 stroke-[hsl(var(--muted-foreground))]" />
       </Button>
 
-      {/* Search Info Bar - Show when searching */}
+      
       {showSearchInfo && searchQuery && (
         <div className="px-4 py-3 border-b bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 transition-all duration-300">
           <div className="flex items-center justify-between text-sm">
             <div className="flex items-center gap-2">
               <Search className="h-4 w-4" />
               <span>
-                Showing {displayMessages.length} results for "{searchQuery}"
+                {/* FIX: Replaced " with &quot; */}
+                Showing {displayMessages.length} results for &quot;{searchQuery}&quot;
               </span>
             </div>
             <Button
