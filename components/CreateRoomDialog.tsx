@@ -60,7 +60,7 @@ export default function CreateRoomDialog({ user }: { user: SupabaseUser | undefi
           whileTap={{ scale: 1 }}
           title="Create Room"
           className={cn(
-            "flex items-center justify-center rounded-full w-[3.6em] h-[3.6em]",
+            "flex items-center justify-center rounded-full w-[2.6em] h-[2.6em]",
             "bg-[var(--action-bg)] border border-[var(--action-ring)] shadow-sm",
             "transition-all duration-200 hover:bg-[var(--action-hover)] hover:shadow-lg"
           )}

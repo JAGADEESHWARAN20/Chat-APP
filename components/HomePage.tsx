@@ -356,12 +356,13 @@ function UnifiedHomeContent({
                           {/* Chat Container */}
                           <div className="flex-1 flex flex-col">
                             <div className="flex-1 px-2">
-                              <ChatMessages
-                                searchQuery={searchQuery}
-                                isSearching={isSearching}
-                                onSearchStateChange={setIsSearching}
-                                onSearchTrigger={handleSearchToggle}
-                              />
+                            <ChatMessages
+  searchQuery={searchQuery}
+  isSearching={isSearching}
+  onSearchStateChange={setIsSearching}
+  onSearchTrigger={handleSearchToggle}
+  isSearchExpanded={isSearchExpanded} // Add this line
+/>
                             </div>
                             <div className="flex-none border-t bg-background">
                               <ChatInput />

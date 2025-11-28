@@ -8,13 +8,15 @@ interface ChatMessagesProps {
   isSearching?: boolean;
   onSearchStateChange?: (searching: boolean) => void;
   onSearchTrigger?: () => void; // New prop
+  isSearchExpanded?: boolean; // Add this line
 }
 
 export default function ChatMessages({ 
   searchQuery = "", 
   isSearching = false, 
   onSearchStateChange,
-  onSearchTrigger 
+  onSearchTrigger,
+  isSearchExpanded // Add this line
 }: ChatMessagesProps) {
   return (
     <Suspense fallback={
@@ -22,12 +24,14 @@ export default function ChatMessages({
         Loading messages...
       </div>
     }>
-      <ListMessages 
-        searchQuery={searchQuery}
-        isSearching={isSearching}
-        onSearchStateChange={onSearchStateChange}
-        onSearchTrigger={onSearchTrigger} // Pass the trigger prop
-      />
+ 
+<ListMessages
+  searchQuery={searchQuery}
+  isSearching={isSearching}
+  onSearchStateChange={onSearchStateChange}
+  onSearchTrigger={onSearchTrigger}
+  isSearchExpanded={isSearchExpanded} // Pass it down
+/>
     </Suspense>
   );
 }

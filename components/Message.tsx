@@ -86,15 +86,15 @@ const ResponsiveMenuItem: React.FC<{
     >
       <Icon className={`flex-shrink-0 ${isMobile ? "h-4 w-4" : "h-4 w-4"}`} />
       
-      {isMobile && (
+    
         <span className="flex-1 text-sm font-medium">
           {item.label}
         </span>
-      )}
+    
       
-      {isMobile && (
+    
         <span className="sr-only">{item.label}</span>
-      )}
+    
     </DropdownMenuItem>
   );
 };

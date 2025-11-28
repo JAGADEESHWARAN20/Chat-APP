@@ -54,7 +54,7 @@ export default function NotificationsWrapper() {
         whileHover={{ scale: 1 }}
         className={cn(
           "relative flex items-center justify-center rounded-full",
-          "w-[3.6em] h-[3.6em] transition-all duration-300 shadow-sm",
+          "w-[2.6em] h-[2.6em] transition-all duration-300 shadow-sm",
           "bg-[var(--action-bg)] border border-[var(--action-ring)] hover:bg-[var(--action-hover)] hover:shadow-lg",
           !userId && "opacity-50 cursor-not-allowed"
         )}

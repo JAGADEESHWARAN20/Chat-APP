@@ -21,6 +21,7 @@ interface ListMessagesProps {
   isSearching?: boolean;
   onSearchStateChange?: (searching: boolean) => void;
   onSearchTrigger?: () => void;
+   isSearchExpanded?: boolean;
 }
 
 // Enhanced Search Engine with Character Sequence Matching
@@ -250,9 +251,9 @@ class MessageSearchEngine {
 
 export default function ListMessages({ 
   searchQuery = "", 
-  isSearching = false, 
   onSearchStateChange,
-  onSearchTrigger
+  onSearchTrigger,
+  isSearchExpanded  
 }: ListMessagesProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [userScrolled, setUserScrolled] = useState(false);
@@ -604,37 +605,16 @@ export default function ListMessages({
 
   SkeletonMessage.displayName = "SkeletonMessage";
 
-  // Enhanced empty state with search context
-// Enhanced empty state with search context
-const renderEmptyState = () => {
-  if (searchQuery && displayMessages.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full p-8 text-center">
-        <Search className="h-16 w-16 text-muted-foreground/30 mb-4" />
-        <h3 className="text-lg font-semibold mb-2">No messages found</h3>
-        <p className="text-sm text-muted-foreground mb-4">
-          {/* FIX: Replaced " with &quot; */}
-          No messages match &quot;{searchQuery}&quot;
-        </p>
-        <Button variant="outline" onClick={handleClearSearch}>
-          Clear Search
-        </Button>
-      </div>
-    );
-  }
+  // Enhanced empty state with search context - REMOVED empty state rendering
+  const renderEmptyState = () => {
+    // Don't render empty state when searching
+    if (searchQuery && displayMessages.length === 0) {
+      return null; // Don't show any empty state when searching
+    }
 
-  return (
-    <div 
-      className="flex items-center justify-center h-full"
-      style={{ 
-        color: 'hsl(var(--no-messages-color))',
-        fontSize: 'var(--no-messages-size)' 
-      }}
-    >
-      <p>No messages yet. Start a conversation!</p>
-    </div>
-  );
-};
+    // Don't render empty state for normal mode either
+    return null;
+  };
 
   if (!selectedRoom?.id) {
     return (
@@ -652,31 +632,31 @@ const renderEmptyState = () => {
 
   return (
     <div className="h-[75dvh] w-full flex flex-col overflow-hidden relative">
-      {/* Search Trigger Button */}
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={handleSearchTrigger}
-        className={cn(
-          "absolute top-4 right-4 z-30 w-[2.5em] h-[2.5em] flex items-center justify-center rounded-full",
-          "bg-[hsl(var(--background))]/60 backdrop-blur-md shadow-sm",
-          "transition-all duration-300 ease-in-out group hover:bg-[hsl(var(--action-active))]/15 active:scale-95",
-          "focus-visible:ring-[hsl(var(--action-ring))]/50 focus-visible:ring-2",
-          "text-[hsl(var(--foreground))]"
-        )}
-        title="Search Messages"
-      >
-        <Search className="h-5 w-5 transition-all duration-300 stroke-[hsl(var(--muted-foreground))]" />
-      </Button>
-
-      
+     
+{!isSearchExpanded && (
+  <Button
+    variant="ghost"
+    size="icon"
+    onClick={handleSearchTrigger}
+    className={cn(
+      "absolute top-4 right-4 z-30 w-[2.5em] h-[2.5em] flex items-center justify-center rounded-full",
+      "bg-[hsl(var(--background))]/60 backdrop-blur-md shadow-sm",
+      "transition-all duration-300 ease-in-out group hover:bg-[hsl(var(--action-active))]/15 active:scale-95",
+      "focus-visible:ring-[hsl(var(--action-ring))]/50 focus-visible:ring-2",
+      "text-[hsl(var(--foreground))]"
+    )}
+    title="Search Messages"
+  >
+    <Search className="h-5 w-5 transition-all duration-300 stroke-[hsl(var(--muted-foreground))]" />
+  </Button>
+)}
+      {/* Search Info Header */}
       {showSearchInfo && searchQuery && (
         <div className="px-4 py-3 border-b bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 transition-all duration-300">
           <div className="flex items-center justify-between text-sm">
             <div className="flex items-center gap-2">
               <Search className="h-4 w-4" />
               <span>
-                {/* FIX: Replaced " with &quot; */}
                 Showing {displayMessages.length} results for &quot;{searchQuery}&quot;
               </span>
             </div>
@@ -684,9 +664,10 @@ const renderEmptyState = () => {
               variant="ghost"
               size="sm"
               onClick={handleClearSearch}
-              className="h-6 w-6 p-0 hover:bg-black/10 dark:hover:bg-white/10"
+              className="h-6 px-2 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-800/30"
             >
-              <X className="h-3 w-3" />
+              <X className="h-3 w-3 mr-1" />
+              Clear
             </Button>
           </div>
         </div>
@@ -715,6 +696,7 @@ const renderEmptyState = () => {
               />
             ))
           ) : (
+            // Don't render empty state - just show nothing
             renderEmptyState()
           )}
         </div>
