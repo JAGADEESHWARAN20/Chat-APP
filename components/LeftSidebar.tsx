@@ -174,9 +174,11 @@ const LeftSidebar = React.memo<LeftSidebarProps>(({ user, isOpen, onClose, class
           { event: "*", schema: "public", table: "room_participants" },
           (payload: any) => {
             try {
-              const rec = payload?.new ?? payload?.old;
-              if (!rec) return;
-              const status = (rec as any).status as string | undefined;
+              const rec = (payload?.new ?? payload?.old) as { status?: string; room_id?: string } | null;
+              if (!rec || !rec.status) return;
+
+              const status = rec.status;
+
               if (!status) return;
               if (status === "accepted" || status === "left" || status === "rejected") {
                 fetchRooms({ force: true }).catch((e) => console.error("fetchRooms error:", e));
@@ -192,11 +194,13 @@ const LeftSidebar = React.memo<LeftSidebarProps>(({ user, isOpen, onClose, class
           { event: "*", schema: "public", table: "notifications" },
           (payload: any) => {
             try {
-              const rec = payload?.new ?? payload?.old;
-              if (!rec) return;
-              const t = (rec as any).type as string | undefined;
-              if (t === "join_request_accepted") {
-                fetchRooms({ force: true }).catch((e) => console.error("fetchRooms error:", e));
+              const rec = payload?.new as { type?: string; room_id?: string } | null;
+              if (!rec || !rec.type) return;
+        
+              if (rec.type === "join_request_accepted" && rec.room_id) {
+                fetchRooms({ force: true }).catch((e) =>
+                  console.error("fetchRooms error:", e)
+                );
                 toast.success("Join request accepted");
               }
             } catch (e) {
@@ -204,6 +208,7 @@ const LeftSidebar = React.memo<LeftSidebarProps>(({ user, isOpen, onClose, class
             }
           }
         );
+        
 
         await channel.subscribe();
       } catch (err) {

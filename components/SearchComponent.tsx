@@ -26,7 +26,7 @@ import {
 
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useDebounce } from "use-debounce";
-import { toast } from "@/components/ui/sonner"
+import { toast } from "@/components/ui/sonner";
 
 type PartialProfile = {
   id: string;
@@ -34,19 +34,6 @@ type PartialProfile = {
   display_name: string | null;
   avatar_url: string | null;
 };
-
-interface RealtimePayload {
-  eventType: string;
-  new: any;
-  old: any;
-}
-
-interface NotificationPayload {
-  new?: {
-    type?: string;
-    room_id?: string;
-  };
-}
 
 const highlight = (text: string, q: string) => {
   if (!q) return text;
@@ -78,10 +65,15 @@ const SearchComponent = memo(function SearchComponent({
   const [loading, setLoading] = useState(false);
 
   const [debounced] = useDebounce(query, 300);
-
-  // session guard
   const [sessionReady, setSessionReady] = useState(false);
 
+  const presence = useRoomPresence();
+  const availableRooms = useAvailableRooms();
+  const { joinRoom, leaveRoom, updateRoomMembership } = useRoomActions();
+
+  // -----------------------------
+  // Session Ready
+  // -----------------------------
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       if (data.session?.user?.id) {
@@ -90,25 +82,9 @@ const SearchComponent = memo(function SearchComponent({
     });
   }, [supabase]);
 
-  // Store
-  const presence = useRoomPresence();
-  const availableRooms = useAvailableRooms();
-  const { joinRoom, leaveRoom, refreshRooms, updateRoomMembership } =
-    useRoomActions();
-
-  // Log for debugging
-  useEffect(() => {
-    console.log("🔍 availableRooms =", availableRooms);
-  }, [availableRooms]);
-
-  // initial room fetch
-  useEffect(() => {
-    if (sessionReady && user?.id) {
-      refreshRooms().catch(console.error);
-    }
-  }, [sessionReady, user?.id, refreshRooms]);
-
-  // search filter
+  // -----------------------------
+  // Filter Rooms
+  // -----------------------------
   const filteredRooms = useMemo(() => {
     if (!debounced) return availableRooms;
     return availableRooms.filter((room) =>
@@ -116,35 +92,27 @@ const SearchComponent = memo(function SearchComponent({
     );
   }, [availableRooms, debounced]);
 
-  // ───────────────────────────────────────────────
-  // REALTIME PATCH WITH sessionReady BLOCK
-  // ───────────────────────────────────────────────
+  // -----------------------------
+  // Realtime (FAST VERSION)
+  // No refreshRooms() here anymore
+  // Only instant membership updates
+  // -----------------------------
   useEffect(() => {
     if (!sessionReady || !user?.id) return;
 
-    console.log("🔌 Realtime enabled for user:", user.id);
+    const channel = supabase.channel(`search-sync-${user.id}`);
 
-    const channel = supabase.channel(`search-sync-${user.id}`, {
-      config: { broadcast: { self: false } },
-    });
-
-    // room_participants realtime
     channel.on(
       "postgres_changes",
       {
-        event: "*",
+        event: "UPDATE",
         schema: "public",
         table: "room_participants",
         filter: `user_id=eq.${user.id}`,
       },
-      async (payload: RealtimePayload) => {
-        const { eventType, new: newRec, old: oldRec } = payload;
-        const record = newRec || oldRec;
-
-        if (!record?.room_id) return;
-
-        if (eventType === "UPDATE" && newRec?.status === "accepted") {
-          updateRoomMembership(record.room_id, {
+      (payload) => {
+        if (payload.new?.status === "accepted") {
+          updateRoomMembership(payload.new.room_id, {
             isMember: true,
             participationStatus: "accepted",
           });
@@ -163,39 +131,30 @@ const SearchComponent = memo(function SearchComponent({
         table: "notifications",
         filter: `user_id=eq.${user.id}`,
       },
-      async (payload: NotificationPayload) => {
-        const rec = payload.new;
-        if (!rec) return;
-
+      (payload) => {
+        const rec = payload.new as { type?: string; room_id?: string } | null;
+        if (!rec || !rec.type) return;
+        
         if (rec.type === "join_request_accepted" && rec.room_id) {
           updateRoomMembership(rec.room_id, {
             isMember: true,
             participationStatus: "accepted",
           });
-
           toast.success("Your join request was accepted!");
-          setTimeout(() => refreshRooms(), 300);
-        }
+        }        
       }
     );
 
-    channel.subscribe((status) => {
-      console.log("Realtime status:", status);
-    });
+    channel.subscribe();
 
     return () => {
-      console.log("🔌 Cleaning realtime channel");
       supabase.removeChannel(channel);
     };
-  }, [
-    sessionReady,
-    user?.id,
-    supabase,
-    updateRoomMembership,
-    refreshRooms,
-  ]);
+  }, [sessionReady, user?.id, supabase, updateRoomMembership]);
 
-  // fetch users
+  // -----------------------------
+  // Fetch Users (RPC)
+  // -----------------------------
   const fetchUsersRPC = useCallback(async () => {
     if (tab !== "users") return;
 
@@ -207,8 +166,9 @@ const SearchComponent = memo(function SearchComponent({
       });
 
       if (error) throw error;
+
       setUserResults(data || []);
-    } catch (err) {
+    } catch {
       toast.error("Failed loading users");
     } finally {
       setLoading(false);
@@ -219,7 +179,9 @@ const SearchComponent = memo(function SearchComponent({
     if (tab === "users") fetchUsersRPC();
   }, [tab, fetchUsersRPC]);
 
-  // join & leave
+  // -----------------------------
+  // Actions
+  // -----------------------------
   const handleJoin = useCallback(
     async (roomId: string) => {
       await joinRoom(roomId);
@@ -234,11 +196,12 @@ const SearchComponent = memo(function SearchComponent({
     [leaveRoom]
   );
 
-  // Card components unchanged
+  // -----------------------------
+  // Cards
+  // -----------------------------
   const RoomCard = ({ room }: { room: RoomWithMembership }) => {
     const online = presence?.[room.id]?.onlineUsers ?? 0;
-    const isMember =
-      room.isMember && room.participationStatus === "accepted";
+    const isMember = room.isMember && room.participationStatus === "accepted";
     const isPending = room.participationStatus === "pending";
 
     return (
@@ -316,6 +279,7 @@ const SearchComponent = memo(function SearchComponent({
     );
   };
 
+  // user card
   const UserCard = (u: PartialProfile) => {
     const initial =
       (u.display_name ?? u.username ?? "?")[0]?.toUpperCase();
