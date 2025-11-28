@@ -412,3 +412,37 @@ body {
     }
   }
 }
+
+/* Enhanced search animations */
+.search-highlight-pulse {
+  animation: searchPulse 2s ease-in-out;
+}
+
+@keyframes searchPulse {
+  0% {
+    background-color: rgba(59, 130, 246, 0.1);
+  }
+  50% {
+    background-color: rgba(59, 130, 246, 0.3);
+  }
+  100% {
+    background-color: rgba(59, 130, 246, 0.1);
+  }
+}
+
+/* Smooth scroll behavior */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Mobile optimizations */
+@media (max-width: 400px) {
+  .message-container {
+    padding: 0.5rem;
+  }
+  
+  .search-info-bar {
+    font-size: 0.875rem;
+    padding: 0.75rem 1rem;
+  }
+}

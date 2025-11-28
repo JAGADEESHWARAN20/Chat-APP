@@ -10,7 +10,7 @@ import { useUser } from "@/lib/store/user";
 import { useSelectedRoom } from "@/lib/store/roomstore";
 import TypingIndicator from "./TypingIndicator";
 import { Button } from "@/components/ui/button";
-import { Search } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSearchHighlight } from "@/lib/store/SearchHighlightContext";
 
@@ -20,32 +20,63 @@ interface ListMessagesProps {
   searchQuery?: string;
   isSearching?: boolean;
   onSearchStateChange?: (searching: boolean) => void;
-  onSearchTrigger?: () => void; // New prop to trigger search in parent
+  onSearchTrigger?: () => void;
 }
 
-// Search Algorithm - Inverted Index with string IDs
+// Enhanced Search Engine with Character Sequence Matching
 class MessageSearchEngine {
   private invertedIndex: Map<string, Set<string>> = new Map();
   private messages: Map<string, Imessage> = new Map();
+  private characterIndex: Map<string, Set<string>> = new Map();
 
   indexMessage(message: Imessage) {
     this.messages.set(message.id, message);
     const words = this.tokenize(message.text);
     
+    // Index words for full word search
     for (const word of words) {
       if (!this.invertedIndex.has(word)) {
         this.invertedIndex.set(word, new Set());
       }
       this.invertedIndex.get(word)!.add(message.id);
     }
+
+    // Index character sequences for partial matching
+    this.indexCharacterSequences(message.id, message.text);
+  }
+
+  private indexCharacterSequences(messageId: string, text: string) {
+    const cleanText = text.toLowerCase();
+    
+    // Index all possible character sequences (from 1 to full length)
+    for (let start = 0; start < cleanText.length; start++) {
+      for (let length = 1; length <= Math.min(10, cleanText.length - start); length++) {
+        const sequence = cleanText.substring(start, start + length);
+        
+        if (!this.characterIndex.has(sequence)) {
+          this.characterIndex.set(sequence, new Set());
+        }
+        this.characterIndex.get(sequence)!.add(messageId);
+      }
+    }
   }
 
   removeMessage(messageId: string) {
     this.messages.delete(messageId);
+    
+    // Remove from word index
     for (const [word, messageIds] of this.invertedIndex.entries()) {
       messageIds.delete(messageId);
       if (messageIds.size === 0) {
         this.invertedIndex.delete(word);
+      }
+    }
+    
+    // Remove from character index
+    for (const [sequence, messageIds] of this.characterIndex.entries()) {
+      messageIds.delete(messageId);
+      if (messageIds.size === 0) {
+        this.characterIndex.delete(sequence);
       }
     }
   }
@@ -54,29 +85,149 @@ class MessageSearchEngine {
     const queryWords = this.tokenize(query);
     if (queryWords.length === 0) return [];
 
-    let results: Set<string> | null = null;
+    const lowerQuery = query.toLowerCase();
     
-    for (const word of queryWords) {
-      const wordResults = this.invertedIndex.get(word);
-      if (!wordResults) return [];
-      
-      if (results === null) {
-        results = new Set(wordResults);
-      } else {
-        results = new Set([...results].filter((id: string) => wordResults.has(id)));
+    // Use character sequence matching for better partial matching
+    let results: Set<string> = new Set();
+    
+    // Strategy 1: Character sequence matching (most important for partial matches)
+    for (const [sequence, messageIds] of this.characterIndex.entries()) {
+      if (lowerQuery.includes(sequence) || sequence.includes(lowerQuery)) {
+        messageIds.forEach(id => results.add(id));
       }
     }
 
-    if (!results) return [];
-    
+    // Strategy 2: Word-based matching (for complete words)
+    for (const word of queryWords) {
+      const wordResults = this.invertedIndex.get(word);
+      if (wordResults) {
+        wordResults.forEach(id => results.add(id));
+      }
+    }
+
+    // Strategy 3: Direct text contains (fallback)
+    for (const [id, message] of this.messages.entries()) {
+      if (message.text.toLowerCase().includes(lowerQuery)) {
+        results.add(id);
+      }
+    }
+
+    if (results.size === 0) return [];
+
+    // Score and sort results by relevance
     return Array.from(results)
       .map(id => this.messages.get(id))
       .filter((msg): msg is Imessage => msg !== undefined)
       .sort((a, b) => {
-        const aScore = this.calculateSequenceRelevance(a, query);
-        const bScore = this.calculateSequenceRelevance(b, query);
+        const aScore = this.calculateEnhancedRelevance(a, query);
+        const bScore = this.calculateEnhancedRelevance(b, query);
         return bScore - aScore;
       });
+  }
+
+  private calculateEnhancedRelevance(message: Imessage, query: string): number {
+    const text = message.text.toLowerCase();
+    const lowerQuery = query.toLowerCase();
+    let score = 0;
+
+    // Exact match bonus (highest priority)
+    if (text === lowerQuery) {
+      score += 5000;
+    }
+
+    // Query starts with text or text starts with query
+    if (text.startsWith(lowerQuery) || lowerQuery.startsWith(text)) {
+      score += 2000;
+    }
+
+    // Exact phrase match
+    if (text.includes(lowerQuery)) {
+      score += 1500;
+      
+      // Position bonus - matches at start are better
+      const position = text.indexOf(lowerQuery);
+      if (position === 0) {
+        score += 1000;
+      } else if (position < 10) {
+        score += 500;
+      }
+    }
+
+    // Word boundary matches
+    const words = text.split(/\s+/);
+    const queryWords = lowerQuery.split(/\s+/).filter(w => w.length > 0);
+    
+    let allWordsFound = true;
+    let wordBoundaryMatches = 0;
+
+    queryWords.forEach(queryWord => {
+      let wordFound = false;
+      
+      words.forEach(word => {
+        // Exact word match
+        if (word === queryWord) {
+          score += 800;
+          wordFound = true;
+          wordBoundaryMatches++;
+        }
+        // Word starts with query
+        else if (word.startsWith(queryWord)) {
+          score += 400;
+          wordFound = true;
+          wordBoundaryMatches++;
+        }
+        // Word contains query
+        else if (word.includes(queryWord)) {
+          score += 200;
+          wordFound = true;
+        }
+        // Query contains word (partial match)
+        else if (queryWord.includes(word) && word.length > 2) {
+          score += 100;
+          wordFound = true;
+        }
+      });
+
+      if (!wordFound) {
+        allWordsFound = false;
+      }
+    });
+
+    // All words found bonus
+    if (allWordsFound) {
+      score += 600;
+    }
+
+    // Word boundary match bonus
+    if (wordBoundaryMatches === queryWords.length) {
+      score += 400;
+    }
+
+    // Character sequence matching score
+    let sequenceScore = 0;
+    for (let i = 0; i < lowerQuery.length; i++) {
+      for (let j = i + 1; j <= Math.min(i + 10, lowerQuery.length); j++) {
+        const sequence = lowerQuery.substring(i, j);
+        if (text.includes(sequence)) {
+          sequenceScore += sequence.length * 10; // Longer sequences get more weight
+        }
+      }
+    }
+    score += sequenceScore;
+
+    // Recency bonus (newer messages rank higher)
+    const messageAge = Date.now() - new Date(message.created_at).getTime();
+    const daysOld = messageAge / (1000 * 60 * 60 * 24);
+    const recencyBonus = Math.max(0, 100 - daysOld);
+    score += recencyBonus;
+
+    // Length similarity bonus (similar length messages rank higher)
+    const lengthDifference = Math.abs(text.length - lowerQuery.length);
+    if (lengthDifference < 10) {
+      score += 200;
+    }
+
+    return score;
   }
 
   private tokenize(text: string): string[] {
@@ -86,54 +237,14 @@ class MessageSearchEngine {
       .filter(word => word.length > 0);
   }
 
-  private calculateSequenceRelevance(message: Imessage, query: string): number {
-    const text = message.text.toLowerCase();
-    const lowerQuery = query.toLowerCase();
-    let score = 0;
-    
-    if (text.includes(lowerQuery)) {
-      score += 1000;
-      
-      const words = text.split(/\s+/);
-      for (const word of words) {
-        if (word.startsWith(lowerQuery)) {
-          score += 500;
-          break;
-        }
-      }
-    }
-    
-    const queryWords = lowerQuery.split(/\s+/).filter(w => w.length > 0);
-    let allWordsFound = true;
-    
-    queryWords.forEach(word => {
-      if (text.includes(word)) {
-        const occurrences = (text.split(word).length - 1);
-        score += occurrences * 100;
-        
-        if (text.startsWith(word)) {
-          score += 200;
-        }
-      } else {
-        allWordsFound = false;
-      }
-    });
-    
-    if (allWordsFound) {
-      score += 300;
-    }
-    
-    const messageAge = Date.now() - new Date(message.created_at).getTime();
-    const daysOld = messageAge / (1000 * 60 * 60 * 24);
-    const recencyBonus = Math.max(0, 50 - daysOld);
-    score += recencyBonus;
-    
-    return score;
-  }
-
   clear() {
     this.invertedIndex.clear();
     this.messages.clear();
+    this.characterIndex.clear();
+  }
+
+  getMessageCount(): number {
+    return this.messages.size;
   }
 }
 
@@ -141,7 +252,7 @@ export default function ListMessages({
   searchQuery = "", 
   isSearching = false, 
   onSearchStateChange,
-  onSearchTrigger // New prop
+  onSearchTrigger
 }: ListMessagesProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [userScrolled, setUserScrolled] = useState(false);
@@ -149,6 +260,8 @@ export default function ListMessages({
   const [isLoading, setIsLoading] = useState(false);
   
   const [currentNavigatedMessageId, setCurrentNavigatedMessageId] = useState<string | null>(null);
+  const [searchResults, setSearchResults] = useState<Imessage[]>([]);
+  const [showSearchInfo, setShowSearchInfo] = useState(false);
 
   const selectedRoom = useSelectedRoom();
   const user = useUser((state) => state.user);
@@ -188,54 +301,69 @@ export default function ListMessages({
     });
   }, []);
 
+  // Enhanced scroll to message
+  const scrollToMessage = useCallback((messageId: string, behavior: ScrollBehavior = 'smooth') => {
+    const messageElement = document.getElementById(`msg-${messageId}`);
+    if (messageElement && scrollRef.current) {
+      messageElement.scrollIntoView({ 
+        behavior, 
+        block: "center" 
+      });
+    }
+  }, []);
+
   // Search trigger handler
   const handleSearchTrigger = useCallback(() => {
     onSearchTrigger?.();
   }, [onSearchTrigger]);
 
+  // Clear search results
+  const handleClearSearch = useCallback(() => {
+    setSearchResults([]);
+    setHighlightedMessageId(null);
+    setCurrentNavigatedMessageId(null);
+    setShowSearchInfo(false);
+    onSearchStateChange?.(false);
+  }, [setHighlightedMessageId, onSearchStateChange]);
+
   // Index messages for search when they load
   useEffect(() => {
     if (messages.length > 0 && selectedRoom?.id) {
-      searchEngineRef.current.clear();
-      messages.forEach(msg => {
-        if (msg.room_id === selectedRoom.id) {
+      const roomMessages = messages.filter(msg => msg.room_id === selectedRoom.id);
+      if (roomMessages.length > 0) {
+        searchEngineRef.current.clear();
+        roomMessages.forEach(msg => {
           searchEngineRef.current.indexMessage(msg);
-        }
-      });
+        });
+      }
     }
   }, [messages, selectedRoom?.id]);
 
-  // Handle search from header input
+  // ENHANCED: Real-time search with character sequence matching
   useEffect(() => {
     if (searchQuery.trim().length === 0) {
-      setHighlightedMessageId(null);
-      setCurrentNavigatedMessageId(null);
-      onSearchStateChange?.(false);
+      handleClearSearch();
       return;
     }
 
     onSearchStateChange?.(true);
+    setShowSearchInfo(true);
     
-    setTimeout(() => {
+    // Immediate search for better responsiveness
+    const searchTimeout = setTimeout(() => {
       try {
         const results = searchEngineRef.current.search(searchQuery);
+        setSearchResults(results);
         
-        // Auto-navigate to first result in real-time as user types
         if (results.length > 0) {
           const bestMatch = results[0];
           setHighlightedMessageId(bestMatch.id);
           setCurrentNavigatedMessageId(bestMatch.id);
           
-          // Scroll to the matched message
+          // Auto-scroll to the first result with slight delay
           setTimeout(() => {
-            const messageElement = document.getElementById(`msg-${bestMatch.id}`);
-            if (messageElement) {
-              messageElement.scrollIntoView({ 
-                behavior: "smooth", 
-                block: "center" 
-              });
-            }
-          }, 100);
+            scrollToMessage(bestMatch.id, 'smooth');
+          }, 50);
         } else {
           setHighlightedMessageId(null);
           setCurrentNavigatedMessageId(null);
@@ -244,19 +372,21 @@ export default function ListMessages({
         console.error("Search error:", error);
         setHighlightedMessageId(null);
         setCurrentNavigatedMessageId(null);
+        setSearchResults([]);
       } finally {
         onSearchStateChange?.(false);
       }
-    }, 0);
-  }, [searchQuery, setHighlightedMessageId, onSearchStateChange]);
+    }, 50); // Reduced debounce for instant feedback
+
+    return () => clearTimeout(searchTimeout);
+  }, [searchQuery, setHighlightedMessageId, onSearchStateChange, handleClearSearch, scrollToMessage]);
 
   // Clear navigation when search query is cleared
   useEffect(() => {
     if (!searchQuery) {
-      setCurrentNavigatedMessageId(null);
-      setHighlightedMessageId(null);
+      handleClearSearch();
     }
-  }, [searchQuery, setHighlightedMessageId]);
+  }, [searchQuery, handleClearSearch]);
 
   // Load initial messages
   useEffect(() => {
@@ -276,6 +406,7 @@ export default function ListMessages({
       setMessages([]);
       messagesLoadedRef.current.delete(prevRoomIdRef.current || "");
       searchEngineRef.current.clear();
+      handleClearSearch();
     }
   
     const alreadyLoaded = messagesLoadedRef.current.has(currentRoomId);
@@ -301,7 +432,7 @@ export default function ListMessages({
     };
   
     loadInitialMessages();
-  }, [selectedRoom?.id, setMessages, isLoading]);
+  }, [selectedRoom?.id, setMessages, isLoading, handleClearSearch]);
 
   // Real-time subscription
   const handleRealtimePayload = useCallback(
@@ -442,15 +573,24 @@ export default function ListMessages({
     prevMessagesLength.current = messages.length;
   }, [messages.length, userScrolled, selectedRoom?.id]);
 
-  // Filter messages for current room
-  const filteredMessages = useMemo(() => {
+  // Filter messages - ALWAYS show only searched messages when search query exists
+  const displayMessages = useMemo(() => {
     const currentRoomId = selectedRoom?.id;
     if (!messages.length || !currentRoomId) return [];
     
-    return messages
+    // Get base room messages
+    const roomMessages = messages
       .filter(msg => msg.room_id === currentRoomId)
       .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-  }, [messages, selectedRoom?.id]);
+
+    // When search query exists, ALWAYS show ONLY matching messages
+    if (searchQuery && searchQuery.trim().length > 0) {
+      return searchResults.length > 0 ? searchResults : [];
+    }
+
+    // No search query: show all room messages
+    return roomMessages;
+  }, [messages, selectedRoom?.id, searchQuery, searchResults]);
 
   const SkeletonMessage = React.memo(() => (
     <div className="flex gap-2 animate-pulse w-full p-2">
@@ -463,6 +603,36 @@ export default function ListMessages({
   ));
 
   SkeletonMessage.displayName = "SkeletonMessage";
+
+  // Enhanced empty state with search context
+  const renderEmptyState = () => {
+    if (searchQuery && displayMessages.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+          <Search className="h-16 w-16 text-muted-foreground/30 mb-4" />
+          <h3 className="text-lg font-semibold mb-2">No messages found</h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            No messages match "{searchQuery}"
+          </p>
+          <Button variant="outline" onClick={handleClearSearch}>
+            Clear Search
+          </Button>
+        </div>
+      );
+    }
+
+    return (
+      <div 
+        className="flex items-center justify-center h-full"
+        style={{ 
+          color: 'hsl(var(--no-messages-color))',
+          fontSize: 'var(--no-messages-size)' 
+        }}
+      >
+        <p>No messages yet. Start a conversation!</p>
+      </div>
+    );
+  };
 
   if (!selectedRoom?.id) {
     return (
@@ -480,7 +650,7 @@ export default function ListMessages({
 
   return (
     <div className="h-[75dvh] w-full flex flex-col overflow-hidden relative">
-      {/* Search Trigger Button - Top Right Corner */}
+      {/* Search Trigger Button */}
       <Button
         variant="ghost"
         size="icon"
@@ -497,7 +667,29 @@ export default function ListMessages({
         <Search className="h-5 w-5 transition-all duration-300 stroke-[hsl(var(--muted-foreground))]" />
       </Button>
 
-      {/* Messages Scroll Area */}
+      {/* Search Info Bar - Show when searching */}
+      {showSearchInfo && searchQuery && (
+        <div className="px-4 py-3 border-b bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 transition-all duration-300">
+          <div className="flex items-center justify-between text-sm">
+            <div className="flex items-center gap-2">
+              <Search className="h-4 w-4" />
+              <span>
+                Showing {displayMessages.length} results for "{searchQuery}"
+              </span>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleClearSearch}
+              className="h-6 w-6 p-0 hover:bg-black/10 dark:hover:bg-white/10"
+            >
+              <X className="h-3 w-3" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Messages Scroll Area - Will show ONLY searched messages when searching */}
       <div
         ref={scrollRef}
         onScroll={handleOnScroll}
@@ -510,34 +702,26 @@ export default function ListMessages({
                 <SkeletonMessage key={index} />
               ))}
             </div>
-          ) : filteredMessages.length > 0 ? (
-            filteredMessages.map((message) => (
+          ) : displayMessages.length > 0 ? (
+            displayMessages.map((message) => (
               <Message 
                 key={message.id} 
                 message={message} 
                 isNavigated={currentNavigatedMessageId === message.id}
-                searchQuery={searchQuery}
+                searchQuery={searchQuery} // Always pass searchQuery for highlighting
               />
             ))
           ) : (
-            <div 
-              className="flex items-center justify-center h-full"
-              style={{ 
-                color: 'hsl(var(--no-messages-color))',
-                fontSize: 'var(--no-messages-size)' 
-              }}
-            >
-              <p>No messages yet. Start a conversation!</p>
-            </div>
+            renderEmptyState()
           )}
         </div>
       </div>
 
-      {/* Typing Indicator */}
-      <TypingIndicator />
+      {/* Typing Indicator - Hide when searching */}
+      {!searchQuery && <TypingIndicator />}
 
-      {/* New messages notification */}
-      {notification > 0 && (
+      {/* New messages notification - Hide when searching */}
+      {!searchQuery && notification > 0 && (
         <div className="absolute bottom-20 right-4 z-10">
           <button
             onClick={scrollDown}
