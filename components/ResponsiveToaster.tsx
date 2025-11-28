@@ -1,4 +1,3 @@
-// components/ResponsiveToaster.tsx
 "use client";
 
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
@@ -11,7 +10,8 @@ export function ResponsiveToaster() {
 
      return (
           <SonnerToaster
-               position={isMobile ? "center" : "bottom-right"}
+               // FIX: "center" is not valid. Changed to "bottom-center" (or use "top-center")
+               position={isMobile ? "bottom-center" : "bottom-right"}
                theme={theme === "system" ? "light" : (theme as any)}
                toastOptions={{
                     duration: 4000,
