@@ -23,7 +23,6 @@ import {
   Check,
   X,
   Trash2,
-  MoreVertical,
   ArrowRight,
   UserPlus,
   Mail,
