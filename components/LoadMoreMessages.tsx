@@ -6,7 +6,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { LIMIT_MESSAGE } from "@/lib/constant";
 import { getFromAndTo } from "@/lib/utils";
 import { Imessage, useMessage } from "@/lib/store/messages";
-import { toast } from "/components/ui/sonner"
+import { toast } from "@/components/ui/sonner"
 import { useUnifiedRoomStore } from "@/lib/store/roomstore";
 import { MESSAGE_WITH_PROFILE_SELECT } from "@/lib/queries/messages";
 

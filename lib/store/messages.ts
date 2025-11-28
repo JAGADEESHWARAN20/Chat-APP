@@ -4,7 +4,7 @@ import { create } from "zustand";
 import { LIMIT_MESSAGE } from "../constant";
 import { Database } from "@/lib/types/supabase";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { toast } from "/components/ui/sonner"
+import { toast } from "@/components/ui/sonner"
 import {  RealtimePostgresUpdatePayload, RealtimePostgresDeletePayload } from '@supabase/supabase-js';
 
 // Add this helper function at the top of your store

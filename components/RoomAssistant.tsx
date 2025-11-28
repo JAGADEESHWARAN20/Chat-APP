@@ -42,9 +42,8 @@ import {
   PopoverContent,
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Switch } from "@/components/ui/switch";
-import { Separator } from "@/components/ui/separator";
-import { toast } from "/components/ui/sonner"
+
+import { toast } from "@/components/ui/sonner"
 
 import { useTheme } from "next-themes";
 // import { useRoomContext } from "@/lib/store/RoomContext";

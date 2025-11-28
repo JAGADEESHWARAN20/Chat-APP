@@ -4,7 +4,7 @@ import { useRef, useEffect } from "react";
 import { useUnifiedRoomStore, RoomWithMembership } from "../store/roomstore";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useUser } from "@/lib/store/user";
-import { toast } from "/components/ui/sonner"
+import { toast } from "@/components/ui/sonner"
 import { Database } from "@/lib/types/supabase";
 
 type Room = Database["public"]["Tables"]["rooms"]["Row"];

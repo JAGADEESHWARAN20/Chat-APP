@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useUnifiedRoomStore } from "@/lib/store/roomstore";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Button } from "./ui/button";
-import { toast } from "/components/ui/sonner"
+import { toast } from "@/components/ui/sonner"
 import { useUser } from "@/lib/store/user";
 import type { Database } from "@/lib/types/supabase";
 import { ArrowRight } from "lucide-react";

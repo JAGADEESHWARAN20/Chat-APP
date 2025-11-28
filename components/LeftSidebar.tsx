@@ -14,7 +14,7 @@ import { Loader2,  MessageSquare, Users, Plus, ChevronLeft } from "lucide-react
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { toast } from "/components/ui/sonner"
+import { toast } from "@/components/ui/sonner"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
