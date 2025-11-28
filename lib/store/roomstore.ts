@@ -4,7 +4,7 @@
 import { create } from "zustand";
 import { devtools, subscribeWithSelector } from "zustand/middleware";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner"
 import type { Database } from "@/lib/types/supabase";
 import { useEffect } from "react";
 

@@ -16,7 +16,7 @@ import { PlusCircle, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { toast } from "sonner";
+import { toast } from "/components/ui/sonner"
 // import { useRoomContext } from "@/lib/store/RoomContext";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";

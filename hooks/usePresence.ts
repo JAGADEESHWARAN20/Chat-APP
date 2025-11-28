@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useUser } from "@/lib/store/user";
-import { toast } from "sonner";
+import { toast } from "/components/ui/sonner"
 import type { RealtimeChannel, RealtimePresenceState } from "@supabase/supabase-js";
 import { useUnifiedRoomStore } from "@/lib/store/roomstore"; // ✅ Use unified store
 

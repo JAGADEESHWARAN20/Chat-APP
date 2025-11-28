@@ -2,7 +2,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner"
 
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useNotification, type Inotification } from "@/lib/store/notifications";

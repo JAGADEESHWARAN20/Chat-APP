@@ -26,7 +26,7 @@ import {
 
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useDebounce } from "use-debounce";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner"
 
 type PartialProfile = {
   id: string;

@@ -16,7 +16,7 @@ import {
   TooltipContent,
 } from "@/components/ui/tooltip";
 import { Separator } from "@/components/ui/separator";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner"
 import { ChatMessage } from "../RoomAssistant";
 
 

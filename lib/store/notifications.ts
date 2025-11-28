@@ -3,7 +3,7 @@
 import React from "react";
 import { create } from "zustand";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner"
 import type { Database } from "@/lib/types/supabase";
 import { RealtimeChannel } from "@supabase/supabase-js";
 import { SafeSupabaseQuery } from "@/lib/utils/supabase-queries";

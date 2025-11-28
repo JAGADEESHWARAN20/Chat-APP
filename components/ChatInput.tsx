@@ -6,7 +6,7 @@ import { useMessage } from "@/lib/store/messages";
 import { useUser } from "@/lib/store/user";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
+import { toast } from "/components/ui/sonner"
 import { v4 as uuidv4 } from "uuid";
 import { Imessage } from "@/lib/store/messages";
 import { Send, Loader2 } from "lucide-react";
