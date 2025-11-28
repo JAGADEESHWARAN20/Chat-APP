@@ -205,7 +205,7 @@ export const useUnifiedRoomStore = create<RoomState>()(
           const { data, error } = await supabase.rpc("get_rooms_with_counts", {
             p_user_id: userId,
             p_query: undefined,
-            p_include_participants: true,
+            
           });
 
           if (error) {

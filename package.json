@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "types": "npx supabase gen types typescript --project-id ejdxofntajrkrmgmikkr --schema public > lib/types/supabase.ts"
+    "types": "node scripts/generate-types.js"
+
   },
   "dependencies": {
     "@openrouter/sdk": "^0.1.10",

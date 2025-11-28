@@ -532,17 +532,15 @@ export type Database = {
         }[]
       }
       get_rooms_with_counts: {
-        Args: {
-          p_include_participants?: boolean
-          p_query?: string
-          p_user_id: string
-        }
+        Args: { p_query?: string; p_user_id: string }
         Returns: {
           created_at: string
           created_by: string
           id: string
           is_member: boolean
           is_private: boolean
+          latest_message: string
+          latest_message_created_at: string
           member_count: number
           name: string
           participation_status: string
