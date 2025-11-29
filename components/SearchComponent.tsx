@@ -172,7 +172,7 @@ const RoomCard = memo(function RoomCard({
 --------------------------------------------------------- */
 export default function SearchComponent({ user }: any) {
   const router = useRouter();
-  const supabase = getSupabaseBrowserClient();
+  // const supabase = getSupabaseBrowserClient();
 
   const availableRooms = useAvailableRooms();
   const presence = useRoomPresence();

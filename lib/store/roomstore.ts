@@ -501,40 +501,59 @@ export const useRoomRealtimeSync = (userId: string | null) => {
     // Real-time Presence Sync For Each Room
 
 
-    channel
-    .on(
+    channel.on(
       "postgres_changes",
       { event: "*", schema: "public", table: "room_participants" },
       (payload) => {
         const rec = payload.new as RoomParticipantRecord;
-      
         if (!rec) return;
     
-        if (rec.user_id !== userId) return; // client-side filter ONLY
+        // state accessor
+        const store = useUnifiedRoomStore.getState();
     
+        // only care about logged-in user
+        if (rec.user_id !== userId) return;
+    
+        // get previous room state
+        const room = store.rooms.find((r) => r.id === rec.room_id);
+    
+        // 🟢 USER ACCEPTED
         if (rec.status === "accepted") {
-          updateRoomMembership(rec.room_id, {
+          const prevCount = room?.memberCount ?? 0;
+    
+          store.updateRoomMembership(rec.room_id, {
             isMember: true,
             participationStatus: "accepted",
+            memberCount: prevCount + 1,
           });
+    
           toast.success("🎉 You're now a member of this room!");
+          return;
         }
     
+        // 🟡 USER PENDING
         if (rec.status === "pending") {
-          updateRoomMembership(rec.room_id, {
+          store.updateRoomMembership(rec.room_id, {
             isMember: false,
             participationStatus: "pending",
           });
+          return;
         }
     
+        // 🔴 USER LEFT
         if (rec.status === "left") {
-          updateRoomMembership(rec.room_id, {
+          const prevCount = room?.memberCount ?? 1;
+    
+          store.updateRoomMembership(rec.room_id, {
             isMember: false,
             participationStatus: null,
+            memberCount: Math.max(0, prevCount - 1),
           });
+    
+          return;
         }
       }
-    )
+    )    
     
       .on('postgres_changes', 
         { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
