@@ -458,115 +458,91 @@ export const useRoomRealtimeSync = (userId: string | null) => {
   useEffect(() => {
     if (!userId) return;
 
-    console.log('🔌 useRoomRealtimeSync - Setting up for user:', userId);
-    const channel = supabase.channel(`global-room-sync-${userId}`);
+    const channel = supabase.channel(`room-sync-${userId}`);
 
-    const handleParticipantChange = async (payload: any) => {
-      const { eventType, new: newRecord } = payload;
-      const roomId = newRecord?.room_id;
-      
-      if (!roomId) return;
-
-      console.log('📢 Real-time participant change:', { eventType, roomId, status: newRecord?.status });
-
-      // INSTANT UI UPDATE - No waiting for refresh
-      if (eventType === 'UPDATE' && newRecord?.status === 'accepted') {
-        console.log('⚡ INSTANT UPDATE - User accepted to room:', roomId);
-        updateRoomMembership(roomId, { 
-          isMember: true, 
-          participationStatus: "accepted" 
-        });
-        toast.success("🎉 You're now a member of this room!");
-      }
-      
-      
-    };
-
-    const handleNotification = async (payload: any) => {
-      const { new: newRecord } = payload;
-      
-      if (newRecord?.type === 'join_request_accepted' && newRecord.room_id) {
-        console.log('📢 Real-time notification - Join request accepted for room:', newRecord.room_id);
-        // INSTANT UI UPDATE
-        updateRoomMembership(newRecord.room_id, { 
-          isMember: true, 
-          participationStatus: "accepted" 
-        });
-        toast.success("🎉 Your join request was accepted!");
-        
-        // Refresh for complete data
-        setTimeout(() => refreshRooms(), 500);
-      }
-    };
-    // Real-time Presence Sync For Each Room
-
-
+    // -----------------------------------------
+    // room_participants listener (self changes)
+    // -----------------------------------------
     channel.on(
       "postgres_changes",
       { event: "*", schema: "public", table: "room_participants" },
       (payload) => {
         const rec = payload.new as RoomParticipantRecord;
-        if (!rec) return;
-    
-        // state accessor
+        if (!rec || rec.user_id !== userId) return;
+
         const store = useUnifiedRoomStore.getState();
-    
-        // only care about logged-in user
-        if (rec.user_id !== userId) return;
-    
-        // get previous room state
         const room = store.rooms.find((r) => r.id === rec.room_id);
-    
-        // 🟢 USER ACCEPTED
+        const prev = room?.memberCount ?? 0;
+
         if (rec.status === "accepted") {
-          const prevCount = room?.memberCount ?? 0;
-    
-          store.updateRoomMembership(rec.room_id, {
+          updateRoomMembership(rec.room_id, {
             isMember: true,
             participationStatus: "accepted",
-            memberCount: prevCount + 1,
+            memberCount: prev + 1,
           });
-    
           toast.success("🎉 You're now a member of this room!");
-          return;
         }
-    
-        // 🟡 USER PENDING
+
         if (rec.status === "pending") {
-          store.updateRoomMembership(rec.room_id, {
+          updateRoomMembership(rec.room_id, {
             isMember: false,
             participationStatus: "pending",
           });
-          return;
         }
-    
-        // 🔴 USER LEFT
+
         if (rec.status === "left") {
-          const prevCount = room?.memberCount ?? 1;
-    
-          store.updateRoomMembership(rec.room_id, {
+          updateRoomMembership(rec.room_id, {
             isMember: false,
             participationStatus: null,
-            memberCount: Math.max(0, prevCount - 1),
+            memberCount: Math.max(0, prev - 1),
           });
-    
-          return;
         }
       }
-    )    
-    
-      .on('postgres_changes', 
-        { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
-        handleNotification
-      );
+    );
+
+    // -----------------------------------------
+    // notifications listener (owner accepted your request)
+    // -----------------------------------------
+    channel.on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "notifications",
+        filter: `user_id=eq.${userId}`,
+      },
+      (payload) => {
+        const rec = payload.new as {
+          type?: string;
+          room_id?: string;
+        };
+
+        if (rec?.type !== "join_request_accepted" || !rec.room_id) return;
+
+        const store = useUnifiedRoomStore.getState();
+        const room = store.rooms.find((r) => r.id === rec.room_id);
+        const prev = room?.memberCount ?? 0;
+
+        updateRoomMembership(rec.room_id, {
+          isMember: true,
+          participationStatus: "accepted",
+          memberCount: prev + 1,
+        });
+
+        toast.success("🎉 Your join request was accepted!");
+
+        setTimeout(() => store.refreshRooms(), 300);
+      }
+    );
 
     channel.subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [userId, refreshRooms, updateRoomMembership, supabase]);
+  }, [userId, refreshRooms, updateRoomMembership]);
 };
+
 
 
 // Helper function for fetching users
