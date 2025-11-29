@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useMemo, useCallback } from "react";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUnifiedRoomStore } from "@/lib/store/roomstore";
@@ -16,7 +16,7 @@ import ChatHeader from "@/components/ChatHeader";
 import SearchComponent from "@/components/SearchComponent";
 import CreateRoomDialog from "@/components/CreateRoomDialog";
 import NotificationsWrapper from "@/components/NotificationsWrapper";
-import SecureInitUser from "@/lib/initialization/secureInitUser";
+
 import { Home, Search as SearchIcon, PanelLeft, Settings, X, ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +24,8 @@ import { useMediaQuery } from "@/hooks/use-media-query";
 import { ThemeTransitionWrapper } from "./ThemeTransitionWrapper";
 import { PresenceConnector } from "./PresenceConnector";
 import { useUser } from "@/lib/store/user";
+import { useMessage } from "@/lib/store/messages";
+
 
 interface UnifiedHomeProps {
   initialSidebarState?: "expanded" | "collapsed";
@@ -37,17 +39,15 @@ function UnifiedHomeContent({
   sidebarState,
 }: UnifiedHomeProps) {
   const { user } = useUser();
-  const setRoomUser = useUnifiedRoomStore((s) => s.setUser);
+
+    // Keep roomstore.user synced with auth user
+  
 
   // --- Search State ---
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
 
-  // --- 1. Init Data ---
-  useEffect(() => {
-    if (user) setRoomUser(user);
-  }, [user, setRoomUser]);
 
   // --- 2. Layout Constants ---
   const isMobile = useMediaQuery("(max-width: 768px)");
@@ -178,6 +178,32 @@ function UnifiedHomeContent({
   }, [isMobile, isLeftSidebarOpen, manualRightOpen, SIDEBAR_WIDTH]);
 
   const selectedRoomId = useUnifiedRoomStore((s) => s.selectedRoomId);
+  const { setActiveRoom, loadInitialMessages, subscribeToRoom, unsubscribeFromRoom } =
+  useMessage((s) => ({
+    setActiveRoom: s.setActiveRoom,
+    loadInitialMessages: s.loadInitialMessages,
+    subscribeToRoom: s.subscribeToRoom,
+    unsubscribeFromRoom: s.unsubscribeFromRoom,
+  }));
+
+// when room changes → switch cache + (if needed) fetch once
+useEffect(() => {
+  if (!selectedRoomId) {
+    setActiveRoom(null);
+    unsubscribeFromRoom();
+    return;
+  }
+
+  setActiveRoom(selectedRoomId);
+  loadInitialMessages(selectedRoomId); // cached after first time
+  subscribeToRoom(selectedRoomId);
+
+  return () => {
+    // optional: don't unsubscribe here if you want persistent realtime
+    unsubscribeFromRoom();
+  };
+}, [selectedRoomId, setActiveRoom, loadInitialMessages, subscribeToRoom, unsubscribeFromRoom]);
+
   const currentUser = useUnifiedRoomStore((s) => s.user);
 
   // --- 7. Tabs Logic ---
@@ -197,7 +223,7 @@ function UnifiedHomeContent({
         userId={currentUser?.id ?? null}
       />
 
-      <SecureInitUser />
+     
 
       {/* --- LEFT SIDEBAR --- */}
       <aside

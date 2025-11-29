@@ -523,13 +523,6 @@ export type Database = {
           isSetofReturn: true
         }
       }
-      get_room_member_counts: {
-        Args: never
-        Returns: {
-          member_count: number
-          room_id: string
-        }[]
-      }
       get_room_members: {
         Args: { room_id_param: string }
         Returns: {

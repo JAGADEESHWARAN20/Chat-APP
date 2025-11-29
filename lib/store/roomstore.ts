@@ -74,18 +74,26 @@ interface RoomState {
 
 
 // in normalizeRpcRooms - map owner field from RPC payload
-const normalizeRpcRooms = (data: any): RoomWithMembership[] =>
-  (Array.isArray(data) ? data : []).map((r: any) => ({
-    ...r,
-    created_by: r.created_by ?? r.created_by_id ?? null,
+const normalizeRpcRooms = (rows: any[]): RoomWithMembership[] =>
+  rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    is_private: r.is_private,
+    created_by: r.created_by,
+    created_at: r.created_at,
+
+    // from room_overview
+    memberCount: r.member_count ?? 0,
+    latestMessage: r.latest_message ?? null,
+    latest_message_created_at: r.latest_message_created_at ?? null,
+
+    // membership info
     isMember: Boolean(r.is_member),
-    participationStatus: (r.participation_status === "pending" || r.participation_status === "accepted") 
-      ? r.participation_status 
-      : null,
-    memberCount: Number(r.member_count ?? 0),
-    online_users: r.online_users ?? undefined,
-    unreadCount: r.unread_count ?? undefined,
-    latestMessage: r.latest_message ?? undefined,
+    participationStatus: r.participation_status ?? null,
+
+    // optional fields – keep existing support
+    unreadCount: r.unread_count ?? 0,
+    online_users: r.online_users ?? 0,
   }));
 
 
@@ -186,11 +194,7 @@ export const useUnifiedRoomStore = create<RoomState>()(
         let userId = get().user?.id;
         
         try {
-          if (!userId) {
-            const u = await supabase.auth.getUser();
-            userId = u.data.user?.id ?? undefined;
-            if (userId) set({ user: { id: userId } });
-          }
+         
           if (!userId) return null;
           
           // Skip if we have data and not forcing refresh
@@ -204,7 +208,7 @@ export const useUnifiedRoomStore = create<RoomState>()(
 
           const { data, error } = await supabase.rpc("get_rooms_with_counts", {
             p_user_id: userId,
-            p_query: undefined,
+            p_query: null as any,
             
           });
 
@@ -465,8 +469,7 @@ export const useRoomRealtimeSync = (userId: string | null) => {
         toast.success("🎉 You're now a member of this room!");
       }
       
-      // Also refresh for complete data consistency
-      setTimeout(() => refreshRooms(), 500);
+      
     };
 
     const handleNotification = async (payload: any) => {

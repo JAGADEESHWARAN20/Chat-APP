@@ -3,11 +3,9 @@ import { Space_Grotesk } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ResponsiveToaster } from "@/components/ResponsiveToaster";
 import { SearchHighlightProvider } from "@/lib/store/SearchHighlightContext";
-import RoomInitializer from "@/lib/initialization/RoomInitializer";
 
 import "@/app/globals.css";
-import ClientInitializer from "@/lib/initialization/clientinitializer";
-
+import {AuthProvider} from "./providers/AuthProvider";
 
 
 const space_Grotesk = Space_Grotesk({ subsets: ["latin"] });
@@ -17,6 +15,7 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  
   return (
     <html lang="en" suppressHydrationWarning className="h-full w-full">
       <head />
@@ -31,15 +30,10 @@ export default async function RootLayout({
         >
 
             <SearchHighlightProvider>
-              <ClientInitializer /> {/* ensures Zustand store stays synced */}
-              <RoomInitializer />
-
-              {/* Wrap the entire app in SidebarLayout which includes SidebarProvider */}
-             
+            <AuthProvider> 
                 {children}
-             
-
               <ResponsiveToaster />
+                </AuthProvider>
             </SearchHighlightProvider>
 
         </ThemeProvider>

@@ -4,10 +4,14 @@ import { create } from "zustand";
 import { LIMIT_MESSAGE } from "../constant";
 import { Database } from "@/lib/types/supabase";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { toast } from "@/components/ui/sonner"
-import {  RealtimePostgresUpdatePayload, RealtimePostgresDeletePayload } from '@supabase/supabase-js';
+import { toast } from "@/components/ui/sonner";
+import {
+  RealtimePostgresUpdatePayload,
+  RealtimePostgresDeletePayload,
+} from "@supabase/supabase-js";
 
-// Add this helper function at the top of your store
+// ---------- Helpers ----------
+
 export const transformApiMessage = (row: any): Imessage => ({
   ...row,
   is_edited: row.is_edited ?? false,
@@ -26,10 +30,10 @@ export const transformApiMessage = (row: any): Imessage => ({
   },
 });
 
-export type MessageWithProfile = Database["public"]["Tables"]["messages"]["Row"] & {
-  profiles: Database["public"]["Tables"]["profiles"]["Row"];
-};
-
+export type MessageWithProfile =
+  Database["public"]["Tables"]["messages"]["Row"] & {
+    profiles: Database["public"]["Tables"]["profiles"]["Row"];
+  };
 
 export type Imessage = {
   id: string;
@@ -49,74 +53,217 @@ export type Imessage = {
     bio: string | null;
     created_at: string | null;
     updated_at: string | null;
-  } | null; // ✅ allow null so optimistic messages don't fallback to email
+  } | null;
 };
-
 
 type ActionMessage = Imessage | null;
 type ActionType = "edit" | "delete" | null;
 
-interface MessageState {
-  hasMore: boolean;
-  page: number;
+// Per-room bucket – this is the core of caching
+interface RoomBucket {
   messages: Imessage[];
+  hasMore: boolean;
+  isLoading: boolean;
+  initialized: boolean;
+  oldestCreatedAt: string | null; // for pagination later (before=cursor)
+}
+
+type SupabaseChannel = ReturnType<
+  ReturnType<typeof getSupabaseBrowserClient>["channel"]
+>;
+
+interface MessageState {
+  // 👇 which room is currently active in the UI
+  activeRoomId: string | null;
+
+  // 👇 messages for the *active* room only (for components)
+  messages: Imessage[];
+  hasMore: boolean;
+
+  // 👇 full cache: all rooms you’ve touched this session
+  roomBuckets: Record<string, RoomBucket>;
+
   actionMessage: ActionMessage;
   actionType: ActionType;
   optimisticIds: string[];
-  currentSubscription: ReturnType<
-    ReturnType<typeof getSupabaseBrowserClient>["channel"]
-  > | null;
+  currentSubscription: SupabaseChannel | null;
 
-  addMessage: (message: Imessage) => void;
+  // Basic ops
+  setActiveRoom: (roomId: string | null) => void;
   setMessages: (messages: Imessage[]) => void;
   clearMessages: () => void;
+  addMessage: (message: Imessage) => void;
   setOptimisticIds: (id: string) => void;
 
   setActionMessage: (message: Imessage, type: ActionType) => void;
   resetActionMessage: () => void;
 
   optimisticDeleteMessage: (messageId: string) => void;
-  optimisticUpdateMessage: (messageId: string, updates: Partial<Imessage>) => void;
+  optimisticUpdateMessage: (
+    messageId: string,
+    updates: Partial<Imessage>
+  ) => void;
 
+  // 🚀 NEW: room-aware loading
+  loadInitialMessages: (roomId: string, opts?: { force?: boolean }) => Promise<void>;
+  loadMoreMessages: (roomId: string) => Promise<void>;
+
+  // realtime
   subscribeToRoom: (roomId?: string, directChatId?: string) => void;
   unsubscribeFromRoom: () => void;
+
+  // server-side search
   searchMessages: (roomId: string, query: string) => Promise<Imessage[]>;
 }
 
+const mergeBucketMessages = (
+  existing: Imessage[],
+  incoming: Imessage[]
+): Imessage[] => {
+  const byId = new Map<string, Imessage>();
+  for (const m of existing) byId.set(m.id, m);
+  for (const m of incoming) byId.set(m.id, m);
+
+  // sort ascending (oldest → newest)
+  return Array.from(byId.values()).sort(
+    (a, b) =>
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
+};
+
 export const useMessage = create<MessageState>()((set, get) => ({
-  hasMore: true,
-  page: 1,
+  activeRoomId: null,
   messages: [],
+  hasMore: true,
+  roomBuckets: {},
+
   optimisticIds: [],
   actionMessage: null,
   actionType: null,
   currentSubscription: null,
 
-  // setMessages: (newMessages) =>
-  //   set((state) => {
-  //     // Transform API messages to ensure all fields are present
-  //     const transformedMessages = newMessages.map(transformApiMessage);
-      
-  //     const existingIds = new Set(state.messages.map((msg) => msg.id));
-  //     const filtered = transformedMessages.filter((msg) => !existingIds.has(msg.id));
-      
-  //     return {
-  //       messages: [...filtered, ...state.messages],
-  //       page: state.page + 1,
-  //       hasMore: newMessages.length >= LIMIT_MESSAGE,
-  //     };
-  //   }),
+  // ---------------------------
+  // Core room selection
+  // ---------------------------
+  setActiveRoom: (roomId) =>
+    set((state) => {
+      if (!roomId) {
+        return {
+          activeRoomId: null,
+          messages: [],
+          hasMore: true,
+        };
+      }
+
+      const bucket = state.roomBuckets[roomId];
+      if (!bucket) {
+        // no cache yet – UI will show skeleton until loadInitialMessages finishes
+        return {
+          activeRoomId: roomId,
+          messages: [],
+          hasMore: true,
+        };
+      }
+
+      return {
+        activeRoomId: roomId,
+        messages: bucket.messages,
+        hasMore: bucket.hasMore,
+      };
+    }),
+
+  // ⚠️ backwards compatible: applies only to activeRoomId bucket + messages
   setMessages: (incoming) =>
+    set((state) => {
+      const roomId = state.activeRoomId;
+      if (!roomId) {
+        return {
+          messages: incoming.map(transformApiMessage),
+          hasMore: incoming.length >= LIMIT_MESSAGE,
+        };
+      }
+
+      const transformed = incoming.map(transformApiMessage);
+      const sorted = transformed.sort(
+        (a, b) =>
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+
+      const bucket: RoomBucket = {
+        messages: sorted,
+        hasMore: sorted.length >= LIMIT_MESSAGE,
+        isLoading: false,
+        initialized: true,
+        oldestCreatedAt: sorted[0]?.created_at ?? null,
+      };
+
+      return {
+        activeRoomId: roomId,
+        messages: sorted,
+        hasMore: bucket.hasMore,
+        roomBuckets: {
+          ...state.roomBuckets,
+          [roomId]: bucket,
+        },
+      };
+    }),
+
+  clearMessages: () =>
     set(() => ({
-      messages: incoming.map(transformApiMessage), // ✅ replace, don’t merge
-      page: 1,
-      hasMore: incoming.length >= LIMIT_MESSAGE,
+      activeRoomId: null,
+      messages: [],
+      hasMore: true,
+      roomBuckets: {},
+      optimisticIds: [],
+      actionMessage: null,
+      actionType: null,
+      currentSubscription: null,
     })),
-  
+
+  // ---------------------------
+  // Add / Update / Delete
+  // ---------------------------
   addMessage: (message) =>
     set((state) => {
-      if (state.messages.some((msg) => msg.id === message.id)) return state;
-      return { messages: [message, ...state.messages] };
+      const roomId =
+        message.room_id ?? message.direct_chat_id ?? state.activeRoomId;
+      if (!roomId) return state;
+
+      const existingBucket = state.roomBuckets[roomId] ?? {
+        messages: [],
+        hasMore: true,
+        isLoading: false,
+        initialized: false,
+        oldestCreatedAt: null,
+      };
+
+      // avoid duplicates
+      if (existingBucket.messages.some((m) => m.id === message.id)) {
+        return state;
+      }
+
+      const mergedMessages = mergeBucketMessages(existingBucket.messages, [
+        transformApiMessage(message),
+      ]);
+
+      const nextBucket: RoomBucket = {
+        ...existingBucket,
+        messages: mergedMessages,
+        initialized: true,
+        oldestCreatedAt: mergedMessages[0]?.created_at ?? null,
+      };
+
+      return {
+        ...state,
+        roomBuckets: {
+          ...state.roomBuckets,
+          [roomId]: nextBucket,
+        },
+        messages:
+          state.activeRoomId === roomId ? mergedMessages : state.messages,
+        hasMore:
+          state.activeRoomId === roomId ? nextBucket.hasMore : state.hasMore,
+      };
     }),
 
   setOptimisticIds: (id) =>
@@ -124,37 +271,228 @@ export const useMessage = create<MessageState>()((set, get) => ({
       optimisticIds: [...state.optimisticIds, id],
     })),
 
-  setActionMessage: (message, type) => set({ actionMessage: message, actionType: type }),
-  resetActionMessage: () => set({ actionMessage: null, actionType: null }),
+  setActionMessage: (message, type) =>
+    set({ actionMessage: message, actionType: type }),
+
+  resetActionMessage: () =>
+    set({ actionMessage: null, actionType: null }),
 
   optimisticDeleteMessage: (messageId) =>
-    set((state) => ({
-      messages: state.messages.filter((msg) => msg.id !== messageId),
-    })),
+    set((state) => {
+      // remove from active list
+      const filtered = state.messages.filter((m) => m.id !== messageId);
+
+      // remove from all buckets
+      const nextBuckets: Record<string, RoomBucket> = {};
+      for (const [roomId, bucket] of Object.entries(state.roomBuckets)) {
+        const msgs = bucket.messages.filter((m) => m.id !== messageId);
+        nextBuckets[roomId] = {
+          ...bucket,
+          messages: msgs,
+          oldestCreatedAt: msgs[0]?.created_at ?? null,
+        };
+      }
+
+      return {
+        messages: filtered,
+        roomBuckets: nextBuckets,
+      };
+    }),
 
   optimisticUpdateMessage: (messageId, updates) =>
-    set((state) => ({
-      messages: state.messages.map((msg) =>
-        msg.id === messageId ? { ...msg, ...updates } : msg
-      ),
-    })),
+    set((state) => {
+      // update active room messages
+      const nextMessages = state.messages.map((m) =>
+        m.id === messageId ? { ...m, ...updates } : m
+      );
 
-  clearMessages: () =>
-    set(() => ({
-      messages: [],
-      page: 1,
-      hasMore: true,
-    })),
+      // update all buckets
+      const nextBuckets: Record<string, RoomBucket> = {};
+      for (const [roomId, bucket] of Object.entries(state.roomBuckets)) {
+        nextBuckets[roomId] = {
+          ...bucket,
+          messages: bucket.messages.map((m) =>
+            m.id === messageId ? { ...m, ...updates } : m
+          ),
+        };
+      }
 
-  // ✅ Fixed: Proper type handling for real-time subscriptions
+      return {
+        messages: nextMessages,
+        roomBuckets: nextBuckets,
+      };
+    }),
+
+  // ---------------------------
+  // 🚀 NEW: room-aware fetch
+  // ---------------------------
+  loadInitialMessages: async (roomId, opts) => {
+    const { force = false } = opts ?? {};
+    const state = get();
+
+    // if we already have cache and not forcing → just use cache
+    const existingBucket = state.roomBuckets[roomId];
+    if (existingBucket && existingBucket.initialized && !force) {
+      set({
+        activeRoomId: roomId,
+        messages: existingBucket.messages,
+        hasMore: existingBucket.hasMore,
+      });
+      return;
+    }
+
+    const supabaseApiUrl = `/api/messages/${roomId}`; // existing route
+
+    try {
+      // mark loading in bucket
+      set((s) => ({
+        roomBuckets: {
+          ...s.roomBuckets,
+          [roomId]: {
+            messages: existingBucket?.messages ?? [],
+            hasMore: existingBucket?.hasMore ?? true,
+            isLoading: true,
+            initialized: existingBucket?.initialized ?? false,
+            oldestCreatedAt: existingBucket?.oldestCreatedAt ?? null,
+          },
+        },
+      }));
+
+      const res = await fetch(`${supabaseApiUrl}?limit=${LIMIT_MESSAGE}`, {
+        method: "GET",
+      });
+
+      if (!res.ok) {
+        throw new Error(`Failed to load messages (${res.status})`);
+      }
+
+      const data = await res.json();
+      const rows = Array.isArray(data.messages) ? data.messages : [];
+
+      const transformed = rows.map(transformApiMessage);
+      const sorted = transformed.sort(
+        (a: Imessage, b: Imessage) =>
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+      
+
+      const bucket: RoomBucket = {
+        messages: sorted,
+        hasMore: sorted.length >= LIMIT_MESSAGE,
+        isLoading: false,
+        initialized: true,
+        oldestCreatedAt: sorted[0]?.created_at ?? null,
+      };
+
+      set((s) => ({
+        activeRoomId: roomId,
+        messages: sorted,
+        hasMore: bucket.hasMore,
+        roomBuckets: {
+          ...s.roomBuckets,
+          [roomId]: bucket,
+        },
+      }));
+    } catch (err) {
+      console.error("loadInitialMessages error:", err);
+      toast.error("Failed to load messages");
+      set((s) => ({
+        roomBuckets: {
+          ...s.roomBuckets,
+          [roomId]: {
+            messages: existingBucket?.messages ?? [],
+            hasMore: existingBucket?.hasMore ?? true,
+            isLoading: false,
+            initialized: existingBucket?.initialized ?? false,
+            oldestCreatedAt: existingBucket?.oldestCreatedAt ?? null,
+          },
+        },
+      }));
+    }
+  },
+
+  // Discord-style load older messages when scrolling up
+  loadMoreMessages: async (roomId) => {
+    const state = get();
+    const bucket = state.roomBuckets[roomId];
+
+    if (!bucket || !bucket.hasMore || bucket.isLoading) return;
+
+    const oldest = bucket.oldestCreatedAt;
+    if (!oldest) return;
+
+    const url = new URL(`/api/messages/${roomId}`, window.location.origin);
+    url.searchParams.set("limit", String(LIMIT_MESSAGE));
+    url.searchParams.set("before", oldest); // backend should use this for pagination
+
+    try {
+      set((s) => ({
+        roomBuckets: {
+          ...s.roomBuckets,
+          [roomId]: { ...bucket, isLoading: true },
+        },
+      }));
+
+      const res = await fetch(url.toString(), { method: "GET" });
+      if (!res.ok) throw new Error("Failed to load older messages");
+
+      const data = await res.json();
+      const rows = Array.isArray(data.messages) ? data.messages : [];
+
+      const transformed = rows.map(transformApiMessage);
+      const sorted = transformed.sort(
+        (a: Imessage, b: Imessage) =>
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+      
+
+      // prepend older ones
+      const merged = mergeBucketMessages(sorted, bucket.messages);
+
+      const nextBucket: RoomBucket = {
+        messages: merged,
+        hasMore: sorted.length >= LIMIT_MESSAGE,
+        isLoading: false,
+        initialized: true,
+        oldestCreatedAt: merged[0]?.created_at ?? bucket.oldestCreatedAt,
+      };
+
+      set((s) => ({
+        roomBuckets: {
+          ...s.roomBuckets,
+          [roomId]: nextBucket,
+        },
+        messages:
+          s.activeRoomId === roomId ? nextBucket.messages : s.messages,
+        hasMore:
+          s.activeRoomId === roomId ? nextBucket.hasMore : s.hasMore,
+      }));
+    } catch (err) {
+      console.error("loadMoreMessages error:", err);
+      toast.error("Failed to load older messages");
+      set((s) => ({
+        roomBuckets: {
+          ...s.roomBuckets,
+          [roomId]: { ...bucket, isLoading: false },
+        },
+      }));
+    }
+  },
+
+  // ---------------------------
+  // Realtime subscription
+  // ---------------------------
   subscribeToRoom: (roomId?: string, directChatId?: string) =>
     set((state) => {
       const supabase = getSupabaseBrowserClient();
 
-      // Unsubscribe previous channel
-      if (state.currentSubscription) supabase.removeChannel(state.currentSubscription);
+      if (state.currentSubscription) {
+        supabase.removeChannel(state.currentSubscription);
+      }
 
-      if (!roomId && !directChatId) return { currentSubscription: null };
+      if (!roomId && !directChatId) {
+        return { currentSubscription: null };
+      }
 
       const filter = roomId
         ? `room_id=eq.${roomId}`
@@ -168,9 +506,13 @@ export const useMessage = create<MessageState>()((set, get) => ({
         .channel(channelName)
         .on(
           "postgres_changes",
-          { event: "INSERT", schema: "public", table: "messages", filter },
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "messages",
+            filter,
+          },
           async (payload) => {
-            // ✅ fetch the message WITH profiles (same shape as /api/messages/[roomId])
             const { data, error } = await supabase
               .from("messages")
               .select(
@@ -179,31 +521,48 @@ export const useMessage = create<MessageState>()((set, get) => ({
                 profiles!messages_sender_id_fkey (
                   id, username, display_name, avatar_url, bio, created_at, updated_at
                 )
-                `
+              `
               )
               .eq("id", payload.new.id)
               .single();
-        
+
             if (error || !data) return;
-        
+
             get().addMessage(transformApiMessage(data));
           }
         )
-        
         .on(
           "postgres_changes",
-          { event: "UPDATE", schema: "public", table: "messages", filter },
-          (payload: RealtimePostgresUpdatePayload<{ [key: string]: any }>) => {
-            const updatedMessage = payload.new as Database["public"]["Tables"]["messages"]["Row"];
-            get().optimisticUpdateMessage(updatedMessage.id, updatedMessage);
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "messages",
+            filter,
+          },
+          (
+            payload: RealtimePostgresUpdatePayload<{
+              [key: string]: any;
+            }>
+          ) => {
+            const updated = payload.new as Database["public"]["Tables"]["messages"]["Row"];
+            get().optimisticUpdateMessage(updated.id, updated);
           }
         )
         .on(
           "postgres_changes",
-          { event: "DELETE", schema: "public", table: "messages", filter },
-          (payload: RealtimePostgresDeletePayload<{ [key: string]: any }>) => {
-            const deletedMessage = payload.old as Database["public"]["Tables"]["messages"]["Row"];
-            get().optimisticDeleteMessage(deletedMessage.id);
+          {
+            event: "DELETE",
+            schema: "public",
+            table: "messages",
+            filter,
+          },
+          (
+            payload: RealtimePostgresDeletePayload<{
+              [key: string]: any;
+            }>
+          ) => {
+            const deleted = payload.old as Database["public"]["Tables"]["messages"]["Row"];
+            get().optimisticDeleteMessage(deleted.id);
           }
         )
         .subscribe();
@@ -220,7 +579,9 @@ export const useMessage = create<MessageState>()((set, get) => ({
       return { currentSubscription: null };
     }),
 
-  // ✅ Fixed: Proper type handling for search results
+  // ---------------------------
+  // Search (unchanged)
+  // ---------------------------
   searchMessages: async (roomId, query) => {
     if (!query.trim()) return [];
 
@@ -228,24 +589,25 @@ export const useMessage = create<MessageState>()((set, get) => ({
 
     const { data, error } = await supabase
       .from("messages")
-      .select(`
+      .select(
+        `
         *,
         profiles!messages_sender_id_fkey (
           id, display_name, avatar_url, username
         )
-      `)
+      `
+      )
       .eq("room_id", roomId)
       .ilike("text", `%${query}%`)
       .order("created_at", { ascending: false })
       .limit(20);
 
     if (error) {
-      toast.error("Message search failed");
       console.error(error);
+      toast.error("Message search failed");
       return [];
     }
 
-    // Proper type assertion
-    return (data || []) as Imessage[];
+    return (data || []).map(transformApiMessage) as Imessage[];
   },
 }));
