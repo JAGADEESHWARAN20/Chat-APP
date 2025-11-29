@@ -392,7 +392,7 @@ export type Database = {
             foreignKeyName: "room_participants_room_id_fkey"
             columns: ["room_id"]
             isOneToOne: false
-            referencedRelation: "rooms"
+            referencedRelation: "room_overview"
             referencedColumns: ["id"]
           },
         ]

@@ -10,6 +10,16 @@ import { useEffect } from "react";
 
 type IRoomRow = Database["public"]["Tables"]["rooms"]["Row"];
 
+type RoomParticipantRecord = {
+  id: string;
+  room_id: string;
+  user_id: string;
+  status: "pending" | "accepted" | "left" | string;
+  created_at?: string;
+  updated_at?: string;
+};
+
+
 // add created_by to the type
 export type RoomWithMembership = IRoomRow & {
   created_by?: string | null;   // <-- new
@@ -492,10 +502,40 @@ export const useRoomRealtimeSync = (userId: string | null) => {
 
 
     channel
-      .on('postgres_changes', 
-        { event: '*', schema: 'public', table: 'room_participants', filter: `user_id=eq.${userId}` },
-        handleParticipantChange
-      )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "room_participants" },
+      (payload) => {
+        const rec = payload.new as RoomParticipantRecord;
+      
+        if (!rec) return;
+    
+        if (rec.user_id !== userId) return; // client-side filter ONLY
+    
+        if (rec.status === "accepted") {
+          updateRoomMembership(rec.room_id, {
+            isMember: true,
+            participationStatus: "accepted",
+          });
+          toast.success("🎉 You're now a member of this room!");
+        }
+    
+        if (rec.status === "pending") {
+          updateRoomMembership(rec.room_id, {
+            isMember: false,
+            participationStatus: "pending",
+          });
+        }
+    
+        if (rec.status === "left") {
+          updateRoomMembership(rec.room_id, {
+            isMember: false,
+            participationStatus: null,
+          });
+        }
+      }
+    )
+    
       .on('postgres_changes', 
         { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
         handleNotification
