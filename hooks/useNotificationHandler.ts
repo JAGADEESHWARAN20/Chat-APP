@@ -1,20 +1,23 @@
-// hooks/useNotificationHandler.ts
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
 import { toast } from "@/components/ui/sonner";
-
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { useNotification, type Inotification } from "@/lib/store/notifications";
+
+import {
+  useNotifications,
+  type Notification,
+} from "@/lib/store/notifications";
+
 import { useUser } from "@/lib/store/user";
 import {
   useUnifiedRoomStore,
   type RoomWithMembership,
 } from "@/lib/store/roomstore";
 
-/**
- * Fetch rooms using RPC and normalize into RoomWithMembership format.
- */
+/* -------------------------------------------------------
+   Fetch rooms from RPC
+------------------------------------------------------- */
 async function fetchRoomsForUser(userId: string): Promise<RoomWithMembership[]> {
   const supabase = getSupabaseBrowserClient();
 
@@ -29,126 +32,114 @@ async function fetchRoomsForUser(userId: string): Promise<RoomWithMembership[]> 
     return [];
   }
 
-  const rows = (data ?? []) as any[];
+  return (data ?? []).map((r: any) => ({
+    id: r.id,
+    name: r.name,
+    is_private: r.is_private,
+    created_by: r.created_by,
+    created_at: r.created_at,
 
-  return rows.map(
-    (r): RoomWithMembership => ({
-      id: r.id,
-      name: r.name,
-      is_private: r.is_private,
-      created_by: r.created_by,
-      created_at: r.created_at,
-      isMember: Boolean(r.is_member),
-      participationStatus: r.participation_status ?? null,
-      memberCount: typeof r.member_count === "number" ? r.member_count : 0,
-      online_users: typeof r.online_users === "number" ? r.online_users : undefined,
-      unreadCount: typeof r.unread_count === "number" ? r.unread_count : undefined,
-      latestMessage: typeof r.latest_message === "string" ? r.latest_message : undefined,
-      latest_message_created_at: r.latest_message_created_at ?? null,
-    })
-  );
+    isMember: Boolean(r.is_member),
+    participationStatus: r.participation_status ?? null,
+
+    memberCount: r.member_count ?? 0,
+    online_users: r.online_users ?? 0,
+    unreadCount: r.unread_count ?? 0,
+
+    latestMessage: r.latest_message ?? null,
+    latest_message_created_at: r.latest_message_created_at ?? null,
+  }));
 }
 
+/* -------------------------------------------------------
+   Hook
+------------------------------------------------------- */
 export function useNotificationHandler() {
-  const { user: currentUser, authUser } = useUser();
-  const {
-    addNotification,
-    subscribeToNotifications,
-    unsubscribeFromNotifications,
-  } = useNotification();
+  const { user: profileUser, authUser } = useUser();
+  const userId = profileUser?.id || authUser?.id;
 
-  // Roomstore bindings
-  const roomStore = useUnifiedRoomStore();
-  const setRooms = roomStore.setRooms; // ✅ FIXED
-  const setSelectedRoomId = roomStore.setSelectedRoomId;
+  /* store APIs */
+  const { add, subscribe, unsubscribe } = useNotifications();
 
-  const mountedRef = useRef(true);
-  const userId: string | undefined = currentUser?.id || authUser?.id;
+  const { setRooms, setSelectedRoomId } = useUnifiedRoomStore();
 
-  /* -----------------------------------------
-     Subscribe/Unsubscribe lifecycle
-  ----------------------------------------- */
+  const mounted = useRef(true);
+
+  /* -------------------------------------------------------
+     Subscribe to realtime notifications
+  ------------------------------------------------------- */
   useEffect(() => {
-    mountedRef.current = true;
+    mounted.current = true;
 
     if (!userId) return;
 
-    subscribeToNotifications(userId);
+    subscribe(userId);
 
     return () => {
-      mountedRef.current = false;
-      unsubscribeFromNotifications();
+      mounted.current = false;
+      unsubscribe();
     };
-  }, [userId, subscribeToNotifications, unsubscribeFromNotifications]);
+  }, [userId, subscribe, unsubscribe]);
 
-  /* -----------------------------------------
-     Notification Handler
-  ----------------------------------------- */
+  /* -------------------------------------------------------
+     Handle incoming notifications
+  ------------------------------------------------------- */
   const handleNotification = useCallback(
-    async (notification: Inotification) => {
-      if (!mountedRef.current || !userId) return;
+    async (notif: Notification) => {
+      if (!mounted.current || !userId) return;
 
-      await addNotification(notification);
+      // Add to store
+      add(notif);
 
-      switch (notification.type) {
+      switch (notif.type) {
+        /* user’s join request accepted */
         case "join_request_accepted": {
           toast.success("Your request to join a room was accepted!", {
-            description: notification.message ?? "",
+            description: notif.message ?? "",
           });
 
-          const roomsData = await fetchRoomsForUser(userId);
+          const updated = await fetchRoomsForUser(userId);
+          setRooms(updated);
 
-          setRooms(roomsData); // ✅ FIXED
-
-          if (notification.room_id) {
-            const matched = roomsData.find(
-              (room) => room.id === notification.room_id
-            );
-            if (matched) {
-              setSelectedRoomId(notification.room_id);
-            }
+          if (notif.room_id) {
+            const room = updated.find((r) => r.id === notif.room_id);
+            if (room) setSelectedRoomId(notif.room_id);
           }
           break;
         }
 
-        case "join_request_rejected": {
+        case "join_request_rejected":
           toast.error("Your join request was rejected.");
           break;
-        }
 
-        case "room_invite": {
+        case "room_invite":
           toast.info("You were invited to a room.");
           break;
-        }
 
-        case "user_joined": {
-          toast.success("A user joined your room");
+        case "user_joined":
+          toast.success("A user joined your room.");
           break;
-        }
 
-        case "room_left": {
-          toast.info("A user left your room");
+        case "room_left":
+          toast.info("A user left your room.");
           break;
-        }
 
-        case "message": {
+        case "message":
           toast.info(
             `New message from ${
-              notification.users?.username || "someone"
+              notif.users?.username ||
+              notif.users?.display_name ||
+              "someone"
             }`,
-            {
-              description: notification.message,
-            }
+            { description: notif.message }
           );
           break;
-        }
 
-        default: {
-          toast(notification.message ?? "New notification");
-        }
+        default:
+          toast(notif.message ?? "New notification");
       }
     },
-    [addNotification, setRooms, setSelectedRoomId, userId]
+    [add, setRooms, setSelectedRoomId, userId]
   );
 
   return { handleNotification };

@@ -10,7 +10,7 @@ import React, {
   useState,
 } from "react";
 
-import { toast } from "@/components/ui/sonner"
+import { toast } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -37,15 +37,12 @@ import {
 } from "lucide-react";
 
 import {
-  useNotification,
-  type Inotification,
+  useNotifications,
+  type Notification,
   useNotificationSubscription,
 } from "@/lib/store/notifications";
 
-import {
-  useUnifiedRoomStore,
-} from "@/lib/store/roomstore";
-
+import { useUnifiedRoomStore } from "@/lib/store/roomstore";
 import { useAuthSync } from "@/hooks/useAuthSync";
 import { useConnectionManager } from "@/hooks/useConnectionManager";
 
@@ -56,10 +53,11 @@ import {
   AccordionContent,
 } from "@/components/ui/accordion";
 
-// ─────────────────────────────────────────────────────────────
-// Notification UI helpers
-// ─────────────────────────────────────────────────────────────
-function getNotificationDisplay(n: Inotification) {
+/* =======================================================================
+   Notification UI helpers
+   ======================================================================= */
+
+function getNotificationDisplay(n: Notification) {
   const sender = n.users?.display_name || n.users?.username || "Someone";
   const room = n.rooms?.name || "a room";
 
@@ -114,15 +112,16 @@ function getNotificationDisplay(n: Inotification) {
   }
 }
 
-function shouldShowNotificationActions(n: Inotification) {
+function shouldShowNotificationActions(n: Notification) {
   return ["join_request", "room_invite"].includes(n.type);
 }
 
-// ─────────────────────────────────────────────────────────────
-// 📌 Notification Item Component Props
-// ─────────────────────────────────────────────────────────────
+/* =======================================================================
+   Notification Item
+   ======================================================================= */
+
 type NotificationItemProps = {
-  notification: Inotification;
+  notification: Notification;
   onAccept: (id: string, roomId: string | null, type: string) => Promise<void>;
   onReject: (
     id: string,
@@ -133,9 +132,6 @@ type NotificationItemProps = {
   isLoading?: boolean;
 };
 
-// ─────────────────────────────────────────────────────────────
-// 📌 Enhanced Notification Item Component
-// ─────────────────────────────────────────────────────────────
 export const NotificationItem = memo(function NotificationItem({
   notification,
   onAccept,
@@ -151,11 +147,10 @@ export const NotificationItem = memo(function NotificationItem({
   const showActions = shouldShowNotificationActions(notification);
   const [open, setOpen] = useState(false);
 
-  // Enhanced keyboard navigation
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' || e.key === ' ') {
+    if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
-      setOpen(prev => !prev);
+      setOpen((prev) => !prev);
     }
   }, []);
 
@@ -188,82 +183,93 @@ export const NotificationItem = memo(function NotificationItem({
             role="button"
             tabIndex={0}
             aria-expanded={open}
-            aria-label={`Notification: ${text}. ${open ? 'Expanded' : 'Collapsed'}. Click to ${open ? 'collapse' : 'expand'}`}
+            aria-label={`Notification: ${text}. ${
+              open ? "Expanded" : "Collapsed"
+            }. Click to ${open ? "collapse" : "expand"}`}
             onKeyDown={handleKeyDown}
-            className={`p-4 flex items-start gap-3 rounded-lg mx-2 my-1 cursor-pointer transition-all
-              hover:bg-muted/60 focus:bg-muted/60 focus:outline-none focus:ring-2 focus:ring-primary/50
-              ${notification.status === "read" ? "opacity-70" : "bg-muted/40"}
-              min-h-[80px] md:min-h-[70px]
+            className={`mx-2 my-1 flex min-h-[80px] cursor-pointer items-start gap-3 rounded-lg p-4 transition-all md:min-h-[70px]
+              bg-gradient-to-r from-background/80 to-muted/60
+              hover:from-muted/80 hover:to-muted/70
+              focus:outline-none focus:ring-2 focus:ring-primary/40
+              shadow-sm
+              ${notification.status === "read" ? "opacity-70" : ""}
             `}
             onClick={() => setOpen((o) => !o)}
           >
-            <Avatar className="h-10 w-10 flex-shrink-0">
-              <AvatarImage 
-                src={notification.users?.avatar_url || ""} 
-                alt={`${notification.users?.username || 'User'} avatar`}
+            <Avatar className="flex-shrink-0 h-10 w-10 border border-border/60 shadow-sm">
+              <AvatarImage
+                src={notification.users?.avatar_url || ""}
+                alt={`${notification.users?.username || "User"} avatar`}
               />
               <AvatarFallback aria-hidden="true">
                 {notification.users?.username?.[0]?.toUpperCase() ?? "?"}
               </AvatarFallback>
             </Avatar>
 
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <span aria-hidden="true">{icon}</span>
-                <span className="line-clamp-2 break-words">{text}</span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex flex-1 items-center gap-2 text-sm font-medium leading-snug">
+                  <span aria-hidden="true" className="mt-0.5">
+                    {icon}
+                  </span>
+                  <span className="line-clamp-2 break-words">{text}</span>
+                </div>
+
+                {showActions && (
+                  <div className="flex flex-shrink-0 items-center gap-1">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      disabled={isLoading}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onReject(
+                          notification.id,
+                          notification.sender_id,
+                          notification.room_id
+                        );
+                      }}
+                      className="h-8 w-8 hover:bg-destructive/15"
+                      aria-label="Reject request"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      disabled={isLoading}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onAccept(
+                          notification.id,
+                          notification.room_id,
+                          notification.type
+                        );
+                      }}
+                      className="h-8 w-8 text-green-600 hover:bg-green-500/15"
+                      aria-label="Accept request"
+                    >
+                      <Check className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
               </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                <time dateTime={notification.created_at || new Date().toISOString()}>
+
+              <p className="mt-2 text-xs text-muted-foreground">
+                <time
+                  dateTime={notification.created_at || new Date().toISOString()}
+                >
                   {notification.created_at
                     ? new Date(notification.created_at).toLocaleString()
                     : "Just now"}
                 </time>
               </p>
             </div>
-
-            {showActions && (
-              <div className="flex items-center gap-1 flex-shrink-0">
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  disabled={isLoading}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onReject(
-                      notification.id,
-                      notification.sender_id,
-                      notification.room_id
-                    );
-                  }}
-                  className="h-8 w-8 hover:bg-destructive/20"
-                  aria-label="Reject request"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  disabled={isLoading}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onAccept(
-                      notification.id,
-                      notification.room_id,
-                      notification.type
-                    );
-                  }}
-                  className="h-8 w-8 hover:bg-green-500/20 text-green-600"
-                  aria-label="Accept request"
-                >
-                  <Check className="h-4 w-4" />
-                </Button>
-              </div>
-            )}
           </div>
 
           <AccordionContent>
-            <div className="px-4 pb-4 flex gap-2 flex-wrap">
+            <div className="flex flex-wrap gap-2 px-4 pb-4">
               {showActions && (
                 <>
                   <Button
@@ -276,9 +282,9 @@ export const NotificationItem = memo(function NotificationItem({
                         notification.room_id
                       )
                     }
-                    className="flex-1 min-w-[120px]"
+                    className="min-w-[120px] flex-1"
                   >
-                    <X className="h-4 w-4 mr-1" /> Reject
+                    <X className="mr-1 h-4 w-4" /> Reject
                   </Button>
 
                   <Button
@@ -290,9 +296,9 @@ export const NotificationItem = memo(function NotificationItem({
                         notification.type
                       )
                     }
-                    className="flex-1 min-w-[120px]"
+                    className="min-w-[120px] flex-1"
                   >
-                    <Check className="h-4 w-4 mr-1" /> Accept
+                    <Check className="mr-1 h-4 w-4" /> Accept
                   </Button>
                 </>
               )}
@@ -300,10 +306,10 @@ export const NotificationItem = memo(function NotificationItem({
               <Button
                 size="sm"
                 variant="outline"
-                className="ml-auto flex-1 min-w-[120px]"
+                className="ml-auto min-w-[120px] flex-1"
                 onClick={() => onDelete(notification.id)}
               >
-                <Trash2 className="h-4 w-4 mr-1" /> Delete
+                <Trash2 className="mr-1 h-4 w-4" /> Delete
               </Button>
             </div>
           </AccordionContent>
@@ -313,37 +319,49 @@ export const NotificationItem = memo(function NotificationItem({
   );
 });
 
-// ─────────────────────────────────────────────────────────────
-// Connection Status Indicator
-// ─────────────────────────────────────────────────────────────
-function ConnectionStatus({ connectionState, onRetry }: {
-  connectionState: 'connected' | 'connecting' | 'disconnected';
+/* =======================================================================
+   Connection Status Indicator
+   ======================================================================= */
+
+function ConnectionStatus({
+  connectionState,
+  onRetry,
+}: {
+  connectionState: "connected" | "connecting" | "disconnected";
   onRetry: () => void;
 }) {
   const statusConfig = {
-    connected: { icon: Wifi, text: 'Connected', color: 'text-green-500' },
-    connecting: { icon: Loader2, text: 'Connecting...', color: 'text-yellow-500' },
-    disconnected: { icon: WifiOff, text: 'Disconnected', color: 'text-red-500' },
+    connected: { icon: Wifi, text: "Connected", color: "text-green-500" },
+    connecting: {
+      icon: Loader2,
+      text: "Connecting...",
+      color: "text-yellow-500",
+    },
+    disconnected: { icon: WifiOff, text: "Disconnected", color: "text-red-500" },
   };
 
   const { icon: Icon, text, color } = statusConfig[connectionState];
 
   return (
-    <div 
-      className="flex items-center gap-2 px-4 py-2 text-sm border-b bg-background/80 backdrop-blur-sm"
+    <div
+      className="flex items-center gap-2 border-b bg-background/80 px-4 py-2 text-sm backdrop-blur-sm"
       role="status"
       aria-live="polite"
     >
-      <Icon className={`h-4 w-4 ${color} ${connectionState === 'connecting' ? 'animate-spin' : ''}`} />
+      <Icon
+        className={`h-4 w-4 ${color} ${
+          connectionState === "connecting" ? "animate-spin" : ""
+        }`}
+      />
       <span>{text}</span>
-      {connectionState === 'disconnected' && (
+      {connectionState === "disconnected" && (
         <Button
           variant="ghost"
           size="sm"
           onClick={onRetry}
           className="ml-auto h-6 px-2 text-xs"
         >
-          <RefreshCw className="h-3 w-3 mr-1" />
+          <RefreshCw className="mr-1 h-3 w-3" />
           Retry
         </Button>
       )}
@@ -351,9 +369,10 @@ function ConnectionStatus({ connectionState, onRetry }: {
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// Main Component
-// ─────────────────────────────────────────────────────────────
+/* =======================================================================
+   Main Component
+   ======================================================================= */
+
 export default function Notifications({
   isOpen: externalIsOpen,
   onClose: externalOnClose,
@@ -363,6 +382,7 @@ export default function Notifications({
 }) {
   const [internalIsOpen, setInternalIsOpen] = useState(false);
   const isOpen = externalIsOpen ?? internalIsOpen;
+
   const handleClose = useCallback(
     () => externalOnClose?.() ?? setInternalIsOpen(false),
     [externalOnClose]
@@ -370,24 +390,23 @@ export default function Notifications({
 
   const {
     notifications,
-    fetchNotifications,
-    removeNotification,
+    fetch: fetchNotifications,
+    remove,
+    unread,
     isLoading,
-    unreadCount,
     lastFetch,
-  } = useNotification();
+  } = useNotifications();
 
   const { fetchRooms } = useUnifiedRoomStore();
-
   const { userId, isAuthenticated } = useAuthSync();
-
   const { connectionState, attemptReconnection } = useConnectionManager(userId);
 
+  // Start realtime subscription
   useNotificationSubscription(userId ?? null);
 
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
 
-  // Cache TTL
+  // Cache TTL for initial fetches
   const CACHE_TTL = 30_000;
   const lastFetchRef = useRef(lastFetch);
   useEffect(() => {
@@ -403,7 +422,7 @@ export default function Notifications({
     }
   }, [userId, fetchNotifications]);
 
-  // Reload if drawer opens with no notifications
+  // Reload when drawer opens and nothing loaded
   useEffect(() => {
     if (isOpen && notifications.length === 0 && userId) {
       fetchNotifications(userId);
@@ -411,7 +430,12 @@ export default function Notifications({
   }, [isOpen, userId, notifications.length, fetchNotifications]);
 
   const addLoading = (id: string) =>
-    setLoadingIds((s) => new Set(s).add(id));
+    setLoadingIds((s) => {
+      const next = new Set(s);
+      next.add(id);
+      return next;
+    });
+
   const removeLoading = (id: string) =>
     setLoadingIds((s) => {
       const next = new Set(s);
@@ -419,15 +443,15 @@ export default function Notifications({
       return next;
     });
 
-  // ─────────────────────────────────────────────────────────────
-  // Accept (enhanced with immediate removal and better error handling)
-  // ─────────────────────────────────────────────────────────────
+  /* -------------------------------------------------------------------
+     Accept
+     ------------------------------------------------------------------- */
   const handleAccept = useCallback(
     async (id: string, roomId: string | null, type: string) => {
       if (!userId || !roomId || loadingIds.has(id)) return;
 
       addLoading(id);
-      removeNotification(id);
+      remove(id); // optimistic remove
 
       try {
         const res = await fetch(`/api/notifications/${id}/accept`, {
@@ -440,32 +464,34 @@ export default function Notifications({
         }
 
         await fetchRooms();
-        toast.success("Join request accepted! The user has been added to the room.");
-
+        toast.success(
+          type === "join_request"
+            ? "Join request accepted! The user has been added to the room."
+            : "Action completed successfully."
+        );
       } catch (err: any) {
         console.error("Accept error:", err);
-        toast.error(err.message || "Failed to accept join request");
-        if (userId) fetchNotifications(userId);
+        toast.error(err.message || "Failed to accept");
+        if (userId) {
+          // re-sync from backend
+          fetchNotifications(userId);
+        }
       } finally {
         removeLoading(id);
       }
     },
-    [userId, loadingIds, removeNotification, fetchRooms, fetchNotifications]
+    [userId, loadingIds, remove, fetchRooms, fetchNotifications]
   );
 
-  // ─────────────────────────────────────────────────────────────
-  // Reject (enhanced error handling)
-  // ─────────────────────────────────────────────────────────────
+  /* -------------------------------------------------------------------
+     Reject
+     ------------------------------------------------------------------- */
   const handleReject = useCallback(
-    async (
-      id: string,
-      senderId: string | null,
-      roomId: string | null
-    ) => {
+    async (id: string, senderId: string | null, roomId: string | null) => {
       if (loadingIds.has(id)) return;
 
       addLoading(id);
-      removeNotification(id);
+      remove(id); // optimistic remove
 
       try {
         const res = await fetch(`/api/notifications/${id}/reject`, {
@@ -483,17 +509,19 @@ export default function Notifications({
       } catch (err: any) {
         console.error("Reject error:", err);
         toast.error(err.message || "Failed to reject");
-        if (userId) fetchNotifications(userId);
+        if (userId) {
+          fetchNotifications(userId);
+        }
       } finally {
         removeLoading(id);
       }
     },
-    [userId, loadingIds, removeNotification, fetchNotifications]
+    [userId, loadingIds, remove, fetchNotifications]
   );
 
-  // ─────────────────────────────────────────────────────────────
-  // Delete
-  // ─────────────────────────────────────────────────────────────
+  /* -------------------------------------------------------------------
+     Delete
+     ------------------------------------------------------------------- */
   const handleDelete = useCallback(
     async (id: string) => {
       if (loadingIds.has(id)) return;
@@ -505,18 +533,21 @@ export default function Notifications({
           method: "DELETE",
         });
 
-        removeNotification(id);
+        remove(id);
         toast.success("Deleted");
-      } catch {
+      } catch (err: any) {
+        console.error("Delete error:", err);
         toast.error("Delete failed");
       } finally {
         removeLoading(id);
       }
     },
-    [loadingIds, removeNotification]
+    [loadingIds, remove]
   );
 
-  // Sort by date
+  /* -------------------------------------------------------------------
+     Sort + list
+     ------------------------------------------------------------------- */
   const sorted = useMemo(
     () =>
       [...notifications].sort(
@@ -542,18 +573,20 @@ export default function Notifications({
     [sorted, handleAccept, handleReject, handleDelete, loadingIds]
   );
 
-  // Connection-aware empty states
+  /* -------------------------------------------------------------------
+     Empty states with connection awareness
+     ------------------------------------------------------------------- */
   const renderEmptyState = () => {
-    if (connectionState === 'disconnected') {
+    if (connectionState === "disconnected") {
       return (
-        <div className="flex flex-col items-center justify-center h-full p-8 text-center">
-          <WifiOff className="h-16 w-16 text-muted-foreground/30 mb-4" />
-          <h3 className="text-lg font-semibold mb-2">Connection Lost</h3>
-          <p className="text-sm text-muted-foreground mb-4">
+        <div className="flex h-full flex-col items-center justify-center p-8 text-center">
+          <WifiOff className="mb-4 h-16 w-16 text-muted-foreground/30" />
+          <h3 className="mb-2 text-lg font-semibold">Connection Lost</h3>
+          <p className="mb-4 text-sm text-muted-foreground">
             Unable to load notifications. Please check your connection.
           </p>
           <Button onClick={attemptReconnection}>
-            <RefreshCw className="h-4 w-4 mr-2" />
+            <RefreshCw className="mr-2 h-4 w-4" />
             Try Again
           </Button>
         </div>
@@ -562,30 +595,32 @@ export default function Notifications({
 
     if (isLoading && notifications.length === 0) {
       return (
-        <div className="flex items-center justify-center h-32">
+        <div className="flex h-32 items-center justify-center">
           <Loader2 className="h-6 w-6 animate-spin" />
-          <span className="ml-2 text-sm text-muted-foreground">Loading notifications...</span>
+          <span className="ml-2 text-sm text-muted-foreground">
+            Loading notifications...
+          </span>
         </div>
       );
     }
 
     return (
-      <div className="flex flex-col items-center justify-center h-full p-8 text-center text-muted-foreground">
-        <Bell className="h-12 w-12 mb-4 opacity-50" />
+      <div className="flex h-full flex-col items-center justify-center p-8 text-center text-muted-foreground">
+        <Bell className="mb-4 h-12 w-12 opacity-50" />
         <p className="text-lg font-medium">All caught up!</p>
         <p className="text-sm">No new notifications</p>
       </div>
     );
   };
 
-  // ─────────────────────────────────────────────────────────────
-  // If not authenticated
-  // ─────────────────────────────────────────────────────────────
+  /* -------------------------------------------------------------------
+     If not authenticated
+     ------------------------------------------------------------------- */
   if (!isAuthenticated) {
     return (
       <Sheet open={isOpen} onOpenChange={handleClose}>
         <SheetContent side="right" className="w-full sm:max-w-sm">
-          <SheetHeader className="p-4 border-b">
+          <SheetHeader className="border-b p-4">
             <div className="flex items-center gap-3">
               <Button variant="ghost" size="icon" onClick={handleClose}>
                 <ArrowRight />
@@ -594,10 +629,10 @@ export default function Notifications({
             </div>
           </SheetHeader>
 
-          <div className="flex flex-col items-center justify-center h-full p-8 text-center">
-            <Bell className="h-16 w-16 text-muted-foreground/30 mb-4" />
+          <div className="flex h-full flex-col items-center justify-center p-8 text-center">
+            <Bell className="mb-4 h-16 w-16 text-muted-foreground/30" />
             <h3 className="text-lg font-semibold">Sign in required</h3>
-            <p className="text-sm text-muted-foreground">
+            <p className="mt-1 text-sm text-muted-foreground">
               Log in to see your notifications
             </p>
             <Button
@@ -612,36 +647,45 @@ export default function Notifications({
     );
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // Authenticated Drawer
-  // ─────────────────────────────────────────────────────────────
+  /* -------------------------------------------------------------------
+     Authenticated drawer
+     ------------------------------------------------------------------- */
   return (
     <Sheet open={isOpen} onOpenChange={handleClose}>
-      <SheetContent side="right" className="flex flex-col w-full sm:max-w-sm p-0" hideCloseButton>
-        <SheetHeader className="p-4 border-b">
+      <SheetContent
+        side="right"
+        className="flex w-full flex-col p-0 sm:max-w-sm"
+        hideCloseButton
+      >
+        <SheetHeader className="border-b bg-gradient-to-r from-background to-muted/60 p-4">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={handleClose}>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleClose}
+              className="rounded-full border border-border/40 shadow-sm"
+            >
               <ArrowRight />
             </Button>
             <SheetTitle className="flex items-center gap-2">
               Notifications
-              {unreadCount > 0 && (
-                <span className="px-2 py-0.5 text-xs font-bold text-white bg-red-500 rounded-full">
-                  {unreadCount > 99 ? "99+" : unreadCount}
+              {unread > 0 && (
+                <span className="rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white shadow-sm">
+                  {unread > 99 ? "99+" : unread}
                 </span>
               )}
             </SheetTitle>
           </div>
         </SheetHeader>
 
-        <ConnectionStatus 
-          connectionState={connectionState} 
+        <ConnectionStatus
+          connectionState={connectionState}
           onRetry={attemptReconnection}
         />
 
         <div className="flex-1 overflow-y-auto scrollbar-thin">
           {isLoading && notifications.length === 0 ? (
-            <div className="flex items-center justify-center h-32">
+            <div className="flex h-32 items-center justify-center">
               <Loader2 className="h-6 w-6 animate-spin" />
             </div>
           ) : notifications.length === 0 ? (
@@ -652,7 +696,7 @@ export default function Notifications({
         </div>
 
         {notifications.length > 0 && (
-          <div className="p-4 border-t text-sm flex justify-between">
+          <div className="flex justify-between border-t p-4 text-sm">
             <span className="text-muted-foreground">
               {notifications.length} total
             </span>
