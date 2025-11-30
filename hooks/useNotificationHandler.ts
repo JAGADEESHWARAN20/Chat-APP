@@ -1,8 +1,8 @@
-// hooks/useNotificationHandler.ts - ENHANCED VERSION
+// hooks/useNotificationHandler.ts
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
-import { toast } from "@/components/ui/sonner"
+import { toast } from "@/components/ui/sonner";
 
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useNotification, type Inotification } from "@/lib/store/notifications";
@@ -13,8 +13,7 @@ import {
 } from "@/lib/store/roomstore";
 
 /**
- * Fetch rooms for the given user using the get_rooms_with_counts RPC,
- * and normalize into RoomWithMembership so it matches the roomstore expectations.
+ * Fetch rooms using RPC and normalize into RoomWithMembership format.
  */
 async function fetchRoomsForUser(userId: string): Promise<RoomWithMembership[]> {
   const supabase = getSupabaseBrowserClient();
@@ -34,25 +33,18 @@ async function fetchRoomsForUser(userId: string): Promise<RoomWithMembership[]> 
 
   return rows.map(
     (r): RoomWithMembership => ({
-      // Base room fields (from RPC)
       id: r.id,
       name: r.name,
       is_private: r.is_private,
       created_by: r.created_by,
       created_at: r.created_at,
-
-      // Membership-related fields
       isMember: Boolean(r.is_member),
       participationStatus: r.participation_status ?? null,
       memberCount: typeof r.member_count === "number" ? r.member_count : 0,
-
-      // Optional "extended" fields used in the app
-      online_users:
-        typeof r.online_users === "number" ? r.online_users : undefined,
-      unreadCount:
-        typeof r.unread_count === "number" ? r.unread_count : undefined,
-      latestMessage:
-        typeof r.latest_message === "string" ? r.latest_message : undefined,
+      online_users: typeof r.online_users === "number" ? r.online_users : undefined,
+      unreadCount: typeof r.unread_count === "number" ? r.unread_count : undefined,
+      latestMessage: typeof r.latest_message === "string" ? r.latest_message : undefined,
+      latest_message_created_at: r.latest_message_created_at ?? null,
     })
   );
 }
@@ -64,21 +56,23 @@ export function useNotificationHandler() {
     subscribeToNotifications,
     unsubscribeFromNotifications,
   } = useNotification();
-  const roomStore = useUnifiedRoomStore();
 
-  const setRooms = roomStore.setAvailableRooms;
+  // Roomstore bindings
+  const roomStore = useUnifiedRoomStore();
+  const setRooms = roomStore.setRooms; // ✅ FIXED
   const setSelectedRoomId = roomStore.setSelectedRoomId;
 
   const mountedRef = useRef(true);
   const userId: string | undefined = currentUser?.id || authUser?.id;
 
-  // Manage subscription lifecycle
+  /* -----------------------------------------
+     Subscribe/Unsubscribe lifecycle
+  ----------------------------------------- */
   useEffect(() => {
     mountedRef.current = true;
 
     if (!userId) return;
 
-    // Centralized subscription from the notification store
     subscribeToNotifications(userId);
 
     return () => {
@@ -87,10 +81,9 @@ export function useNotificationHandler() {
     };
   }, [userId, subscribeToNotifications, unsubscribeFromNotifications]);
 
-  /**
-   * Handle a single notification event.
-   * This is exported so you can plug it into any real-time listener if needed.
-   */
+  /* -----------------------------------------
+     Notification Handler
+  ----------------------------------------- */
   const handleNotification = useCallback(
     async (notification: Inotification) => {
       if (!mountedRef.current || !userId) return;
@@ -104,7 +97,8 @@ export function useNotificationHandler() {
           });
 
           const roomsData = await fetchRoomsForUser(userId);
-          setRooms(roomsData);
+
+          setRooms(roomsData); // ✅ FIXED
 
           if (notification.room_id) {
             const matched = roomsData.find(
