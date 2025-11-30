@@ -9,15 +9,6 @@ import { useEffect } from "react";
 
 type IRoomRow = Database["public"]["Tables"]["rooms"]["Row"];
 
-type RoomParticipantRecord = {
-  id: string;
-  room_id: string;
-  user_id: string;
-  status: "pending" | "accepted" | "left" | string;
-  created_at?: string;
-  updated_at?: string;
-};
-
 export type RoomWithMembership = IRoomRow & {
   created_by?: string | null;
   isMember: boolean;
@@ -34,19 +25,11 @@ export interface RoomPresence {
   lastUpdated?: string;
 }
 
-export interface TypingUser {
-  user_id: string;
-  is_typing: boolean;
-  display_name?: string;
-}
-
 interface RoomState {
   user: { id: string } | null;
   rooms: RoomWithMembership[];
   selectedRoomId: string | null;
   roomPresence: Record<string, RoomPresence>;
-  typingUsers: TypingUser[];
-  typingDisplayText: string;
   isLoading: boolean;
   error: string | null;
 
@@ -57,12 +40,6 @@ interface RoomState {
   setRoomPresence: (roomId: string, p: RoomPresence) => void;
   setLoading: (v: boolean) => void;
   setError: (v: string | null) => void;
-  setAvailableRooms: (rooms: RoomWithMembership[]) => void;
-  addRoom: (room: RoomWithMembership) => void;
-  updateRoom: (roomId: string, updates: Partial<RoomWithMembership>) => void;
-  removeRoom: (roomId: string) => void;
-  updateTypingUsers: (users: TypingUser[]) => void;
-  updateTypingText: (text: string) => void;
   clearError: () => void;
 
   // Core operations
@@ -70,12 +47,11 @@ interface RoomState {
   joinRoom: (roomId: string) => Promise<boolean>;
   leaveRoom: (roomId: string) => Promise<boolean>;
   createRoom: (name: string, isPrivate: boolean) => Promise<RoomWithMembership | null>;
-  sendMessage: (roomId: string, text: string) => Promise<boolean>;
   
   // Instant sync operations
   updateRoomMembership: (roomId: string, updates: Partial<RoomWithMembership>) => void;
-  mergeRoomMembership: (roomId: string, updates: Partial<RoomWithMembership>) => void;
   refreshRooms: () => Promise<void>;
+  forceRefreshRooms: () => void;
 }
 
 const normalizeRpcRooms = (rows: any[]): RoomWithMembership[] =>
@@ -110,8 +86,6 @@ export const useUnifiedRoomStore = create<RoomState>()(
       rooms: [],
       selectedRoomId: null,
       roomPresence: {},
-      typingUsers: [],
-      typingDisplayText: "",
       isLoading: false,
       error: null,
 
@@ -137,28 +111,6 @@ export const useUnifiedRoomStore = create<RoomState>()(
       
       setError: (v) => set({ error: v }),
       
-      setAvailableRooms: (rooms) => set({ rooms }),
-      
-      addRoom: (room) =>
-        set((state) => ({ rooms: [...state.rooms, room] })),
-      
-      updateRoom: (roomId, updates) =>
-        set((state) => ({
-          rooms: state.rooms.map((room) =>
-            room.id === roomId ? { ...room, ...updates } : room
-          ),
-        })),
-      
-      removeRoom: (roomId) =>
-        set((state) => ({
-          rooms: state.rooms.filter((room) => room.id !== roomId),
-          selectedRoomId: state.selectedRoomId === roomId ? null : state.selectedRoomId,
-        })),
-      
-      updateTypingUsers: (users) => set({ typingUsers: users }),
-      
-      updateTypingText: (text) => set({ typingDisplayText: text }),
-      
       clearError: () => set({ error: null }),
 
       // 🎯 INSTANT OPTIMISTIC UPDATES
@@ -171,18 +123,17 @@ export const useUnifiedRoomStore = create<RoomState>()(
         }));
       },
 
-      mergeRoomMembership: (roomId, updates) => {
-        console.log('⚡ mergeRoomMembership - Merging updates for room:', roomId, updates);
-        set((state) => ({
-          rooms: state.rooms.map((room) =>
-            room.id === roomId ? { ...room, ...updates } : room
-          ),
-        }));
-      },
-
       refreshRooms: async (): Promise<void> => {
         console.log('🔄 refreshRooms - Forcing refresh');
         await get().fetchRooms({ force: true });
+      },
+
+      forceRefreshRooms: () => {
+        console.log('🚀 FORCE refreshing rooms');
+        set({ isLoading: true });
+        setTimeout(() => {
+          get().fetchRooms({ force: true });
+        }, 100);
       },
 
       // 🎯 CORE OPERATIONS
@@ -234,19 +185,6 @@ export const useUnifiedRoomStore = create<RoomState>()(
           return null;
         } finally {
           set({ isLoading: false });
-        }
-      },
-
-      sendMessage: async (roomId: string, text: string) => {
-        try {
-          const res = await fetch("/api/messages/send", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ roomId, text }),
-          });
-          return res.ok;
-        } catch {
-          return false;
         }
       },
 
@@ -396,13 +334,10 @@ export const useSelectedRoom = () =>
 export const useRoomLoading = () => useUnifiedRoomStore((s) => s.isLoading);
 export const useRoomError = () => useUnifiedRoomStore((s) => s.error);
 export const useRoomPresence = () => useUnifiedRoomStore((s) => s.roomPresence);
-export const useTypingUsers = () => useUnifiedRoomStore((s) => s.typingUsers);
-export const useTypingDisplayText = () => useUnifiedRoomStore((s) => s.typingDisplayText);
 
 export const useRoomActions = () =>
   useUnifiedRoomStore((s) => ({
     setSelectedRoomId: s.setSelectedRoomId,
-    setAvailableRooms: s.setAvailableRooms,
     setUser: s.setUser,
     setLoading: s.setLoading,
     setError: s.setError,
@@ -411,23 +346,15 @@ export const useRoomActions = () =>
     joinRoom: s.joinRoom,
     leaveRoom: s.leaveRoom,
     createRoom: s.createRoom,
-    sendMessage: s.sendMessage,
     refreshRooms: s.refreshRooms,
+    forceRefreshRooms: s.forceRefreshRooms,
     updateRoomMembership: s.updateRoomMembership,
-    mergeRoomMembership: s.mergeRoomMembership,
-    updateTypingUsers: s.updateTypingUsers,
-    updateTypingText: s.updateTypingText,
-    addRoom: s.addRoom,
-    updateRoom: s.updateRoom,
-    removeRoom: s.removeRoom,
     setRoomPresence: s.setRoomPresence,
   }));
 
 // 🎯 ENHANCED Real-time sync hook for SearchComponent
-// 🎯 ENHANCED Real-time sync hook for SearchComponent
-// 🎯 ENHANCED Real-time sync hook for SearchComponent
 export const useRoomRealtimeSync = (userId: string | null) => {
-  const { refreshRooms, updateRoomMembership } = useRoomActions();
+  const { refreshRooms, forceRefreshRooms } = useRoomActions();
   const supabase = getSupabaseBrowserClient();
 
   useEffect(() => {
@@ -435,7 +362,7 @@ export const useRoomRealtimeSync = (userId: string | null) => {
 
     const channel = supabase.channel(`room-sync-${userId}`);
 
-    // Listen for room_participants changes (when user gets accepted)
+    // Listen for ALL room_participants changes
     channel.on(
       "postgres_changes",
       { 
@@ -446,13 +373,11 @@ export const useRoomRealtimeSync = (userId: string | null) => {
       },
       (payload) => {
         const rec = payload.new as { room_id?: string; status?: string };
-        
         console.log("🔄 Room participant change detected:", rec);
         
         if (rec?.status === "accepted") {
-          console.log("🎉 User accepted into room, refreshing rooms");
-          // Force immediate refresh with small delay
-          setTimeout(() => refreshRooms(), 100);
+          console.log("🎉 User accepted into room, force refreshing rooms");
+          forceRefreshRooms();
         }
       }
     );
@@ -468,18 +393,16 @@ export const useRoomRealtimeSync = (userId: string | null) => {
       },
       (payload) => {
         const rec = payload.new as { type?: string; room_id?: string };
-        
-        console.log("📨 Notification INSERT received:", rec?.type);
+        console.log("📨 Notification INSERT:", rec?.type);
         
         if (rec?.type === "join_request_accepted") {
-          console.log("🎉 Join request accepted notification, refreshing rooms immediately");
-          // Force immediate refresh
-          setTimeout(() => refreshRooms(), 100);
+          console.log("🎉 Join request accepted notification, FORCE refreshing rooms");
+          forceRefreshRooms();
         }
       }
     );
 
-    // 🎯 NEW: Listen for DELETE events on notifications (when owner accepts)
+    // Listen for notification DELETES (when owner accepts)
     channel.on(
       "postgres_changes",
       { 
@@ -489,13 +412,12 @@ export const useRoomRealtimeSync = (userId: string | null) => {
         filter: `user_id=eq.${userId}`
       },
       (payload) => {
-        console.log("🗑️ Notification DELETED for user, this might be an accept action");
-        // Refresh rooms in case this was a join request acceptance
-        setTimeout(() => refreshRooms(), 100);
+        console.log("🗑️ Notification DELETED - join request was processed");
+        forceRefreshRooms();
       }
     );
 
-    // 🎯 NEW: Listen for room_members inserts (direct membership)
+    // Listen for room_members inserts
     channel.on(
       "postgres_changes",
       { 
@@ -505,8 +427,8 @@ export const useRoomRealtimeSync = (userId: string | null) => {
         filter: `user_id=eq.${userId}`
       },
       (payload) => {
-        console.log("🎯 Direct room_members INSERT detected, refreshing rooms");
-        setTimeout(() => refreshRooms(), 100);
+        console.log("🎯 Direct room_members INSERT, force refreshing rooms");
+        forceRefreshRooms();
       }
     );
 
@@ -517,7 +439,7 @@ export const useRoomRealtimeSync = (userId: string | null) => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [userId, refreshRooms, updateRoomMembership]);
+  }, [userId, refreshRooms, forceRefreshRooms]);
 };
 
 // Helper function for fetching users

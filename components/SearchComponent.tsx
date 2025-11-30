@@ -20,14 +20,15 @@ import {
   useRoomActions,
   useRoomPresence,
   fetchAllUsers,
-  useRoomRealtimeSync, // 🎯 ADD THIS IMPORT
+  useRoomRealtimeSync,
 } from "@/lib/store/roomstore";
 
 import { useDebounce } from "use-debounce";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { useUser } from "@/lib/store/user"; // 🎯 ADD THIS IMPORT
+import { useUser } from "@/lib/store/user";
 
 import { Users, Lock, Search } from "lucide-react";
+import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 
 /* ---------------------------------------------------------
    UTIL: highlight search text
@@ -51,32 +52,43 @@ const highlight = (text: string, q: string) => {
 /* ---------------------------------------------------------
    USER CARD
 --------------------------------------------------------- */
+interface UserCardProps {
+  user: {
+    id: string;
+    username?: string;
+    display_name?: string;
+    created_at: string;
+  };
+  query: string;
+  onOpenDM: (id: string) => void;
+}
+
 const UserCard = memo(function UserCard({
   user,
   query,
   onOpenDM,
-}: {
-  user: any;
-  query: string;
-  onOpenDM: (id: string) => void;
-}) {
+}: UserCardProps) {
   return (
-    <div className="flex flex-col bg-card/80 w-[30vw] h-[28vh] rounded-xl border shadow-sm hover:shadow-md transition-all overflow-hidden">
+    <div className="flex flex-col bg-card/80 w-full max-w-sm h-64 rounded-xl border shadow-sm hover:shadow-md transition-all overflow-hidden hover:bg-card/90">
       <div className="p-4 bg-gradient-to-br from-purple-600/20 to-purple-800/40">
-        <p className="font-semibold truncate flex items-center gap-2">
-          @{highlight(user.username || user.display_name, query)}
+        <p className="font-semibold truncate flex items-center gap-2 text-sm sm:text-base">
+          @{highlight(user.username || user.display_name || "Unknown", query)}
         </p>
       </div>
 
       <div className="flex flex-col justify-between p-4 flex-1">
-        <div className="space-y-1 text-sm">
-          <span className="text-xs opacity-70">
-            Joined at: {new Date(user.created_at).toLocaleDateString()}
+        <div className="space-y-1 text-xs sm:text-sm">
+          <span className="opacity-70">
+            Joined: {new Date(user.created_at).toLocaleDateString()}
           </span>
         </div>
 
         <div className="mt-3">
-          <Button size="sm" onClick={() => onOpenDM(user.id)}>
+          <Button 
+            size="sm" 
+            onClick={() => onOpenDM(user.id)}
+            className="w-full hover:bg-primary/90"
+          >
             Message
           </Button>
         </div>
@@ -88,6 +100,22 @@ const UserCard = memo(function UserCard({
 /* ---------------------------------------------------------
    ROOM CARD
 --------------------------------------------------------- */
+interface RoomCardProps {
+  room: {
+    id: string;
+    name: string;
+    is_private: boolean;
+    isMember: boolean;
+    participationStatus: "pending" | "accepted" | null;
+    memberCount: number;
+  };
+  query: string;
+  presence: Record<string, { onlineUsers?: number }>;
+  onJoin: (id: string) => void;
+  onLeave: (id: string) => void;
+  onOpen: (id: string) => void;
+}
+
 const RoomCard = memo(function RoomCard({
   room,
   query,
@@ -95,49 +123,42 @@ const RoomCard = memo(function RoomCard({
   onJoin,
   onLeave,
   onOpen,
-}: {
-  room: any;
-  query: string;
-  presence: any;
-  onJoin: (id: string) => void;
-  onLeave: (id: string) => void;
-  onOpen: (id: string) => void;
-}) {
+}: RoomCardProps) {
   const online = presence?.[room.id]?.onlineUsers ?? 0;
   const isMember = room.isMember && room.participationStatus === "accepted";
   const isPending = room.participationStatus === "pending";
 
   return (
-    <div className="flex flex-col bg-card/80 w-[30vw] h-[40vh] rounded-xl border shadow-sm hover:shadow-md transition-all overflow-hidden">
+    <div className="flex flex-col bg-card/80 w-full max-w-sm h-80 rounded-xl border shadow-sm hover:shadow-md transition-all overflow-hidden hover:bg-card/90">
       <div className="p-4 bg-gradient-to-br from-indigo-600/20 to-indigo-800/40">
-        <p className="font-semibold truncate flex items-center gap-2">
+        <p className="font-semibold truncate flex items-center gap-2 text-sm sm:text-base">
           #{highlight(room.name, query)}
-          {room.is_private && <Lock className="h-4 w-4 opacity-50" />}
+          {room.is_private && <Lock className="h-4 w-4 opacity-50 flex-shrink-0" />}
         </p>
       </div>
 
       <div className="flex flex-col justify-between p-4 flex-1">
-        <div className="space-y-1 text-sm">
+        <div className="space-y-2 text-xs sm:text-sm">
           <div className="flex items-center gap-2">
-            <Users className="h-4 w-4 opacity-60" />
-            <span className="font-medium">{room.memberCount}</span>
+            <Users className="h-4 w-4 opacity-60 flex-shrink-0" />
+            <span className="font-medium">{room.memberCount} members</span>
 
             {online > 0 && (
-              <span className="text-green-500 text-xs flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse"></span>
+              <span className="text-green-500 text-xs flex items-center gap-1 ml-auto">
+                <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse flex-shrink-0" />
                 {online} online
               </span>
             )}
           </div>
 
           {isPending && (
-            <span className="text-xs bg-yellow-500/20 text-yellow-700 px-2 py-1 rounded-md">
+            <span className="text-xs bg-yellow-500/20 text-yellow-700 px-2 py-1 rounded-md inline-block">
               Pending approval
             </span>
           )}
 
           {isMember && (
-            <span className="text-xs bg-green-500/20 text-green-700 px-2 py-1 rounded-md">
+            <span className="text-xs bg-green-500/20 text-green-700 px-2 py-1 rounded-md inline-block">
               Member
             </span>
           )}
@@ -146,20 +167,29 @@ const RoomCard = memo(function RoomCard({
         <div className="mt-3 flex flex-col gap-2">
           {isMember ? (
             <>
-              <Button size="sm" onClick={() => onOpen(room.id)}>
+              <Button 
+                size="sm" 
+                onClick={() => onOpen(room.id)}
+                className="hover:bg-primary/90"
+              >
                 Open
               </Button>
               <Button
                 variant="outline"
                 size="sm"
-                className="text-red-600"
+                className="text-red-600 hover:text-red-700 hover:border-red-300"
                 onClick={() => onLeave(room.id)}
               >
                 Leave
               </Button>
             </>
           ) : (
-            <Button size="sm" disabled={isPending} onClick={() => onJoin(room.id)}>
+            <Button 
+              size="sm" 
+              disabled={isPending} 
+              onClick={() => onJoin(room.id)}
+              className="hover:bg-primary/90"
+            >
               {isPending ? "Requested" : "Join"}
             </Button>
           )}
@@ -170,76 +200,79 @@ const RoomCard = memo(function RoomCard({
 });
 
 /* ---------------------------------------------------------
-   MAIN COMPONENT — FIXED REAL-TIME UPDATES
+   MAIN COMPONENT — ENHANCED REAL-TIME UPDATES
 --------------------------------------------------------- */
-export default function SearchComponent({ user }: any) {
+export default function SearchComponent() {
   const router = useRouter();
   const authUser = useUser();
   
   const availableRooms = useAvailableRooms();
   const presence = useRoomPresence();
-  const { joinRoom, leaveRoom, updateRoomMembership, fetchRooms } = useRoomActions();
+  const { joinRoom, leaveRoom, updateRoomMembership, forceRefreshRooms } = useRoomActions();
 
-  // 🎯 USE THE REAL-TIME SYNC HOOK
+  // 🎯 USE THE ENHANCED REAL-TIME SYNC HOOK
   useRoomRealtimeSync(authUser?.user?.id || null);
 
-  // 🎯 ADD THIS NEW EFFECT FOR DIRECT REAL-TIME UPDATES
+  // 🎯 AGGRESSIVE REAL-TIME LISTENER FOR INSTANT UPDATES
   useEffect(() => {
     if (!authUser?.user?.id) return;
     
     const supabase = getSupabaseBrowserClient();
     
-    const directChannel = supabase.channel('search-direct-updates')
+    const directChannel = supabase.channel('search-aggressive-updates')
       .on(
-        'postgres_changes',
+        'postgres_changes' as any,
         {
-          event: 'INSERT',
+          event: '*',
           schema: 'public',
           table: 'room_members',
           filter: `user_id=eq.${authUser.user.id}`
         },
-        (payload) => {
-          console.log('🎯 Direct room membership detected in SearchComponent');
-          fetchRooms({ force: true });
+        (payload: RealtimePostgresChangesPayload<any>) => {
+          console.log('🎯 Room membership change in SearchComponent:', payload.eventType);
+          forceRefreshRooms();
         }
       )
       .on(
-        'postgres_changes',
+        'postgres_changes' as any,
         {
-          event: 'INSERT',
+          event: '*',
           schema: 'public', 
           table: 'notifications',
           filter: `user_id=eq.${authUser.user.id}`
         },
-        (payload) => {
-          if (payload.new.type === 'join_request_accepted') {
-            console.log('🎯 Join accepted notification in SearchComponent');
-            fetchRooms({ force: true });
+        (payload: RealtimePostgresChangesPayload<any>) => {
+          console.log('📨 Notification change in SearchComponent:', payload.eventType, payload.new?.type);
+          
+          if (payload.new?.type === 'join_request_accepted' || payload.eventType === 'DELETE') {
+            console.log('🎯 Join request related change, FORCE refreshing');
+            forceRefreshRooms();
           }
         }
       )
       .on(
-        'postgres_changes',
+        'postgres_changes' as any,
         {
-          event: 'DELETE', 
+          event: '*',
           schema: 'public',
-          table: 'notifications', 
+          table: 'room_participants',
           filter: `user_id=eq.${authUser.user.id}`
         },
-        (payload) => {
-          console.log('🗑️ Notification deleted - might be join request acceptance');
-          // Refresh rooms in case this was an accept action
-          setTimeout(() => fetchRooms({ force: true }), 100);
+        (payload: RealtimePostgresChangesPayload<any>) => {
+          console.log('👥 Room participant change in SearchComponent:', payload.eventType);
+          if (payload.new?.status === 'accepted') {
+            forceRefreshRooms();
+          }
         }
       )
       .subscribe((status) => {
-        console.log('🔔 SearchComponent direct channel status:', status);
+        console.log('🔔 SearchComponent aggressive channel status:', status);
       });
 
     return () => {
       supabase.removeChannel(directChannel);
     };
-  }, [authUser?.user?.id, fetchRooms]);
+  }, [authUser?.user?.id, forceRefreshRooms]);
   
   const [query, setQuery] = useState("");
   const [activeTab, setActiveTab] = useState("rooms");
@@ -307,64 +340,91 @@ export default function SearchComponent({ user }: any) {
      UI
   --------------------------------------------------------- */
   return (
-    <div className="w-full h-[90vh] p-4 flex flex-col overflow-hidden">
+    <div className="w-full min-h-screen p-4 flex flex-col overflow-hidden">
+      {/* HEADER & SEARCH */}
+      <div className="flex flex-col gap-4 mb-6">
+        <div className="flex flex-col sm:flex-row items-center gap-4">
+          <div className="relative flex-1 w-full">
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search rooms or users..."
+              className="pl-10 h-12 rounded-xl text-sm sm:text-base"
+            />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 sm:h-5 sm:w-5 opacity-50" />
+          </div>
 
-      {/* SEARCH BAR */}
-      <div className="flex items-center gap-4 mb-4">
-        <div className="relative flex-1">
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search..."
-            className="pl-10 h-12 rounded-xl"
-          />
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 opacity-50" />
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full sm:w-auto">
+            <TabsList className="grid w-full grid-cols-2 h-10 sm:h-12">
+              <TabsTrigger value="rooms" className="text-xs sm:text-sm">Rooms</TabsTrigger>
+              <TabsTrigger value="users" className="text-xs sm:text-sm">Users</TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
-
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid grid-cols-2">
-            <TabsTrigger value="rooms">Rooms</TabsTrigger>
-            <TabsTrigger value="users">Users</TabsTrigger>
-          </TabsList>
-        </Tabs>
       </div>
 
       {/* CONTENT */}
-      <div className="flex-1 overflow-y-auto scrollbar-thin p-2">
+      <div className="flex-1 overflow-y-auto scrollbar-thin pb-4">
         {activeTab === "rooms" && (
           <motion.div
-            className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4"
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
+            transition={{ duration: 0.3 }}
           >
-            {filteredRooms.map((room) => (
-              <RoomCard
-                key={room.id}
-                room={room}
-                query={debounced}
-                presence={presence}
-                onJoin={handleJoin}
-                onLeave={handleLeave}
-                onOpen={handleOpenRoom}
-              />
-            ))}
+            {filteredRooms.length > 0 ? (
+              filteredRooms.map((room) => (
+                <RoomCard
+                  key={room.id}
+                  room={room}
+                  query={debounced}
+                  presence={presence}
+                  onJoin={handleJoin}
+                  onLeave={handleLeave}
+                  onOpen={handleOpenRoom}
+                />
+              ))
+            ) : (
+              <div className="col-span-full flex flex-col items-center justify-center py-12 text-center">
+                <Users className="h-16 w-16 text-muted-foreground/50 mb-4" />
+                <h3 className="text-lg font-semibold mb-2">
+                  {debounced ? "No rooms found" : "No rooms available"}
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  {debounced ? "Try adjusting your search" : "Join some rooms to get started"}
+                </p>
+              </div>
+            )}
           </motion.div>
         )}
 
         {activeTab === "users" && (
           <motion.div
-            className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4"
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
+            transition={{ duration: 0.3 }}
           >
-            {filteredUsers.map((u) => (
-              <UserCard
-                key={u.id}
-                user={u}
-                query={debounced}
-                onOpenDM={handleOpenDM}
-              />
-            ))}
+            {filteredUsers.length > 0 ? (
+              filteredUsers.map((user) => (
+                <UserCard
+                  key={user.id}
+                  user={user}
+                  query={debounced}
+                  onOpenDM={handleOpenDM}
+                />
+              ))
+            ) : (
+              <div className="col-span-full flex flex-col items-center justify-center py-12 text-center">
+                <Users className="h-16 w-16 text-muted-foreground/50 mb-4" />
+                <h3 className="text-lg font-semibold mb-2">
+                  {debounced ? "No users found" : "No users available"}
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  {debounced ? "Try adjusting your search" : "Users will appear here"}
+                </p>
+              </div>
+            )}
           </motion.div>
         )}
       </div>

@@ -44,11 +44,10 @@ import {
 
 import {
   useUnifiedRoomStore,
-  type RoomWithMembership,
 } from "@/lib/store/roomstore";
 
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import type { Database } from "@/lib/types/supabase";
+import { useAuthSync } from "@/hooks/useAuthSync";
+import { useConnectionManager } from "@/hooks/useConnectionManager";
 
 import { Swipeable } from "@/components/ui/swipeable";
 import {
@@ -56,90 +55,6 @@ import {
   AccordionItem,
   AccordionContent,
 } from "@/components/ui/accordion";
-import { useAuthSync } from "@/hooks/useAuthSync";
-import { useConnectionManager } from "@/hooks/useConnectionManager";
-
-// ─────────────────────────────────────────────────────────────
-// Type from DB rooms
-// ─────────────────────────────────────────────────────────────
-type DBRoom = Database["public"]["Tables"]["rooms"]["Row"];
-
-// ─────────────────────────────────────────────────────────────
-// Fix transformRoom helper
-// (Always return a RoomWithMembership type)
-// ─────────────────────────────────────────────────────────────
-const transformRoom = async (
-  room: DBRoom,
-  userId: string,
-  supabase: ReturnType<typeof getSupabaseBrowserClient>
-): Promise<RoomWithMembership> => {
-  try {
-    const { data: membership } = await supabase
-      .from("room_members")
-      .select("status")
-      .eq("room_id", room.id)
-      .eq("user_id", userId)
-      .single();
-
-    const { data: participant } = await supabase
-      .from("room_participants")
-      .select("status")
-      .eq("room_id", room.id)
-      .eq("user_id", userId)
-      .single();
-
-    const { count } = await supabase
-      .from("room_members")
-      .select("*", { count: "exact", head: true })
-      .eq("room_id", room.id)
-      .eq("status", "accepted");
-
-    const participationStatus =
-      membership?.status ??
-      participant?.status ??
-      null;
-
-    return {
-      id: room.id,
-      name: room.name,
-      is_private: room.is_private,
-      created_by: room.created_by,
-      created_at: room.created_at,
-
-      isMember: participationStatus === "accepted",
-      participationStatus:
-  membership?.status === "pending" || membership?.status === "accepted"
-    ? membership.status
-    : participant?.status === "pending" || participant?.status === "accepted"
-    ? participant.status
-    : null,
-
-      memberCount: count ?? 0,
-
-      // UI-only fields:
-      unreadCount: undefined,
-      latestMessage: undefined,
-      online_users: undefined,
-    };
-  } catch (err) {
-    console.error("transformRoom error:", err);
-
-    return {
-      id: room.id,
-      name: room.name,
-      is_private: room.is_private,
-      created_by: room.created_by,
-      created_at: room.created_at,
-
-      isMember: false,
-      participationStatus: null,
-      memberCount: 0,
-      unreadCount: undefined,
-      latestMessage: undefined,
-      online_users: undefined,
-    };
-  }
-};
 
 // ─────────────────────────────────────────────────────────────
 // Notification UI helpers
@@ -455,7 +370,6 @@ export default function Notifications({
 
   const {
     notifications,
-    markAsRead,
     fetchNotifications,
     removeNotification,
     isLoading,
@@ -463,12 +377,8 @@ export default function Notifications({
     lastFetch,
   } = useNotification();
 
-  const setSelectedRoomId = useUnifiedRoomStore(
-    (s) => s.setSelectedRoomId
-  );
   const { fetchRooms } = useUnifiedRoomStore();
 
-  const supabase = getSupabaseBrowserClient();
   const { userId, isAuthenticated } = useAuthSync();
 
   const { connectionState, attemptReconnection } = useConnectionManager(userId);
@@ -510,51 +420,41 @@ export default function Notifications({
     });
 
   // ─────────────────────────────────────────────────────────────
-  // Accept (fixed)
+  // Accept (enhanced with immediate removal and better error handling)
   // ─────────────────────────────────────────────────────────────
-  // ─────────────────────────────────────────────────────────────
-// Accept (enhanced with immediate removal and better error handling)
-// ─────────────────────────────────────────────────────────────
-const handleAccept = useCallback(
-  async (id: string, roomId: string | null, type: string) => {
-    if (!userId || !roomId || loadingIds.has(id)) return;
+  const handleAccept = useCallback(
+    async (id: string, roomId: string | null, type: string) => {
+      if (!userId || !roomId || loadingIds.has(id)) return;
 
-    addLoading(id);
-    // 🎯 CRITICAL: Remove notification immediately from UI
-    removeNotification(id);
+      addLoading(id);
+      removeNotification(id);
 
-    try {
-      const res = await fetch(`/api/notifications/${id}/accept`, {
-        method: "POST",
-      });
+      try {
+        const res = await fetch(`/api/notifications/${id}/accept`, {
+          method: "POST",
+        });
 
-      if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(errorText || "Accept failed");
+        if (!res.ok) {
+          const errorText = await res.text();
+          throw new Error(errorText || "Accept failed");
+        }
+
+        await fetchRooms();
+        toast.success("Join request accepted! The user has been added to the room.");
+
+      } catch (err: any) {
+        console.error("Accept error:", err);
+        toast.error(err.message || "Failed to accept join request");
+        if (userId) fetchNotifications(userId);
+      } finally {
+        removeLoading(id);
       }
-
-      // 🎯 CRITICAL: Remove markAsRead call since notification is now DELETED
-      // await markAsRead(id); // ❌ REMOVE THIS LINE
-      
-      // 🎯 Force immediate rooms refresh
-      await fetchRooms();
-      
-      toast.success("Join request accepted! The user has been added to the room.");
-
-    } catch (err: any) {
-      console.error("Accept error:", err);
-      toast.error(err.message || "Failed to accept join request");
-      // 🎯 Re-fetch notifications to restore if there was an error
-      if (userId) fetchNotifications(userId);
-    } finally {
-      removeLoading(id);
-    }
-  },
-  [userId, loadingIds, removeNotification, fetchRooms, fetchNotifications]
-);
+    },
+    [userId, loadingIds, removeNotification, fetchRooms, fetchNotifications]
+  );
 
   // ─────────────────────────────────────────────────────────────
-  // Reject
+  // Reject (enhanced error handling)
   // ─────────────────────────────────────────────────────────────
   const handleReject = useCallback(
     async (
@@ -574,17 +474,21 @@ const handleAccept = useCallback(
           headers: { "Content-Type": "application/json" },
         });
 
-        if (!res.ok) throw new Error("Reject failed");
+        if (!res.ok) {
+          const errorText = await res.text();
+          throw new Error(errorText || "Reject failed");
+        }
 
-        await markAsRead(id);
         toast.success("Request rejected");
-      } catch {
-        toast.error("Failed to reject");
+      } catch (err: any) {
+        console.error("Reject error:", err);
+        toast.error(err.message || "Failed to reject");
+        if (userId) fetchNotifications(userId);
       } finally {
         removeLoading(id);
       }
     },
-    [loadingIds, removeNotification, markAsRead]
+    [userId, loadingIds, removeNotification, fetchNotifications]
   );
 
   // ─────────────────────────────────────────────────────────────
