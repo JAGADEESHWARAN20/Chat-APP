@@ -47,6 +47,7 @@ interface RoomState {
   joinRoom: (roomId: string) => Promise<boolean>;
   leaveRoom: (roomId: string) => Promise<boolean>;
   createRoom: (name: string, isPrivate: boolean) => Promise<RoomWithMembership | null>;
+  sendMessage: (roomId: string, text: string) => Promise<boolean>; // ✅ Added
   
   // Instant sync operations
   updateRoomMembership: (roomId: string, updates: Partial<RoomWithMembership>) => void;
@@ -185,6 +186,20 @@ export const useUnifiedRoomStore = create<RoomState>()(
           return null;
         } finally {
           set({ isLoading: false });
+        }
+      },
+
+      // ✅ ADDED: sendMessage function
+      sendMessage: async (roomId: string, text: string) => {
+        try {
+          const res = await fetch("/api/messages/send", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ roomId, text }),
+          });
+          return res.ok;
+        } catch {
+          return false;
         }
       },
 
@@ -346,6 +361,7 @@ export const useRoomActions = () =>
     joinRoom: s.joinRoom,
     leaveRoom: s.leaveRoom,
     createRoom: s.createRoom,
+    sendMessage: s.sendMessage, // ✅ Added
     refreshRooms: s.refreshRooms,
     forceRefreshRooms: s.forceRefreshRooms,
     updateRoomMembership: s.updateRoomMembership,
@@ -439,7 +455,7 @@ export const useRoomRealtimeSync = (userId: string | null) => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [userId, refreshRooms, forceRefreshRooms]);
+  }, [userId, refreshRooms, forceRefreshRooms, supabase]); // ✅ Fixed: Added supabase dependency
 };
 
 // Helper function for fetching users

@@ -26,7 +26,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     sync();
 
-    const { data } = supabase.auth.onAuthStateChange((_evt, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_evt, session) => {
       if (session?.user) {
         setUser(session.user);
         setRoomUser({ id: session.user.id });
@@ -36,8 +36,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
-    return () => data.subscription.unsubscribe();
-  }, []);
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [clearUser, setRoomUser, setUser, supabase.auth]); // ✅ Fixed: Added all dependencies
 
   return <>{children}</>;
 }
