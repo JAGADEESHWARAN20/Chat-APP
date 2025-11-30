@@ -20,10 +20,12 @@ import {
   useRoomActions,
   useRoomPresence,
   fetchAllUsers,
+  useRoomRealtimeSync, // 🎯 ADD THIS IMPORT
 } from "@/lib/store/roomstore";
 
 import { useDebounce } from "use-debounce";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { useUser } from "@/lib/store/user"; // 🎯 ADD THIS IMPORT
 
 import { Users, Lock, Search } from "lucide-react";
 
@@ -168,15 +170,18 @@ const RoomCard = memo(function RoomCard({
 });
 
 /* ---------------------------------------------------------
-   MAIN COMPONENT — HIGH PERFORMANCE VERSION
+   MAIN COMPONENT — FIXED REAL-TIME UPDATES
 --------------------------------------------------------- */
 export default function SearchComponent({ user }: any) {
   const router = useRouter();
-  // const supabase = getSupabaseBrowserClient();
-
+  const authUser = useUser(); // 🎯 GET AUTH USER
+  
   const availableRooms = useAvailableRooms();
   const presence = useRoomPresence();
-  const { joinRoom, leaveRoom, updateRoomMembership } = useRoomActions();
+  const { joinRoom, leaveRoom, updateRoomMembership, fetchRooms } = useRoomActions();
+
+  // 🎯 USE THE REAL-TIME SYNC HOOK
+  useRoomRealtimeSync(authUser?.user?.id || null);
 
   const [query, setQuery] = useState("");
   const [activeTab, setActiveTab] = useState("rooms");

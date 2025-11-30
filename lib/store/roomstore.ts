@@ -1,4 +1,3 @@
-// lib/store/unified-room-store.ts
 "use client";
 
 import { create } from "zustand";
@@ -19,10 +18,8 @@ type RoomParticipantRecord = {
   updated_at?: string;
 };
 
-
-// add created_by to the type
 export type RoomWithMembership = IRoomRow & {
-  created_by?: string | null;   // <-- new
+  created_by?: string | null;
   isMember: boolean;
   participationStatus: "pending" | "accepted" | null;
   memberCount: number;
@@ -30,7 +27,6 @@ export type RoomWithMembership = IRoomRow & {
   unreadCount?: number;
   latestMessage?: string | null;
 };
-
 
 export interface RoomPresence {
   onlineUsers: number;
@@ -82,8 +78,6 @@ interface RoomState {
   refreshRooms: () => Promise<void>;
 }
 
-
-// in normalizeRpcRooms - map owner field from RPC payload
 const normalizeRpcRooms = (rows: any[]): RoomWithMembership[] =>
   rows.map((r) => ({
     id: r.id,
@@ -91,21 +85,14 @@ const normalizeRpcRooms = (rows: any[]): RoomWithMembership[] =>
     is_private: r.is_private,
     created_by: r.created_by,
     created_at: r.created_at,
-
-    // from room_overview
     memberCount: r.member_count ?? 0,
     latestMessage: r.latest_message ?? null,
     latest_message_created_at: r.latest_message_created_at ?? null,
-
-    // membership info
     isMember: Boolean(r.is_member),
     participationStatus: r.participation_status ?? null,
-
-    // optional fields – keep existing support
     unreadCount: r.unread_count ?? 0,
     online_users: r.online_users ?? 0,
   }));
-
 
 const safeJson = async (res: Response) => {
   try {
@@ -204,10 +191,8 @@ export const useUnifiedRoomStore = create<RoomState>()(
         let userId = get().user?.id;
         
         try {
-         
           if (!userId) return null;
           
-          // Skip if we have data and not forcing refresh
           if (!force && get().rooms.length > 0) {
             console.log('📦 fetchRooms - Using cached data');
             return get().rooms;
@@ -219,7 +204,6 @@ export const useUnifiedRoomStore = create<RoomState>()(
           const { data, error } = await supabase.rpc("get_rooms_with_counts", {
             p_user_id: userId,
             p_query: null as any,
-            
           });
 
           if (error) {
@@ -237,7 +221,6 @@ export const useUnifiedRoomStore = create<RoomState>()(
           
           set({ rooms: formatted });
           
-          // Auto-select first room if none selected
           const sel = get().selectedRoomId;
           if (!sel && formatted.length > 0) {
             const defaultRoom = formatted.find((r) => r.name === "General Chat") ?? formatted[0];
@@ -268,59 +251,58 @@ export const useUnifiedRoomStore = create<RoomState>()(
       },
 
       joinRoom: async (roomId) => {
-  const room = get().rooms.find(r => r.id === roomId);
-  const currentUserId = get().user?.id;
-  const isOwner = room?.created_by && currentUserId && room.created_by === currentUserId;
+        const room = get().rooms.find(r => r.id === roomId);
+        const currentUserId = get().user?.id;
+        const isOwner = room?.created_by && currentUserId && room.created_by === currentUserId;
 
-  console.log('🎯 joinRoom - Starting for room:', roomId, 'Current status:', room?.participationStatus, 'isOwner:', isOwner);
+        console.log('🎯 joinRoom - Starting for room:', roomId, 'Current status:', room?.participationStatus, 'isOwner:', isOwner);
 
-  // INSTANT OPTIMISTIC UPDATE
-  if (room?.is_private && !isOwner) {
-    get().updateRoomMembership(roomId, { participationStatus: "pending" });
-    toast.info("Join request sent — awaiting approval");
-  } else if (room) {
-    get().updateRoomMembership(roomId, { 
-      isMember: true, 
-      participationStatus: "accepted", 
-      memberCount: (room.memberCount || 0) + 1 
-    });
-    toast.success("Joined room successfully!");
-  }
+        // INSTANT OPTIMISTIC UPDATE
+        if (room?.is_private && !isOwner) {
+          get().updateRoomMembership(roomId, { participationStatus: "pending" });
+          toast.info("Join request sent — awaiting approval");
+        } else if (room) {
+          get().updateRoomMembership(roomId, { 
+            isMember: true, 
+            participationStatus: "accepted", 
+            memberCount: (room.memberCount || 0) + 1 
+          });
+          toast.success("Joined room successfully!");
+        }
 
-  try {
-    const res = await fetch(`/api/rooms/${roomId}/join`, { method: "POST", headers: { "Content-Type": "application/json" } });
-    const json = await safeJson(res);
+        try {
+          const res = await fetch(`/api/rooms/${roomId}/join`, { method: "POST", headers: { "Content-Type": "application/json" } });
+          const json = await safeJson(res);
 
-    if (!res.ok) {
-      // rollback to previous room object values
-      if (room) {
-        get().updateRoomMembership(roomId, {
-          isMember: room.isMember,
-          participationStatus: room.participationStatus,
-          memberCount: room.memberCount
-        });
-      }
-      toast.error(json?.error || "Failed to join room");
-      return false;
-    }
+          if (!res.ok) {
+            // rollback to previous room object values
+            if (room) {
+              get().updateRoomMembership(roomId, {
+                isMember: room.isMember,
+                participationStatus: room.participationStatus,
+                memberCount: room.memberCount
+              });
+            }
+            toast.error(json?.error || "Failed to join room");
+            return false;
+          }
 
-    // Refresh canonical state (small delay to allow DB triggers to fire)
-    setTimeout(() => get().refreshRooms(), 500);
-    return true;
-  } catch (err: any) {
-    console.error("❌ joinRoom error:", err);
-    if (room) {
-      get().updateRoomMembership(roomId, {
-        isMember: room.isMember,
-        participationStatus: room.participationStatus,
-        memberCount: room.memberCount
-      });
-    }
-    toast.error("Failed to join room");
-    return false;
-  }
-},
-
+          // Refresh canonical state
+          setTimeout(() => get().refreshRooms(), 500);
+          return true;
+        } catch (err: any) {
+          console.error("❌ joinRoom error:", err);
+          if (room) {
+            get().updateRoomMembership(roomId, {
+              isMember: room.isMember,
+              participationStatus: room.participationStatus,
+              memberCount: room.memberCount
+            });
+          }
+          toast.error("Failed to join room");
+          return false;
+        }
+      },
 
       leaveRoom: async (roomId) => {
         const room = get().rooms.find(r => r.id === roomId);
@@ -419,38 +401,29 @@ export const useTypingDisplayText = () => useUnifiedRoomStore((s) => s.typingDis
 
 export const useRoomActions = () =>
   useUnifiedRoomStore((s) => ({
-    // Setters
     setSelectedRoomId: s.setSelectedRoomId,
     setAvailableRooms: s.setAvailableRooms,
     setUser: s.setUser,
     setLoading: s.setLoading,
     setError: s.setError,
     clearError: s.clearError,
-    
-    // Room operations
     fetchRooms: s.fetchRooms,
     joinRoom: s.joinRoom,
     leaveRoom: s.leaveRoom,
     createRoom: s.createRoom,
     sendMessage: s.sendMessage,
-    
-    // Sync operations
     refreshRooms: s.refreshRooms,
     updateRoomMembership: s.updateRoomMembership,
     mergeRoomMembership: s.mergeRoomMembership,
-    
-    // Typing
     updateTypingUsers: s.updateTypingUsers,
     updateTypingText: s.updateTypingText,
-    
-    // Room management
     addRoom: s.addRoom,
     updateRoom: s.updateRoom,
     removeRoom: s.removeRoom,
     setRoomPresence: s.setRoomPresence,
   }));
 
-// Real-time sync hook
+// 🎯 ENHANCED Real-time sync hook for SearchComponent
 export const useRoomRealtimeSync = (userId: string | null) => {
   const { refreshRooms, updateRoomMembership } = useRoomActions();
   const supabase = getSupabaseBrowserClient();
@@ -460,78 +433,66 @@ export const useRoomRealtimeSync = (userId: string | null) => {
 
     const channel = supabase.channel(`room-sync-${userId}`);
 
-    // -----------------------------------------
-    // room_participants listener (self changes)
-    // -----------------------------------------
+    // Listen for room_participants changes (when user gets accepted)
     channel.on(
       "postgres_changes",
-      { event: "*", schema: "public", table: "room_participants" },
+      { 
+        event: "*", 
+        schema: "public", 
+        table: "room_participants",
+        filter: `user_id=eq.${userId}`
+      },
       (payload) => {
-        const rec = payload.new as RoomParticipantRecord;
-        if (!rec || rec.user_id !== userId) return;
-
-        const store = useUnifiedRoomStore.getState();
-        const room = store.rooms.find((r) => r.id === rec.room_id);
-        const prev = room?.memberCount ?? 0;
-
-        if (rec.status === "accepted") {
-          updateRoomMembership(rec.room_id, {
-            isMember: true,
-            participationStatus: "accepted",
-            memberCount: prev + 1,
-          });
-          toast.success("🎉 You're now a member of this room!");
-        }
-
-        if (rec.status === "pending") {
-          updateRoomMembership(rec.room_id, {
-            isMember: false,
-            participationStatus: "pending",
-          });
-        }
-
-        if (rec.status === "left") {
-          updateRoomMembership(rec.room_id, {
-            isMember: false,
-            participationStatus: null,
-            memberCount: Math.max(0, prev - 1),
-          });
+        const rec = payload.new as { room_id?: string; status?: string };
+        
+        console.log("🔄 Room participant change detected:", rec);
+        
+        if (rec?.status === "accepted") {
+          console.log("🎉 User accepted into room, refreshing rooms");
+          refreshRooms();
         }
       }
     );
 
-    // -----------------------------------------
-    // notifications listener (owner accepted your request)
-    // -----------------------------------------
+    // Listen for join_request_accepted notifications
     channel.on(
       "postgres_changes",
-      {
-        event: "*",
-        schema: "public",
+      { 
+        event: "INSERT", 
+        schema: "public", 
         table: "notifications",
-        filter: `user_id=eq.${userId}`,
+        filter: `user_id=eq.${userId}`
       },
       (payload) => {
-        const rec = payload.new as {
-          type?: string;
-          room_id?: string;
-        };
+        const rec = payload.new as { type?: string; room_id?: string };
+        
+        console.log("📨 Notification received:", rec?.type);
+        
+        if (rec?.type === "join_request_accepted") {
+          console.log("🎉 Join request accepted notification, refreshing rooms");
+          refreshRooms();
+        }
+      }
+    );
 
-        if (rec?.type !== "join_request_accepted" || !rec.room_id) return;
-
-        const store = useUnifiedRoomStore.getState();
-        const room = store.rooms.find((r) => r.id === rec.room_id);
-        const prev = room?.memberCount ?? 0;
-
-        updateRoomMembership(rec.room_id, {
-          isMember: true,
-          participationStatus: "accepted",
-          memberCount: prev + 1,
-        });
-
-        toast.success("🎉 Your join request was accepted!");
-
-        setTimeout(() => store.refreshRooms(), 300);
+    // Listen for notification updates (when owner processes request)
+    channel.on(
+      "postgres_changes",
+      { 
+        event: "UPDATE", 
+        schema: "public", 
+        table: "notifications",
+        filter: `user_id=eq.${userId}`
+      },
+      (payload) => {
+        const rec = payload.new as { type?: string; room_id?: string };
+        
+        console.log("📨 Notification updated:", rec?.type);
+        
+        if (rec?.type === "join_request_processed") {
+          console.log("🔄 Join request processed by owner");
+          // No need to refresh here as the requester will get their own notification
+        }
       }
     );
 
@@ -542,8 +503,6 @@ export const useRoomRealtimeSync = (userId: string | null) => {
     };
   }, [userId, refreshRooms, updateRoomMembership]);
 };
-
-
 
 // Helper function for fetching users
 export const fetchAllUsers = async () => {

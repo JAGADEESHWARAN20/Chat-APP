@@ -14,7 +14,6 @@ export async function POST(
     {
       cookies: {
         getAll: cookieStore.getAll,
-        // force no-set cookie for edge environments
         setAll: () => {},
       },
     }
@@ -41,8 +40,8 @@ export async function POST(
     return NextResponse.json({ error: "Notification not found" }, { status: 404 });
   }
 
-  const requesterId = existing.sender_id;  // 🔥 the user who sent join request
-  const ownerId = existing.user_id;        // room owner
+  const requesterId = existing.sender_id;  // The user who sent join request
+  const ownerId = existing.user_id;        // Room owner (notification recipient)
   const roomId = existing.room_id;
 
   if (!requesterId || !roomId) {
@@ -61,31 +60,19 @@ export async function POST(
   });
 
   if (rpcError) {
+    console.error("❌ RPC Error:", rpcError);
     return NextResponse.json({ error: rpcError.message }, { status: 400 });
   }
 
-  // ------------------ INSERT NOTIFICATION FOR REQUESTER ------------------
-  const { error: insertError } = await supabase
-    .from("notifications")
-    .insert({
-      user_id: requesterId,
-      sender_id: actingUserId,
-      room_id: roomId,
-      type: "join_request_accepted",
-      status: "unread",
-      message: "Your request to join the room was accepted",
-    });
+  console.log("✅ Join request accepted successfully");
 
-  if (insertError) {
-    console.error("❌ Failed to notify requester:", insertError);
-    return NextResponse.json({
-      error: "Request accepted but requester was not notified",
-    }, { status: 500 });
-  }
-
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ 
+    success: true,
+    message: "Join request accepted",
+    room_id: roomId,
+    user_id: requesterId
+  });
 }
-
 
 // import { cookies } from "next/headers";
 // import { NextRequest, NextResponse } from "next/server";
