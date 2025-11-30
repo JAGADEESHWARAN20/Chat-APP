@@ -234,22 +234,18 @@ export default function SearchComponent() {
         }
       )
       .on(
-        'postgres_changes' as any,
+        "postgres_changes",
         {
-          event: '*',
-          schema: 'public', 
-          table: 'notifications',
-          filter: `user_id=eq.${authUser.user.id}`
+          event: "*",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${authUser.user.id}`,
         },
-        (payload: RealtimePostgresChangesPayload<any>) => {
-          console.log('📨 Notification change in SearchComponent:', payload.eventType, payload.new?.type);
-          
-          if (payload.new?.type === 'join_request_accepted' || payload.eventType === 'DELETE') {
-            console.log('🎯 Join request related change, FORCE refreshing');
-            forceRefreshRooms();
-          }
+        () => {
+          forceRefreshRooms();
         }
       )
+      
       .on(
         'postgres_changes' as any,
         {
