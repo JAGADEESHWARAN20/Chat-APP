@@ -463,7 +463,12 @@ export const useRoomRealtimeSync = (userId: string | null) => {
 
     const channel = supabase.channel(`room-sync-${userId}`);
 
-    // room_participants changes for this user
+    // Helper type for any supabase row
+    type AnyRow = Record<string, any> | null;
+
+    /* --------------------------------------------------------
+       🔥 room_participants: INSERT + UPDATE + DELETE
+    -------------------------------------------------------- */
     channel.on(
       "postgres_changes",
       {
@@ -473,14 +478,40 @@ export const useRoomRealtimeSync = (userId: string | null) => {
         filter: `user_id=eq.${userId}`,
       },
       (payload) => {
-        const rec = payload.new as { status?: string } | null;
-        if (rec?.status === "accepted") {
+        const newRow: AnyRow = payload.new;
+        const oldRow: AnyRow = payload.old;
+
+        const newStatus = newRow?.status;
+        const oldStatus = oldRow?.status;
+
+        console.log("room_participants change", { newStatus, oldStatus });
+
+        if (newStatus === "accepted" || oldStatus === "accepted") {
           forceRefreshRooms();
         }
       }
     );
 
-    // notifications for this user
+    /* --------------------------------------------------------
+       🔥 room_members: INSERT + DELETE
+    -------------------------------------------------------- */
+    channel.on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "room_members",
+        filter: `user_id=eq.${userId}`,
+      },
+      () => {
+        console.log("room_members updated -> refresh");
+        forceRefreshRooms();
+      }
+    );
+
+    /* --------------------------------------------------------
+       🔥 notifications INSERT
+    -------------------------------------------------------- */
     channel.on(
       "postgres_changes",
       {
@@ -490,14 +521,19 @@ export const useRoomRealtimeSync = (userId: string | null) => {
         filter: `user_id=eq.${userId}`,
       },
       (payload) => {
-        const rec = payload.new as { type?: string } | null;
-        if (rec?.type === "join_request_accepted") {
+        const newRow: AnyRow = payload.new;
+
+        if (newRow?.type === "join_request_accepted") {
+          console.log("join_request_accepted → refresh");
           forceRefreshRooms();
         }
       }
     );
 
-    // notification deletes (owner accepted etc.)
+    /* --------------------------------------------------------
+       🔥 notifications DELETE
+       (means owner accepted / rejected)
+    -------------------------------------------------------- */
     channel.on(
       "postgres_changes",
       {
@@ -507,31 +543,21 @@ export const useRoomRealtimeSync = (userId: string | null) => {
         filter: `user_id=eq.${userId}`,
       },
       () => {
+        console.log("notification deleted → refresh");
         forceRefreshRooms();
       }
     );
 
-    // room_members insert for this user
-    channel.on(
-      "postgres_changes",
-      {
-        event: "INSERT",
-        schema: "public",
-        table: "room_members",
-        filter: `user_id=eq.${userId}`,
-      },
-      () => {
-        forceRefreshRooms();
-      }
-    );
-
-    channel.subscribe();
+    channel.subscribe((status) => {
+      console.log("room realtime status:", status);
+    });
 
     return () => {
       supabase.removeChannel(channel);
     };
   }, [userId, forceRefreshRooms, supabase]);
 };
+
 
 /* -------------------------------------------------------
    HELPERS: FETCH USERS FOR SEARCH
