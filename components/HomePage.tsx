@@ -414,7 +414,7 @@ useEffect(() => {
                 exit={{ opacity: 0, y: -10 }}
                 className="flex-1 flex flex-col overflow-hidden p-4"
               >
-                <SearchComponent user={user} />
+                <SearchComponent  />
               </motion.section>
             )}
           </AnimatePresence>

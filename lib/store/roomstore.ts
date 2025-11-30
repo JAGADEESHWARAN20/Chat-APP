@@ -1,11 +1,15 @@
 "use client";
 
+import { useEffect } from "react";
 import { create } from "zustand";
 import { devtools, subscribeWithSelector } from "zustand/middleware";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { toast } from "@/components/ui/sonner"
+import { toast } from "@/components/ui/sonner";
 import type { Database } from "@/lib/types/supabase";
-import { useEffect } from "react";
+
+/* -------------------------------------------------------
+   TYPES
+------------------------------------------------------- */
 
 type IRoomRow = Database["public"]["Tables"]["rooms"]["Row"];
 
@@ -17,6 +21,7 @@ export type RoomWithMembership = IRoomRow & {
   online_users?: number;
   unreadCount?: number;
   latestMessage?: string | null;
+  latest_message_created_at?: string | null;
 };
 
 export interface RoomPresence {
@@ -25,35 +30,58 @@ export interface RoomPresence {
   lastUpdated?: string;
 }
 
+export interface TypingUser {
+  user_id: string;
+  is_typing: boolean;
+  display_name?: string;
+}
+
 interface RoomState {
+  // Auth / identity
   user: { id: string } | null;
+
+  // Rooms & presence
   rooms: RoomWithMembership[];
   selectedRoomId: string | null;
   roomPresence: Record<string, RoomPresence>;
+
+  // UI / status
   isLoading: boolean;
   error: string | null;
+
+  // Typing state (for useTypingStatus / TypingIndicator)
+  typingUsers: TypingUser[];
+  typingDisplayText: string;
 
   // Setters
   setUser: (u: { id: string } | null) => void;
   setRooms: (rooms: RoomWithMembership[]) => void;
   setSelectedRoomId: (id: string | null) => void;
-  setRoomPresence: (roomId: string, p: RoomPresence) => void;
+  setRoomPresence: (roomId: string, presence: RoomPresence) => void;
   setLoading: (v: boolean) => void;
   setError: (v: string | null) => void;
   clearError: () => void;
+
+  // Typing setters
+  updateTypingUsers: (users: TypingUser[]) => void;
+  updateTypingText: (text: string) => void;
 
   // Core operations
   fetchRooms: (opts?: { force?: boolean }) => Promise<RoomWithMembership[] | null>;
   joinRoom: (roomId: string) => Promise<boolean>;
   leaveRoom: (roomId: string) => Promise<boolean>;
   createRoom: (name: string, isPrivate: boolean) => Promise<RoomWithMembership | null>;
-  sendMessage: (roomId: string, text: string) => Promise<boolean>; // ✅ Added
-  
+  sendMessage: (roomId: string, text: string) => Promise<boolean>;
+
   // Instant sync operations
   updateRoomMembership: (roomId: string, updates: Partial<RoomWithMembership>) => void;
   refreshRooms: () => Promise<void>;
   forceRefreshRooms: () => void;
 }
+
+/* -------------------------------------------------------
+   HELPERS
+------------------------------------------------------- */
 
 const normalizeRpcRooms = (rows: any[]): RoomWithMembership[] =>
   rows.map((r) => ({
@@ -79,10 +107,14 @@ const safeJson = async (res: Response) => {
   }
 };
 
-// Create the unified store
+/* -------------------------------------------------------
+   STORE
+------------------------------------------------------- */
+
 export const useUnifiedRoomStore = create<RoomState>()(
   devtools(
     subscribeWithSelector((set, get) => ({
+      // Base state
       user: null,
       rooms: [],
       selectedRoomId: null,
@@ -90,33 +122,53 @@ export const useUnifiedRoomStore = create<RoomState>()(
       isLoading: false,
       error: null,
 
-      // 🎯 SETTERS
-      setUser: (u) => set({ user: u }),
-      
+      // Typing state
+      typingUsers: [],
+      typingDisplayText: "",
+
+      /* ------------------------------
+         SETTERS
+      ------------------------------ */
+
+      setUser: (u) => {
+        set({ user: u });
+      },
+
       setRooms: (rooms) => {
-        console.log('🚀 setRooms - Updating store with', rooms.length, 'rooms');
         set({ rooms });
+
         const sel = get().selectedRoomId;
         if (!sel && rooms.length > 0) {
-          const defaultRoom = rooms.find((r) => r.name === "General Chat") ?? rooms[0];
+          const defaultRoom =
+            rooms.find((r) => r.name === "General Chat") ?? rooms[0];
           set({ selectedRoomId: defaultRoom?.id ?? null });
         }
       },
-      
-      setSelectedRoomId: (id) => set({ selectedRoomId: id }),
-      
-      setRoomPresence: (roomId, p) =>
-        set((s) => ({ roomPresence: { ...s.roomPresence, [roomId]: p } })),
-      
+
+      setSelectedRoomId: (id) => {
+        set({ selectedRoomId: id });
+      },
+
+      setRoomPresence: (roomId, presence) =>
+        set((state) => ({
+          roomPresence: { ...state.roomPresence, [roomId]: presence },
+        })),
+
       setLoading: (v) => set({ isLoading: v }),
-      
+
       setError: (v) => set({ error: v }),
-      
+
       clearError: () => set({ error: null }),
 
-      // 🎯 INSTANT OPTIMISTIC UPDATES
+      // Typing setters
+      updateTypingUsers: (users) => set({ typingUsers: users }),
+      updateTypingText: (text) => set({ typingDisplayText: text }),
+
+      /* ------------------------------
+         INSTANT OPTIMISTIC UPDATES
+      ------------------------------ */
+
       updateRoomMembership: (roomId, updates) => {
-        console.log('⚡ updateRoomMembership - Instant update for room:', roomId, updates);
         set((state) => ({
           rooms: state.rooms.map((room) =>
             room.id === roomId ? { ...room, ...updates } : room
@@ -125,38 +177,40 @@ export const useUnifiedRoomStore = create<RoomState>()(
       },
 
       refreshRooms: async (): Promise<void> => {
-        console.log('🔄 refreshRooms - Forcing refresh');
         await get().fetchRooms({ force: true });
       },
 
       forceRefreshRooms: () => {
-        console.log('🚀 FORCE refreshing rooms');
         set({ isLoading: true });
         setTimeout(() => {
           get().fetchRooms({ force: true });
         }, 100);
       },
 
-      // 🎯 CORE OPERATIONS
+      /* ------------------------------
+         CORE OPERATIONS
+      ------------------------------ */
+
       fetchRooms: async ({ force = false } = {}) => {
         const supabase = getSupabaseBrowserClient();
-        let userId = get().user?.id;
-        
+        const userId = get().user?.id;
+
         try {
           if (!userId) return null;
-          
+
           if (!force && get().rooms.length > 0) {
-            console.log('📦 fetchRooms - Using cached data');
             return get().rooms;
           }
 
           set({ isLoading: true, error: null });
-          console.log('🌐 fetchRooms - Fetching from server');
 
-          const { data, error } = await supabase.rpc("get_rooms_with_counts", {
-            p_user_id: userId,
-            p_query: null as any,
-          });
+          const { data, error } = await supabase.rpc(
+            "get_rooms_with_counts",
+            {
+              p_user_id: userId,
+              p_query: null as any,
+            }
+          );
 
           if (error) {
             console.error("❌ fetchRooms RPC error:", error);
@@ -165,20 +219,16 @@ export const useUnifiedRoomStore = create<RoomState>()(
           }
 
           const formatted = normalizeRpcRooms(data);
-          console.log('✅ fetchRooms - Success:', {
-            total: formatted.length,
-            joined: formatted.filter(r => r.isMember && r.participationStatus === 'accepted').length,
-            pending: formatted.filter(r => r.participationStatus === 'pending').length
-          });
-          
           set({ rooms: formatted });
-          
+
           const sel = get().selectedRoomId;
           if (!sel && formatted.length > 0) {
-            const defaultRoom = formatted.find((r) => r.name === "General Chat") ?? formatted[0];
+            const defaultRoom =
+              formatted.find((r) => r.name === "General Chat") ??
+              formatted[0];
             set({ selectedRoomId: defaultRoom?.id ?? null });
           }
-          
+
           return formatted;
         } catch (err: any) {
           console.error("❌ fetchRooms error:", err);
@@ -189,7 +239,6 @@ export const useUnifiedRoomStore = create<RoomState>()(
         }
       },
 
-      // ✅ ADDED: sendMessage function
       sendMessage: async (roomId: string, text: string) => {
         try {
           const res = await fetch("/api/messages/send", {
@@ -198,49 +247,53 @@ export const useUnifiedRoomStore = create<RoomState>()(
             body: JSON.stringify({ roomId, text }),
           });
           return res.ok;
-        } catch {
+        } catch (err) {
+          console.error("❌ sendMessage error:", err);
           return false;
         }
       },
 
       joinRoom: async (roomId) => {
-        const room = get().rooms.find(r => r.id === roomId);
+        const room = get().rooms.find((r) => r.id === roomId);
         const currentUserId = get().user?.id;
-        const isOwner = room?.created_by && currentUserId && room.created_by === currentUserId;
+        const isOwner =
+          room?.created_by && currentUserId
+            ? room.created_by === currentUserId
+            : false;
 
-        console.log('🎯 joinRoom - Starting for room:', roomId, 'Current status:', room?.participationStatus, 'isOwner:', isOwner);
-
-        // INSTANT OPTIMISTIC UPDATE
+        // Optimistic update
         if (room?.is_private && !isOwner) {
           get().updateRoomMembership(roomId, { participationStatus: "pending" });
           toast.info("Join request sent — awaiting approval");
         } else if (room) {
-          get().updateRoomMembership(roomId, { 
-            isMember: true, 
-            participationStatus: "accepted", 
-            memberCount: (room.memberCount || 0) + 1 
+          get().updateRoomMembership(roomId, {
+            isMember: true,
+            participationStatus: "accepted",
+            memberCount: (room.memberCount || 0) + 1,
           });
           toast.success("Joined room successfully!");
         }
 
         try {
-          const res = await fetch(`/api/rooms/${roomId}/join`, { method: "POST", headers: { "Content-Type": "application/json" } });
+          const res = await fetch(`/api/rooms/${roomId}/join`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+          });
           const json = await safeJson(res);
 
           if (!res.ok) {
-            // rollback to previous room object values
+            // rollback
             if (room) {
               get().updateRoomMembership(roomId, {
                 isMember: room.isMember,
                 participationStatus: room.participationStatus,
-                memberCount: room.memberCount
+                memberCount: room.memberCount,
               });
             }
             toast.error(json?.error || "Failed to join room");
             return false;
           }
 
-          // Refresh canonical state
           setTimeout(() => get().refreshRooms(), 500);
           return true;
         } catch (err: any) {
@@ -249,7 +302,7 @@ export const useUnifiedRoomStore = create<RoomState>()(
             get().updateRoomMembership(roomId, {
               isMember: room.isMember,
               participationStatus: room.participationStatus,
-              memberCount: room.memberCount
+              memberCount: room.memberCount,
             });
           }
           toast.error("Failed to join room");
@@ -258,51 +311,50 @@ export const useUnifiedRoomStore = create<RoomState>()(
       },
 
       leaveRoom: async (roomId) => {
-        const room = get().rooms.find(r => r.id === roomId);
-        console.log('🚪 leaveRoom - Starting for room:', roomId);
+        const room = get().rooms.find((r) => r.id === roomId);
 
-        // INSTANT OPTIMISTIC UPDATE
+        // Optimistic update
         if (room) {
-          get().updateRoomMembership(roomId, { 
-            isMember: false, 
-            participationStatus: null, 
-            memberCount: Math.max(0, room.memberCount - 1) 
+          get().updateRoomMembership(roomId, {
+            isMember: false,
+            participationStatus: null,
+            memberCount: Math.max(0, room.memberCount - 1),
           });
-          if (get().selectedRoomId === roomId) set({ selectedRoomId: null });
+          if (get().selectedRoomId === roomId) {
+            set({ selectedRoomId: null });
+          }
           toast.success("Left room successfully");
         }
 
         try {
-          const res = await fetch(`/api/rooms/${roomId}/leave`, { 
-            method: "PATCH", 
-            headers: { "Content-Type": "application/json" } 
+          const res = await fetch(`/api/rooms/${roomId}/leave`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
           });
           const json = await safeJson(res);
 
           if (!res.ok) {
-            // Rollback optimistic update on error
+            // rollback
             if (room) {
-              get().updateRoomMembership(roomId, { 
-                isMember: room.isMember, 
-                participationStatus: room.participationStatus, 
-                memberCount: room.memberCount 
+              get().updateRoomMembership(roomId, {
+                isMember: room.isMember,
+                participationStatus: room.participationStatus,
+                memberCount: room.memberCount,
               });
             }
             toast.error(json?.error || "Failed to leave room");
             return false;
           }
 
-          // Refresh to get canonical state
           setTimeout(() => get().refreshRooms(), 1000);
           return true;
         } catch (err: any) {
           console.error("❌ leaveRoom error:", err);
-          // Rollback on error
           if (room) {
-            get().updateRoomMembership(roomId, { 
-              isMember: room.isMember, 
-              participationStatus: room.participationStatus, 
-              memberCount: room.memberCount 
+            get().updateRoomMembership(roomId, {
+              isMember: room.isMember,
+              participationStatus: room.participationStatus,
+              memberCount: room.memberCount,
             });
           }
           toast.error("Failed to leave room");
@@ -318,13 +370,16 @@ export const useUnifiedRoomStore = create<RoomState>()(
             body: JSON.stringify({ name, isPrivate }),
           });
           const json = await safeJson(res);
+
           if (!res.ok) {
             toast.error(json?.error || "Failed to create room");
             return null;
           }
 
           await get().refreshRooms();
-          const created = get().rooms.find((r) => r.name === name) ?? null;
+          const created =
+            get().rooms.find((r) => r.name === name) ?? null;
+
           if (created) {
             toast.success("Room created");
             return created;
@@ -340,15 +395,40 @@ export const useUnifiedRoomStore = create<RoomState>()(
   )
 );
 
-/* 🚀 HIGH-PERFORMANCE SELECTORS */
-export const useAvailableRooms = () => useUnifiedRoomStore((s) => s.rooms);
-export const useJoinedRooms = () => 
-  useUnifiedRoomStore((s) => s.rooms.filter((r) => r.isMember && r.participationStatus === "accepted"));
-export const useSelectedRoom = () => 
-  useUnifiedRoomStore((s) => s.rooms.find((r) => r.id === s.selectedRoomId) ?? null);
-export const useRoomLoading = () => useUnifiedRoomStore((s) => s.isLoading);
-export const useRoomError = () => useUnifiedRoomStore((s) => s.error);
-export const useRoomPresence = () => useUnifiedRoomStore((s) => s.roomPresence);
+/* -------------------------------------------------------
+   SELECTORS
+------------------------------------------------------- */
+
+export const useAvailableRooms = () =>
+  useUnifiedRoomStore((s) => s.rooms);
+
+export const useJoinedRooms = () =>
+  useUnifiedRoomStore((s) =>
+    s.rooms.filter(
+      (r) => r.isMember && r.participationStatus === "accepted"
+    )
+  );
+
+export const useSelectedRoom = () =>
+  useUnifiedRoomStore((s) =>
+    s.rooms.find((r) => r.id === s.selectedRoomId) ?? null
+  );
+
+export const useRoomLoading = () =>
+  useUnifiedRoomStore((s) => s.isLoading);
+
+export const useRoomError = () =>
+  useUnifiedRoomStore((s) => s.error);
+
+export const useRoomPresence = () =>
+  useUnifiedRoomStore((s) => s.roomPresence);
+
+// Typing selectors (for useTypingStatus / TypingIndicator)
+export const useTypingUsers = () =>
+  useUnifiedRoomStore((s) => s.typingUsers);
+
+export const useTypingDisplayText = () =>
+  useUnifiedRoomStore((s) => s.typingDisplayText);
 
 export const useRoomActions = () =>
   useUnifiedRoomStore((s) => ({
@@ -361,16 +441,21 @@ export const useRoomActions = () =>
     joinRoom: s.joinRoom,
     leaveRoom: s.leaveRoom,
     createRoom: s.createRoom,
-    sendMessage: s.sendMessage, // ✅ Added
+    sendMessage: s.sendMessage,
     refreshRooms: s.refreshRooms,
     forceRefreshRooms: s.forceRefreshRooms,
     updateRoomMembership: s.updateRoomMembership,
     setRoomPresence: s.setRoomPresence,
+    updateTypingUsers: s.updateTypingUsers,
+    updateTypingText: s.updateTypingText,
   }));
 
-// 🎯 ENHANCED Real-time sync hook for SearchComponent
+/* -------------------------------------------------------
+   REALTIME SYNC HOOK FOR SEARCH COMPONENT
+------------------------------------------------------- */
+
 export const useRoomRealtimeSync = (userId: string | null) => {
-  const { refreshRooms, forceRefreshRooms } = useRoomActions();
+  const { forceRefreshRooms } = useRoomActions();
   const supabase = getSupabaseBrowserClient();
 
   useEffect(() => {
@@ -378,87 +463,80 @@ export const useRoomRealtimeSync = (userId: string | null) => {
 
     const channel = supabase.channel(`room-sync-${userId}`);
 
-    // Listen for ALL room_participants changes
+    // room_participants changes for this user
     channel.on(
       "postgres_changes",
-      { 
-        event: "*", 
-        schema: "public", 
+      {
+        event: "*",
+        schema: "public",
         table: "room_participants",
-        filter: `user_id=eq.${userId}`
+        filter: `user_id=eq.${userId}`,
       },
       (payload) => {
-        const rec = payload.new as { room_id?: string; status?: string };
-        console.log("🔄 Room participant change detected:", rec);
-        
+        const rec = payload.new as { status?: string } | null;
         if (rec?.status === "accepted") {
-          console.log("🎉 User accepted into room, force refreshing rooms");
           forceRefreshRooms();
         }
       }
     );
 
-    // Listen for join_request_accepted notifications
+    // notifications for this user
     channel.on(
       "postgres_changes",
-      { 
-        event: "INSERT", 
-        schema: "public", 
+      {
+        event: "INSERT",
+        schema: "public",
         table: "notifications",
-        filter: `user_id=eq.${userId}`
+        filter: `user_id=eq.${userId}`,
       },
       (payload) => {
-        const rec = payload.new as { type?: string; room_id?: string };
-        console.log("📨 Notification INSERT:", rec?.type);
-        
+        const rec = payload.new as { type?: string } | null;
         if (rec?.type === "join_request_accepted") {
-          console.log("🎉 Join request accepted notification, FORCE refreshing rooms");
           forceRefreshRooms();
         }
       }
     );
 
-    // Listen for notification DELETES (when owner accepts)
+    // notification deletes (owner accepted etc.)
     channel.on(
       "postgres_changes",
-      { 
-        event: "DELETE", 
-        schema: "public", 
+      {
+        event: "DELETE",
+        schema: "public",
         table: "notifications",
-        filter: `user_id=eq.${userId}`
+        filter: `user_id=eq.${userId}`,
       },
-      (payload) => {
-        console.log("🗑️ Notification DELETED - join request was processed");
+      () => {
         forceRefreshRooms();
       }
     );
 
-    // Listen for room_members inserts
+    // room_members insert for this user
     channel.on(
       "postgres_changes",
-      { 
-        event: "INSERT", 
-        schema: "public", 
+      {
+        event: "INSERT",
+        schema: "public",
         table: "room_members",
-        filter: `user_id=eq.${userId}`
+        filter: `user_id=eq.${userId}`,
       },
-      (payload) => {
-        console.log("🎯 Direct room_members INSERT, force refreshing rooms");
+      () => {
         forceRefreshRooms();
       }
     );
 
-    channel.subscribe((status) => {
-      console.log("🔔 Real-time channel status:", status);
-    });
+    channel.subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [userId, refreshRooms, forceRefreshRooms, supabase]); // ✅ Fixed: Added supabase dependency
+  }, [userId, forceRefreshRooms, supabase]);
 };
 
-// Helper function for fetching users
+/* -------------------------------------------------------
+   HELPERS: FETCH USERS FOR SEARCH
+------------------------------------------------------- */
+
 export const fetchAllUsers = async () => {
   const supabase = getSupabaseBrowserClient();
   const { data } = await supabase
