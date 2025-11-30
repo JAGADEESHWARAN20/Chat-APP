@@ -40,8 +40,8 @@ export async function POST(
     return NextResponse.json({ error: "Notification not found" }, { status: 404 });
   }
 
-  const requesterId = existing.sender_id;  // The user who sent join request
-  const ownerId = existing.user_id;        // Room owner (notification recipient)
+  const requesterId = existing.sender_id;
+  const ownerId = existing.user_id;
   const roomId = existing.room_id;
 
   if (!requesterId || !roomId) {
@@ -53,7 +53,7 @@ export async function POST(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  // ------------------ CALL RPC ------------------
+  // 🎯 Use the fixed SECURITY DEFINER function
   const { error: rpcError } = await supabase.rpc("accept_notification", {
     p_notification_id: notificationId,
     p_target_user_id: actingUserId,
