@@ -424,6 +424,8 @@ export const useRoomActions = () =>
   }));
 
 // 🎯 ENHANCED Real-time sync hook for SearchComponent
+// 🎯 ENHANCED Real-time sync hook for SearchComponent
+// 🎯 ENHANCED Real-time sync hook for SearchComponent
 export const useRoomRealtimeSync = (userId: string | null) => {
   const { refreshRooms, updateRoomMembership } = useRoomActions();
   const supabase = getSupabaseBrowserClient();
@@ -449,7 +451,8 @@ export const useRoomRealtimeSync = (userId: string | null) => {
         
         if (rec?.status === "accepted") {
           console.log("🎉 User accepted into room, refreshing rooms");
-          refreshRooms();
+          // Force immediate refresh with small delay
+          setTimeout(() => refreshRooms(), 100);
         }
       }
     );
@@ -466,37 +469,50 @@ export const useRoomRealtimeSync = (userId: string | null) => {
       (payload) => {
         const rec = payload.new as { type?: string; room_id?: string };
         
-        console.log("📨 Notification received:", rec?.type);
+        console.log("📨 Notification INSERT received:", rec?.type);
         
         if (rec?.type === "join_request_accepted") {
-          console.log("🎉 Join request accepted notification, refreshing rooms");
-          refreshRooms();
+          console.log("🎉 Join request accepted notification, refreshing rooms immediately");
+          // Force immediate refresh
+          setTimeout(() => refreshRooms(), 100);
         }
       }
     );
 
-    // Listen for notification updates (when owner processes request)
+    // 🎯 NEW: Listen for DELETE events on notifications (when owner accepts)
     channel.on(
       "postgres_changes",
       { 
-        event: "UPDATE", 
+        event: "DELETE", 
         schema: "public", 
         table: "notifications",
         filter: `user_id=eq.${userId}`
       },
       (payload) => {
-        const rec = payload.new as { type?: string; room_id?: string };
-        
-        console.log("📨 Notification updated:", rec?.type);
-        
-        if (rec?.type === "join_request_processed") {
-          console.log("🔄 Join request processed by owner");
-          // No need to refresh here as the requester will get their own notification
-        }
+        console.log("🗑️ Notification DELETED for user, this might be an accept action");
+        // Refresh rooms in case this was a join request acceptance
+        setTimeout(() => refreshRooms(), 100);
       }
     );
 
-    channel.subscribe();
+    // 🎯 NEW: Listen for room_members inserts (direct membership)
+    channel.on(
+      "postgres_changes",
+      { 
+        event: "INSERT", 
+        schema: "public", 
+        table: "room_members",
+        filter: `user_id=eq.${userId}`
+      },
+      (payload) => {
+        console.log("🎯 Direct room_members INSERT detected, refreshing rooms");
+        setTimeout(() => refreshRooms(), 100);
+      }
+    );
+
+    channel.subscribe((status) => {
+      console.log("🔔 Real-time channel status:", status);
+    });
 
     return () => {
       supabase.removeChannel(channel);

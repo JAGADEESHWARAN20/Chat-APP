@@ -174,7 +174,7 @@ const RoomCard = memo(function RoomCard({
 --------------------------------------------------------- */
 export default function SearchComponent({ user }: any) {
   const router = useRouter();
-  const authUser = useUser(); // 🎯 GET AUTH USER
+  const authUser = useUser();
   
   const availableRooms = useAvailableRooms();
   const presence = useRoomPresence();
@@ -183,6 +183,64 @@ export default function SearchComponent({ user }: any) {
   // 🎯 USE THE REAL-TIME SYNC HOOK
   useRoomRealtimeSync(authUser?.user?.id || null);
 
+  // 🎯 ADD THIS NEW EFFECT FOR DIRECT REAL-TIME UPDATES
+  useEffect(() => {
+    if (!authUser?.user?.id) return;
+    
+    const supabase = getSupabaseBrowserClient();
+    
+    const directChannel = supabase.channel('search-direct-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'room_members',
+          filter: `user_id=eq.${authUser.user.id}`
+        },
+        (payload) => {
+          console.log('🎯 Direct room membership detected in SearchComponent');
+          fetchRooms({ force: true });
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public', 
+          table: 'notifications',
+          filter: `user_id=eq.${authUser.user.id}`
+        },
+        (payload) => {
+          if (payload.new.type === 'join_request_accepted') {
+            console.log('🎯 Join accepted notification in SearchComponent');
+            fetchRooms({ force: true });
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE', 
+          schema: 'public',
+          table: 'notifications', 
+          filter: `user_id=eq.${authUser.user.id}`
+        },
+        (payload) => {
+          console.log('🗑️ Notification deleted - might be join request acceptance');
+          // Refresh rooms in case this was an accept action
+          setTimeout(() => fetchRooms({ force: true }), 100);
+        }
+      )
+      .subscribe((status) => {
+        console.log('🔔 SearchComponent direct channel status:', status);
+      });
+
+    return () => {
+      supabase.removeChannel(directChannel);
+    };
+  }, [authUser?.user?.id, fetchRooms]);
+  
   const [query, setQuery] = useState("");
   const [activeTab, setActiveTab] = useState("rooms");
   const [users, setUsers] = useState<any[]>([]);

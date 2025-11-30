@@ -512,51 +512,46 @@ export default function Notifications({
   // ─────────────────────────────────────────────────────────────
   // Accept (fixed)
   // ─────────────────────────────────────────────────────────────
-  const handleAccept = useCallback(
-    async (id: string, roomId: string | null, type: string) => {
-      if (!userId || !roomId || loadingIds.has(id)) return;
+  // ─────────────────────────────────────────────────────────────
+// Accept (enhanced with immediate removal and better error handling)
+// ─────────────────────────────────────────────────────────────
+const handleAccept = useCallback(
+  async (id: string, roomId: string | null, type: string) => {
+    if (!userId || !roomId || loadingIds.has(id)) return;
 
-      addLoading(id);
-      removeNotification(id);
+    addLoading(id);
+    // 🎯 CRITICAL: Remove notification immediately from UI
+    removeNotification(id);
 
-      try {
-        const res = await fetch(`/api/notifications/${id}/accept`, {
-          method: "POST",
-        });
+    try {
+      const res = await fetch(`/api/notifications/${id}/accept`, {
+        method: "POST",
+      });
 
-        if (!res.ok) throw new Error(await res.text());
-
-        await markAsRead(id);
-        await fetchRooms();
-
-        const { data: room } = await supabase
-          .from("rooms")
-          .select("*")
-          .eq("id", roomId)
-          .single();
-
-        if (!room) {
-          toast.error("Room not found");
-          return;
-        }
-
-        await transformRoom(room, userId, supabase);
-        toast.success("Request accepted successfully!");
-      } catch (err: any) {
-        toast.error(err.message || "Failed to accept");
-      } finally {
-        removeLoading(id);
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(errorText || "Accept failed");
       }
-    },
-    [
-      userId,
-      loadingIds,
-      removeNotification,
-      markAsRead,
-      fetchRooms,
-      supabase,
-    ]
-  );
+
+      // 🎯 CRITICAL: Remove markAsRead call since notification is now DELETED
+      // await markAsRead(id); // ❌ REMOVE THIS LINE
+      
+      // 🎯 Force immediate rooms refresh
+      await fetchRooms();
+      
+      toast.success("Join request accepted! The user has been added to the room.");
+
+    } catch (err: any) {
+      console.error("Accept error:", err);
+      toast.error(err.message || "Failed to accept join request");
+      // 🎯 Re-fetch notifications to restore if there was an error
+      if (userId) fetchNotifications(userId);
+    } finally {
+      removeLoading(id);
+    }
+  },
+  [userId, loadingIds, removeNotification, fetchRooms, fetchNotifications]
+);
 
   // ─────────────────────────────────────────────────────────────
   // Reject
