@@ -3,35 +3,33 @@
 import { useState, useEffect } from "react";
 import { Bell } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+
 import Notifications from "./Notifications";
 import { useNotificationHandler } from "@/hooks/useNotificationHandler";
 import { useUser } from "@/lib/store/user";
-import { useNotification } from "@/lib/store/notifications";
+import { useNotifications } from "@/lib/store/notifications"; // ✅ correct import
 import { cn } from "@/lib/utils";
 
-/**
- * NotificationsWrapper
- * ----------------------------------------------------------
- * - Displays the bell icon for notifications.
- * - Syncs with Supabase user state.
- * - Fetches notifications when opened.
- * - Shows unread count badge and subtle animated glow.
- * - Fully theme-aware with --action-* color variables.
- */
 export default function NotificationsWrapper() {
   const [isOpen, setIsOpen] = useState(false);
   const { user: currentUser, authUser } = useUser();
-  const { unreadCount, fetchNotifications, hasError } = useNotification();
+
+  // ✅ NEW API FROM STORE
+  const {
+    unread,           // replaces unreadCount
+    fetch: fetchNotifications, // replaces fetchNotifications
+    hasError,
+  } = useNotifications();
+
   const userId = currentUser?.id || authUser?.id;
 
   useNotificationHandler();
 
-  /** 🔁 Fetch notifications when opened */
+  // 🔁 Fetch on open
   useEffect(() => {
     if (isOpen && userId) fetchNotifications(userId);
   }, [isOpen, userId, fetchNotifications]);
 
-  /** 🔔 Handle bell click */
   const handleClick = () => {
     if (!userId) {
       window.location.href = "/auth/signin";
@@ -42,12 +40,12 @@ export default function NotificationsWrapper() {
 
   return (
     <div className="relative">
-      {/* ======================================
-       * 🔔 Notification Trigger Button
-       * ====================================== */}
+      {/* ============================
+       🔔 Notification Trigger Button
+      ============================ */}
       <motion.button
         title="Notifications"
-        aria-label={`Notifications ${unreadCount > 0 ? `${unreadCount} unread` : ""}`}
+        aria-label={`Notifications ${unread > 0 ? `${unread} unread` : ""}`}
         onClick={handleClick}
         disabled={!userId}
         whileTap={{ scale: 1 }}
@@ -59,9 +57,9 @@ export default function NotificationsWrapper() {
           !userId && "opacity-50 cursor-not-allowed"
         )}
       >
-        {/* 🔴 Animated glow when unread */}
+        {/* 🔴 Glow animation */}
         <AnimatePresence>
-          {unreadCount > 0 && (
+          {unread > 0 && (
             <motion.div
               key="glow"
               className="absolute inset-0 rounded-full bg-[var(--action-active)]/20 blur-md"
@@ -76,16 +74,16 @@ export default function NotificationsWrapper() {
         {/* 🔔 Bell Icon */}
         <Bell
           className={cn(
-            "relative z-10 h-[2em] w-[2em] transition-colors   duration-200",
-            unreadCount > 0
+            "relative z-10 h-[2em] w-[2em] transition-colors duration-200",
+            unread > 0
               ? "stroke-[var(--action-active)] fill-[var(--action-active)]"
-              : "stroke-[var(--action-text)] group-hover:stroke-[var(--action-active)]"
+              : "stroke-[var(--action-text)]"
           )}
         />
 
-        {/* 🔴 Unread Badge */}
+        {/* Unread badge */}
         <AnimatePresence>
-          {unreadCount > 0 && userId && (
+          {unread > 0 && userId && (
             <motion.span
               key="badge"
               initial={{ opacity: 0, y: -5 }}
@@ -97,20 +95,20 @@ export default function NotificationsWrapper() {
                 "rounded-full bg-[var(--action-active)] text-white text-xs font-semibold shadow-md"
               )}
             >
-              {unreadCount > 99 ? "99+" : unreadCount}
+              {unread > 99 ? "99+" : unread}
             </motion.span>
           )}
         </AnimatePresence>
 
-        {/* ⚠️ Error Ping Indicator */}
+        {/* Ping indicator for errors */}
         {hasError && userId && (
-          <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-ping" />
+          <span className="absolute -top-1 -right-1 h-2 w-2 animate-ping rounded-full bg-red-500" />
         )}
       </motion.button>
 
-      {/* ======================================
-       * 📜 Notifications Dropdown Panel
-       * ====================================== */}
+      {/* ============================
+       📜 Notifications Drawer
+      ============================ */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
@@ -119,7 +117,7 @@ export default function NotificationsWrapper() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.25, ease: "easeInOut" }}
-            className="absolute right-0 mt-3 z-50 w-[22rem] sm:w-[24rem]"
+            className="absolute right-0 z-50 mt-3 w-[22rem] sm:w-[24rem]"
           >
             <Notifications isOpen={isOpen} onClose={() => setIsOpen(false)} />
           </motion.div>
