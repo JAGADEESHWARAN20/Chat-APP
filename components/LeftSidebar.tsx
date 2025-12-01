@@ -30,7 +30,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
 interface LeftSidebarProps {
@@ -67,7 +66,6 @@ const LeftSidebar = React.memo<LeftSidebarProps>(
     const [isCreating, setIsCreating] = useState(false);
 
     const debouncedRef = useRef<NodeJS.Timeout | null>(null);
-    const supabase = getSupabaseBrowserClient();
 
     // ------------------------------
     // Client-side only: Joined Rooms
@@ -196,40 +194,6 @@ const LeftSidebar = React.memo<LeftSidebarProps>(
       },
       [selectedRoom?.id, handleRoomClick]
     );
-
-    // ------------------------------
-    // Realtime Sync (NO DUPES)
-    // ------------------------------
-    useEffect(() => {
-      if (!authUser?.id) return;
-    
-      const channel = supabase.channel(`leftsidebar-${authUser.id}`);
-    
-      channel
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "room_participants" },
-          () => fetchRooms({ force: true })
-        )
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "notifications" },
-          (payload) => {
-            const rec = payload?.new as { type?: string };
-            if (rec.type === "join_request_accepted") {
-              toast.success("Join request accepted");
-              fetchRooms({ force: true });
-            }
-          }
-        );
-    
-      void channel.subscribe(); // <-- IMPORTANT FIX
-    
-      return () => {
-        supabase.removeChannel(channel);
-      };
-    }, [authUser?.id, supabase, fetchRooms]);
-    
 
     // ------------------------------
     // First load — fetch rooms once
