@@ -3,7 +3,7 @@
 import { useEffect, useRef, useMemo } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useUser } from "@/lib/store/user";
-import { useUnifiedRoomStore } from "@/lib/store/roomstore";
+import { useUnifiedRoomStore } from "@/lib/store/unused/roomstore";
 // import { useRoomStore } from "@/lib/store/RoomContext";
 // import { AuthApiError } from "@supabase/supabase-js";
 
@@ -35,7 +35,7 @@ export function useAuthSync() {
           err?.name === "AuthApiError" && err?.code === "refresh_token_not_found";
         if (isAuthError) {
           // Hard sign out to clear any stale client state
-          supabase.auth.signOut().catch(() => {});
+          supabase.auth.signOut().catch(() => { });
           setUser(null);
           setRoomUser(null);
         }

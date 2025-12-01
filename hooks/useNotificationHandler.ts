@@ -13,7 +13,7 @@ import { useUser } from "@/lib/store/user";
 import {
   useUnifiedRoomStore,
   type RoomWithMembership,
-} from "@/lib/store/roomstore";
+} from "@/lib/store/unused/roomstore";
 
 /* -------------------------------------------------------
    Fetch rooms from RPC
@@ -126,10 +126,9 @@ export function useNotificationHandler() {
 
         case "message":
           toast.info(
-            `New message from ${
-              notif.users?.username ||
-              notif.users?.display_name ||
-              "someone"
+            `New message from ${notif.users?.username ||
+            notif.users?.display_name ||
+            "someone"
             }`,
             { description: notif.message }
           );

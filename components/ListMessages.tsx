@@ -7,7 +7,7 @@ import { DeleteAlert, EditAlert } from "./MessasgeActions";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Database } from "@/lib/types/supabase";
 import { useUser } from "@/lib/store/user";
-import { useSelectedRoom } from "@/lib/store/roomstore";
+import { useSelectedRoom } from "@/lib/store/unused/roomstore";
 import TypingIndicator from "./TypingIndicator";
 import { Button } from "@/components/ui/button";
 import { Search, X } from "lucide-react";
@@ -21,7 +21,7 @@ interface ListMessagesProps {
   isSearching?: boolean;
   onSearchStateChange?: (searching: boolean) => void;
   onSearchTrigger?: () => void;
-   isSearchExpanded?: boolean;
+  isSearchExpanded?: boolean;
 }
 
 // Enhanced Search Engine with Character Sequence Matching
@@ -33,7 +33,7 @@ class MessageSearchEngine {
   indexMessage(message: Imessage) {
     this.messages.set(message.id, message);
     const words = this.tokenize(message.text);
-    
+
     // Index words for full word search
     for (const word of words) {
       if (!this.invertedIndex.has(word)) {
@@ -48,12 +48,12 @@ class MessageSearchEngine {
 
   private indexCharacterSequences(messageId: string, text: string) {
     const cleanText = text.toLowerCase();
-    
+
     // Index all possible character sequences (from 1 to full length)
     for (let start = 0; start < cleanText.length; start++) {
       for (let length = 1; length <= Math.min(10, cleanText.length - start); length++) {
         const sequence = cleanText.substring(start, start + length);
-        
+
         if (!this.characterIndex.has(sequence)) {
           this.characterIndex.set(sequence, new Set());
         }
@@ -64,7 +64,7 @@ class MessageSearchEngine {
 
   removeMessage(messageId: string) {
     this.messages.delete(messageId);
-    
+
     // Remove from word index
     for (const [word, messageIds] of this.invertedIndex.entries()) {
       messageIds.delete(messageId);
@@ -72,7 +72,7 @@ class MessageSearchEngine {
         this.invertedIndex.delete(word);
       }
     }
-    
+
     // Remove from character index
     for (const [sequence, messageIds] of this.characterIndex.entries()) {
       messageIds.delete(messageId);
@@ -87,10 +87,10 @@ class MessageSearchEngine {
     if (queryWords.length === 0) return [];
 
     const lowerQuery = query.toLowerCase();
-    
+
     // Use character sequence matching for better partial matching
     let results: Set<string> = new Set();
-    
+
     // Strategy 1: Character sequence matching (most important for partial matches)
     for (const [sequence, messageIds] of this.characterIndex.entries()) {
       if (lowerQuery.includes(sequence) || sequence.includes(lowerQuery)) {
@@ -144,7 +144,7 @@ class MessageSearchEngine {
     // Exact phrase match
     if (text.includes(lowerQuery)) {
       score += 1500;
-      
+
       // Position bonus - matches at start are better
       const position = text.indexOf(lowerQuery);
       if (position === 0) {
@@ -157,13 +157,13 @@ class MessageSearchEngine {
     // Word boundary matches
     const words = text.split(/\s+/);
     const queryWords = lowerQuery.split(/\s+/).filter(w => w.length > 0);
-    
+
     let allWordsFound = true;
     let wordBoundaryMatches = 0;
 
     queryWords.forEach(queryWord => {
       let wordFound = false;
-      
+
       words.forEach(word => {
         // Exact word match
         if (word === queryWord) {
@@ -249,24 +249,24 @@ class MessageSearchEngine {
   }
 }
 
-export default function ListMessages({ 
-  searchQuery = "", 
+export default function ListMessages({
+  searchQuery = "",
   onSearchStateChange,
   onSearchTrigger,
-  isSearchExpanded  
+  isSearchExpanded
 }: ListMessagesProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [userScrolled, setUserScrolled] = useState(false);
   const [notification, setNotification] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
-  
+
   const [currentNavigatedMessageId, setCurrentNavigatedMessageId] = useState<string | null>(null);
   const [searchResults, setSearchResults] = useState<Imessage[]>([]);
   const [showSearchInfo, setShowSearchInfo] = useState(false);
 
   const selectedRoom = useSelectedRoom();
   const user = useUser((state) => state.user);
-  
+
   const {
     messages,
     setMessages,
@@ -280,7 +280,7 @@ export default function ListMessages({
   const supabase = getSupabaseBrowserClient();
   const messagesLoadedRef = useRef<Set<string>>(new Set());
   const prevRoomIdRef = useRef<string | null>(null);
-  
+
   const searchEngineRef = useRef<MessageSearchEngine>(new MessageSearchEngine());
 
   const handleOnScroll = useCallback(() => {
@@ -306,9 +306,9 @@ export default function ListMessages({
   const scrollToMessage = useCallback((messageId: string, behavior: ScrollBehavior = 'smooth') => {
     const messageElement = document.getElementById(`msg-${messageId}`);
     if (messageElement && scrollRef.current) {
-      messageElement.scrollIntoView({ 
-        behavior, 
-        block: "center" 
+      messageElement.scrollIntoView({
+        behavior,
+        block: "center"
       });
     }
   }, []);
@@ -349,18 +349,18 @@ export default function ListMessages({
 
     onSearchStateChange?.(true);
     setShowSearchInfo(true);
-    
+
     // Immediate search for better responsiveness
     const searchTimeout = setTimeout(() => {
       try {
         const results = searchEngineRef.current.search(searchQuery);
         setSearchResults(results);
-        
+
         if (results.length > 0) {
           const bestMatch = results[0];
           setHighlightedMessageId(bestMatch.id);
           setCurrentNavigatedMessageId(bestMatch.id);
-          
+
           // Auto-scroll to the first result with slight delay
           setTimeout(() => {
             scrollToMessage(bestMatch.id, 'smooth');
@@ -392,7 +392,7 @@ export default function ListMessages({
   // Load initial messages
   useEffect(() => {
     const currentRoomId = selectedRoom?.id;
-    
+
     if (!currentRoomId) {
       setMessages([]);
       messagesLoadedRef.current.clear();
@@ -400,21 +400,21 @@ export default function ListMessages({
       searchEngineRef.current.clear();
       return;
     }
-  
+
     const roomChanged = currentRoomId !== prevRoomIdRef.current;
-  
+
     if (roomChanged) {
       setMessages([]);
       messagesLoadedRef.current.delete(prevRoomIdRef.current || "");
       searchEngineRef.current.clear();
       handleClearSearch();
     }
-  
+
     const alreadyLoaded = messagesLoadedRef.current.has(currentRoomId);
     if (alreadyLoaded || isLoading) return;
-  
+
     prevRoomIdRef.current = currentRoomId;
-  
+
     const loadInitialMessages = async () => {
       setIsLoading(true);
       try {
@@ -431,7 +431,7 @@ export default function ListMessages({
         setIsLoading(false);
       }
     };
-  
+
     loadInitialMessages();
   }, [selectedRoom?.id, setMessages, isLoading, handleClearSearch]);
 
@@ -493,7 +493,7 @@ export default function ListMessages({
               if (scrollRef.current) {
                 const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
                 const isAtBottom = scrollHeight - scrollTop <= clientHeight + 100;
-                
+
                 if (!isAtBottom) {
                   setNotification(prev => prev + 1);
                 }
@@ -578,7 +578,7 @@ export default function ListMessages({
   const displayMessages = useMemo(() => {
     const currentRoomId = selectedRoom?.id;
     if (!messages.length || !currentRoomId) return [];
-    
+
     // Get base room messages
     const roomMessages = messages
       .filter(msg => msg.room_id === currentRoomId)
@@ -618,11 +618,11 @@ export default function ListMessages({
 
   if (!selectedRoom?.id) {
     return (
-      <div 
+      <div
         className="flex items-center justify-center h-full overflow-hidden"
-        style={{ 
+        style={{
           color: 'hsl(var(--no-messages-color))',
-          fontSize: 'var(--no-messages-size)' 
+          fontSize: 'var(--no-messages-size)'
         }}
       >
         <p>Select a room to start chatting</p>
@@ -632,24 +632,24 @@ export default function ListMessages({
 
   return (
     <div className="h-[75dvh] w-full flex flex-col overflow-hidden relative">
-     
-{!isSearchExpanded && (
-  <Button
-    variant="ghost"
-    size="icon"
-    onClick={handleSearchTrigger}
-    className={cn(
-      "absolute top-4 right-4 z-30 w-[2.5em] h-[2.5em] flex items-center justify-center rounded-full",
-      "bg-[hsl(var(--background))]/60 backdrop-blur-md shadow-sm",
-      "transition-all duration-300 ease-in-out group hover:bg-[hsl(var(--action-active))]/15 active:scale-95",
-      "focus-visible:ring-[hsl(var(--action-ring))]/50 focus-visible:ring-2",
-      "text-[hsl(var(--foreground))]"
-    )}
-    title="Search Messages"
-  >
-    <Search className="h-5 w-5 transition-all duration-300 stroke-[hsl(var(--muted-foreground))]" />
-  </Button>
-)}
+
+      {!isSearchExpanded && (
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleSearchTrigger}
+          className={cn(
+            "absolute top-4 right-4 z-30 w-[2.5em] h-[2.5em] flex items-center justify-center rounded-full",
+            "bg-[hsl(var(--background))]/60 backdrop-blur-md shadow-sm",
+            "transition-all duration-300 ease-in-out group hover:bg-[hsl(var(--action-active))]/15 active:scale-95",
+            "focus-visible:ring-[hsl(var(--action-ring))]/50 focus-visible:ring-2",
+            "text-[hsl(var(--foreground))]"
+          )}
+          title="Search Messages"
+        >
+          <Search className="h-5 w-5 transition-all duration-300 stroke-[hsl(var(--muted-foreground))]" />
+        </Button>
+      )}
       {/* Search Info Header */}
       {showSearchInfo && searchQuery && (
         <div className="px-4 py-3 border-b bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 transition-all duration-300">
@@ -688,9 +688,9 @@ export default function ListMessages({
             </div>
           ) : displayMessages.length > 0 ? (
             displayMessages.map((message) => (
-              <Message 
-                key={message.id} 
-                message={message} 
+              <Message
+                key={message.id}
+                message={message}
                 isNavigated={currentNavigatedMessageId === message.id}
                 searchQuery={searchQuery} // Always pass searchQuery for highlighting
               />

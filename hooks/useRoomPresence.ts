@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { useUnifiedRoomStore } from "@/lib/store/roomstore";
+import { useUnifiedRoomStore } from "@/lib/store/unused/roomstore";
 
 export function useRoomPresenceSync(roomId: string | null, userId: string | null) {
   const supabase = getSupabaseBrowserClient();

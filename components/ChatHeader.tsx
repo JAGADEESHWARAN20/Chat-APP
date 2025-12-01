@@ -12,7 +12,7 @@ import { RoomActiveUsers } from "@/components/reusable/RoomActiveUsers";
 import { RoomAssistantDialog } from "./AIchatDialog";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
-import { useAvailableRooms, useRoomActions, useSelectedRoom } from "@/lib/store/roomstore";
+import { useAvailableRooms, useRoomActions, useSelectedRoom } from "@/lib/store/unused/roomstore";
 
 export default function ChatHeader({ user }: { user: SupabaseUser | undefined }) {
   const [isSwitchRoomPopoverOpen, setIsSwitchRoomPopoverOpen] = useState(false);
@@ -90,7 +90,7 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
                       onClick={() => handleRoomSwitch(room.id)}
                     >
                       <div className="flex flex-col truncate">
-                      <span
+                        <span
                           className={cn(
                             "font-bold text-sm truncate",
                             isActive ? "text-room-active" : "text-room",

@@ -42,7 +42,7 @@ import {
   useNotificationSubscription,
 } from "@/lib/store/notifications";
 
-import { useUnifiedRoomStore } from "@/lib/store/roomstore";
+import { useRoomActions, useUnifiedRoomStore } from "@/lib/store/unused/roomstore";
 import { useAuthSync } from "@/hooks/useAuthSync";
 import { useConnectionManager } from "@/hooks/useConnectionManager";
 
@@ -183,9 +183,8 @@ export const NotificationItem = memo(function NotificationItem({
             role="button"
             tabIndex={0}
             aria-expanded={open}
-            aria-label={`Notification: ${text}. ${
-              open ? "Expanded" : "Collapsed"
-            }. Click to ${open ? "collapse" : "expand"}`}
+            aria-label={`Notification: ${text}. ${open ? "Expanded" : "Collapsed"
+              }. Click to ${open ? "collapse" : "expand"}`}
             onKeyDown={handleKeyDown}
             className={`mx-2 my-1 flex min-h-[80px] cursor-pointer items-start gap-3 rounded-lg p-4 transition-all md:min-h-[70px]
               bg-gradient-to-r from-background/80 to-muted/60
@@ -349,9 +348,8 @@ function ConnectionStatus({
       aria-live="polite"
     >
       <Icon
-        className={`h-4 w-4 ${color} ${
-          connectionState === "connecting" ? "animate-spin" : ""
-        }`}
+        className={`h-4 w-4 ${color} ${connectionState === "connecting" ? "animate-spin" : ""
+          }`}
       />
       <span>{text}</span>
       {connectionState === "disconnected" && (
@@ -446,12 +444,22 @@ export default function Notifications({
   /* -------------------------------------------------------------------
      Accept
      ------------------------------------------------------------------- */
+  // In Notifications.tsx - update handleAccept function
   const handleAccept = useCallback(
     async (id: string, roomId: string | null, type: string) => {
       if (!userId || !roomId || loadingIds.has(id)) return;
 
       addLoading(id);
-      remove(id); // optimistic remove
+
+      // OPTIMISTIC UPDATE: Immediately update search component
+      // This ensures UI updates before the real-time event arrives
+      const { updateRoomMembership } = useRoomActions();
+      updateRoomMembership(roomId, {
+        participationStatus: "accepted",
+        isMember: true,
+      });
+
+      remove(id); // optimistic remove from notifications
 
       try {
         const res = await fetch(`/api/notifications/${id}/accept`, {
@@ -463,7 +471,9 @@ export default function Notifications({
           throw new Error(errorText || "Accept failed");
         }
 
+        // Force refresh rooms to get updated counts
         await fetchRooms();
+
         toast.success(
           type === "join_request"
             ? "Join request accepted! The user has been added to the room."
@@ -472,6 +482,13 @@ export default function Notifications({
       } catch (err: any) {
         console.error("Accept error:", err);
         toast.error(err.message || "Failed to accept");
+
+        // Rollback optimistic update on error
+        updateRoomMembership(roomId, {
+          participationStatus: "pending", // Rollback to pending
+          isMember: false,
+        });
+
         if (userId) {
           // re-sync from backend
           fetchNotifications(userId);
@@ -482,7 +499,6 @@ export default function Notifications({
     },
     [userId, loadingIds, remove, fetchRooms, fetchNotifications]
   );
-
   /* -------------------------------------------------------------------
      Reject
      ------------------------------------------------------------------- */

@@ -1,21 +1,21 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { create } from "zustand";
 import { devtools, subscribeWithSelector } from "zustand/middleware";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { toast } from "@/components/ui/sonner";
 import type { Database } from "@/lib/types/supabase";
 
-let realtimeInitialized = false;
-
 /* -------------------------------------------------------
-   TYPES
+   TYPES - Using your Database types
 ------------------------------------------------------- */
 
-type IRoomRow = Database["public"]["Tables"]["rooms"]["Row"];
+type RoomRow = Database["public"]["Tables"]["rooms"]["Row"];
+type RoomMembersRow = Database["public"]["Tables"]["room_members"]["Row"];
+type RoomParticipantsRow = Database["public"]["Tables"]["room_participants"]["Row"];
 
-export type RoomWithMembership = IRoomRow & {
+export type RoomWithMembership = RoomRow & {
   created_by?: string | null;
   isMember: boolean;
   participationStatus: "pending" | "accepted" | null;
@@ -326,7 +326,7 @@ export const useUnifiedRoomStore = create<RoomState>()(
           get().updateRoomMembership(roomId, {
             isMember: false,
             participationStatus: null,
-            memberCount: Math.max(0, room.memberCount - 1),
+            memberCount: Math.max(0, (room.memberCount || 0) - 1),
           });
           if (get().selectedRoomId === roomId) {
             set({ selectedRoomId: null });
@@ -459,88 +459,225 @@ export const useRoomActions = () =>
   }));
 
 /* -------------------------------------------------------
-   REALTIME SYNC HOOK FOR SEARCH COMPONENT
+   UNIFIED REALTIME SYNC HOOK
 ------------------------------------------------------- */
+
+// Track subscriptions per user to prevent duplicates
+const userSubscriptions = new Map<string, boolean>();
 
 export const useRoomRealtimeSync = (userId: string | null) => {
   const { forceRefreshRooms, updateRoomMembership } = useRoomActions();
   const supabase = getSupabaseBrowserClient();
+  const refreshTimeoutRef = useRef<NodeJS.Timeout>();
+  const pendingUpdatesRef = useRef<Map<string, { roomId: string; status: string }>>(new Map());
 
   useEffect(() => {
     if (!userId) return;
 
-    // Prevent duplicate listeners
-    if (realtimeInitialized) return;
-    realtimeInitialized = true;
+    // Prevent duplicate listeners for same user
+    if (userSubscriptions.has(userId)) {
+      console.log(`📡 Realtime already active for user ${userId}`);
+      return;
+    }
 
-    const channel = supabase.channel(`unified-realtime-${userId}`);
+    userSubscriptions.set(userId, true);
+    console.log(`📡 Initializing unified realtime for user ${userId}`);
 
-    const refresh = () => forceRefreshRooms();
+    const channel = supabase.channel(`room-realtime-${userId}`);
+
+    // Unified function to update room status
+    const updateRoomStatus = (roomId: string, status: "pending" | "accepted" | null) => {
+      const isMember = status === "accepted";
+      
+      updateRoomMembership(roomId, {
+        participationStatus: status,
+        isMember: isMember,
+      });
+      
+      console.log(`🔄 Updated room ${roomId} status to ${status}`);
+    };
+
+    // Debounced refresh
+    const debouncedRefresh = () => {
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current);
+      }
+      refreshTimeoutRef.current = setTimeout(() => {
+        console.log("🔄 Triggering debounced room refresh");
+        forceRefreshRooms();
+      }, 500);
+    };
 
     /* ---------------------------------------------------------
-       1) MEMBERSHIP + PARTICIPANTS
+       CASE 1: User clicks JOIN button (private room → pending)
     --------------------------------------------------------- */
     channel.on(
       "postgres_changes",
-      { event: "*", schema: "public", table: "room_members", filter: `user_id=eq.${userId}` },
-      refresh
-    );
-
-    channel.on(
-      "postgres_changes",
       {
-        event: "*",
+        event: "INSERT",
         schema: "public",
         table: "room_participants",
         filter: `user_id=eq.${userId}`,
       },
       (payload) => {
-        const newRow = payload.new as { status?: string } | null;
-    
-        if (newRow?.status === "accepted") {
-          refresh();
+        const newRow = payload.new as RoomParticipantsRow;
+        
+        if (newRow.status === "pending" && newRow.room_id) {
+          console.log("🔄 JOIN BUTTON: User pending in room_participants", payload);
+          
+          updateRoomStatus(newRow.room_id, "pending");
+          debouncedRefresh();
         }
       }
     );
-    
 
     /* ---------------------------------------------------------
-       2) NOTIFICATIONS
+       CASE 2: Owner ACCEPTS join request (pending → accepted)
     --------------------------------------------------------- */
     channel.on(
       "postgres_changes",
-      { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` },
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: "room_participants",
+        filter: `user_id=eq.${userId}`,
+      },
       (payload) => {
-        if (payload.new?.type === "join_request_accepted") {
-          refresh();
+        const newRow = payload.new as RoomParticipantsRow;
+        const oldRow = payload.old as RoomParticipantsRow;
+        
+        if (newRow.status === "accepted" && newRow.room_id && oldRow?.status === "pending") {
+          console.log("✅ OWNER ACCEPTED: room_participants pending → accepted", payload);
+          
+          updateRoomStatus(newRow.room_id, "accepted");
+          debouncedRefresh();
+        }
+      }
+    );
+
+    /* ---------------------------------------------------------
+       CASE 3: room_members gets INSERTED (after acceptance)
+    --------------------------------------------------------- */
+    channel.on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "room_members",
+        filter: `user_id=eq.${userId}`,
+      },
+      (payload) => {
+        const newRow = payload.new as RoomMembersRow;
+        
+        if (newRow.status === "accepted" && newRow.room_id) {
+          console.log("🎯 ROOM_MEMBERS INSERT: User accepted into room", payload);
+          
+          updateRoomStatus(newRow.room_id, "accepted");
+          debouncedRefresh();
+        }
+      }
+    );
+
+    /* ---------------------------------------------------------
+       CASE 4: Notification arrives (join_request_accepted)
+    --------------------------------------------------------- */
+    channel.on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "notifications",
+        filter: `user_id=eq.${userId} AND type=eq.join_request_accepted`,
+      },
+      (payload) => {
+        const notification = payload.new as Database["public"]["Tables"]["notifications"]["Row"];
+        
+        if (notification.room_id) {
+          console.log("🔔 NOTIFICATION: join_request_accepted received", payload);
+          
+          const updateKey = `${notification.room_id}-${userId}`;
+          if (pendingUpdatesRef.current.has(updateKey)) {
+            console.log("⏭️ Skipping duplicate update");
+            return;
+          }
+          
+          pendingUpdatesRef.current.set(updateKey, {
+            roomId: notification.room_id,
+            status: "accepted"
+          });
+          
+          updateRoomStatus(notification.room_id, "accepted");
+          
+          setTimeout(() => {
+            pendingUpdatesRef.current.delete(updateKey);
+          }, 2000);
+          
+          debouncedRefresh();
+        }
+      }
+    );
+
+    /* ---------------------------------------------------------
+       CASE 5: User leaves room
+    --------------------------------------------------------- */
+    channel.on(
+      "postgres_changes",
+      {
+        event: "DELETE",
+        schema: "public",
+        table: "room_members",
+        filter: `user_id=eq.${userId}`,
+      },
+      (payload) => {
+        const oldRow = payload.old as RoomMembersRow;
+        
+        if (oldRow?.room_id) {
+          console.log("🗑️ USER LEFT: room_members deleted", payload);
+          
+          updateRoomStatus(oldRow.room_id, null);
+          debouncedRefresh();
         }
       }
     );
 
     channel.on(
       "postgres_changes",
-      { event: "DELETE", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` },
-      () => refresh()
+      {
+        event: "DELETE",
+        schema: "public",
+        table: "room_participants",
+        filter: `user_id=eq.${userId}`,
+      },
+      (payload) => {
+        const oldRow = payload.old as RoomParticipantsRow;
+        
+        if (oldRow?.room_id) {
+          console.log("🗑️ USER LEFT: room_participants deleted", payload);
+          
+          updateRoomStatus(oldRow.room_id, null);
+          debouncedRefresh();
+        }
+      }
     );
 
     /* ---------------------------------------------------------
-       3) MESSAGES — LIVE unread + latestMessage update
+       CASE 6: Messages for latest message updates
     --------------------------------------------------------- */
     channel.on(
       "postgres_changes",
       { event: "INSERT", schema: "public", table: "messages" },
       (payload) => {
-        const msg = payload.new;
+        const msg = payload.new as Database["public"]["Tables"]["messages"]["Row"];
         const roomId = msg.room_id;
         if (!roomId) return;
 
-        // update latest message
+        // Update latest message
         updateRoomMembership(roomId, {
-          latestMessage: msg.content ?? msg.text ?? null,
+          latestMessage: msg.text ?? null,
           latest_message_created_at: msg.created_at,
         });
 
-        // increment unreadCount ONLY if you are not inside that room
+        // Increment unreadCount ONLY if you are not inside that room
         const selectedRoomId = useUnifiedRoomStore.getState().selectedRoomId;
 
         if (selectedRoomId !== roomId) {
@@ -555,16 +692,29 @@ export const useRoomRealtimeSync = (userId: string | null) => {
     );
 
     /* ---------------------------------------------------------
-       SUBSCRIBE
+       SUBSCRIBE & CLEANUP
     --------------------------------------------------------- */
-    channel.subscribe();
+    channel.subscribe((status) => {
+      console.log(`📡 Unified realtime status for ${userId}:`, status);
+      
+      if (status === "SUBSCRIBED") {
+        console.log("✅ Unified realtime connected successfully");
+      }
+    });
 
     return () => {
+      console.log(`🧹 Cleaning up unified realtime for user ${userId}`);
+      
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current);
+      }
+      
+      pendingUpdatesRef.current.clear();
       supabase.removeChannel(channel);
+      userSubscriptions.delete(userId);
     };
-  }, [userId]);
+  }, [userId, forceRefreshRooms, updateRoomMembership]);
 };
-
 
 /* -------------------------------------------------------
    HELPERS: FETCH USERS FOR SEARCH
@@ -576,4 +726,61 @@ export const fetchAllUsers = async () => {
     .from("profiles")
     .select("id, username, display_name, avatar_url, created_at");
   return data || [];
+};
+
+/* -------------------------------------------------------
+   ENHANCED DEBUG HELPER
+------------------------------------------------------- */
+export const useDebugRoomSubscription = (userId: string | null) => {
+  useEffect(() => {
+    if (!userId) return;
+    
+    console.log("🔍 DEBUG: Setting up enhanced subscription check");
+    
+    const supabase = getSupabaseBrowserClient();
+    
+    const testChannel = supabase.channel(`debug-${userId}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'room_participants',
+        filter: `user_id=eq.${userId}`,
+      }, (payload) => {
+        console.log("🔍 DEBUG: room_participants INSERT:", payload.new);
+      })
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'room_participants',
+        filter: `user_id=eq.${userId}`,
+      }, (payload) => {
+        console.log("🔍 DEBUG: room_participants UPDATE:", {
+          old: payload.old,
+          new: payload.new
+        });
+      })
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'room_members',
+        filter: `user_id=eq.${userId}`,
+      }, (payload) => {
+        console.log("🔍 DEBUG: room_members INSERT:", payload.new);
+      })
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'notifications',
+        filter: `user_id=eq.${userId} AND type=eq.join_request_accepted`,
+      }, (payload) => {
+        console.log("🔍 DEBUG: join_request_accepted notification:", payload.new);
+      })
+      .subscribe((status) => {
+        console.log("🔍 DEBUG: Subscription status:", status);
+      });
+    
+    return () => {
+      supabase.removeChannel(testChannel);
+    };
+  }, [userId]);
 };

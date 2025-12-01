@@ -11,7 +11,7 @@ import { v4 as uuidv4 } from "uuid";
 import { Imessage } from "@/lib/store/messages";
 import { Send, Loader2 } from "lucide-react";
 import { useTypingStatus } from "@/hooks/useTypingStatus";
-import { useRoomActions, useSelectedRoom } from "@/lib/store/roomstore";
+import { useRoomActions, useSelectedRoom } from "@/lib/store/unused/roomstore";
 
 export default function ChatInput() {
   const [text, setText] = useState("");
@@ -19,7 +19,7 @@ export default function ChatInput() {
   const inputRef = useRef<HTMLInputElement>(null);
   const { addMessage, setOptimisticIds, optimisticDeleteMessage } = useMessage();
 
-  
+
   // ✅ FIXED: Use Zustand selectors
   const selectedRoom = useSelectedRoom();
   const { sendMessage } = useRoomActions();
@@ -36,7 +36,7 @@ export default function ChatInput() {
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const newText = e.target.value;
     setText(newText);
-    
+
     // Trigger typing indicator when text is not empty
     if (newText.trim().length > 0 && hasActiveChat) {
       handleTyping();
@@ -81,13 +81,13 @@ export default function ChatInput() {
         updated_at: null,
         bio: null,
       },
-      
+
     };
 
     setOptimisticIds(optimisticId);
     addMessage(optimisticMessage);
     setText("");
-    
+
     try {
       // ✅ FIXED: Use the room store's sendMessage action
       const success = await sendMessage(selectedRoom.id, text.trim());
@@ -144,8 +144,8 @@ export default function ChatInput() {
         className="gap-2 h-[44px] px-4"
         size="sm"
       >
-        
-        {isSending ? <Loader2 className="h-4 w-4 animate-spin" />: <Send className="w-4 h-4" />}
+
+        {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="w-4 h-4" />}
       </Button>
     </div>
   );

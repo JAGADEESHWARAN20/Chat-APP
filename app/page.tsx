@@ -2,7 +2,7 @@
 
 import UnifiedHome from "@/components/HomePage";
 import { PresenceConnector } from "@/components/PresenceConnector";
-import { useUnifiedRoomStore } from "@/lib/store/roomstore";
+import { useUnifiedRoomStore } from "@/lib/store/unused/roomstore";
 
 export default function Page() {
   const selectedRoomId = useUnifiedRoomStore((s) => s.selectedRoomId);
@@ -11,7 +11,7 @@ export default function Page() {
   return (
     <>
       {/* 🔥 Runs presence whenever roomId/userId exist */}
-      <PresenceConnector 
+      <PresenceConnector
         roomId={selectedRoomId ?? null}
         userId={currentUser?.id ?? null}
       />

@@ -52,7 +52,7 @@ import { cn } from "@/lib/utils";
 import { PairedMessageRenderer } from "./RoomAssistantParts/PairedMessageRenderer";
 import { MessageSkeleton } from "./RoomAssistantParts/MessageSkeleton";
 import { MODELS } from "./RoomAssistantParts/constants";
-import { useUnifiedRoomStore } from "@/lib/store/roomstore";
+import { useUnifiedRoomStore } from "@/lib/store/unused/roomstore";
 
 interface RoomAssistantProps {
   roomId: string;
@@ -97,7 +97,7 @@ function RoomAssistantComponent(props: RoomAssistantProps) {
     roomId,
     roomName,
     className,
-    
+
     isExpanded: externalExpand,
     onToggleExpand,
     messages,
@@ -121,7 +121,7 @@ function RoomAssistantComponent(props: RoomAssistantProps) {
 
   const isExpanded = externalExpand ?? expandedInput;
 
-  
+
 
   /* ------------------ Auto Scroll ------------------ */
   useEffect(() => {
@@ -152,16 +152,16 @@ function RoomAssistantComponent(props: RoomAssistantProps) {
       const res = await fetch(`/api/ai/summarize`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          prompt, 
-          roomId, 
+        body: JSON.stringify({
+          prompt,
+          roomId,
           model,
-          userId: user?.id 
+          userId: user?.id
         }),
       });
 
       const data: SummarizeResponse = await res.json();
-      
+
       if (!res.ok) {
         throw new Error(data.error || "AI request failed");
       }
@@ -182,7 +182,7 @@ function RoomAssistantComponent(props: RoomAssistantProps) {
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : "An error occurred";
       toast.error(errorMessage);
-      
+
       // Remove the user message if AI failed
       startTransition(() => setMessages((prev) => prev.filter(m => m.id !== userMsg.id)));
     } finally {
@@ -198,7 +198,7 @@ function RoomAssistantComponent(props: RoomAssistantProps) {
     }
   };
 
- 
+
 
   return (
     <div className={cn("relative w-full h-full ", className)}>
@@ -218,10 +218,10 @@ function RoomAssistantComponent(props: RoomAssistantProps) {
           )}
         >
           <div className="w-full flex items-center justify-between gap-3">
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              onClick={onToggleExpand} 
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onToggleExpand}
               className="rounded-full"
             >
               {isExpanded ? (
@@ -230,7 +230,7 @@ function RoomAssistantComponent(props: RoomAssistantProps) {
                 <Maximize2 className="h-4 w-4 text-foreground/80" />
               )}
             </Button>
-            
+
             <motion.div
               className="flex items-center gap-2"
               initial={{ opacity: 0, y: -8 }}
@@ -269,16 +269,16 @@ function RoomAssistantComponent(props: RoomAssistantProps) {
               </PopoverTrigger>
 
               <PopoverContent
-              side="left"
+                side="left"
                 className={cn(
                   "w-52 mt-[6em] shadow-md rounded-xl",
                   "bg-[hsl(var(--popover))] border border-border/30"
                 )}
               >
                 <div className="space-y-2 text-xs">
-                  
 
-                
+
+
 
                   <Button
                     variant="ghost"
@@ -323,12 +323,12 @@ function RoomAssistantComponent(props: RoomAssistantProps) {
           )}
         >
           <AnimatePresence mode="popLayout">
-          {loadingHistory ? (
-  <div className="w-full h-full flex flex-col gap-2 justify-center px-6">
-    <MessageSkeleton />
-    <MessageSkeleton />
-  </div>
-) : messages.length > 0 ? (
+            {loadingHistory ? (
+              <div className="w-full h-full flex flex-col gap-2 justify-center px-6">
+                <MessageSkeleton />
+                <MessageSkeleton />
+              </div>
+            ) : messages.length > 0 ? (
               messages.map((msg, i) => {
                 if (msg.role !== "user") return null;
                 const next = messages[i + 1];

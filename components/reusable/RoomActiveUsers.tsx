@@ -1,6 +1,6 @@
 "use client";
 
-import { useUnifiedRoomStore, useRoomPresence } from "@/lib/store/roomstore";
+import { useUnifiedRoomStore, useRoomPresence } from "@/lib/store/unused/roomstore";
 import { Users } from "lucide-react";
 import React from "react";
 
@@ -10,7 +10,7 @@ interface RoomActiveUsersProps {
   compact?: boolean;
 }
 
-export function RoomActiveUsers({ 
+export function RoomActiveUsers({
   roomId,
   showZero = false,
   compact = false

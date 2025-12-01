@@ -21,14 +21,13 @@ import {
   useRoomPresence,
   fetchAllUsers,
   useRoomRealtimeSync,
-} from "@/lib/store/roomstore";
+  useDebugRoomSubscription,
+} from "@/lib/store/unused/roomstore";
 
 import { useDebounce } from "use-debounce";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useUser } from "@/lib/store/user";
 
 import { Users, Lock, Search } from "lucide-react";
-import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 
 /* ---------------------------------------------------------
    UTIL: highlight search text
@@ -84,8 +83,8 @@ const UserCard = memo(function UserCard({
         </div>
 
         <div className="mt-3">
-          <Button 
-            size="sm" 
+          <Button
+            size="sm"
             onClick={() => onOpenDM(user.id)}
             className="w-full hover:bg-primary/90"
           >
@@ -133,7 +132,9 @@ const RoomCard = memo(function RoomCard({
       <div className="p-4 bg-gradient-to-br from-indigo-600/20 to-indigo-800/40">
         <p className="font-semibold truncate flex items-center gap-2 text-sm sm:text-base">
           #{highlight(room.name, query)}
-          {room.is_private && <Lock className="h-4 w-4 opacity-50 flex-shrink-0" />}
+          {room.is_private && (
+            <Lock className="h-4 w-4 opacity-50 flex-shrink-0" />
+          )}
         </p>
       </div>
 
@@ -167,8 +168,8 @@ const RoomCard = memo(function RoomCard({
         <div className="mt-3 flex flex-col gap-2">
           {isMember ? (
             <>
-              <Button 
-                size="sm" 
+              <Button
+                size="sm"
                 onClick={() => onOpen(room.id)}
                 className="hover:bg-primary/90"
               >
@@ -184,9 +185,9 @@ const RoomCard = memo(function RoomCard({
               </Button>
             </>
           ) : (
-            <Button 
-              size="sm" 
-              disabled={isPending} 
+            <Button
+              size="sm"
+              disabled={isPending}
               onClick={() => onJoin(room.id)}
               className="hover:bg-primary/90"
             >
@@ -205,71 +206,15 @@ const RoomCard = memo(function RoomCard({
 export default function SearchComponent() {
   const router = useRouter();
   const authUser = useUser();
-  
+
   const availableRooms = useAvailableRooms();
   const presence = useRoomPresence();
-  const { joinRoom, leaveRoom, updateRoomMembership, forceRefreshRooms } = useRoomActions();
+  const { joinRoom, leaveRoom, updateRoomMembership } = useRoomActions();
 
-  // 🎯 USE THE ENHANCED REAL-TIME SYNC HOOK
+  // 🎯 Centralized realtime: membership + notifications + messages
   useRoomRealtimeSync(authUser?.user?.id || null);
-
-  // 🎯 AGGRESSIVE REAL-TIME LISTENER FOR INSTANT UPDATES
-  useEffect(() => {
-    if (!authUser?.user?.id) return;
-    
-    const supabase = getSupabaseBrowserClient();
-    
-    const directChannel = supabase.channel('search-aggressive-updates')
-      .on(
-        'postgres_changes' as any,
-        {
-          event: '*',
-          schema: 'public',
-          table: 'room_members',
-          filter: `user_id=eq.${authUser.user.id}`
-        },
-        (payload: RealtimePostgresChangesPayload<any>) => {
-          console.log('🎯 Room membership change in SearchComponent:', payload.eventType);
-          forceRefreshRooms();
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "notifications",
-          filter: `user_id=eq.${authUser.user.id}`,
-        },
-        () => {
-          forceRefreshRooms();
-        }
-      )
-      
-      .on(
-        'postgres_changes' as any,
-        {
-          event: '*',
-          schema: 'public',
-          table: 'room_participants',
-          filter: `user_id=eq.${authUser.user.id}`
-        },
-        (payload: RealtimePostgresChangesPayload<any>) => {
-          console.log('👥 Room participant change in SearchComponent:', payload.eventType);
-          if (payload.new?.status === 'accepted') {
-            forceRefreshRooms();
-          }
-        }
-      )
-      .subscribe((status) => {
-        console.log('🔔 SearchComponent aggressive channel status:', status);
-      });
-
-    return () => {
-      supabase.removeChannel(directChannel);
-    };
-  }, [authUser?.user?.id, forceRefreshRooms]);
-  
+  // Add this line temporarily for debugging
+  useDebugRoomSubscription(authUser?.user?.id || null);
   const [query, setQuery] = useState("");
   const [activeTab, setActiveTab] = useState("rooms");
   const [users, setUsers] = useState<any[]>([]);
@@ -316,7 +261,10 @@ export default function SearchComponent() {
 
   const handleLeave = useCallback(
     async (roomId: string) => {
-      updateRoomMembership(roomId, { isMember: false, participationStatus: null });
+      updateRoomMembership(roomId, {
+        isMember: false,
+        participationStatus: null,
+      });
       await leaveRoom(roomId);
     },
     [leaveRoom, updateRoomMembership]
@@ -350,10 +298,18 @@ export default function SearchComponent() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 sm:h-5 sm:w-5 opacity-50" />
           </div>
 
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full sm:w-auto">
+          <Tabs
+            value={activeTab}
+            onValueChange={setActiveTab}
+            className="w-full sm:w-auto"
+          >
             <TabsList className="grid w-full grid-cols-2 h-10 sm:h-12">
-              <TabsTrigger value="rooms" className="text-xs sm:text-sm">Rooms</TabsTrigger>
-              <TabsTrigger value="users" className="text-xs sm:text-sm">Users</TabsTrigger>
+              <TabsTrigger value="rooms" className="text-xs sm:text-sm">
+                Rooms
+              </TabsTrigger>
+              <TabsTrigger value="users" className="text-xs sm:text-sm">
+                Users
+              </TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
@@ -387,7 +343,9 @@ export default function SearchComponent() {
                   {debounced ? "No rooms found" : "No rooms available"}
                 </h3>
                 <p className="text-sm text-muted-foreground">
-                  {debounced ? "Try adjusting your search" : "Join some rooms to get started"}
+                  {debounced
+                    ? "Try adjusting your search"
+                    : "Join some rooms to get started"}
                 </p>
               </div>
             )}
@@ -417,7 +375,9 @@ export default function SearchComponent() {
                   {debounced ? "No users found" : "No users available"}
                 </h3>
                 <p className="text-sm text-muted-foreground">
-                  {debounced ? "Try adjusting your search" : "Users will appear here"}
+                  {debounced
+                    ? "Try adjusting your search"
+                    : "Users will appear here"}
                 </p>
               </div>
             )}

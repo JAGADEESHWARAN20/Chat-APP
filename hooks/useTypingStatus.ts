@@ -2,10 +2,10 @@
 import { useEffect, useCallback, useRef } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import type { Database } from "@/lib/types/supabase";
-import { useRoomActions, useSelectedRoom, useTypingUsers, useTypingDisplayText } from "@/lib/store/roomstore";
+import { useRoomActions, useSelectedRoom, useTypingUsers, useTypingDisplayText } from "@/lib/store/unused/roomstore";
 
 // Add missing import for useRoomStore
-import { useUnifiedRoomStore } from '@/lib/store/roomstore';
+import { useUnifiedRoomStore } from '@/lib/store/unused/roomstore';
 
 interface TypingUser {
   user_id: string;
@@ -23,12 +23,12 @@ export function useTypingStatus() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
-  
+
   const { updateTypingUsers, updateTypingText } = useRoomActions();
   const selectedRoom = useSelectedRoom();
   const typingUsers = useTypingUsers();
   const typingDisplayText = useTypingDisplayText();
-  
+
   const roomId = selectedRoom?.id ?? null;
   const user = useUnifiedRoomStore((state) => state.user);
   const currentUserId = user?.id ?? null;
@@ -87,14 +87,14 @@ export function useTypingStatus() {
   // Generate typing display text
   useEffect(() => {
     const otherTypingUsers = typingUsers.filter(u => u.user_id !== currentUserId);
-    
+
     if (otherTypingUsers.length === 0) {
       updateTypingText("");
       return;
     }
 
     const names = otherTypingUsers.map(u => u.display_name || `User ${u.user_id.slice(-4)}`);
-    
+
     let displayText = "";
     if (names.length === 1) {
       displayText = `${names[0]} is typing...`;
@@ -103,7 +103,7 @@ export function useTypingStatus() {
     } else {
       displayText = `${names.length} people are typing...`;
     }
-    
+
     updateTypingText(displayText);
   }, [typingUsers, currentUserId, updateTypingText]);
 
@@ -128,9 +128,9 @@ export function useTypingStatus() {
         const existingIndex = updatedUsers.findIndex(u => u.user_id === payload.user_id);
 
         if (existingIndex >= 0) {
-          updatedUsers[existingIndex] = { 
-            ...updatedUsers[existingIndex], 
-            is_typing: true 
+          updatedUsers[existingIndex] = {
+            ...updatedUsers[existingIndex],
+            is_typing: true
           };
         } else {
           updatedUsers.push({

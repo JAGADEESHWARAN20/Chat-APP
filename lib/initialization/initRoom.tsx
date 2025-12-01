@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useEffect } from "react";
-import { useUnifiedRoomStore, RoomWithMembership } from "../store/roomstore";
+import { useUnifiedRoomStore, RoomWithMembership } from "../store/unused/roomstore";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useUser } from "@/lib/store/user";
 import { toast } from "@/components/ui/sonner"
@@ -39,11 +39,11 @@ const transformRooms = async (
         // ✅ FIXED: Properly type the participation status
         const participation = participations?.find((p) => p.room_id === room.id);
         const rawStatus = participation?.status;
-        
+
         // Convert string status to the specific union type
-        const participationStatus: "pending" | "accepted" | null = 
-          rawStatus === "pending" || rawStatus === "accepted" 
-            ? rawStatus 
+        const participationStatus: "pending" | "accepted" | null =
+          rawStatus === "pending" || rawStatus === "accepted"
+            ? rawStatus
             : null;
 
         const isMember = participationStatus === "accepted";

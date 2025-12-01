@@ -4,7 +4,7 @@ import React, { useEffect, useState, useMemo, useCallback } from "react";
 
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
-import { useUnifiedRoomStore } from "@/lib/store/roomstore";
+import { useUnifiedRoomStore } from "@/lib/store/unused/roomstore";
 
 import RightSidebarContent from "@/components/sidebar/RightSidebarContent";
 import { SidebarProvider } from "@/components/sidebar";
@@ -40,8 +40,8 @@ function UnifiedHomeContent({
 }: UnifiedHomeProps) {
   const { user } = useUser();
 
-    // Keep roomstore.user synced with auth user
-  
+  // Keep roomstore.user synced with auth user
+
 
   // --- Search State ---
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
@@ -179,30 +179,30 @@ function UnifiedHomeContent({
 
   const selectedRoomId = useUnifiedRoomStore((s) => s.selectedRoomId);
   const { setActiveRoom, loadInitialMessages, subscribeToRoom, unsubscribeFromRoom } =
-  useMessage((s) => ({
-    setActiveRoom: s.setActiveRoom,
-    loadInitialMessages: s.loadInitialMessages,
-    subscribeToRoom: s.subscribeToRoom,
-    unsubscribeFromRoom: s.unsubscribeFromRoom,
-  }));
+    useMessage((s) => ({
+      setActiveRoom: s.setActiveRoom,
+      loadInitialMessages: s.loadInitialMessages,
+      subscribeToRoom: s.subscribeToRoom,
+      unsubscribeFromRoom: s.unsubscribeFromRoom,
+    }));
 
-// when room changes → switch cache + (if needed) fetch once
-useEffect(() => {
-  if (!selectedRoomId) {
-    setActiveRoom(null);
-    unsubscribeFromRoom();
-    return;
-  }
+  // when room changes → switch cache + (if needed) fetch once
+  useEffect(() => {
+    if (!selectedRoomId) {
+      setActiveRoom(null);
+      unsubscribeFromRoom();
+      return;
+    }
 
-  setActiveRoom(selectedRoomId);
-  loadInitialMessages(selectedRoomId); // cached after first time
-  subscribeToRoom(selectedRoomId);
+    setActiveRoom(selectedRoomId);
+    loadInitialMessages(selectedRoomId); // cached after first time
+    subscribeToRoom(selectedRoomId);
 
-  return () => {
-    // optional: don't unsubscribe here if you want persistent realtime
-    unsubscribeFromRoom();
-  };
-}, [selectedRoomId, setActiveRoom, loadInitialMessages, subscribeToRoom, unsubscribeFromRoom]);
+    return () => {
+      // optional: don't unsubscribe here if you want persistent realtime
+      unsubscribeFromRoom();
+    };
+  }, [selectedRoomId, setActiveRoom, loadInitialMessages, subscribeToRoom, unsubscribeFromRoom]);
 
   const currentUser = useUnifiedRoomStore((s) => s.user);
 
@@ -223,7 +223,7 @@ useEffect(() => {
         userId={currentUser?.id ?? null}
       />
 
-     
+
 
       {/* --- LEFT SIDEBAR --- */}
       <aside
@@ -382,13 +382,13 @@ useEffect(() => {
                           {/* Chat Container */}
                           <div className="flex-1 flex flex-col">
                             <div className="flex-1 px-2">
-                            <ChatMessages
-  searchQuery={searchQuery}
-  isSearching={isSearching}
-  onSearchStateChange={setIsSearching}
-  onSearchTrigger={handleSearchToggle}
-  isSearchExpanded={isSearchExpanded} // Add this line
-/>
+                              <ChatMessages
+                                searchQuery={searchQuery}
+                                isSearching={isSearching}
+                                onSearchStateChange={setIsSearching}
+                                onSearchTrigger={handleSearchToggle}
+                                isSearchExpanded={isSearchExpanded} // Add this line
+                              />
                             </div>
                             <div className="flex-none border-t bg-background">
                               <ChatInput />
@@ -414,7 +414,7 @@ useEffect(() => {
                 exit={{ opacity: 0, y: -10 }}
                 className="flex-1 flex flex-col overflow-hidden p-4"
               >
-                <SearchComponent  />
+                <SearchComponent />
               </motion.section>
             )}
           </AnimatePresence>

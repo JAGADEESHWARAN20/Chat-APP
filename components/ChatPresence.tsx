@@ -1,6 +1,6 @@
 // components/ChatPresence.tsx
 "use client";
-import { useUnifiedRoomStore } from "@/lib/store/roomstore";
+import { useUnifiedRoomStore } from "@/lib/store/unused/roomstore";
 import { RoomActiveUsers } from "./reusable/RoomActiveUsers";
 
 export default function ChatPresence() {
