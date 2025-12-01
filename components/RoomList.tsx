@@ -211,7 +211,7 @@ export default function RoomList() {
       supabase.removeChannel(roomChannel);
       supabase.removeChannel(participantChannel);
     };
-  }, [user, fetchRooms, fetchParticipations]);
+  }, [user, fetchRooms, fetchParticipations, supabase]);
 
   /* -----------------------------
       AUTH CHECK
