@@ -1,6 +1,5 @@
-// components/Notifications.tsx
+// components/Notifications.tsx (no changes needed, but included for completeness)
 "use client";
-
 import React, { memo, useCallback, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,7 +20,6 @@ import {
   Bell,
   Loader2,
 } from "lucide-react";
-
 import {
   useNotifications,
   useUnreadCount,
@@ -29,22 +27,18 @@ import {
   useUnifiedStore,
   type NotificationData,
 } from "@/lib/store/unified-roomstore";
-
 import { Swipeable } from "@/components/ui/swipeable";
 import {
   Accordion,
   AccordionItem,
   AccordionContent,
 } from "@/components/ui/accordion";
-
 /* ============================================================================
    NOTIFICATION HELPERS
 ============================================================================ */
-
 function getNotificationDisplay(n: NotificationData) {
   const sender = n.users?.display_name || n.users?.username || "Someone";
   const room = n.rooms?.name || "a room";
-
   switch (n.type) {
     case "room_invite":
       return {
@@ -73,15 +67,12 @@ function getNotificationDisplay(n: NotificationData) {
       };
   }
 }
-
 function shouldShowActions(n: NotificationData) {
   return ["join_request", "room_invite"].includes(n.type);
 }
-
 /* ============================================================================
    NOTIFICATION ITEM COMPONENT
 ============================================================================ */
-
 interface NotificationItemProps {
   notification: NotificationData;
   onAccept: (id: string) => Promise<void>;
@@ -89,7 +80,6 @@ interface NotificationItemProps {
   onDelete: (id: string) => Promise<void>;
   isLoading?: boolean;
 }
-
 const NotificationItem = memo(function NotificationItem({
   notification,
   onAccept,
@@ -101,10 +91,8 @@ const NotificationItem = memo(function NotificationItem({
     () => getNotificationDisplay(notification),
     [notification]
   );
-
   const showActions = shouldShowActions(notification);
   const [open, setOpen] = useState(false);
-
   return (
     <Swipeable
       onSwipeLeft={() => showActions && !isLoading && onAccept(notification.id)}
@@ -144,7 +132,6 @@ const NotificationItem = memo(function NotificationItem({
                 {notification.users?.username?.[0]?.toUpperCase() ?? "?"}
               </AvatarFallback>
             </Avatar>
-
             {/* Content */}
             <div className="min-w-0 flex-1">
               <div className="flex items-start justify-between gap-2">
@@ -152,7 +139,6 @@ const NotificationItem = memo(function NotificationItem({
                   <span className="mt-0.5">{icon}</span>
                   <span className="line-clamp-2 break-words">{text}</span>
                 </div>
-
                 {/* Quick Actions */}
                 {showActions && (
                   <div className="flex flex-shrink-0 items-center gap-1">
@@ -183,14 +169,12 @@ const NotificationItem = memo(function NotificationItem({
                   </div>
                 )}
               </div>
-
               {/* Timestamp */}
               <p className="mt-2 text-xs text-muted-foreground">
                 {new Date(notification.created_at).toLocaleString()}
               </p>
             </div>
           </div>
-
           {/* Expanded Actions */}
           <AccordionContent>
             <div className="flex flex-wrap gap-2 px-4 pb-4">
@@ -228,56 +212,44 @@ const NotificationItem = memo(function NotificationItem({
     </Swipeable>
   );
 });
-
 /* ============================================================================
    MAIN NOTIFICATIONS COMPONENT
 ============================================================================ */
-
 interface NotificationsProps {
   isOpen?: boolean;
   onClose?: () => void;
 }
-
 export default function Notifications({
   isOpen: externalIsOpen,
   onClose: externalOnClose,
 }: NotificationsProps) {
   const [internalIsOpen, setInternalIsOpen] = useState(false);
   const isOpen = externalIsOpen ?? internalIsOpen;
-
   const handleClose = useCallback(
     () => externalOnClose?.() ?? setInternalIsOpen(false),
     [externalOnClose]
   );
-
   // Zustand state - auto-updates from realtime
   const notifications = useNotifications();
   const unreadCount = useUnreadCount();
   const { acceptJoinRequest } = useRoomActions();
-
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
-
   const addLoading = (id: string) =>
     setLoadingIds((s) => new Set([...s, id]));
-
   const removeLoading = (id: string) =>
     setLoadingIds((s) => {
       const next = new Set(s);
       next.delete(id);
       return next;
     });
-
   /* ------------------------------------------------------------------------
      HANDLERS
   ------------------------------------------------------------------------ */
-
   const handleAccept = useCallback(
     async (id: string) => {
       const notification = notifications.find((n) => n.id === id);
       if (!notification?.room_id || loadingIds.has(id)) return;
-
       addLoading(id);
-
       try {
         await acceptJoinRequest(id, notification.room_id);
       } catch (error) {
@@ -288,16 +260,12 @@ export default function Notifications({
     },
     [notifications, loadingIds, acceptJoinRequest]
   );
-
   const handleReject = useCallback(
     async (id: string) => {
       if (loadingIds.has(id)) return;
-
       addLoading(id);
-
       // Remove from UI immediately
       useUnifiedStore.getState().removeNotification(id);
-
       try {
         const notification = notifications.find((n) => n.id === id);
         const res = await fetch(`/api/notifications/${id}/reject`, {
@@ -308,7 +276,6 @@ export default function Notifications({
           }),
           headers: { "Content-Type": "application/json" },
         });
-
         if (!res.ok) throw new Error("Reject failed");
       } catch (error) {
         console.error("Reject error:", error);
@@ -320,16 +287,12 @@ export default function Notifications({
     },
     [notifications, loadingIds]
   );
-
   const handleDelete = useCallback(
     async (id: string) => {
       if (loadingIds.has(id)) return;
-
       addLoading(id);
-
       // Remove from UI immediately
       useUnifiedStore.getState().removeNotification(id);
-
       try {
         await fetch(`/api/notifications/${id}`, {
           method: "DELETE",
@@ -342,11 +305,9 @@ export default function Notifications({
     },
     [loadingIds]
   );
-
   /* ------------------------------------------------------------------------
      SORTED NOTIFICATIONS
   ------------------------------------------------------------------------ */
-
   const sortedNotifications = useMemo(
     () =>
       [...notifications].sort(
@@ -355,11 +316,9 @@ export default function Notifications({
       ),
     [notifications]
   );
-
   /* ------------------------------------------------------------------------
      RENDER
   ------------------------------------------------------------------------ */
-
   return (
     <Sheet open={isOpen} onOpenChange={handleClose}>
       <SheetContent
@@ -388,7 +347,6 @@ export default function Notifications({
             </SheetTitle>
           </div>
         </SheetHeader>
-
         {/* Content */}
         <div className="flex-1 overflow-y-auto scrollbar-thin">
           {sortedNotifications.length === 0 ? (
@@ -412,7 +370,6 @@ export default function Notifications({
             </div>
           )}
         </div>
-
         {/* Footer */}
         {notifications.length > 0 && (
           <div className="flex justify-between border-t p-4 text-sm">
