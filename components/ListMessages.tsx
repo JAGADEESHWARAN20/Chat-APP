@@ -7,7 +7,7 @@ import { DeleteAlert, EditAlert } from "./MessasgeActions";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Database } from "@/lib/types/supabase";
 import { useUser } from "@/lib/store/user";
-import { useSelectedRoom } from "@/lib/store/roomstore";
+import { useSelectedRoom } from "@/lib/store/unified-roomstore";
 import TypingIndicator from "./TypingIndicator";
 import { Button } from "@/components/ui/button";
 import { Search, X } from "lucide-react";

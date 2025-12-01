@@ -1,106 +1,114 @@
 "use client";
 
 import { useRef, useEffect } from "react";
-import { useUnifiedRoomStore, RoomWithMembership } from "../store/roomstore";
+import { RoomData, useUnifiedStore } from "@/lib/store/unified-roomstore";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useUser } from "@/lib/store/user";
-import { toast } from "@/components/ui/sonner"
-import { Database } from "@/lib/types/supabase";
+import { toast } from "@/components/ui/sonner";
+import type { Database } from "@/lib/types/supabase";
 
 type Room = Database["public"]["Tables"]["rooms"]["Row"];
 
-// Enhanced transform with proper type safety
+/**
+ * Transform normal DB rooms into RoomData[] used by unified-roomstore
+ */
 const transformRooms = async (
   rooms: Room[],
   userId: string,
   supabase: ReturnType<typeof getSupabaseBrowserClient>
-): Promise<RoomWithMembership[]> => {
+) => {
   try {
-    // Fetch participations
     const { data: participations, error: partError } = await supabase
       .from("room_participants")
       .select("*")
       .eq("user_id", userId);
 
-    if (partError) {
-      throw new Error("Failed to fetch room participations");
-    }
+    if (partError) throw new Error("Failed to fetch room participations");
 
-    // For each room, fetch member count
-    const enrichedRooms = await Promise.all(
+    return await Promise.all(
       rooms.map(async (room) => {
-        // Member count from room_members (accepted only)
         const { count: memberCount } = await supabase
           .from("room_members")
-          .select("*", { count: "exact", head: true })
+          .select("*", { head: true, count: "exact" })
           .eq("room_id", room.id)
           .eq("status", "accepted");
 
-        // ✅ FIXED: Properly type the participation status
-        const participation = participations?.find((p) => p.room_id === room.id);
-        const rawStatus = participation?.status;
+        const participation = participations?.find(
+          (p) => p.room_id === room.id
+        );
 
-        // Convert string status to the specific union type
-        const participationStatus: "pending" | "accepted" | null =
-          rawStatus === "pending" || rawStatus === "accepted"
+        const rawStatus = participation?.status;
+        const participation_status =
+          rawStatus === "pending" || rawStatus === "accepted" || rawStatus === "rejected"
             ? rawStatus
             : null;
 
-        const isMember = participationStatus === "accepted";
+        const is_member = participation_status === "accepted";
 
         return {
-          ...room,
-          isMember,
-          participationStatus, // ✅ Now properly typed
-          memberCount: memberCount ?? 0,
-          online_users: undefined,
-          unreadCount: undefined,
-          latestMessage: undefined,
+          id: room.id,
+          name: room.name,
+          is_private: room.is_private,
+          created_by: room.created_by,
+          created_at: room.created_at,
+
+          is_member,
+          participation_status,
+          member_count: memberCount ?? 0,
+          online_users: 0,
+          unread_count: 0,
+          latest_message: null,
+          latest_message_created_at: null,
         };
       })
     );
-
-    return enrichedRooms;
   } catch (error) {
     console.error("Transform error:", error);
-    // Fallback: Return with defaults
+
     return rooms.map((room) => ({
-      ...room,
-      isMember: false,
-      participationStatus: null, // ✅ Proper null type
-      memberCount: 0,
-      online_users: undefined,
-      unreadCount: undefined,
-      latestMessage: undefined,
+      id: room.id,
+      name: room.name,
+      is_private: room.is_private,
+      created_by: room.created_by,
+      created_at: room.created_at,
+
+      is_member: false,
+      participation_status: null,
+      member_count: 0,
+      online_users: 0,
+      unread_count: 0,
+      latest_message: null,
+      latest_message_created_at: null,
     }));
   }
 };
 
-function InitRoom({ rooms }: { rooms: Room[] }) {
-  const initState = useRef(false);
-  const user = useUser((state) => state.user);
+export default function InitRoom({ rooms }: { rooms: Room[] }) {
   const supabase = getSupabaseBrowserClient();
-  const setRooms = useUnifiedRoomStore((state) => state.setRooms);
+  const user = useUser((state) => state.user);
+  const setRooms = useUnifiedStore((state) => state.setRooms);
+
+  const initState = useRef(false);
 
   useEffect(() => {
     if (!initState.current && user && rooms.length > 0) {
-      const initialize = async () => {
+      const run = async () => {
         try {
-          const transformedRooms = await transformRooms(rooms, user.id, supabase);
-          setRooms(transformedRooms);
+          const result = await transformRooms(rooms, user.id, supabase);
+
+          setRooms(result as RoomData[]);
           initState.current = true;
-          console.log(`✅ Initialized ${transformedRooms.length} rooms`);
+
+          console.log(`✅ Initialized ${result.length} rooms`);
         } catch (error) {
-          console.error("Error initializing rooms:", error);
-          toast.error(error instanceof Error ? error.message : "Failed to initialize rooms");
+          toast.error("Failed to initialize rooms");
+          console.error(error);
         }
       };
 
-      initialize();
+      run();
     }
   }, [rooms, user, supabase, setRooms]);
 
   return null;
 }
-
-export default InitRoom;

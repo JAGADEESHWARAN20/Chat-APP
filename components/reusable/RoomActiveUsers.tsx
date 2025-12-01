@@ -1,6 +1,6 @@
 "use client";
 
-import { useUnifiedRoomStore, useRoomPresence } from "@/lib/store/roomstore";
+import { useUnifiedRoomStore, useRoomPresence } from "@/lib/store/unified-roomstore";
 import { Users } from "lucide-react";
 import React from "react";
 

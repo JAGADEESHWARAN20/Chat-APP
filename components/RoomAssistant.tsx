@@ -52,7 +52,7 @@ import { cn } from "@/lib/utils";
 import { PairedMessageRenderer } from "./RoomAssistantParts/PairedMessageRenderer";
 import { MessageSkeleton } from "./RoomAssistantParts/MessageSkeleton";
 import { MODELS } from "./RoomAssistantParts/constants";
-import { useUnifiedRoomStore } from "@/lib/store/roomstore";
+import { useUnifiedRoomStore } from "@/lib/store/unified-roomstore";
 
 interface RoomAssistantProps {
   roomId: string;

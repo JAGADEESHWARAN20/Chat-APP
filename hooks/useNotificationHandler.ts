@@ -4,50 +4,39 @@ import { useCallback, useEffect, useRef } from "react";
 import { toast } from "@/components/ui/sonner";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
-import {
-  useNotifications,
-  type Notification,
-} from "@/lib/store/notifications";
-
+import { useNotifications, type Notification } from "@/lib/store/notifications";
 import { useUser } from "@/lib/store/user";
+
 import {
-  useUnifiedRoomStore,
-  type RoomWithMembership,
-} from "@/lib/store/roomstore";
+  useUnifiedStore,
+  type RoomData,
+} from "@/lib/store/unified-roomstore";
 
 /* -------------------------------------------------------
-   Fetch rooms from RPC
+   Fetch rooms from RPC using unified RoomData type
 ------------------------------------------------------- */
-async function fetchRoomsForUser(userId: string): Promise<RoomWithMembership[]> {
+async function fetchRoomsForUser(userId: string): Promise<RoomData[]> {
   const supabase = getSupabaseBrowserClient();
 
-  const { data, error } = await supabase.rpc("get_rooms_with_counts", {
+  const { data, error } = await supabase.rpc("get_unified_room_data", {
     p_user_id: userId,
-    p_query: undefined,
-    p_include_participants: true,
   });
 
   if (error) {
-    console.error("get_rooms_with_counts error:", error);
+    console.error("get_unified_room_data error:", error);
     return [];
   }
 
   return (data ?? []).map((r: any) => ({
-    id: r.id,
-    name: r.name,
-    is_private: r.is_private,
-    created_by: r.created_by,
-    created_at: r.created_at,
-
-    isMember: Boolean(r.is_member),
-    participationStatus: r.participation_status ?? null,
-
-    memberCount: r.member_count ?? 0,
+    ...r,
+    participation_status:
+      r.participation_status === "accepted" ||
+      r.participation_status === "pending" ||
+      r.participation_status === "rejected"
+        ? r.participation_status
+        : null,
     online_users: r.online_users ?? 0,
-    unreadCount: r.unread_count ?? 0,
-
-    latestMessage: r.latest_message ?? null,
-    latest_message_created_at: r.latest_message_created_at ?? null,
+    unread_count: r.unread_count ?? 0,
   }));
 }
 
@@ -58,16 +47,14 @@ export function useNotificationHandler() {
   const { user: profileUser, authUser } = useUser();
   const userId = profileUser?.id || authUser?.id;
 
-  /* store APIs */
   const { add, subscribe, unsubscribe } = useNotifications();
 
-  const { setRooms, setSelectedRoomId } = useUnifiedRoomStore();
+  const setRooms = useUnifiedStore((s) => s.setRooms);
+  const setSelectedRoomId = useUnifiedStore((s) => s.setSelectedRoomId);
 
   const mounted = useRef(true);
 
-  /* -------------------------------------------------------
-     Subscribe to realtime notifications
-  ------------------------------------------------------- */
+  /* Subscribe to realtime notifications */
   useEffect(() => {
     mounted.current = true;
 
@@ -81,18 +68,14 @@ export function useNotificationHandler() {
     };
   }, [userId, subscribe, unsubscribe]);
 
-  /* -------------------------------------------------------
-     Handle incoming notifications
-  ------------------------------------------------------- */
+  /* Handle incoming notifications */
   const handleNotification = useCallback(
     async (notif: Notification) => {
       if (!mounted.current || !userId) return;
 
-      // Add to store
       add(notif);
 
       switch (notif.type) {
-        /* user’s join request accepted */
         case "join_request_accepted": {
           toast.success("Your request to join a room was accepted!", {
             description: notif.message ?? "",
@@ -102,8 +85,7 @@ export function useNotificationHandler() {
           setRooms(updated);
 
           if (notif.room_id) {
-            const room = updated.find((r) => r.id === notif.room_id);
-            if (room) setSelectedRoomId(notif.room_id);
+            setSelectedRoomId(notif.room_id);
           }
           break;
         }
@@ -116,19 +98,11 @@ export function useNotificationHandler() {
           toast.info("You were invited to a room.");
           break;
 
-        case "user_joined":
-          toast.success("A user joined your room.");
-          break;
-
-        case "room_left":
-          toast.info("A user left your room.");
-          break;
-
         case "message":
           toast.info(
             `New message from ${notif.users?.username ||
-            notif.users?.display_name ||
-            "someone"
+              notif.users?.display_name ||
+              "someone"
             }`,
             { description: notif.message }
           );

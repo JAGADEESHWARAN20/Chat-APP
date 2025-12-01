@@ -3,43 +3,49 @@
 import { useEffect } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useUser } from "@/lib/store/user";
-import { useUnifiedRoomStore } from "@/lib/store/roomstore";
+import { useUnifiedStore } from "@/lib/store/unified-roomstore";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const supabase = getSupabaseBrowserClient();
+
   const setUser = useUser((s) => s.setUser);
   const clearUser = useUser((s) => s.clearUser);
 
-  const setRoomUser = useUnifiedRoomStore((s) => s.setUser);
+  // ✅ Correct Zustand selector
+  const setRoomUserId = useUnifiedStore((s) => s.setUserId);
 
   useEffect(() => {
     const sync = async () => {
       const { data } = await supabase.auth.getUser();
+
       if (data?.user?.id) {
         setUser(data.user);
-        setRoomUser({ id: data.user.id });
+        setRoomUserId(data.user.id);
       } else {
         clearUser();
-        setRoomUser(null);
+        setRoomUserId(null);
       }
     };
 
     sync();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_evt, session) => {
+    // AUTH LISTENER
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_evt, session) => {
       if (session?.user) {
         setUser(session.user);
-        setRoomUser({ id: session.user.id });
+        setRoomUserId(session.user.id);
       } else {
         clearUser();
-        setRoomUser(null);
+        setRoomUserId(null);
       }
     });
 
     return () => {
       subscription.unsubscribe();
     };
-  }, [clearUser, setRoomUser, setUser, supabase.auth]); // ✅ Fixed: Added all dependencies
+  }, [setUser, clearUser, setRoomUserId, supabase.auth]);
 
   return <>{children}</>;
 }

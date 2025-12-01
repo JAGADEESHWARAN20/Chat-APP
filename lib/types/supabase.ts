@@ -561,6 +561,23 @@ export type Database = {
           participation_status: string
         }[]
       }
+      get_unified_room_data: {
+        Args: { p_user_id: string }
+        Returns: {
+          created_at: string
+          created_by: string
+          id: string
+          is_member: boolean
+          is_private: boolean
+          latest_message: string
+          latest_message_created_at: string
+          member_count: number
+          name: string
+          online_users: number
+          participation_status: string
+          unread_count: number
+        }[]
+      }
       handle_notification_action: {
         Args: {
           p_action: string

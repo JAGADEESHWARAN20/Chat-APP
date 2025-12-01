@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useUnifiedRoomStore } from "@/lib/store/roomstore";
+import { useUnifiedRoomStore } from "@/lib/store/unified-roomstore";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Button } from "./ui/button";
 import { toast } from "@/components/ui/sonner"
@@ -11,7 +11,7 @@ import type { Database } from "@/lib/types/supabase";
 import { ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { RoomCard } from "./ui/room-card";
-import type { RoomWithMembership } from "@/lib/store/roomstore"; // ← Single source: Use store's type
+import type { RoomWithMembership } from "@/lib/store/unified-roomstore"; // ← Single source: Use store's type
 
 // Define missing type from Supabase schema (IRoomParticipant was in deleted file)
 type IRoomParticipant = Database["public"]["Tables"]["room_participants"]["Row"];

@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 import { ChatMessage } from "./RoomAssistant";
 
 
-import { MessageSkeleton } from "./RoomAssistantParts/MessageSkeleton";
+// import { MessageSkeleton } from "./RoomAssistantParts/MessageSkeleton";
 
 export function RoomAssistantDialog({ roomId, roomName, triggerButton }: any) {
   const [open, setOpen] = useState(false);

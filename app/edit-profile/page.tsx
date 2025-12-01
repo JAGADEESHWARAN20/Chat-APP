@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { ChevronLeft, User, Edit3, Upload, Loader2, CheckCircle, AlertCircle } from "lucide-react";
+import { ChevronLeft, User, Edit3,  Loader2, CheckCircle, AlertCircle } from "lucide-react";
 import { toast } from "@/components/ui/sonner"
 import { Skeleton } from "@/components/ui/skeleton";
 // import { Progress } from "@/components/ui/progress";

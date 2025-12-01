@@ -1,16 +1,17 @@
-// hooks/useAuthSync.tsx (your useAuthSync file)
 "use client";
+
 import { useEffect, useRef, useMemo } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useUser } from "@/lib/store/user";
-import { useUnifiedRoomStore } from "@/lib/store/roomstore";
-// import { useRoomStore } from "@/lib/store/RoomContext";
-// import { AuthApiError } from "@supabase/supabase-js";
+import { useUnifiedStore } from "@/lib/store/unified-roomstore";
 
 export function useAuthSync() {
   const supabase = getSupabaseBrowserClient();
   const { user, setUser } = useUser();
-  const setRoomUser = useUnifiedRoomStore((s) => s.setUser);
+
+  // ✅ unified-store only stores userId, not full user
+  const setRoomUserId = useUnifiedStore((s) => s.setUserId);
+
   const lastUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -20,46 +21,56 @@ export function useAuthSync() {
       .getSession()
       .then(({ data }) => {
         if (!mounted) return;
+
         const newUser = data.session?.user ?? null;
         const userId = newUser?.id ?? null;
+
         if (lastUserIdRef.current !== userId) {
           lastUserIdRef.current = userId;
+
+          // Update local user store
           setUser(newUser);
-          setRoomUser(newUser);
+
+          // Update unified room store with ONLY userId
+          setRoomUserId(userId);
         }
       })
       .catch((err) => {
-        // handle refresh-token related failures gracefully
         console.error("getSession error:", err);
+
         const isAuthError =
-          err?.name === "AuthApiError" && err?.code === "refresh_token_not_found";
+          err?.name === "AuthApiError" &&
+          err?.code === "refresh_token_not_found";
+
         if (isAuthError) {
-          // Hard sign out to clear any stale client state
-          supabase.auth.signOut().catch(() => { });
+          supabase.auth.signOut().catch(() => {});
           setUser(null);
-          setRoomUser(null);
+          setRoomUserId(null);
         }
       });
 
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "INITIAL_SESSION") return;
+
       const newUser = session?.user ?? null;
       const userId = newUser?.id ?? null;
+
       if (lastUserIdRef.current === userId) return;
+
       lastUserIdRef.current = userId;
+
       setUser(newUser);
-      setRoomUser(newUser);
+      setRoomUserId(userId);
     });
 
     return () => {
       mounted = false;
       data.subscription.unsubscribe();
     };
-  }, [supabase, setUser, setRoomUser]);
+  }, [supabase, setUser, setRoomUserId]);
 
   const userId = user?.id ?? null;
   const isAuthenticated = Boolean(userId);
-  // If user is literally undefined, treat as loading
   const isLoading = user === undefined;
 
   return useMemo(

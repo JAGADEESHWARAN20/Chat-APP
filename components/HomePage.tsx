@@ -4,7 +4,7 @@ import React, { useEffect, useState, useMemo, useCallback } from "react";
 
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
-import { useUnifiedRoomStore } from "@/lib/store/roomstore";
+import { useUnifiedRoomStore } from "@/lib/store/unified-roomstore";
 
 import RightSidebarContent from "@/components/sidebar/RightSidebarContent";
 import { SidebarProvider } from "@/components/sidebar";

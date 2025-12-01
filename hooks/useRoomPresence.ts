@@ -2,21 +2,20 @@
 
 import { useEffect } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { useUnifiedRoomStore } from "@/lib/store/roomstore";
+import { useUnifiedStore } from "@/lib/store/unified-roomstore";
 
 export function useRoomPresenceSync(roomId: string | null, userId: string | null) {
   const supabase = getSupabaseBrowserClient();
-  const setRoomPresence = useUnifiedRoomStore((s) => s.setRoomPresence);
+  const setRoomPresence = useUnifiedStore((s) => s.setRoomPresence);
 
   useEffect(() => {
     if (!roomId || !userId) return;
 
     const channel = supabase.channel(`presence-room-${roomId}`, {
-      config: {
-        presence: { key: userId },
-      },
+      config: { presence: { key: userId } }
     });
 
+    // Announce user presence
     channel.track({
       user_id: userId,
       room_id: roomId,
@@ -36,9 +35,8 @@ export function useRoomPresenceSync(roomId: string | null, userId: string | null
 
     channel.subscribe();
 
-    // 🔥 FIX: cleanup returns void, not a Promise
     return () => {
-      supabase.removeChannel(channel); // we don't return the promise
+      supabase.removeChannel(channel);
     };
   }, [roomId, userId, supabase, setRoomPresence]);
 }
