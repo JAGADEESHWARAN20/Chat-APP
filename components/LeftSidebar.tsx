@@ -11,10 +11,9 @@ import React, {
 import { useUser } from "@/lib/store/user";
 import {
   useSelectedRoom,
-  useAvailableRooms,
+  useRooms,
   useRoomActions,
-  useRoomLoading,
-  type RoomWithMembership,
+  type RoomData,
 } from "@/lib/store/unified-roomstore";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -32,6 +31,9 @@ import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
 
+/* -------------------------------------------------------------------------- */
+/* TYPES                                                                      */
+/* -------------------------------------------------------------------------- */
 interface LeftSidebarProps {
   user: { id: string } | null;
   isOpen: boolean;
@@ -40,26 +42,23 @@ interface LeftSidebarProps {
   handleToggleLeft?: () => void;
 }
 
-/** Extended local type */
-type RoomLocal = RoomWithMembership & {
-  unreadCount?: number;
+type RoomLocal = RoomData & {
   latestMessage?: string | null;
-  online_users?: number;
+  unreadCount?: number;
 };
+
+/* -------------------------------------------------------------------------- */
+/* COMPONENT                                                                  */
+/* -------------------------------------------------------------------------- */
 
 const LeftSidebar = React.memo<LeftSidebarProps>(
   ({ user, isOpen, onClose, className, handleToggleLeft }) => {
     const authUser = useUser((s) => s.user);
 
     const selectedRoom = useSelectedRoom();
-    const availableRooms = useAvailableRooms();
-    const isLoading = useRoomLoading();
-
+    const rooms = useRooms();
     const { setSelectedRoomId, createRoom, fetchRooms } = useRoomActions();
 
-    // ------------------------------
-    // Local State
-    // ------------------------------
     const [searchTerm, setSearchTerm] = useState("");
     const [showCreateRoom, setShowCreateRoom] = useState(false);
     const [newRoomName, setNewRoomName] = useState("");
@@ -67,34 +66,37 @@ const LeftSidebar = React.memo<LeftSidebarProps>(
 
     const debouncedRef = useRef<NodeJS.Timeout | null>(null);
 
-    // ------------------------------
-    // Client-side only: Joined Rooms
-    // ------------------------------
+    /* ---------------------------------------------------------------------- */
+    /* JOINED ROOMS                                                           */
+    /* ---------------------------------------------------------------------- */
     const joinedRooms = useMemo(
       () =>
-        availableRooms.filter(
-          (r) => r.isMember && r.participationStatus === "accepted"
+        rooms.filter(
+          (r) => r.is_member && r.participation_status === "accepted"
         ) as RoomLocal[],
-      [availableRooms]
+      [rooms]
     );
 
+    /* ---------------------------------------------------------------------- */
+    /* FILTER ROOMS                                                           */
+    /* ---------------------------------------------------------------------- */
     const filteredRooms = useMemo(() => {
       if (!searchTerm.trim()) return joinedRooms;
-      const s = searchTerm.toLowerCase();
-      return joinedRooms.filter((r) => r.name.toLowerCase().includes(s));
+      const q = searchTerm.toLowerCase();
+      return joinedRooms.filter((r) => r.name.toLowerCase().includes(q));
     }, [joinedRooms, searchTerm]);
 
-    // ------------------------------
-    // Search input debounce
-    // ------------------------------
+    /* ---------------------------------------------------------------------- */
+    /* SEARCH DEBOUNCE                                                        */
+    /* ---------------------------------------------------------------------- */
     const handleSearchChange = useCallback((value: string) => {
       if (debouncedRef.current) clearTimeout(debouncedRef.current);
       debouncedRef.current = setTimeout(() => setSearchTerm(value), 250);
     }, []);
 
-    // ------------------------------
-    // Create Room
-    // ------------------------------
+    /* ---------------------------------------------------------------------- */
+    /* CREATE ROOM                                                            */
+    /* ---------------------------------------------------------------------- */
     const handleCreateRoom = useCallback(async () => {
       const name = newRoomName.trim();
       if (!name) {
@@ -106,37 +108,34 @@ const LeftSidebar = React.memo<LeftSidebarProps>(
       try {
         await createRoom(name, false);
         toast.success("Room created");
-        setShowCreateRoom(false);
+
         setNewRoomName("");
-        // fetch updated rooms
-        fetchRooms({ force: true });
-      } catch {
+        setShowCreateRoom(false);
+        fetchRooms(); // refresh list
+      } catch (err) {
         toast.error("Failed to create room");
       } finally {
         setIsCreating(false);
       }
     }, [newRoomName, createRoom, fetchRooms]);
 
-    // ------------------------------
-    // Selecting a room
-    // ------------------------------
+    /* ---------------------------------------------------------------------- */
+    /* SELECT ROOM                                                            */
+    /* ---------------------------------------------------------------------- */
     const handleRoomClick = useCallback(
       (roomId: string) => {
         setSelectedRoomId(roomId);
         onClose?.();
       },
-      [onClose, setSelectedRoomId]
+      [setSelectedRoomId, onClose]
     );
 
-    // ------------------------------
-    // Render each room row
-    // ------------------------------
+    /* ---------------------------------------------------------------------- */
+    /* RENDER ROOM ITEM                                                       */
+    /* ---------------------------------------------------------------------- */
     const renderItem = useCallback(
       (room: RoomLocal) => {
-        const unread =
-          room.unreadCount ??
-          (room as any).unread_count ??
-          0;
+        const unread = room.unread_count ?? 0;
 
         return (
           <button
@@ -150,9 +149,7 @@ const LeftSidebar = React.memo<LeftSidebarProps>(
             )}
           >
             <Avatar className="h-10 w-10 sm:h-12 sm:w-12">
-              <AvatarFallback>
-                {room.name[0]?.toUpperCase()}
-              </AvatarFallback>
+              <AvatarFallback>{room.name[0]?.toUpperCase()}</AvatarFallback>
             </Avatar>
 
             <div className="ml-3 flex-1 min-w-0">
@@ -169,13 +166,13 @@ const LeftSidebar = React.memo<LeftSidebarProps>(
               </div>
 
               <div className="text-xs sm:text-sm text-muted-foreground truncate mb-1.5">
-                {room.latestMessage ?? "No messages yet"}
+                {room.latest_message ?? "No messages yet"}
               </div>
 
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-[10px] sm:text-xs text-muted-foreground">
                   <Users className="h-3 w-3" />
-                  <span>{room.memberCount ?? 0}</span>
+                  <span>{room.member_count}</span>
 
                   {room.online_users ? (
                     <span className="text-emerald-500 font-medium">
@@ -195,23 +192,23 @@ const LeftSidebar = React.memo<LeftSidebarProps>(
       [selectedRoom?.id, handleRoomClick]
     );
 
-    // ------------------------------
-    // First load — fetch rooms once
-    // ------------------------------
+    /* ---------------------------------------------------------------------- */
+    /* INITIAL FETCH                                                          */
+    /* ---------------------------------------------------------------------- */
     useEffect(() => {
       if (authUser?.id) fetchRooms();
     }, [authUser?.id, fetchRooms]);
 
-    // Debounce cleanup
+    /* Cleanup debounce */
     useEffect(() => {
       return () => {
         if (debouncedRef.current) clearTimeout(debouncedRef.current);
       };
     }, []);
 
-    // ------------------------------
-    // No Auth UI
-    // ------------------------------
+    /* ---------------------------------------------------------------------- */
+    /* NO AUTH UI                                                             */
+    /* ---------------------------------------------------------------------- */
     if (!authUser) {
       return (
         <div className="flex flex-col h-full items-center justify-center p-4 text-center">
@@ -234,9 +231,9 @@ const LeftSidebar = React.memo<LeftSidebarProps>(
       );
     }
 
-    // ------------------------------
-    // MAIN SIDEBAR UI
-    // ------------------------------
+    /* ---------------------------------------------------------------------- */
+    /* SIDEBAR UI                                                             */
+    /* ---------------------------------------------------------------------- */
     return (
       <div className={cn("flex flex-col h-full w-full", className)}>
         <Tabs defaultValue="rooms" className="flex flex-col h-full w-full">
@@ -275,6 +272,7 @@ const LeftSidebar = React.memo<LeftSidebarProps>(
             <div className="relative">
               {!showCreateRoom ? (
                 <div className="flex gap-2">
+                  {/* Search */}
                   <div className="relative flex-1">
                     <Input
                       placeholder="Search rooms…"
@@ -286,17 +284,13 @@ const LeftSidebar = React.memo<LeftSidebarProps>(
                       variant="ghost"
                       size="icon"
                       className="absolute right-0 top-0 h-9 w-9"
-                      onClick={() => fetchRooms({ force: true })}
+                      onClick={() => fetchRooms()}
                     >
-                      <Loader2
-                        className={cn(
-                          "h-3.5 w-3.5",
-                          isLoading && "animate-spin"
-                        )}
-                      />
+                      <Loader2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>
 
+                  {/* Create Button */}
                   <Button
                     variant="outline"
                     size="icon"
@@ -312,9 +306,7 @@ const LeftSidebar = React.memo<LeftSidebarProps>(
                     placeholder="Enter room name…"
                     value={newRoomName}
                     onChange={(e) => setNewRoomName(e.target.value)}
-                    onKeyDown={(e) =>
-                      e.key === "Enter" && handleCreateRoom()
-                    }
+                    onKeyDown={(e) => e.key === "Enter" && handleCreateRoom()}
                     disabled={isCreating}
                     className="h-8 text-sm"
                   />
@@ -336,11 +328,11 @@ const LeftSidebar = React.memo<LeftSidebarProps>(
                     <Button
                       variant="ghost"
                       size="sm"
+                      disabled={isCreating}
                       onClick={() => {
                         setShowCreateRoom(false);
                         setNewRoomName("");
                       }}
-                      disabled={isCreating}
                     >
                       Cancel
                     </Button>
@@ -354,11 +346,7 @@ const LeftSidebar = React.memo<LeftSidebarProps>(
           <div className="flex-1 min-h-0 relative">
             <TabsContent value="rooms" className="absolute inset-0 m-0">
               <div className="flex-1 overflow-y-auto px-3 pb-3">
-                {isLoading && !filteredRooms.length ? (
-                  <div className="flex justify-center items-center h-32">
-                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                  </div>
-                ) : !filteredRooms.length ? (
+                {!filteredRooms.length ? (
                   <div className="flex flex-col items-center justify-center h-48 text-center">
                     <Users className="h-10 w-10 mb-3 text-muted-foreground/50" />
                     <p className="text-sm text-muted-foreground">
@@ -366,9 +354,7 @@ const LeftSidebar = React.memo<LeftSidebarProps>(
                     </p>
                   </div>
                 ) : (
-                  <div className="space-y-1">
-                    {filteredRooms.map(renderItem)}
-                  </div>
+                  <div className="space-y-1">{filteredRooms.map(renderItem)}</div>
                 )}
               </div>
             </TabsContent>
@@ -391,5 +377,4 @@ const LeftSidebar = React.memo<LeftSidebarProps>(
 );
 
 LeftSidebar.displayName = "LeftSidebar";
-
 export default LeftSidebar;

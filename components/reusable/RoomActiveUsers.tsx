@@ -1,8 +1,9 @@
 "use client";
 
-import { useUnifiedRoomStore, useRoomPresence } from "@/lib/store/unified-roomstore";
-import { Users } from "lucide-react";
 import React from "react";
+import { useUnifiedStore, useRoomPresence } from "@/lib/store/unified-roomstore";
+import { Users } from "lucide-react";
+import type { RoomData } from "@/lib/store/unified-roomstore";
 
 interface RoomActiveUsersProps {
   roomId: string;
@@ -13,14 +14,14 @@ interface RoomActiveUsersProps {
 export function RoomActiveUsers({
   roomId,
   showZero = false,
-  compact = false
+  compact = false,
 }: RoomActiveUsersProps) {
-  const rooms = useUnifiedRoomStore((state) => state.rooms);
+  const rooms = useUnifiedStore((state) => state.rooms as RoomData[]);
   const presence = useRoomPresence();
 
-  const room = rooms.find((r) => r.id === roomId);
+  const room = rooms.find((r: RoomData) => r.id === roomId);
 
-  const memberCount = room?.memberCount ?? 0;
+  const memberCount = room?.member_count ?? 0;
   const onlineUsers = presence[roomId]?.onlineUsers ?? 0;
 
   if (onlineUsers === 0 && !showZero) return null;
@@ -39,8 +40,11 @@ export function RoomActiveUsers({
     <div className="flex items-center gap-4 text-sm">
       <div className="flex items-center gap-1 text-muted-foreground">
         <Users className="h-4 w-4" />
-        <span>{memberCount} {memberCount === 1 ? "member" : "members"}</span>
+        <span>
+          {memberCount} {memberCount === 1 ? "member" : "members"}
+        </span>
       </div>
+
       <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
         <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
         <span className="font-medium">{onlineUsers} online</span>

@@ -4,7 +4,7 @@ import React, { useEffect, useState, useMemo, useCallback } from "react";
 
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
-import { useUnifiedRoomStore } from "@/lib/store/unified-roomstore";
+import { useUnifiedStore } from "@/lib/store/unified-roomstore";
 
 import RightSidebarContent from "@/components/sidebar/RightSidebarContent";
 import { SidebarProvider } from "@/components/sidebar";
@@ -177,7 +177,7 @@ function UnifiedHomeContent({
     };
   }, [isMobile, isLeftSidebarOpen, manualRightOpen, SIDEBAR_WIDTH]);
 
-  const selectedRoomId = useUnifiedRoomStore((s) => s.selectedRoomId);
+  const selectedRoomId = useUnifiedStore((s) => s.selectedRoomId);
   const { setActiveRoom, loadInitialMessages, subscribeToRoom, unsubscribeFromRoom } =
     useMessage((s) => ({
       setActiveRoom: s.setActiveRoom,
@@ -204,7 +204,7 @@ function UnifiedHomeContent({
     };
   }, [selectedRoomId, setActiveRoom, loadInitialMessages, subscribeToRoom, unsubscribeFromRoom]);
 
-  const currentUser = useUnifiedRoomStore((s) => s.user);
+  const currentUser = useUnifiedStore((s) => s.userId);
 
   // --- 7. Tabs Logic ---
   const [activeTab, setActiveTab] = useState<"home" | "search">("home");
@@ -220,7 +220,7 @@ function UnifiedHomeContent({
     <div className="flex h-[100vh] w-screen overflow-hidden bg-background text-foreground relative">
       <PresenceConnector
         roomId={selectedRoomId}
-        userId={currentUser?.id ?? null}
+        userId={currentUser ?? null}
       />
 
 

@@ -676,3 +676,13 @@ export const useSelectedRoom = () =>
 // Select list of rooms (wrapper)
 export const useAvailableRooms = () =>
   useUnifiedStore((s) => s.rooms);
+
+/* ============================================================================
+   TYPING SELECTORS
+============================================================================ */
+
+export const useTypingUsers = () =>
+  useUnifiedStore((s) => s.typingUsers);
+
+export const useTypingDisplayText = () =>
+  useUnifiedStore((s) => s.typingDisplayText);
