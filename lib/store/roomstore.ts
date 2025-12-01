@@ -181,11 +181,9 @@ export const useUnifiedRoomStore = create<RoomState>()(
       },
 
       forceRefreshRooms: () => {
-        set({ isLoading: true });
-        setTimeout(() => {
-          get().fetchRooms({ force: true });
-        }, 100);
+        get().fetchRooms({ force: true });
       },
+      
 
       /* ------------------------------
          CORE OPERATIONS
@@ -194,41 +192,39 @@ export const useUnifiedRoomStore = create<RoomState>()(
       fetchRooms: async ({ force = false } = {}) => {
         const supabase = getSupabaseBrowserClient();
         const userId = get().user?.id;
-
+      
+        if (!userId) return null;
+      
         try {
-          if (!userId) return null;
-
-          if (!force && get().rooms.length > 0) {
-            return get().rooms;
-          }
-
           set({ isLoading: true, error: null });
-
-          const { data, error } = await supabase.rpc(
-            "get_rooms_with_counts",
-            {
-              p_user_id: userId,
-              p_query: null as any,
-            }
-          );
-
+      
+          const { data, error } = await supabase.rpc("get_rooms_with_counts", {
+            p_user_id: userId,
+            p_query: null as any,
+          });
+      
           if (error) {
             console.error("❌ fetchRooms RPC error:", error);
             set({ error: error.message ?? "Failed to fetch rooms" });
             return null;
           }
-
+      
           const formatted = normalizeRpcRooms(data);
-          set({ rooms: formatted });
-
+      
+          // Only update Zustand if data changed → reduces renders
+          set((state) => {
+            const changed = JSON.stringify(state.rooms) !== JSON.stringify(formatted);
+            return changed ? { rooms: formatted } : state;
+          });
+      
+          // Maintain selected room
           const sel = get().selectedRoomId;
           if (!sel && formatted.length > 0) {
             const defaultRoom =
-              formatted.find((r) => r.name === "General Chat") ??
-              formatted[0];
-            set({ selectedRoomId: defaultRoom?.id ?? null });
+              formatted.find((r) => r.name === "General Chat") ?? formatted[0];
+            set({ selectedRoomId: defaultRoom.id });
           }
-
+      
           return formatted;
         } catch (err: any) {
           console.error("❌ fetchRooms error:", err);
@@ -238,7 +234,7 @@ export const useUnifiedRoomStore = create<RoomState>()(
           set({ isLoading: false });
         }
       },
-
+      
       sendMessage: async (roomId: string, text: string) => {
         try {
           const res = await fetch("/api/messages/send", {
@@ -463,12 +459,12 @@ export const useRoomRealtimeSync = (userId: string | null) => {
 
     const channel = supabase.channel(`room-sync-${userId}`);
 
-    // Helper type for any supabase row
-    type AnyRow = Record<string, any> | null;
+    const refresh = () => {
+      console.log("🔄 Realtime → Refresh rooms");
+      forceRefreshRooms();
+    };
 
-    /* --------------------------------------------------------
-       🔥 room_participants: INSERT + UPDATE + DELETE
-    -------------------------------------------------------- */
+    /* 🔥 room_participants */
     channel.on(
       "postgres_changes",
       {
@@ -478,23 +474,12 @@ export const useRoomRealtimeSync = (userId: string | null) => {
         filter: `user_id=eq.${userId}`,
       },
       (payload) => {
-        const newRow: AnyRow = payload.new;
-        const oldRow: AnyRow = payload.old;
-
-        const newStatus = newRow?.status;
-        const oldStatus = oldRow?.status;
-
-        console.log("room_participants change", { newStatus, oldStatus });
-
-        if (newStatus === "accepted" || oldStatus === "accepted") {
-          forceRefreshRooms();
-        }
+        console.log("room_participants change:", payload);
+        refresh();
       }
     );
 
-    /* --------------------------------------------------------
-       🔥 room_members: INSERT + DELETE
-    -------------------------------------------------------- */
+    /* 🔥 room_members */
     channel.on(
       "postgres_changes",
       {
@@ -503,15 +488,13 @@ export const useRoomRealtimeSync = (userId: string | null) => {
         table: "room_members",
         filter: `user_id=eq.${userId}`,
       },
-      () => {
-        console.log("room_members updated -> refresh");
-        forceRefreshRooms();
+      (payload) => {
+        console.log("room_members change:", payload);
+        refresh();
       }
     );
 
-    /* --------------------------------------------------------
-       🔥 notifications INSERT
-    -------------------------------------------------------- */
+    /* 🔥 notifications (INSERT) */
     channel.on(
       "postgres_changes",
       {
@@ -521,19 +504,12 @@ export const useRoomRealtimeSync = (userId: string | null) => {
         filter: `user_id=eq.${userId}`,
       },
       (payload) => {
-        const newRow: AnyRow = payload.new;
-
-        if (newRow?.type === "join_request_accepted") {
-          console.log("join_request_accepted → refresh");
-          forceRefreshRooms();
-        }
+        console.log("notification inserted:", payload.new?.type);
+        refresh();
       }
     );
 
-    /* --------------------------------------------------------
-       🔥 notifications DELETE
-       (means owner accepted / rejected)
-    -------------------------------------------------------- */
+    /* 🔥 notifications (DELETE) */
     channel.on(
       "postgres_changes",
       {
@@ -542,20 +518,21 @@ export const useRoomRealtimeSync = (userId: string | null) => {
         table: "notifications",
         filter: `user_id=eq.${userId}`,
       },
-      () => {
-        console.log("notification deleted → refresh");
-        forceRefreshRooms();
+      (payload) => {
+        console.log("notification deleted:", payload.old?.type);
+        refresh();
       }
     );
 
+    /* Subscribe */
     channel.subscribe((status) => {
-      console.log("room realtime status:", status);
+      console.log("Realtime status:", status);
     });
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [userId, forceRefreshRooms, supabase]);
+  }, [userId, forceRefreshRooms]);
 };
 
 
