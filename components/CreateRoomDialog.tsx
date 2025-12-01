@@ -20,7 +20,7 @@ import { toast } from "@/components/ui/sonner"
 // import { useRoomContext } from "@/lib/store/RoomContext";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { useUnifiedRoomStore } from "@/lib/store/unused/roomstore";
+import { useUnifiedRoomStore } from "@/lib/store/roomstore";
 
 export default function CreateRoomDialog({ user }: { user: SupabaseUser | undefined }) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);

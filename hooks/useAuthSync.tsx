@@ -3,7 +3,7 @@
 import { useEffect, useRef, useMemo } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useUser } from "@/lib/store/user";
-import { useUnifiedRoomStore } from "@/lib/store/unused/roomstore";
+import { useUnifiedRoomStore } from "@/lib/store/roomstore";
 // import { useRoomStore } from "@/lib/store/RoomContext";
 // import { AuthApiError } from "@supabase/supabase-js";
 

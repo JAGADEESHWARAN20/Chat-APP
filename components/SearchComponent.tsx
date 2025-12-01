@@ -22,7 +22,7 @@ import {
   fetchAllUsers,
   useRoomRealtimeSync,
   useDebugRoomSubscription,
-} from "@/lib/store/unused/roomstore";
+} from "@/lib/store/roomstore";
 
 import { useDebounce } from "use-debounce";
 import { useUser } from "@/lib/store/user";

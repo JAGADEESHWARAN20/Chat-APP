@@ -12,7 +12,7 @@ import { RoomActiveUsers } from "@/components/reusable/RoomActiveUsers";
 import { RoomAssistantDialog } from "./AIchatDialog";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
-import { useAvailableRooms, useRoomActions, useSelectedRoom } from "@/lib/store/unused/roomstore";
+import { useAvailableRooms, useRoomActions, useSelectedRoom } from "@/lib/store/roomstore";
 
 export default function ChatHeader({ user }: { user: SupabaseUser | undefined }) {
   const [isSwitchRoomPopoverOpen, setIsSwitchRoomPopoverOpen] = useState(false);

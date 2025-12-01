@@ -13,7 +13,7 @@ import { useUser } from "@/lib/store/user";
 import {
   useUnifiedRoomStore,
   type RoomWithMembership,
-} from "@/lib/store/unused/roomstore";
+} from "@/lib/store/roomstore";
 
 /* -------------------------------------------------------
    Fetch rooms from RPC

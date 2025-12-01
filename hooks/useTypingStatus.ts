@@ -2,10 +2,10 @@
 import { useEffect, useCallback, useRef } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import type { Database } from "@/lib/types/supabase";
-import { useRoomActions, useSelectedRoom, useTypingUsers, useTypingDisplayText } from "@/lib/store/unused/roomstore";
+import { useRoomActions, useSelectedRoom, useTypingUsers, useTypingDisplayText } from "@/lib/store/roomstore";
 
 // Add missing import for useRoomStore
-import { useUnifiedRoomStore } from '@/lib/store/unused/roomstore';
+import { useUnifiedRoomStore } from '@/lib/store/roomstore';
 
 interface TypingUser {
   user_id: string;

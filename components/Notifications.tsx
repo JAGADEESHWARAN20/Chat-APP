@@ -42,7 +42,7 @@ import {
   useNotificationSubscription,
 } from "@/lib/store/notifications";
 
-import { useRoomActions, useUnifiedRoomStore } from "@/lib/store/unused/roomstore";
+import { useRoomActions, useUnifiedRoomStore } from "@/lib/store/roomstore";
 import { useAuthSync } from "@/hooks/useAuthSync";
 import { useConnectionManager } from "@/hooks/useConnectionManager";
 

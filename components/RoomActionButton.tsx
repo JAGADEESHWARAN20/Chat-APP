@@ -1,6 +1,6 @@
 import { Button } from "./ui/button";
 import { Switch } from "./ui/switch";
-import type { RoomWithMembership } from "@/lib/store/unused/roomstore"; // ✅ import the extended type
+import type { RoomWithMembership } from "@/lib/store/roomstore"; // ✅ import the extended type
 
 type RoomActionButtonProps = {
   room: RoomWithMembership;

@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useUser } from "@/lib/store/user";
-import { useUnifiedRoomStore } from "@/lib/store/unused/roomstore";
+import { useUnifiedRoomStore } from "@/lib/store/roomstore";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const supabase = getSupabaseBrowserClient();

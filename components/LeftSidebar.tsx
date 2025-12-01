@@ -15,7 +15,7 @@ import {
   useRoomActions,
   useRoomLoading,
   type RoomWithMembership,
-} from "@/lib/store/unused/roomstore";
+} from "@/lib/store/roomstore";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {

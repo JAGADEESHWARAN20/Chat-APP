@@ -1,5 +1,5 @@
 // Simple test to verify Jest setup works
-import { extractPresenceDataForTest } from '../lib/store/RoomContext';
+import { extractPresenceDataForTest } from '../lib/store/unused/RoomContext';
 
 describe('RoomContext Basic Tests', () => {
   test('extractPresenceDataForTest function exists', () => {
@@ -15,13 +15,13 @@ describe('RoomContext Basic Tests', () => {
   test('extracts basic presence data', () => {
     const mockState = {
       'room-1': [
-        { 
-          user_id: 'user1', 
+        {
+          user_id: 'user1',
           display_name: 'User One'
         }
       ]
     };
-    
+
     const result = extractPresenceDataForTest(mockState as any);
     expect(result).toHaveLength(1);
     expect(result[0].user_id).toBe('user1');

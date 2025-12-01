@@ -11,7 +11,7 @@ import { v4 as uuidv4 } from "uuid";
 import { Imessage } from "@/lib/store/messages";
 import { Send, Loader2 } from "lucide-react";
 import { useTypingStatus } from "@/hooks/useTypingStatus";
-import { useRoomActions, useSelectedRoom } from "@/lib/store/unused/roomstore";
+import { useRoomActions, useSelectedRoom } from "@/lib/store/roomstore";
 
 export default function ChatInput() {
   const [text, setText] = useState("");

@@ -1,6 +1,6 @@
 import { renderHook, act } from '@testing-library/react';
 import { createClient } from '@supabase/supabase-js';
-import { useRoomContext, extractPresenceDataForTest } from '../lib/store/RoomContext';
+import { useRoomContext, extractPresenceDataForTest } from '../lib/store/unused/RoomContext';
 
 // Mock Supabase
 const mockSupabase = {
@@ -62,26 +62,26 @@ describe('RoomContext', () => {
     // Create a properly typed mock presence state
     const mockState = {
       'room-1': [
-        { 
-          user_id: 'test-uuid', 
-          display_name: 'Test User', 
+        {
+          user_id: 'test-uuid',
+          display_name: 'Test User',
           online_at: new Date().toISOString(),
           room_id: 'room-1'
         } as TestPresenceData,
       ],
       'room-2': [
-        { 
-          user_id: 'current-uuid', 
-          display_name: 'Self', 
+        {
+          user_id: 'current-uuid',
+          display_name: 'Self',
           online_at: new Date().toISOString(),
           room_id: 'room-2'
         } as TestPresenceData,
       ],
     };
-    
+
     // Cast to any to satisfy TypeScript
     const data = extractPresenceDataForTest(mockState as any, 'current-uuid');
-    
+
     // Should exclude current user and return only the other user
     expect(data).toHaveLength(1);
     expect(data[0].user_id).toBe('test-uuid');
@@ -100,15 +100,15 @@ describe('RoomContext', () => {
       'room-1': [
         null,
         undefined,
-        { 
-          user_id: 'valid-uuid', 
-          display_name: 'Valid User', 
+        {
+          user_id: 'valid-uuid',
+          display_name: 'Valid User',
           online_at: new Date().toISOString(),
           room_id: 'room-1'
         } as TestPresenceData,
       ],
     };
-    
+
     const data = extractPresenceDataForTest(mockState as any);
     expect(data).toHaveLength(1);
     expect(data[0].user_id).toBe('valid-uuid');
@@ -117,10 +117,10 @@ describe('RoomContext', () => {
   test('typing users are updated correctly', async () => {
     // Since we can't easily test the hook without proper setup, test the utility function directly
     const mockUserIds = ['user1', 'user2'];
-    
+
     // This tests that the function exists and can be called
     expect(typeof extractPresenceDataForTest).toBe('function');
-    
+
     const result = extractPresenceDataForTest({} as any);
     expect(Array.isArray(result)).toBe(true);
   });
