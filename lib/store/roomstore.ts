@@ -7,6 +7,8 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { toast } from "@/components/ui/sonner";
 import type { Database } from "@/lib/types/supabase";
 
+let realtimeInitialized = false;
+
 /* -------------------------------------------------------
    TYPES
 ------------------------------------------------------- */
@@ -147,7 +149,17 @@ export const useUnifiedRoomStore = create<RoomState>()(
 
       setSelectedRoomId: (id) => {
         set({ selectedRoomId: id });
+      
+        // Reset unread count when you open the room
+        if (id) {
+          set((state) => ({
+            rooms: state.rooms.map((room) =>
+              room.id === id ? { ...room, unreadCount: 0 } : room
+            ),
+          }));
+        }
       },
+      
 
       setRoomPresence: (roomId, presence) =>
         set((state) => ({
@@ -451,20 +463,29 @@ export const useRoomActions = () =>
 ------------------------------------------------------- */
 
 export const useRoomRealtimeSync = (userId: string | null) => {
-  const { forceRefreshRooms } = useRoomActions();
+  const { forceRefreshRooms, updateRoomMembership } = useRoomActions();
   const supabase = getSupabaseBrowserClient();
 
   useEffect(() => {
     if (!userId) return;
 
-    const channel = supabase.channel(`room-sync-${userId}`);
+    // Prevent duplicate listeners
+    if (realtimeInitialized) return;
+    realtimeInitialized = true;
 
-    const refresh = () => {
-      console.log("🔄 Realtime → Refresh rooms");
-      forceRefreshRooms();
-    };
+    const channel = supabase.channel(`unified-realtime-${userId}`);
 
-    /* 🔥 room_participants */
+    const refresh = () => forceRefreshRooms();
+
+    /* ---------------------------------------------------------
+       1) MEMBERSHIP + PARTICIPANTS
+    --------------------------------------------------------- */
+    channel.on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "room_members", filter: `user_id=eq.${userId}` },
+      refresh
+    );
+
     channel.on(
       "postgres_changes",
       {
@@ -474,65 +495,74 @@ export const useRoomRealtimeSync = (userId: string | null) => {
         filter: `user_id=eq.${userId}`,
       },
       (payload) => {
-        console.log("room_participants change:", payload);
-        refresh();
+        const newRow = payload.new as { status?: string } | null;
+    
+        if (newRow?.status === "accepted") {
+          refresh();
+        }
       }
     );
+    
 
-    /* 🔥 room_members */
+    /* ---------------------------------------------------------
+       2) NOTIFICATIONS
+    --------------------------------------------------------- */
     channel.on(
       "postgres_changes",
-      {
-        event: "*",
-        schema: "public",
-        table: "room_members",
-        filter: `user_id=eq.${userId}`,
-      },
+      { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` },
       (payload) => {
-        console.log("room_members change:", payload);
-        refresh();
+        if (payload.new?.type === "join_request_accepted") {
+          refresh();
+        }
       }
     );
 
-    /* 🔥 notifications (INSERT) */
     channel.on(
       "postgres_changes",
-      {
-        event: "INSERT",
-        schema: "public",
-        table: "notifications",
-        filter: `user_id=eq.${userId}`,
-      },
-      (payload) => {
-        console.log("notification inserted:", payload.new?.type);
-        refresh();
-      }
+      { event: "DELETE", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` },
+      () => refresh()
     );
 
-    /* 🔥 notifications (DELETE) */
+    /* ---------------------------------------------------------
+       3) MESSAGES — LIVE unread + latestMessage update
+    --------------------------------------------------------- */
     channel.on(
       "postgres_changes",
-      {
-        event: "DELETE",
-        schema: "public",
-        table: "notifications",
-        filter: `user_id=eq.${userId}`,
-      },
+      { event: "INSERT", schema: "public", table: "messages" },
       (payload) => {
-        console.log("notification deleted:", payload.old?.type);
-        refresh();
+        const msg = payload.new;
+        const roomId = msg.room_id;
+        if (!roomId) return;
+
+        // update latest message
+        updateRoomMembership(roomId, {
+          latestMessage: msg.content ?? msg.text ?? null,
+          latest_message_created_at: msg.created_at,
+        });
+
+        // increment unreadCount ONLY if you are not inside that room
+        const selectedRoomId = useUnifiedRoomStore.getState().selectedRoomId;
+
+        if (selectedRoomId !== roomId) {
+          const room = useUnifiedRoomStore.getState().rooms.find((r) => r.id === roomId);
+          if (room) {
+            updateRoomMembership(roomId, {
+              unreadCount: (room.unreadCount ?? 0) + 1,
+            });
+          }
+        }
       }
     );
 
-    /* Subscribe */
-    channel.subscribe((status) => {
-      console.log("Realtime status:", status);
-    });
+    /* ---------------------------------------------------------
+       SUBSCRIBE
+    --------------------------------------------------------- */
+    channel.subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [userId, forceRefreshRooms]);
+  }, [userId]);
 };
 
 
