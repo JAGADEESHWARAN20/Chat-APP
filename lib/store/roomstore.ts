@@ -731,6 +731,9 @@ export const fetchAllUsers = async () => {
 /* -------------------------------------------------------
    ENHANCED DEBUG HELPER
 ------------------------------------------------------- */
+/* -------------------------------------------------------
+   ENHANCED DEBUG HELPER - SIMPLIFIED VERSION
+------------------------------------------------------- */
 export const useDebugRoomSubscription = (userId: string | null) => {
   useEffect(() => {
     if (!userId) return;
@@ -739,7 +742,10 @@ export const useDebugRoomSubscription = (userId: string | null) => {
     
     const supabase = getSupabaseBrowserClient();
     
-    const testChannel = supabase.channel(`debug-${userId}`)
+    const testChannel = supabase.channel(`debug-${userId}`);
+    
+    // Setup listeners
+    testChannel
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
@@ -774,13 +780,19 @@ export const useDebugRoomSubscription = (userId: string | null) => {
         filter: `user_id=eq.${userId} AND type=eq.join_request_accepted`,
       }, (payload) => {
         console.log("🔍 DEBUG: join_request_accepted notification:", payload.new);
-      })
-      .subscribe((status) => {
-        console.log("🔍 DEBUG: Subscription status:", status);
       });
     
+    testChannel.subscribe((status) => {
+      console.log("🔍 DEBUG: Subscription status:", status);
+    });
+    
+    // Store channel reference for cleanup
+    let channelRef = testChannel;
+    
     return () => {
-      supabase.removeChannel(testChannel);
+      if (channelRef) {
+        supabase.removeChannel(channelRef);
+      }
     };
   }, [userId]);
 };

@@ -371,6 +371,8 @@ function ConnectionStatus({
    Main Component
    ======================================================================= */
 
+// In Notifications.tsx, update the main component:
+
 export default function Notifications({
   isOpen: externalIsOpen,
   onClose: externalOnClose,
@@ -396,6 +398,7 @@ export default function Notifications({
   } = useNotifications();
 
   const { fetchRooms } = useUnifiedRoomStore();
+  const { updateRoomMembership } = useRoomActions(); // MOVE THIS HERE
   const { userId, isAuthenticated } = useAuthSync();
   const { connectionState, attemptReconnection } = useConnectionManager(userId);
 
@@ -442,9 +445,8 @@ export default function Notifications({
     });
 
   /* -------------------------------------------------------------------
-     Accept
+     Accept - FIXED VERSION
      ------------------------------------------------------------------- */
-  // In Notifications.tsx - update handleAccept function
   const handleAccept = useCallback(
     async (id: string, roomId: string | null, type: string) => {
       if (!userId || !roomId || loadingIds.has(id)) return;
@@ -453,7 +455,7 @@ export default function Notifications({
 
       // OPTIMISTIC UPDATE: Immediately update search component
       // This ensures UI updates before the real-time event arrives
-      const { updateRoomMembership } = useRoomActions();
+      // Use the updateRoomMembership from component level
       updateRoomMembership(roomId, {
         participationStatus: "accepted",
         isMember: true,
@@ -497,8 +499,9 @@ export default function Notifications({
         removeLoading(id);
       }
     },
-    [userId, loadingIds, remove, fetchRooms, fetchNotifications]
+    [userId, loadingIds, remove, fetchRooms, fetchNotifications, updateRoomMembership] // Add updateRoomMembership to dependencies
   );
+  
   /* -------------------------------------------------------------------
      Reject
      ------------------------------------------------------------------- */
