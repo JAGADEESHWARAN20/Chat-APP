@@ -1,4 +1,3 @@
-// components/Notifications.tsx (no changes needed, but included for completeness)
 "use client";
 import React, { memo, useCallback, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -33,7 +32,8 @@ import {
   AccordionItem,
   AccordionContent,
 } from "@/components/ui/accordion";
-/* ============================================================================
+
+/* ============================================================================ 
    NOTIFICATION HELPERS
 ============================================================================ */
 function getNotificationDisplay(n: NotificationData) {
@@ -70,7 +70,8 @@ function getNotificationDisplay(n: NotificationData) {
 function shouldShowActions(n: NotificationData) {
   return ["join_request", "room_invite"].includes(n.type);
 }
-/* ============================================================================
+
+/* ============================================================================ 
    NOTIFICATION ITEM COMPONENT
 ============================================================================ */
 interface NotificationItemProps {
@@ -212,9 +213,11 @@ const NotificationItem = memo(function NotificationItem({
     </Swipeable>
   );
 });
-/* ============================================================================
+
+/* ============================================================================ 
    MAIN NOTIFICATIONS COMPONENT
 ============================================================================ */
+
 interface NotificationsProps {
   isOpen?: boolean;
   onClose?: () => void;
@@ -229,19 +232,25 @@ export default function Notifications({
     () => externalOnClose?.() ?? setInternalIsOpen(false),
     [externalOnClose]
   );
+
   // Zustand state - auto-updates from realtime
   const notifications = useNotifications();
   const unreadCount = useUnreadCount();
   const { acceptJoinRequest } = useRoomActions();
+
+  // IMPORTANT: use selectors for actions so React/Zustand subscriptions work correctly
+  const removeNotification = useUnifiedStore((s) => s.removeNotification);
+  const fetchNotifications = useUnifiedStore((s) => s.fetchNotifications);
+
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
-  const addLoading = (id: string) =>
-    setLoadingIds((s) => new Set([...s, id]));
+  const addLoading = (id: string) => setLoadingIds((s) => new Set([...s, id]));
   const removeLoading = (id: string) =>
     setLoadingIds((s) => {
       const next = new Set(s);
       next.delete(id);
       return next;
     });
+
   /* ------------------------------------------------------------------------
      HANDLERS
   ------------------------------------------------------------------------ */
@@ -252,20 +261,26 @@ export default function Notifications({
       addLoading(id);
       try {
         await acceptJoinRequest(id, notification.room_id);
+        // acceptJoinRequest already removes the notification in the action (store-side)
       } catch (error) {
         console.error("Accept error:", error);
+        // Optionally re-fetch
+        await fetchNotifications();
       } finally {
         removeLoading(id);
       }
     },
-    [notifications, loadingIds, acceptJoinRequest]
+    [notifications, loadingIds, acceptJoinRequest, fetchNotifications]
   );
+
   const handleReject = useCallback(
     async (id: string) => {
       if (loadingIds.has(id)) return;
       addLoading(id);
-      // Remove from UI immediately
-      useUnifiedStore.getState().removeNotification(id);
+
+      // Optimistic UI: remove locally immediately through the store action (reactive)
+      removeNotification(id);
+
       try {
         const notification = notifications.find((n) => n.id === id);
         const res = await fetch(`/api/notifications/${id}/reject`, {
@@ -279,32 +294,39 @@ export default function Notifications({
         if (!res.ok) throw new Error("Reject failed");
       } catch (error) {
         console.error("Reject error:", error);
-        // Re-fetch on error
-        await useUnifiedStore.getState().fetchNotifications();
+        // Re-fetch on error so UI gets the canonical data
+        await fetchNotifications();
       } finally {
         removeLoading(id);
       }
     },
-    [notifications, loadingIds]
+    [notifications, loadingIds, removeNotification, fetchNotifications]
   );
+
   const handleDelete = useCallback(
     async (id: string) => {
       if (loadingIds.has(id)) return;
       addLoading(id);
-      // Remove from UI immediately
-      useUnifiedStore.getState().removeNotification(id);
+
+      // Optimistic UI: remove locally immediately
+      removeNotification(id);
+
       try {
-        await fetch(`/api/notifications/${id}`, {
+        const res = await fetch(`/api/notifications/${id}`, {
           method: "DELETE",
         });
+        if (!res.ok) throw new Error("Delete failed");
       } catch (error) {
         console.error("Delete error:", error);
+        // Re-fetch on error
+        await fetchNotifications();
       } finally {
         removeLoading(id);
       }
     },
-    [loadingIds]
+    [loadingIds, removeNotification, fetchNotifications]
   );
+
   /* ------------------------------------------------------------------------
      SORTED NOTIFICATIONS
   ------------------------------------------------------------------------ */
@@ -316,6 +338,7 @@ export default function Notifications({
       ),
     [notifications]
   );
+
   /* ------------------------------------------------------------------------
      RENDER
   ------------------------------------------------------------------------ */
@@ -379,7 +402,7 @@ export default function Notifications({
             <Button
               size="sm"
               variant="outline"
-              onClick={() => useUnifiedStore.getState().fetchNotifications()}
+              onClick={() => fetchNotifications()}
             >
               Refresh
             </Button>

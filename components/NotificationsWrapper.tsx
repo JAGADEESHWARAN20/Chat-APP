@@ -1,48 +1,42 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Bell } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 import Notifications from "./Notifications";
-import { useNotificationHandler } from "@/hooks/useNotificationHandler";
 import { useUser } from "@/lib/store/user";
-import { useNotifications } from "@/lib/store/notifications"; // ✅ correct import
+import { useUnreadCount, useUnifiedStore } from "@/lib/store/unified-roomstore";
 import { cn } from "@/lib/utils";
 
 export default function NotificationsWrapper() {
   const [isOpen, setIsOpen] = useState(false);
+
   const { user: currentUser, authUser } = useUser();
-
-  // ✅ NEW API FROM STORE
-  const {
-    unread,           // replaces unreadCount
-    fetch: fetchNotifications, // replaces fetchNotifications
-    hasError,
-  } = useNotifications();
-
   const userId = currentUser?.id || authUser?.id;
 
-  useNotificationHandler();
+  // 🔥 UnifiedStore selectors — single source of truth
+  const unread = useUnreadCount();
+  const fetchNotifications = useUnifiedStore((s) => s.fetchNotifications);
 
-  // 🔁 Fetch on open
+  // 🔥 Load notifications when panel opens
   useEffect(() => {
-    if (isOpen && userId) fetchNotifications(userId);
+    if (isOpen && userId) {
+      fetchNotifications();
+    }
   }, [isOpen, userId, fetchNotifications]);
 
-  const handleClick = () => {
+  const handleClick = useCallback(() => {
     if (!userId) {
       window.location.href = "/auth/signin";
       return;
     }
     setIsOpen(true);
-  };
+  }, [userId]);
 
   return (
     <div className="relative">
-      {/* ============================
-       🔔 Notification Trigger Button
-      ============================ */}
+      {/* =============== TRIGGER BUTTON =============== */}
       <motion.button
         title="Notifications"
         aria-label={`Notifications ${unread > 0 ? `${unread} unread` : ""}`}
@@ -57,7 +51,7 @@ export default function NotificationsWrapper() {
           !userId && "opacity-50 cursor-not-allowed"
         )}
       >
-        {/* 🔴 Glow animation */}
+        {/* Animated Glow */}
         <AnimatePresence>
           {unread > 0 && (
             <motion.div
@@ -71,7 +65,7 @@ export default function NotificationsWrapper() {
           )}
         </AnimatePresence>
 
-        {/* 🔔 Bell Icon */}
+        {/* Bell icon */}
         <Bell
           className={cn(
             "relative z-10 h-[2em] w-[2em] transition-colors duration-200",
@@ -81,7 +75,7 @@ export default function NotificationsWrapper() {
           )}
         />
 
-        {/* Unread badge */}
+        {/* 🔴 Unread count badge */}
         <AnimatePresence>
           {unread > 0 && userId && (
             <motion.span
@@ -99,18 +93,11 @@ export default function NotificationsWrapper() {
             </motion.span>
           )}
         </AnimatePresence>
-
-        {/* Ping indicator for errors */}
-        {hasError && userId && (
-          <span className="absolute -top-1 -right-1 h-2 w-2 animate-ping rounded-full bg-red-500" />
-        )}
       </motion.button>
 
-      {/* ============================
-       📜 Notifications Drawer
-      ============================ */}
+      {/* =============== NOTIFICATION PANEL =============== */}
       <AnimatePresence>
-        {isOpen && (
+        {isOpen && userId && (
           <motion.div
             key="notification-panel"
             initial={{ opacity: 0, y: -10 }}
