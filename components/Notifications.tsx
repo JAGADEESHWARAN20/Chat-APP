@@ -294,7 +294,7 @@ const NotificationRow = memo(function NotificationRow({
         </div>
 
         {/* Right actions (three-dot dropdown) */}
-        <div className="flex-shrink-0 ml-2">
+        {/* <div className="flex-shrink-0 ml-2">
           <ItemMenu
             onAccept={() => onAccept(notification.id)}
             onReject={() => onReject(notification.id)}
@@ -302,7 +302,7 @@ const NotificationRow = memo(function NotificationRow({
             showAcceptReject={needsAction}
             loading={loading}
           />
-        </div>
+        </div> */}
       </div>
     </div>
   );
@@ -523,11 +523,11 @@ export default function Notifications({
           <div className="border-t p-4 text-sm flex justify-between items-center">
             <span className="text-muted-foreground">{sorted.length} notifications</span>
 
-            <div className="flex items-center gap-2">
+            {/* <div className="flex items-center gap-2">
               <Button size="sm" variant="outline" onClick={() => startTransition(() => fetchNotifications())}>
                 Refresh
               </Button>
-            </div>
+            </div> */}
           </div>
         )}
       </SheetContent>
