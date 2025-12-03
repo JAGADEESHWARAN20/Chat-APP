@@ -297,14 +297,31 @@ export const useUnifiedStore = create<UnifiedStore>()(
 
       fetchUsers: async () => {
         try {
-          const res = await fetch("/api/users");
-          if (!res.ok) throw new Error("Failed to fetch users");
-          const data = await res.json();
-          get().setUsers(Array.isArray(data) ? data : []);
+          const supabase = getSupabaseBrowserClient();
+      
+          const { data, error } = await supabase
+            .from("profiles")
+            .select("id, username, display_name, avatar_url, bio")
+            .order("username", { ascending: true });
+      
+          if (error) throw error;
+      
+          const normalized: UserData[] = (data || []).map((u) => ({
+            id: u.id,
+            username: u.username ?? "", // <-- FIX: never null
+            display_name: u.display_name ?? undefined,
+            avatar_url: u.avatar_url ?? undefined,
+            bio: u.bio ?? undefined,
+          }));
+      
+          get().setUsers(normalized);
         } catch (err) {
           console.error("fetchUsers error:", err);
+          get().setUsers([]);
         }
       },
+      
+      
 
       fetchNotifications: async () => {
         const userId = get().userId;

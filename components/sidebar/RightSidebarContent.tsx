@@ -141,7 +141,7 @@ export default function RightSidebarContent({ width, onClose }: RightSidebarProp
               <div
                 role="button"
                 tabIndex={0}
-                onClick={() => handleItemClick(`/profile/${storeUser?.id}`)}
+                onClick={() => handleItemClick(`/profile`)}
                 className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 hover:bg-white/10 transition-all duration-300 group cursor-pointer"
               >
                 <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[hsl(var(--sidebar-primary))] to-[hsl(var(--sidebar-primary)/0.7)] flex items-center justify-center text-[hsl(var(--room-text))] font-bold text-lg ">
@@ -156,8 +156,8 @@ export default function RightSidebarContent({ width, onClose }: RightSidebarProp
 
               <div className="flex flex-col gap-1 pt-2">
                 {[
-                  { icon: User, label: "Profile", href: `/profile/${storeUser?.id}` },
-                  { icon: Settings, label: "Settings", href: `/profile/${storeUser?.id}/edit` },
+                  { icon: User, label: "Profile", href: `/profile` },
+                  { icon: Settings, label: "Settings", href: `/edit-profile` },
                 ].map((item) => (
                   <a
                     key={item.label}

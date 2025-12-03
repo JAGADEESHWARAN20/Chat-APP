@@ -1,24 +1,18 @@
-// app/profile/[id]/page.tsx
+// app/profile/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import type { Database } from "@/lib/types/supabase";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { useRouter, useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChevronLeft } from "lucide-react";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 
-export default function OtherUserProfilePage() {
-  const params = useParams();
-  const userId = params?.id as string; // dynamic ID
-  const router = useRouter();
-
-  const [profile, setProfile] = useState<Profile | null>(null);
-
+export default function MyProfilePage() {
   const [supabase] = useState(() =>
     createBrowserClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -26,21 +20,25 @@ export default function OtherUserProfilePage() {
     )
   );
 
-  useEffect(() => {
-    if (!userId) return;
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const router = useRouter();
 
+  useEffect(() => {
     const load = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
       const { data } = await supabase
         .from("profiles")
         .select("*")
-        .eq("id", userId)
+        .eq("id", user.id)
         .single();
 
       setProfile(data);
     };
 
     load();
-  }, [supabase, userId]);
+  }, [supabase]);
 
   if (!profile)
     return (
@@ -54,22 +52,21 @@ export default function OtherUserProfilePage() {
     <div className="mx-[1em] my-[1em] p-3 bg-card text-card-foreground rounded-2xl border border-border">
       <Button
         onClick={() => router.back()}
-        className="flex items-center mb-6 text-muted-foreground"
+        className="flex items-center text-muted-foreground transition-colors mb-6"
       >
-        <ChevronLeft />
+        <ChevronLeft className="w-full h-full stroke-white" />
       </Button>
 
       <div className="flex items-center gap-6">
         <Image
           src={profile.avatar_url || "/default-avatar.png"}
-          alt="Avatar"
           width={80}
           height={80}
+          alt="avatar"
           className="rounded-full border"
         />
-
         <div>
-          <h2 className="text-xl font-semibold">
+          <h2 className="text-xl font-bold">
             {profile.display_name || profile.username}
           </h2>
           <p className="text-muted-foreground">@{profile.username}</p>
@@ -79,8 +76,14 @@ export default function OtherUserProfilePage() {
       <div className="mt-6">
         <h3 className="font-semibold">Bio</h3>
         <p className="text-muted-foreground">
-          {profile.bio || "This user has no bio."}
+          {profile.bio || "No bio yet"}
         </p>
+      </div>
+
+      <div className="mt-8">
+        <Button className="w-full" onClick={() => router.push("/edit-profile")}>
+          Edit Profile
+        </Button>
       </div>
     </div>
   );

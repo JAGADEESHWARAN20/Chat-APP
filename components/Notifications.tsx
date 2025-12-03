@@ -219,7 +219,7 @@ const NotificationRow = memo(function NotificationRow({
 
   return (
     <div className="border-b border-border/40">
-      <div className="flex items-center gap-3 px-3 py-3">
+      <div className="flex items-center gap-3 px-1 py-1">
         {/* Checkbox column */}
         <div className="flex-shrink-0 w-10 flex items-center justify-center">
           {showCheckbox ? (
@@ -531,15 +531,15 @@ export default function Notifications({
               </SheetTitle>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
               {anySelected && (
                 <Button
                   size="sm"
                   variant="destructive"
                   onClick={bulkDelete}
-                  className="mr-2"
+                  className="mr-1"
                 >
-                  <Trash2 className="mr-2 h-4 w-4" /> Delete ({selected.size})
+                  <Trash2 className="mr-1 h-4 w-4" /> Delete ({selected.size})
                 </Button>
               )}
 
@@ -549,7 +549,7 @@ export default function Notifications({
                 onClick={() => startTransition(() => fetchNotifications())}
                 title="Refresh"
               >
-                <Loader2 className="h-4 w-4" />
+                <Loader2 className="h-[1em] w-[1em] p-0" />
               </Button>
 
               <Button
@@ -558,7 +558,7 @@ export default function Notifications({
                 onClick={close}
                 title="Close"
               >
-                <ArrowRight />
+                <ArrowRight className="h-[1.5em] w-[1.5em] p-0" />
               </Button>
             </div>
           </div>
@@ -572,7 +572,7 @@ export default function Notifications({
               <p className="text-sm">No new notifications</p>
             </div>
           ) : (
-            <div className="pb-10 pt-2">
+            <div className="pb-[2em] pt-1">
               {sorted.map((n) => (
                 <NotificationRow
                   key={n.id}
