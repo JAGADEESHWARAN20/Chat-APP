@@ -53,6 +53,9 @@ interface UnifiedStore {
   notifications: NotificationData[];
   isLoading: boolean;
   lastSync: number | null;
+  activeTab: "home" | "search";
+  setActiveTab: (tab: "home" | "search") => void;
+
   selectedRoomId: string | null;
   typingUsers: { user_id: string; is_typing: boolean; display_name?: string }[];
   typingDisplayText: string;
@@ -105,6 +108,9 @@ export const useUnifiedStore = create<UnifiedStore>()(
     typingUsers: [],
     typingDisplayText: "",
     roomPresence: {},
+    activeTab: "home",
+    setActiveTab: (tab) => set({ activeTab: tab }),
+
     setRoomPresence: (roomId, presence) =>
       set((state) => ({
         roomPresence: {
@@ -215,6 +221,7 @@ export const useUnifiedStore = create<UnifiedStore>()(
           participation_status: newRow.status,
           is_member: newRow.status === "accepted",
         });
+        get().fetchRooms();
       }
       // INSERT: User joins (either pending or accepted)
       if (eventType === "INSERT") {
@@ -285,9 +292,7 @@ export const useUnifiedStore = create<UnifiedStore>()(
               description: newRow.message ?? "",
             });
             await get().fetchRooms(); // Refetch to ensure status updates (e.g., pending → accepted)
-            if (newRow.room_id) {
-              get().setSelectedRoomId(newRow.room_id);
-            }
+           
             break;
           }
           case "join_request_rejected": {

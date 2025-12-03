@@ -25,6 +25,7 @@ import { ThemeTransitionWrapper } from "./ThemeTransitionWrapper";
 import { PresenceConnector } from "./PresenceConnector";
 import { useUser } from "@/lib/store/user";
 import { useMessage } from "@/lib/store/messages";
+import { useUnifiedRealtime } from "@/lib/store/unified-roomstore";
 
 
 interface UnifiedHomeProps {
@@ -40,8 +41,9 @@ function UnifiedHomeContent({
 }: UnifiedHomeProps) {
   const { user } = useUser();
 
-  // Keep roomstore.user synced with auth user
-
+  
+  const userId = user?.user?.id ?? null;
+  useUnifiedRealtime(userId);
 
   // --- Search State ---
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
@@ -207,7 +209,9 @@ function UnifiedHomeContent({
   const currentUser = useUnifiedStore((s) => s.userId);
 
   // --- 7. Tabs Logic ---
-  const [activeTab, setActiveTab] = useState<"home" | "search">("home");
+  const activeTab = useUnifiedStore((s) => s.activeTab);
+  const setActiveTab = useUnifiedStore((s) => s.setActiveTab);
+  
   const tabs = useMemo(
     () => [
       { id: "home" as const, icon: Home, label: "Home", onClick: () => setActiveTab("home") },

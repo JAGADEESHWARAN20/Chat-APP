@@ -11,7 +11,7 @@ import {
   useRooms,
   useUsers,
   useRoomActions,
-  useUnifiedRealtime,
+
   useUnifiedStore,
   type RoomData,
   type UserData,
@@ -202,8 +202,6 @@ export default function SearchComponent() {
   // Fix #1 → Reactive setter instead of getState().setUserId
   const setUserId = useUnifiedStore((s) => s.setUserId);
 
-  // Realtime connection
-  useUnifiedRealtime(userId);
 
   // Local state
   const [query, setQuery] = useState("");
@@ -245,9 +243,13 @@ export default function SearchComponent() {
      Handlers
   ----------------------------------------------- */
   const openRoom = useCallback(
-    (id: string) => router.push(`/rooms/${id}`),
-    [router]
+    (id: string) => {
+      useUnifiedStore.getState().setSelectedRoomId(id);
+      useUnifiedStore.getState().setActiveTab("home");
+    },
+    []
   );
+  
 
   const handleJoin = useCallback(
     async (roomId: string) => joinRoom(roomId),
