@@ -1,5 +1,13 @@
 "use client";
-import React, { memo, useCallback, useMemo, useState } from "react";
+
+import React, {
+  memo,
+  useCallback,
+  useMemo,
+  useState,
+  useTransition,
+} from "react";
+
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -7,7 +15,13 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+
+import {
+  Avatar,
+  AvatarImage,
+  AvatarFallback,
+} from "@/components/ui/avatar";
+
 import {
   Check,
   X,
@@ -19,6 +33,7 @@ import {
   Bell,
   Loader2,
 } from "lucide-react";
+
 import {
   useNotifications,
   useUnreadCount,
@@ -26,19 +41,22 @@ import {
   useUnifiedStore,
   type NotificationData,
 } from "@/lib/store/unified-roomstore";
-import { Swipeable } from "@/components/ui/swipeable";
-import {
-  Accordion,
-  AccordionItem,
-  AccordionContent,
-} from "@/components/ui/accordion";
 
-/* ============================================================================ 
-   NOTIFICATION HELPERS
+import { cn } from "@/lib/utils";
+
+/* ============================================================================
+   HELPERS
 ============================================================================ */
-function getNotificationDisplay(n: NotificationData) {
-  const sender = n.users?.display_name || n.users?.username || "Someone";
+function formatDisplay(n: NotificationData) {
+  const sender =
+    n.sender?.display_name ||
+    n.sender?.username ||
+    n.users?.display_name ||
+    n.users?.username ||
+    "Someone";
+
   const room = n.rooms?.name || "a room";
+
   switch (n.type) {
     case "room_invite":
       return {
@@ -63,346 +81,300 @@ function getNotificationDisplay(n: NotificationData) {
     default:
       return {
         icon: <Bell className="h-4 w-4" />,
-        text: n.message || "New notification",
+        text: n.message ?? "New notification",
       };
   }
 }
-function shouldShowActions(n: NotificationData) {
-  return ["join_request", "room_invite"].includes(n.type);
-}
 
-/* ============================================================================ 
-   NOTIFICATION ITEM COMPONENT
+const NEEDS_ACTION = new Set(["join_request", "room_invite"]);
+const hasActions = (n: NotificationData) => NEEDS_ACTION.has(n.type);
+
+/* ============================================================================
+   FAST NOTIFICATION ITEM (Only re-renders when its own props change)
 ============================================================================ */
-interface NotificationItemProps {
-  notification: NotificationData;
-  onAccept: (id: string) => Promise<void>;
-  onReject: (id: string) => Promise<void>;
-  onDelete: (id: string) => Promise<void>;
-  isLoading?: boolean;
-}
 const NotificationItem = memo(function NotificationItem({
   notification,
   onAccept,
   onReject,
   onDelete,
-  isLoading = false,
-}: NotificationItemProps) {
+  isLoading,
+}: {
+  notification: NotificationData;
+  onAccept: (id: string) => void;
+  onReject: (id: string) => void;
+  onDelete: (id: string) => void;
+  isLoading: boolean;
+}) {
+  const sender =
+    notification.sender ||
+    notification.users ||
+    null;
+
+  const displayName =
+    sender?.display_name ||
+    sender?.username ||
+    "Someone";
+
+  const avatar = sender?.avatar_url ?? "";
+
   const { icon, text } = useMemo(
-    () => getNotificationDisplay(notification),
+    () => formatDisplay(notification),
     [notification]
   );
-  const showActions = shouldShowActions(notification);
-  const [open, setOpen] = useState(false);
+
+  const [open, setOpen] = useState<"delete" | "actions" | null>(null);
+
+  const toggle = useCallback(
+    (section: "delete" | "actions") =>
+      setOpen((prev) => (prev === section ? null : section)),
+    []
+  );
+
   return (
-    <Swipeable
-      onSwipeLeft={() => showActions && !isLoading && onAccept(notification.id)}
-      onSwipeRight={() => !isLoading && onReject(notification.id)}
-      swipeThreshold={120}
-      enableMouseEvents
-      className="select-none touch-manipulation"
-    >
-      <Accordion
-        type="single"
-        collapsible
-        value={open ? notification.id : ""}
-        onValueChange={(v) => setOpen(v === notification.id)}
-      >
-        <AccordionItem
-          value={notification.id}
-          className="border-b border-border/50"
+    <div className="border-b border-border/40">
+      <div className="flex items-start w-full">
+
+        {/* LEFT — DELETE ZONE */}
+        <div
+          onClick={() => toggle("delete")}
+          className="w-16 flex-shrink-0 flex items-center justify-center cursor-pointer
+                     bg-destructive/5 hover:bg-destructive/15 active:scale-95 transition-all"
         >
-          <div
-            role="button"
-            tabIndex={0}
-            aria-expanded={open}
-            onClick={() => setOpen((o) => !o)}
-            className={`mx-2 my-1 flex min-h-[80px] cursor-pointer items-start gap-3 rounded-lg p-4 transition-all
-              bg-gradient-to-r from-background/80 to-muted/60
-              hover:from-muted/80 hover:to-muted/70
-              ${notification.status === "read" ? "opacity-70" : ""}
-            `}
-          >
-            {/* Avatar */}
-            <Avatar className="flex-shrink-0 h-10 w-10 border border-border/60 shadow-sm">
-              <AvatarImage
-                src={notification.users?.avatar_url || ""}
-                alt={`${notification.users?.username || "User"} avatar`}
-              />
-              <AvatarFallback>
-                {notification.users?.username?.[0]?.toUpperCase() ?? "?"}
-              </AvatarFallback>
+          <Trash2 className="h-5 w-5 text-destructive" />
+        </div>
+
+        {/* MAIN CONTENT */}
+        <div
+          onClick={() => toggle("actions")}
+          className={cn(
+            "flex-1 p-4 cursor-pointer rounded-r-lg transition-all",
+            "bg-gradient-to-r from-background/80 to-muted/50",
+            "hover:from-muted/70 hover:to-muted/60",
+            notification.status === "read" ? "opacity-70" : ""
+          )}
+        >
+          <div className="flex items-start gap-3">
+            <Avatar className="h-10 w-10 border shadow">
+              <AvatarImage src={avatar} />
+              <AvatarFallback>{displayName[0]?.toUpperCase()}</AvatarFallback>
             </Avatar>
-            {/* Content */}
+
             <div className="min-w-0 flex-1">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex flex-1 items-center gap-2 text-sm font-medium">
-                  <span className="mt-0.5">{icon}</span>
-                  <span className="line-clamp-2 break-words">{text}</span>
-                </div>
-                {/* Quick Actions */}
-                {showActions && (
-                  <div className="flex flex-shrink-0 items-center gap-1">
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      disabled={isLoading}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onReject(notification.id);
-                      }}
-                      className="h-8 w-8 hover:bg-destructive/15"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      disabled={isLoading}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onAccept(notification.id);
-                      }}
-                      className="h-8 w-8 text-green-600 hover:bg-green-500/15"
-                    >
-                      <Check className="h-4 w-4" />
-                    </Button>
-                  </div>
-                )}
+              <div className="flex gap-2 text-sm font-medium">
+                {icon}
+                <span className="line-clamp-2">{text}</span>
               </div>
-              {/* Timestamp */}
-              <p className="mt-2 text-xs text-muted-foreground">
+              <p className="mt-1 text-xs text-muted-foreground">
                 {new Date(notification.created_at).toLocaleString()}
               </p>
             </div>
           </div>
-          {/* Expanded Actions */}
-          <AccordionContent>
-            <div className="flex flex-wrap gap-2 px-4 pb-4">
-              {showActions && (
-                <>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => onReject(notification.id)}
-                    className="min-w-[120px] flex-1"
-                  >
-                    <X className="mr-1 h-4 w-4" /> Reject
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={() => onAccept(notification.id)}
-                    className="min-w-[120px] flex-1"
-                  >
-                    <Check className="mr-1 h-4 w-4" /> Accept
-                  </Button>
-                </>
-              )}
-              <Button
-                size="sm"
-                variant="outline"
-                className="ml-auto min-w-[120px] flex-1"
-                onClick={() => onDelete(notification.id)}
-              >
+        </div>
+      </div>
+
+      {/* DELETE PANEL */}
+      {open === "delete" && (
+        <div className="px-4 pb-4 pt-2">
+          <Button
+            size="sm"
+            variant="destructive"
+            disabled={isLoading}
+            onClick={() => onDelete(notification.id)}
+            className="w-full"
+          >
+            {isLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <>
                 <Trash2 className="mr-1 h-4 w-4" /> Delete
-              </Button>
-            </div>
-          </AccordionContent>
-        </AccordionItem>
-      </Accordion>
-    </Swipeable>
+              </>
+            )}
+          </Button>
+        </div>
+      )}
+
+      {/* ACTIONS PANEL */}
+      {open === "actions" && hasActions(notification) && (
+        <div className="px-4 pb-4 pt-2 flex gap-2 animate-in fade-in slide-in-from-right-4">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onReject(notification.id)}
+            disabled={isLoading}
+            className="flex-1"
+          >
+            <X className="mr-1 h-4 w-4" /> Reject
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => onAccept(notification.id)}
+            disabled={isLoading}
+            className="flex-1"
+          >
+            <Check className="mr-1 h-4 w-4" /> Accept
+          </Button>
+        </div>
+      )}
+    </div>
   );
 });
 
-/* ============================================================================ 
-   MAIN NOTIFICATIONS COMPONENT
+/* ============================================================================
+   MAIN NOTIFICATIONS UI — FAST, PREMIUM, OPTIMIZED
 ============================================================================ */
-
-interface NotificationsProps {
-  isOpen?: boolean;
-  onClose?: () => void;
-}
 export default function Notifications({
   isOpen: externalIsOpen,
   onClose: externalOnClose,
-}: NotificationsProps) {
-  const [internalIsOpen, setInternalIsOpen] = useState(false);
-  const isOpen = externalIsOpen ?? internalIsOpen;
-  const handleClose = useCallback(
-    () => externalOnClose?.() ?? setInternalIsOpen(false),
-    [externalOnClose]
-  );
+}: {
+  isOpen?: boolean;
+  onClose?: () => void;
+}) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isOpen = externalIsOpen ?? internalOpen;
 
-  // Zustand state - auto-updates from realtime
+  const close = useCallback(() => {
+    externalOnClose?.() ?? setInternalOpen(false);
+  }, [externalOnClose]);
+
   const notifications = useNotifications();
   const unreadCount = useUnreadCount();
-  const { acceptJoinRequest } = useRoomActions();
-
-  // IMPORTANT: use selectors for actions so React/Zustand subscriptions work correctly
   const removeNotification = useUnifiedStore((s) => s.removeNotification);
   const fetchNotifications = useUnifiedStore((s) => s.fetchNotifications);
+  const { acceptJoinRequest } = useRoomActions();
 
-  const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
-  const addLoading = (id: string) => setLoadingIds((s) => new Set([...s, id]));
-  const removeLoading = (id: string) =>
-    setLoadingIds((s) => {
-      const next = new Set(s);
-      next.delete(id);
+  const [isPending, startTransition] = useTransition();
+  const [loading, setLoading] = useState<Set<string>>(new Set());
+
+  const setLoad = (id: string, val: boolean) =>
+    setLoading((prev) => {
+      const next = new Set(prev);
+      val ? next.add(id) : next.delete(id);
       return next;
     });
 
-  /* ------------------------------------------------------------------------
-     HANDLERS
-  ------------------------------------------------------------------------ */
-  const handleAccept = useCallback(
+  /* FAST ACTION HANDLERS */
+  const fastReject = useCallback(
     async (id: string) => {
-      const notification = notifications.find((n) => n.id === id);
-      if (!notification?.room_id || loadingIds.has(id)) return;
-      addLoading(id);
-      try {
-        await acceptJoinRequest(id, notification.room_id);
-        // acceptJoinRequest already removes the notification in the action (store-side)
-      } catch (error) {
-        console.error("Accept error:", error);
-        // Optionally re-fetch
-        await fetchNotifications();
-      } finally {
-        removeLoading(id);
-      }
-    },
-    [notifications, loadingIds, acceptJoinRequest, fetchNotifications]
-  );
-
-  const handleReject = useCallback(
-    async (id: string) => {
-      if (loadingIds.has(id)) return;
-      addLoading(id);
-
-      // Optimistic UI: remove locally immediately through the store action (reactive)
-      removeNotification(id);
+      if (loading.has(id)) return;
+      setLoad(id, true);
+      removeNotification(id); // instant UI update
 
       try {
-        const notification = notifications.find((n) => n.id === id);
-        const res = await fetch(`/api/notifications/${id}/reject`, {
+        const n = notifications.find((x) => x.id === id);
+        await fetch(`/api/notifications/${id}/reject`, {
           method: "POST",
-          body: JSON.stringify({
-            room_id: notification?.room_id,
-            sender_id: notification?.sender_id,
-          }),
           headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            room_id: n?.room_id,
+            sender_id: n?.sender_id,
+          }),
         });
-        if (!res.ok) throw new Error("Reject failed");
-      } catch (error) {
-        console.error("Reject error:", error);
-        // Re-fetch on error so UI gets the canonical data
-        await fetchNotifications();
       } finally {
-        removeLoading(id);
+        setLoad(id, false);
       }
     },
-    [notifications, loadingIds, removeNotification, fetchNotifications]
+    [notifications, loading]
   );
 
-  const handleDelete = useCallback(
+  const fastDelete = useCallback(
     async (id: string) => {
-      if (loadingIds.has(id)) return;
-      addLoading(id);
-
-      // Optimistic UI: remove locally immediately
+      if (loading.has(id)) return;
+      setLoad(id, true);
       removeNotification(id);
 
       try {
-        const res = await fetch(`/api/notifications/${id}`, {
-          method: "DELETE",
-        });
-        if (!res.ok) throw new Error("Delete failed");
-      } catch (error) {
-        console.error("Delete error:", error);
-        // Re-fetch on error
-        await fetchNotifications();
+        await fetch(`/api/notifications/${id}`, { method: "DELETE" });
       } finally {
-        removeLoading(id);
+        setLoad(id, false);
       }
     },
-    [loadingIds, removeNotification, fetchNotifications]
+    [loading]
   );
 
-  /* ------------------------------------------------------------------------
-     SORTED NOTIFICATIONS
-  ------------------------------------------------------------------------ */
-  const sortedNotifications = useMemo(
+  const fastAccept = useCallback(
+    async (id: string) => {
+      const n = notifications.find((x) => x.id === id);
+      if (!n || loading.has(id)) return;
+
+      setLoad(id, true);
+
+      try {
+        await acceptJoinRequest(id, n.room_id!);
+      } finally {
+        setLoad(id, false);
+      }
+    },
+    [notifications, loading]
+  );
+
+  /* SORTED using useMemo — only recalcs on notifications change */
+  const sorted = useMemo(
     () =>
       [...notifications].sort(
         (a, b) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          +new Date(b.created_at) - +new Date(a.created_at)
       ),
     [notifications]
   );
 
-  /* ------------------------------------------------------------------------
-     RENDER
-  ------------------------------------------------------------------------ */
   return (
-    <Sheet open={isOpen} onOpenChange={handleClose}>
+    <Sheet open={isOpen} onOpenChange={close}>
       <SheetContent
         side="right"
         className="flex w-full flex-col p-0 sm:max-w-sm"
         hideCloseButton
       >
-        {/* Header */}
-        <SheetHeader className="border-b bg-gradient-to-r from-background to-muted/60 p-4">
+        <SheetHeader className="border-b bg-gradient-to-r from-background to-muted/50 p-4">
           <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleClose}
-              className="rounded-full border border-border/40 shadow-sm"
-            >
+            <Button size="icon" variant="ghost" onClick={close}>
               <ArrowRight />
             </Button>
+
             <SheetTitle className="flex items-center gap-2">
               Notifications
               {unreadCount > 0 && (
-                <span className="rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white shadow-sm">
+                <span className="px-2 py-0.5 rounded-full bg-red-500 text-white text-xs font-bold">
                   {unreadCount > 99 ? "99+" : unreadCount}
                 </span>
               )}
             </SheetTitle>
           </div>
         </SheetHeader>
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto scrollbar-thin">
-          {sortedNotifications.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center p-8 text-center text-muted-foreground">
-              <Bell className="mb-4 h-12 w-12 opacity-50" />
+
+        {/* NOTIFICATION LIST */}
+        <div className="flex-1 overflow-y-auto">
+          {sorted.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+              <Bell className="h-12 w-12 opacity-40 mb-3" />
               <p className="text-lg font-medium">All caught up!</p>
-              <p className="text-sm">No new notifications</p>
             </div>
           ) : (
-            <div className="py-2">
-              {sortedNotifications.map((notification) => (
+            <div className="pb-10 pt-2">
+              {sorted.map((n) => (
                 <NotificationItem
-                  key={notification.id}
-                  notification={notification}
-                  onAccept={handleAccept}
-                  onReject={handleReject}
-                  onDelete={handleDelete}
-                  isLoading={loadingIds.has(notification.id)}
+                  key={n.id}
+                  notification={n}
+                  onAccept={fastAccept}
+                  onReject={fastReject}
+                  onDelete={fastDelete}
+                  isLoading={loading.has(n.id)}
                 />
               ))}
             </div>
           )}
         </div>
-        {/* Footer */}
-        {notifications.length > 0 && (
-          <div className="flex justify-between border-t p-4 text-sm">
+
+        {/* FOOTER */}
+        {sorted.length > 0 && (
+          <div className="border-t p-4 text-sm flex justify-between">
             <span className="text-muted-foreground">
-              {notifications.length} total
+              {sorted.length} notifications
             </span>
+
             <Button
               size="sm"
               variant="outline"
-              onClick={() => fetchNotifications()}
+              onClick={() => startTransition(fetchNotifications)}
             >
               Refresh
             </Button>

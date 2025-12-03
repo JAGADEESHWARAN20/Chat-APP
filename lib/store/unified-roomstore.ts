@@ -48,8 +48,26 @@ export interface NotificationData {
   message: string;
   status: "read" | "unread";
   created_at: string;
-  users?: any;
-  rooms?: any;
+
+  // Supabase joined relations
+  sender?: {
+    id: string;
+    username: string;
+    display_name?: string;
+    avatar_url?: string;
+  } | null;
+
+  users?: {
+    id: string;
+    username: string;
+    display_name?: string;
+    avatar_url?: string;
+  } | null;
+
+  rooms?: {
+    id: string;
+    name: string;
+  } | null;
 }
 
 /* ============================
