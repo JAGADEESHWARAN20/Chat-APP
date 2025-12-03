@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { useUnifiedStore, useRoomPresence } from "@/lib/store/unified-roomstore";
+import { useUnifiedStore } from "@/lib/store/unified-roomstore";
 import { Users } from "lucide-react";
 import type { RoomData } from "@/lib/store/unified-roomstore";
 
@@ -16,13 +16,12 @@ export function RoomActiveUsers({
   showZero = false,
   compact = false,
 }: RoomActiveUsersProps) {
-  const rooms = useUnifiedStore((state) => state.rooms as RoomData[]);
-  const presence = useRoomPresence();
-
+  const rooms = useUnifiedStore((s) => s.rooms as RoomData[]);
+  
   const room = rooms.find((r: RoomData) => r.id === roomId);
-
+  
   const memberCount = room?.member_count ?? 0;
-  const onlineUsers = presence[roomId]?.onlineUsers ?? 0;
+  const onlineUsers = room?.online_users ?? 0; // Use this instead of presence
 
   if (onlineUsers === 0 && !showZero) return null;
 

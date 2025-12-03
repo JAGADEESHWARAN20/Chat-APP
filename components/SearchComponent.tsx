@@ -1,31 +1,32 @@
 "use client";
-import React, { useState, useMemo, useCallback, useEffect } from "react";
-import { useRouter } from "next/navigation";
+
+import React, { memo, useState, useMemo, useCallback } from "react";
 import { motion } from "framer-motion";
+import { useDebounce } from "use-debounce";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Users, Lock, Search, User as UserIcon } from "lucide-react";
-import { useDebounce } from "use-debounce";
+
 import {
   useRooms,
   useUsers,
-  useRoomActions,
-
   useUnifiedStore,
+  useRoomActions,
   type RoomData,
   type UserData,
 } from "@/lib/store/unified-roomstore";
-import { useUser } from "@/lib/store/user";
+
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
-/* -----------------------------------------------
-   highlight utility
------------------------------------------------ */
+/* ============================================================================
+   Highlight Utility
+============================================================================ */
 const highlight = (text: string, q: string) => {
   if (!q) return text;
   const pos = text.toLowerCase().indexOf(q.toLowerCase());
   if (pos === -1) return text;
+
   return (
     <>
       {text.slice(0, pos)}
@@ -37,10 +38,10 @@ const highlight = (text: string, q: string) => {
   );
 };
 
-/* -----------------------------------------------
-   RoomCard - PURE
------------------------------------------------ */
-const RoomCard = React.memo(function RoomCard({
+/* ============================================================================
+   RoomCard — PURE UI
+============================================================================ */
+const RoomCard = memo(function RoomCard({
   room,
   query,
   onJoin,
@@ -131,10 +132,10 @@ const RoomCard = React.memo(function RoomCard({
   );
 });
 
-/* -----------------------------------------------
-   UserCard
------------------------------------------------ */
-const UserCard = React.memo(function UserCard({
+/* ============================================================================
+   UserCard — PURE UI
+============================================================================ */
+const UserCard = memo(function UserCard({
   user,
   query,
 }: {
@@ -184,88 +185,60 @@ const UserCard = React.memo(function UserCard({
   );
 });
 
-/* -----------------------------------------------
-   MAIN COMPONENT
------------------------------------------------ */
+/* ============================================================================
+   MAIN SearchComponent — NOW PURE + REACTIVE
+============================================================================ */
 export default function SearchComponent() {
-  const router = useRouter();
-
-  const authUser = useUser();
-  const userId = authUser?.user?.id ?? null;
-
-  // Zustand reactive slices
+  // 🌐 Real-time slices from unified store
   const rooms = useRooms();
   const users = useUsers();
 
-  const { joinRoom, leaveRoom, fetchAll } = useRoomActions();
+  // actions
+  const { joinRoom, leaveRoom } = useRoomActions();
+  const setSelectedRoomId = useUnifiedStore((s) => s.setSelectedRoomId);
+  const setActiveTab = useUnifiedStore((s) => s.setActiveTab);
 
-  // Fix #1 → Reactive setter instead of getState().setUserId
-  const setUserId = useUnifiedStore((s) => s.setUserId);
-
-
-  // Local state
+  // UI state
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState("rooms");
   const [debounced] = useDebounce(query, 200);
 
-  /* -----------------------------------------------
-     On first load → Sync + Fetch all data
-  ----------------------------------------------- */
-  useEffect(() => {
-    if (!userId) return;
+  /* ---------------------------------------------------------------------
+     OPEN ROOM (dispatcher-friendly)
+  --------------------------------------------------------------------- */
+  const openRoom = useCallback(
+    (id: string) => {
+      setSelectedRoomId(id);
+      setActiveTab("home");
+    },
+    [setSelectedRoomId, setActiveTab]
+  );
 
-    // !!! FIX: use reactive setter, NOT getState()
-    setUserId(userId);
-
-    fetchAll(); // rooms + notifications + users
-  }, [userId, setUserId, fetchAll]);
-
-  /* -----------------------------------------------
-     Filtering
-  ----------------------------------------------- */
+  /* ---------------------------------------------------------------------
+     FILTERING — reacts instantly to store changes
+  --------------------------------------------------------------------- */
   const filteredRooms = useMemo(() => {
     if (!debounced) return rooms;
     const q = debounced.toLowerCase();
-    return rooms.filter((room) => room.name.toLowerCase().includes(q));
+    return rooms.filter((r) => r.name.toLowerCase().includes(q));
   }, [rooms, debounced]);
 
   const filteredUsers = useMemo(() => {
     if (!debounced) return users;
     const q = debounced.toLowerCase();
     return users.filter(
-      (user) =>
-        user.username?.toLowerCase().includes(q) ||
-        (user.display_name || "").toLowerCase().includes(q)
+      (u) =>
+        u.username?.toLowerCase().includes(q) ||
+        (u.display_name || "").toLowerCase().includes(q)
     );
   }, [users, debounced]);
 
-  /* -----------------------------------------------
-     Handlers
-  ----------------------------------------------- */
-  const openRoom = useCallback(
-    (id: string) => {
-      useUnifiedStore.getState().setSelectedRoomId(id);
-      useUnifiedStore.getState().setActiveTab("home");
-    },
-    []
-  );
-  
-
-  const handleJoin = useCallback(
-    async (roomId: string) => joinRoom(roomId),
-    [joinRoom]
-  );
-
-  const handleLeave = useCallback(
-    async (roomId: string) => leaveRoom(roomId),
-    [leaveRoom]
-  );
-
-  /* -----------------------------------------------
-     Render
-  ----------------------------------------------- */
+  /* ---------------------------------------------------------------------
+     RENDER
+  --------------------------------------------------------------------- */
   return (
     <div className="w-full min-h-screen p-4 flex flex-col overflow-hidden">
+      {/* SEARCH HEADER */}
       <div className="flex flex-col sm:flex-row items-center gap-4 mb-6">
         <div className="relative flex-1 w-full">
           <Input
@@ -285,6 +258,7 @@ export default function SearchComponent() {
         </Tabs>
       </div>
 
+      {/* ROOMS GRID */}
       {tab === "rooms" && (
         <motion.div
           className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 overflow-y-auto pb-10"
@@ -297,8 +271,8 @@ export default function SearchComponent() {
                 key={room.id}
                 room={room}
                 query={debounced}
-                onJoin={handleJoin}
-                onLeave={handleLeave}
+                onJoin={joinRoom}
+                onLeave={leaveRoom}
                 onOpen={openRoom}
               />
             ))
@@ -310,6 +284,7 @@ export default function SearchComponent() {
         </motion.div>
       )}
 
+      {/* USERS GRID */}
       {tab === "users" && (
         <motion.div
           className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 overflow-y-auto pb-10"
