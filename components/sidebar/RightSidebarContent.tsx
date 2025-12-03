@@ -157,7 +157,7 @@ export default function RightSidebarContent({ width, onClose }: RightSidebarProp
               <div className="flex flex-col gap-1 pt-2">
                 {[
                   { icon: User, label: "Profile", href: `/profile` },
-                  { icon: Settings, label: "Settings", href: `/edit-profile` },
+                  { icon: Settings, label: "Settings", href: `/settings` },
                 ].map((item) => (
                   <a
                     key={item.label}
