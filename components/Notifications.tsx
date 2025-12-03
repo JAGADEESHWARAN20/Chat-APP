@@ -183,7 +183,7 @@ const NotificationRow = memo(function NotificationRow({
 
   return (
     <div className="border-b border-border/40">
-      <div className="flex items-center gap-3 px-2 py-3">
+      <div className="flex items-center gap-1 px-1 py-1">
         {/* Checkbox column */}
         <div className="flex-shrink-0 w-10 flex items-center justify-center">
           {showCheckbox ? (
@@ -204,7 +204,7 @@ const NotificationRow = memo(function NotificationRow({
         <div
           onClick={() => setExpanded((s) => !s)}
           className={cn(
-            "flex-1 flex items-start gap-3 cursor-pointer select-none",
+            "flex-1 flex items-start gap-1 cursor-pointer select-none",
             "transition-colors"
           )}
         >
