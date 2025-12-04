@@ -129,49 +129,50 @@ const LeftSidebar = memo<LeftSidebarProps>(function LeftSidebar({
   /* --------------------------------------------------------------------------
      CSS VARIABLES STYLES
   -------------------------------------------------------------------------- */
-  const sidebarStyles = {
-    // Layout & spacing
-    padding: 'var(--layout-gap, 1rem)',
-    gap: 'var(--layout-gap, 1rem)',
-    borderRadius: 'var(--radius-unit, 0.5rem)',
-    
-    // Typography
-    fontSize: 'var(--fs-body, 1rem)',
-    fontFamily: 'var(--font-family-base, "Inter", system-ui, sans-serif)',
-    
-    // Colors
-    backgroundColor: 'var(--sidebar-background, hsl(240, 60%, 96%))',
-    color: 'var(--sidebar-foreground, 240, 10%, 20%)',
-    borderColor: 'var(--sidebar-border, 240, 30%, 88%)',
-    
-    // Room item styles
-    roomPadding: 'var(--density-padding, 1rem)',
-    roomGap: 'var(--density-gap, 0.75rem)',
-    roomBorderRadius: 'var(--density-radius, 0.5rem)',
-    
-    // Avatar size - responsive
-    avatarSizeSm: 'var(--sidebar-width-icon, 3rem)',
-    avatarSizeLg: 'calc(var(--sidebar-width-icon, 3rem) * 1.2)',
-    
-    // Typography sizes
-    roomNameSize: 'var(--fs-small, 0.875rem)',
-    messagePreviewSize: 'var(--fs-tiny, 0.75rem)',
-    metaInfoSize: 'calc(var(--fs-tiny, 0.75rem) * 0.9)',
-    
-    // States
+  const sidebarStyles = useMemo(() => ({
+    /* Layout & Spacing */
+    padding: 'var(--layout-gap)',
+    gap: 'var(--layout-gap)',
+    borderRadius: 'var(--radius-unit)',
+  
+    /* Typography */
+    fontSize: 'var(--fs-body)',
+    fontFamily: 'var(--font-family-base)',
+  
+    /* Colors (fixed invalid HSL values) */
+    backgroundColor: 'hsl(var(--sidebar-background))',
+    color: 'hsl(var(--sidebar-foreground))',
+    borderColor: 'hsl(var(--sidebar-border))',
+  
+    /* Room Item Styling */
+    roomPadding: 'var(--density-padding)',
+    roomGap: 'var(--density-gap)',
+    roomBorderRadius: 'var(--density-radius)',
+  
+    /* Avatar Sizes */
+    avatarSizeSm: 'var(--sidebar-width-icon)',
+    avatarSizeLg: 'calc(var(--sidebar-width-icon) * 1.2)',
+  
+    /* Text Sizes */
+    roomNameSize: 'var(--fs-small)',
+    messagePreviewSize: 'var(--fs-tiny)',
+    metaInfoSize: 'calc(var(--fs-tiny) * 0.9)',
+  
+    /* States */
     activeBg: 'hsl(var(--sidebar-primary) / 0.1)',
     activeBorder: 'hsl(var(--sidebar-primary) / 0.2)',
-    hoverBg: 'var(--sidebar-accent, 240, 50%, 92%)',
-    hoverColor: 'var(--sidebar-accent-foreground, 240, 10%, 15%)',
-    
-    // Unread badge
+    hoverBg: 'hsl(var(--sidebar-accent))',
+    hoverColor: 'hsl(var(--sidebar-accent-foreground))',
+  
+    /* Unread Badge */
     unreadBg: 'hsl(var(--sidebar-primary))',
-    unreadColor: 'var(--sidebar-primary-foreground, 0, 0%, 100%)',
-    
-    // Glass effects
-    glassOpacity: 'var(--glass-opacity, 0.75)',
-    glassBlur: 'var(--glass-blur, 16px)',
-  };
+    unreadColor: 'hsl(var(--sidebar-primary-foreground))',
+  
+    /* Glass Effects */
+    glassOpacity: 'var(--glass-opacity)',
+    glassBlur: 'var(--glass-blur)',
+  }), []);
+  
 
   /* --------------------------------------------------------------------------
      RENDER A ROOM
