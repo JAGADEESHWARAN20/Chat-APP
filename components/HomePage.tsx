@@ -137,38 +137,33 @@ function UnifiedHomeContent({ initialSidebarState = "collapsed", sidebarState }:
   -------------------------------------------------------------------------- */
   const layoutStyles = useMemo(
     () => ({
-      // Colors
       backgroundColor: 'hsl(var(--background))',
       foregroundColor: 'hsl(var(--foreground))',
       accentColor: 'hsl(var(--accent))',
       mutedBackground: 'hsl(var(--muted))',
       borderColor: 'hsl(var(--border))',
   
-      // Typography
-      fontSizeBase: 'var(--fs-body, 1rem)',
-      fontSizeLarge: 'var(--fs-subtitle, 1.25rem)',
-      fontFamily: 'var(--font-family-base, "Inter")',
+      fontSizeBase: 'var(--fs-body)',
+      fontSizeLarge: 'var(--fs-subtitle)',
+      fontFamily: 'var(--font-family-base)',
   
-      // Layout
       headerHeight: 'var(--header-height)',
       spacingUnit: 'var(--spacing-unit)',
       gap: 'var(--layout-gap)',
       borderRadius: 'var(--radius-unit)',
   
-      // Effects
       glassOpacity: 'var(--glass-opacity)',
       glassBlur: 'var(--glass-blur)',
       borderOpacity: 'var(--border-opacity)',
   
-      // Animation
       transitionDuration: 'var(--motion-duration)',
       transitionEasing: 'var(--motion-easing)',
   
-      // Sidebar widths
-      sidebarWidthMobile: '280',
-      sidebarWidthDesktop: '520',
+      // FIXED → MUST include px
+      sidebarWidthMobile: '280px',
+      sidebarWidthDesktop: '520px',
     }),
-    [] // 👈 static, never changes
+    []
   );
   
 

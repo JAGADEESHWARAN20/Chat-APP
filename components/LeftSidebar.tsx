@@ -60,6 +60,7 @@ const LeftSidebar = memo<LeftSidebarProps>(function LeftSidebar({
   -------------------------------------------------------------------------- */
   const rooms = useRooms();
   const selectedRoom = useSelectedRoom();
+  const roomPresence = useUnifiedStore((s) => s.roomPresence);
 
   const searchTerm = useUnifiedStore((s) => s.sidebarSearchTerm);
   const setSearchTerm = useUnifiedStore((s) => s.setSidebarSearchTerm);
@@ -174,105 +175,117 @@ const LeftSidebar = memo<LeftSidebarProps>(function LeftSidebar({
   }), []);
   
 
-  /* --------------------------------------------------------------------------
-     RENDER A ROOM
-  -------------------------------------------------------------------------- */
-  const renderRoom = useCallback(
-    (room: RoomLocal) => {
-      const unread = room.unread_count ?? 0;
+ 
+ 
+const renderRoom = useCallback(
+  (room: RoomLocal) => {
+    const unread = room.unread_count ?? 0;
 
-      return (
-        <button
-          key={room.id}
-          onClick={() => handleRoomClick(room.id)}
-          className={cn(
-            "w-full flex items-start rounded-lg transition-dynamic mb-1 text-left select-none",
+    // Real realtime presence for this room
+    const presence = roomPresence[room.id];
+
+    // # of online users
+    const onlineUsers = presence?.onlineUsers ?? 0;
+
+    // # of members (fallback to store)
+    const memberCount = room.member_count ?? presence?.userIds?.length ?? 0;
+
+    return (
+      <button
+        key={room.id}
+        onClick={() => handleRoomClick(room.id)}
+        className={cn(
+          "w-full flex items-start rounded-lg transition-dynamic mb-1 text-left select-none",
+          selectedRoom?.id === room.id ? "border shadow-sm" : "hover:border-transparent"
+        )}
+        style={{
+          padding: sidebarStyles.roomPadding,
+          gap: sidebarStyles.roomGap,
+          borderRadius: sidebarStyles.roomBorderRadius,
+          backgroundColor:
+            selectedRoom?.id === room.id ? sidebarStyles.activeBg : "transparent",
+          border:
             selectedRoom?.id === room.id
-              ? "border shadow-sm"
-              : "hover:border-transparent"
-          )}
-          style={{
-            padding: sidebarStyles.roomPadding,
-            gap: sidebarStyles.roomGap,
-            borderRadius: sidebarStyles.roomBorderRadius,
-            backgroundColor: selectedRoom?.id === room.id 
-              ? sidebarStyles.activeBg 
-              : 'transparent',
-            border: selectedRoom?.id === room.id 
               ? `1px solid ${sidebarStyles.activeBorder}`
-              : '1px solid transparent',
-            fontFamily: sidebarStyles.fontFamily,
+              : "1px solid transparent",
+        }}
+      >
+        {/* AVATAR */}
+        <Avatar
+          className="border"
+          style={{
+            height: sidebarStyles.avatarSizeSm,
+            width: sidebarStyles.avatarSizeSm,
+            borderColor: `hsl(${sidebarStyles.borderColor} / 0.4)`,
           }}
         >
-          <Avatar 
-            className="border"
-            style={{
-              height: sidebarStyles.avatarSizeSm,
-              width: sidebarStyles.avatarSizeSm,
-              borderColor: `hsl(${sidebarStyles.borderColor} / 0.4)`,
-            }}
-          >
-            <AvatarFallback>{room.name[0]?.toUpperCase()}</AvatarFallback>
-          </Avatar>
+          <AvatarFallback>{room.name[0]?.toUpperCase()}</AvatarFallback>
+        </Avatar>
 
-          <div className="flex-1 min-w-0" style={{ marginLeft: sidebarStyles.roomGap }}>
-            <div className="flex items-center justify-between mb-1">
-              <div 
-                className="font-semibold truncate"
-                style={{ fontSize: sidebarStyles.roomNameSize }}
+        {/* CONTENT */}
+        <div className="flex-1 min-w-0" style={{ marginLeft: sidebarStyles.roomGap }}>
+          {/* TITLE + UNREAD */}
+          <div className="flex items-center justify-between mb-1">
+            <div className="font-semibold truncate" style={{ fontSize: sidebarStyles.roomNameSize }}>
+              #{room.name}
+            </div>
+
+            {unread > 0 && (
+              <span
+                className="font-bold rounded-full px-1.5 py-0.5"
+                style={{
+                  fontSize: sidebarStyles.metaInfoSize,
+                  backgroundColor: sidebarStyles.unreadBg,
+                  color: sidebarStyles.unreadColor,
+                }}
               >
-                #{room.name}
-              </div>
+                {unread > 99 ? "99+" : unread}
+              </span>
+            )}
+          </div>
 
-              {unread > 0 && (
-                <span 
-                  className="font-bold rounded-full px-1.5 py-0.5"
-                  style={{
-                    fontSize: sidebarStyles.metaInfoSize,
-                    backgroundColor: sidebarStyles.unreadBg,
-                    color: sidebarStyles.unreadColor,
-                  }}
-                >
-                  {unread > 99 ? "99+" : unread}
+          {/* LATEST MESSAGE */}
+          <div
+            className="text-muted-foreground truncate mb-1.5"
+            style={{ fontSize: sidebarStyles.messagePreviewSize }}
+          >
+            {room.latest_message ?? "No messages yet"}
+          </div>
+
+          {/* MEMBER + ONLINE COUNTS */}
+          <div className="flex items-center justify-between">
+            <div
+              className="flex items-center gap-2 text-muted-foreground"
+              style={{ fontSize: sidebarStyles.metaInfoSize }}
+            >
+              <Users className="h-3 w-3" />
+
+              {/* total members */}
+              <span>{memberCount}</span>
+
+              {/* online count only if > 0 */}
+              {onlineUsers > 0 && (
+                <span className="text-emerald-500 font-medium">
+                  ({onlineUsers} online)
                 </span>
               )}
             </div>
 
-            <div 
-              className="text-muted-foreground truncate mb-1.5"
-              style={{ fontSize: sidebarStyles.messagePreviewSize }}
+            <span
+              className="px-1.5 py-0.5 bg-emerald-100/60 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400 rounded-full"
+              style={{ fontSize: sidebarStyles.metaInfoSize }}
             >
-              {room.latest_message ?? "No messages yet"}
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div 
-                className="flex items-center gap-2 text-muted-foreground"
-                style={{ fontSize: sidebarStyles.metaInfoSize }}
-              >
-                <Users className="h-3 w-3" />
-                <span>{room.member_count}</span>
-
-                {room.online_users ? (
-                  <span className="text-emerald-500 font-medium">
-                    ({room.online_users} online)
-                  </span>
-                ) : null}
-              </div>
-
-              <span 
-                className="px-1.5 py-0.5 bg-emerald-100/60 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400 rounded-full"
-                style={{ fontSize: sidebarStyles.metaInfoSize }}
-              >
-                Joined
-              </span>
-            </div>
+              Joined
+            </span>
           </div>
-        </button>
-      );
-    },
-    [selectedRoom?.id, handleRoomClick, sidebarStyles]
-  );
+        </div>
+      </button>
+    );
+  },
+  [selectedRoom?.id, handleRoomClick, sidebarStyles, roomPresence]
+);
+
+
 
   /* --------------------------------------------------------------------------
      NO USER LOGGED IN

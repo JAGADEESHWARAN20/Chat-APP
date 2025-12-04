@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useMemo } from "react";
 import { useUnifiedStore } from "@/lib/store/unified-roomstore";
 import { Users } from "lucide-react";
 import type { RoomData } from "@/lib/store/unified-roomstore";
@@ -16,15 +16,19 @@ export function RoomActiveUsers({
   showZero = false,
   compact = false,
 }: RoomActiveUsersProps) {
-  const rooms = useUnifiedStore((s) => s.rooms as RoomData[]);
-  
-  const room = rooms.find((r: RoomData) => r.id === roomId);
-  
-  const memberCount = room?.member_count ?? 0;
-  const onlineUsers = room?.online_users ?? 0; // Use this instead of presence
+  const rooms = useUnifiedStore((s) => s.rooms);
+  const presence = useUnifiedStore((s) => s.roomPresence[roomId]);
 
+  const room = rooms.find((r) => r.id === roomId);
+
+  // --- Fallback / realtime merged ---
+  const onlineUsers = presence?.onlineUsers ?? room?.online_users ?? 0;
+  const memberCount = room?.member_count ?? 0;
+
+  // Hide if zero online users and showZero = false
   if (onlineUsers === 0 && !showZero) return null;
 
+  // Compact view
   if (compact) {
     return (
       <div className="flex items-center gap-2">
@@ -35,6 +39,7 @@ export function RoomActiveUsers({
     );
   }
 
+  // Full view
   return (
     <div className="flex items-center gap-4 text-sm">
       <div className="flex items-center gap-1 text-muted-foreground">
@@ -45,7 +50,7 @@ export function RoomActiveUsers({
       </div>
 
       <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
-        <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+        <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
         <span className="font-medium">{onlineUsers} online</span>
       </div>
     </div>
