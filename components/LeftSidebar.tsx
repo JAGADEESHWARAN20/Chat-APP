@@ -46,7 +46,7 @@ type RoomLocal = RoomData & {
 };
 
 /* ============================================================================
-   LEFT SIDEBAR — FULLY REFACTORED
+   LEFT SIDEBAR — REFACTORED WITH CSS VARIABLES
 ============================================================================ */
 const LeftSidebar = memo<LeftSidebarProps>(function LeftSidebar({
   user,
@@ -127,6 +127,53 @@ const LeftSidebar = memo<LeftSidebarProps>(function LeftSidebar({
   }, [newRoomName, createRoom]);
 
   /* --------------------------------------------------------------------------
+     CSS VARIABLES STYLES
+  -------------------------------------------------------------------------- */
+  const sidebarStyles = {
+    // Layout & spacing
+    padding: 'var(--layout-gap, 1rem)',
+    gap: 'var(--layout-gap, 1rem)',
+    borderRadius: 'var(--radius-unit, 0.5rem)',
+    
+    // Typography
+    fontSize: 'var(--fs-body, 1rem)',
+    fontFamily: 'var(--font-family-base, "Inter", system-ui, sans-serif)',
+    
+    // Colors
+    backgroundColor: 'var(--sidebar-background, hsl(240, 60%, 96%))',
+    color: 'var(--sidebar-foreground, 240, 10%, 20%)',
+    borderColor: 'var(--sidebar-border, 240, 30%, 88%)',
+    
+    // Room item styles
+    roomPadding: 'var(--density-padding, 1rem)',
+    roomGap: 'var(--density-gap, 0.75rem)',
+    roomBorderRadius: 'var(--density-radius, 0.5rem)',
+    
+    // Avatar size - responsive
+    avatarSizeSm: 'var(--sidebar-width-icon, 3rem)',
+    avatarSizeLg: 'calc(var(--sidebar-width-icon, 3rem) * 1.2)',
+    
+    // Typography sizes
+    roomNameSize: 'var(--fs-small, 0.875rem)',
+    messagePreviewSize: 'var(--fs-tiny, 0.75rem)',
+    metaInfoSize: 'calc(var(--fs-tiny, 0.75rem) * 0.9)',
+    
+    // States
+    activeBg: 'hsl(var(--sidebar-primary) / 0.1)',
+    activeBorder: 'hsl(var(--sidebar-primary) / 0.2)',
+    hoverBg: 'var(--sidebar-accent, 240, 50%, 92%)',
+    hoverColor: 'var(--sidebar-accent-foreground, 240, 10%, 15%)',
+    
+    // Unread badge
+    unreadBg: 'hsl(var(--sidebar-primary))',
+    unreadColor: 'var(--sidebar-primary-foreground, 0, 0%, 100%)',
+    
+    // Glass effects
+    glassOpacity: 'var(--glass-opacity, 0.75)',
+    glassBlur: 'var(--glass-blur, 16px)',
+  };
+
+  /* --------------------------------------------------------------------------
      RENDER A ROOM
   -------------------------------------------------------------------------- */
   const renderRoom = useCallback(
@@ -138,35 +185,70 @@ const LeftSidebar = memo<LeftSidebarProps>(function LeftSidebar({
           key={room.id}
           onClick={() => handleRoomClick(room.id)}
           className={cn(
-            "w-full flex items-start p-3 rounded-lg transition-colors duration-200 mb-1 text-left select-none",
+            "w-full flex items-start rounded-lg transition-dynamic mb-1 text-left select-none",
             selectedRoom?.id === room.id
-              ? "bg-primary/10 border border-primary/20 shadow-sm"
-              : "hover:bg-muted/40 border border-transparent"
+              ? "border shadow-sm"
+              : "hover:border-transparent"
           )}
+          style={{
+            padding: sidebarStyles.roomPadding,
+            gap: sidebarStyles.roomGap,
+            borderRadius: sidebarStyles.roomBorderRadius,
+            backgroundColor: selectedRoom?.id === room.id 
+              ? sidebarStyles.activeBg 
+              : 'transparent',
+            border: selectedRoom?.id === room.id 
+              ? `1px solid ${sidebarStyles.activeBorder}`
+              : '1px solid transparent',
+            fontFamily: sidebarStyles.fontFamily,
+          }}
         >
-          <Avatar className="h-10 w-10 sm:h-12 sm:w-12 border border-border/40">
+          <Avatar 
+            className="border"
+            style={{
+              height: sidebarStyles.avatarSizeSm,
+              width: sidebarStyles.avatarSizeSm,
+              borderColor: `hsl(${sidebarStyles.borderColor} / 0.4)`,
+            }}
+          >
             <AvatarFallback>{room.name[0]?.toUpperCase()}</AvatarFallback>
           </Avatar>
 
-          <div className="ml-3 flex-1 min-w-0">
-            <div className="flex items-center justify-between mb-0.5">
-              <div className="font-semibold text-sm sm:text-base truncate">
+          <div className="flex-1 min-w-0" style={{ marginLeft: sidebarStyles.roomGap }}>
+            <div className="flex items-center justify-between mb-1">
+              <div 
+                className="font-semibold truncate"
+                style={{ fontSize: sidebarStyles.roomNameSize }}
+              >
                 #{room.name}
               </div>
 
               {unread > 0 && (
-                <span className="text-[10px] font-bold rounded-full px-1.5 py-0.5 bg-primary text-primary-foreground">
+                <span 
+                  className="font-bold rounded-full px-1.5 py-0.5"
+                  style={{
+                    fontSize: sidebarStyles.metaInfoSize,
+                    backgroundColor: sidebarStyles.unreadBg,
+                    color: sidebarStyles.unreadColor,
+                  }}
+                >
                   {unread > 99 ? "99+" : unread}
                 </span>
               )}
             </div>
 
-            <div className="text-xs text-muted-foreground truncate mb-1.5">
+            <div 
+              className="text-muted-foreground truncate mb-1.5"
+              style={{ fontSize: sidebarStyles.messagePreviewSize }}
+            >
               {room.latest_message ?? "No messages yet"}
             </div>
 
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+              <div 
+                className="flex items-center gap-2 text-muted-foreground"
+                style={{ fontSize: sidebarStyles.metaInfoSize }}
+              >
                 <Users className="h-3 w-3" />
                 <span>{room.member_count}</span>
 
@@ -177,7 +259,10 @@ const LeftSidebar = memo<LeftSidebarProps>(function LeftSidebar({
                 ) : null}
               </div>
 
-              <span className="text-[10px] px-1.5 py-0.5 bg-emerald-100/60 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400 rounded-full">
+              <span 
+                className="px-1.5 py-0.5 bg-emerald-100/60 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400 rounded-full"
+                style={{ fontSize: sidebarStyles.metaInfoSize }}
+              >
                 Joined
               </span>
             </div>
@@ -185,7 +270,7 @@ const LeftSidebar = memo<LeftSidebarProps>(function LeftSidebar({
         </button>
       );
     },
-    [selectedRoom?.id, handleRoomClick]
+    [selectedRoom?.id, handleRoomClick, sidebarStyles]
   );
 
   /* --------------------------------------------------------------------------
@@ -193,12 +278,28 @@ const LeftSidebar = memo<LeftSidebarProps>(function LeftSidebar({
   -------------------------------------------------------------------------- */
   if (!user) {
     return (
-      <div className="flex flex-col h-full items-center justify-center p-4 text-center">
-        <Avatar className="h-14 w-14 mb-3 opacity-60">
+      <div 
+        className="flex flex-col h-full items-center justify-center p-4 text-center"
+        style={{
+          backgroundColor: sidebarStyles.backgroundColor,
+          color: `hsl(${sidebarStyles.color})`,
+          padding: sidebarStyles.padding,
+        }}
+      >
+        <Avatar 
+          className="mb-3 opacity-60"
+          style={{
+            height: sidebarStyles.avatarSizeLg,
+            width: sidebarStyles.avatarSizeLg,
+          }}
+        >
           <AvatarFallback>?</AvatarFallback>
         </Avatar>
 
-        <p className="text-sm text-muted-foreground mb-3">
+        <p 
+          className="text-sm text-muted-foreground mb-3"
+          style={{ fontSize: sidebarStyles.roomNameSize }}
+        >
           Please sign in to view rooms
         </p>
       </div>
@@ -209,17 +310,42 @@ const LeftSidebar = memo<LeftSidebarProps>(function LeftSidebar({
      FINAL SIDEBAR UI
   ============================================================================ */
   return (
-    <div className={cn("flex flex-col h-full w-full bg-background", className)}>
+    <div 
+      className={cn("flex flex-col h-full w-full", className)}
+      style={{
+        backgroundColor: sidebarStyles.backgroundColor,
+        color: `hsl(${sidebarStyles.color})`,
+        fontFamily: sidebarStyles.fontFamily,
+        fontSize: sidebarStyles.fontSize,
+      }}
+    >
       <Tabs defaultValue="rooms" className="flex flex-col h-full w-full">
 
         {/* HEADER */}
-        <div className="flex-none px-4 py-3 border-b bg-background">
+        <div 
+          className="flex-none border-b"
+          style={{
+            padding: `calc(${sidebarStyles.padding} * 0.75) ${sidebarStyles.padding}`,
+            borderColor: `hsl(${sidebarStyles.borderColor})`,
+          }}
+        >
           <div className="flex items-center justify-between gap-4 mb-4">
-            <TabsList className="grid w-full grid-cols-2 h-9">
-              <TabsTrigger value="rooms" className="text-sm">
+            <TabsList 
+              className="grid w-full grid-cols-2"
+              style={{ height: sidebarStyles.avatarSizeSm }}
+            >
+              <TabsTrigger 
+                value="rooms" 
+                className="text-sm"
+                style={{ fontSize: sidebarStyles.roomNameSize }}
+              >
                 Rooms
               </TabsTrigger>
-              <TabsTrigger value="chats" className="text-sm">
+              <TabsTrigger 
+                value="chats" 
+                className="text-sm"
+                style={{ fontSize: sidebarStyles.roomNameSize }}
+              >
                 Chats
               </TabsTrigger>
             </TabsList>
@@ -229,8 +355,12 @@ const LeftSidebar = memo<LeftSidebarProps>(function LeftSidebar({
               <Button
                 variant="ghost"
                 size="icon"
-                className="hidden md:flex h-9 w-9"
+                className="hidden md:flex"
                 onClick={handleToggleLeft}
+                style={{
+                  height: sidebarStyles.avatarSizeSm,
+                  width: sidebarStyles.avatarSizeSm,
+                }}
               >
                 <ChevronLeft className="h-5 w-5" />
               </Button>
@@ -241,8 +371,12 @@ const LeftSidebar = memo<LeftSidebarProps>(function LeftSidebar({
               <Button
                 variant="ghost"
                 size="icon"
-                className="md:hidden h-9 w-9"
+                className="md:hidden"
                 onClick={onClose}
+                style={{
+                  height: sidebarStyles.avatarSizeSm,
+                  width: sidebarStyles.avatarSizeSm,
+                }}
               >
                 <ChevronLeft className="h-5 w-5" />
               </Button>
@@ -257,27 +391,42 @@ const LeftSidebar = memo<LeftSidebarProps>(function LeftSidebar({
                   placeholder="Search rooms…"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="h-9"
+                  style={{ height: sidebarStyles.avatarSizeSm }}
                 />
 
                 <Button
                   variant="outline"
                   size="icon"
-                  className="h-9 w-9"
                   onClick={() => setShowCreateRoom(true)}
+                  style={{
+                    height: sidebarStyles.avatarSizeSm,
+                    width: sidebarStyles.avatarSizeSm,
+                  }}
                 >
                   <Plus className="h-4 w-4" />
                 </Button>
               </div>
             ) : (
-              <div className="p-3 rounded-lg border bg-muted/30 space-y-2">
+              <div 
+                className="rounded-lg border space-y-2"
+                style={{
+                  padding: sidebarStyles.roomPadding,
+                  borderRadius: sidebarStyles.roomBorderRadius,
+                  backgroundColor: `hsl(${sidebarStyles.backgroundColor} / 0.3)`,
+                  borderColor: `hsl(${sidebarStyles.borderColor})`,
+                }}
+              >
                 <Input
                   placeholder="Enter room name…"
                   value={newRoomName}
                   onChange={(e) => setNewRoomName(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleCreateRoom()}
                   disabled={isCreating}
-                  className="h-8 text-sm"
+                  className="text-sm"
+                  style={{ 
+                    height: `calc(${sidebarStyles.avatarSizeSm} * 0.9)`,
+                    fontSize: sidebarStyles.roomNameSize,
+                  }}
                 />
 
                 <div className="flex gap-2">
@@ -286,6 +435,10 @@ const LeftSidebar = memo<LeftSidebarProps>(function LeftSidebar({
                     className="flex-1"
                     disabled={isCreating || !newRoomName.trim()}
                     onClick={handleCreateRoom}
+                    style={{ 
+                      fontSize: sidebarStyles.roomNameSize,
+                      padding: `calc(${sidebarStyles.roomPadding} * 0.5)`,
+                    }}
                   >
                     {isCreating ? (
                       <Loader2 className="h-3 w-3 animate-spin" />
@@ -302,6 +455,10 @@ const LeftSidebar = memo<LeftSidebarProps>(function LeftSidebar({
                       setShowCreateRoom(false);
                       setNewRoomName("");
                     }}
+                    style={{ 
+                      fontSize: sidebarStyles.roomNameSize,
+                      padding: `calc(${sidebarStyles.roomPadding} * 0.5)`,
+                    }}
                   >
                     Cancel
                   </Button>
@@ -316,26 +473,64 @@ const LeftSidebar = memo<LeftSidebarProps>(function LeftSidebar({
 
           {/* ROOMS TAB */}
           <TabsContent value="rooms" className="absolute inset-0 m-0">
-            <div className="flex-1 overflow-y-auto px-3 pb-3">
+            <div 
+              className="flex-1 overflow-y-auto pb-3"
+              style={{
+                paddingLeft: sidebarStyles.padding,
+                paddingRight: sidebarStyles.padding,
+              }}
+            >
               {!filteredRooms.length ? (
-                <div className="flex flex-col items-center justify-center h-48 text-center">
-                  <Users className="h-10 w-10 mb-3 text-muted-foreground/50" />
-                  <p className="text-sm text-muted-foreground">
+                <div 
+                  className="flex flex-col items-center justify-center h-48 text-center"
+                  style={{ gap: sidebarStyles.gap }}
+                >
+                  <Users 
+                    className="mb-3 text-muted-foreground/50"
+                    style={{
+                      height: sidebarStyles.avatarSizeLg,
+                      width: sidebarStyles.avatarSizeLg,
+                    }}
+                  />
+                  <p 
+                    className="text-sm text-muted-foreground"
+                    style={{ fontSize: sidebarStyles.roomNameSize }}
+                  >
                     {searchTerm ? "No matching rooms" : "No rooms joined"}
                   </p>
                 </div>
               ) : (
-                <div className="space-y-1">{filteredRooms.map(renderRoom)}</div>
+                <div style={{ gap: sidebarStyles.gap }}>
+                  {filteredRooms.map(renderRoom)}
+                </div>
               )}
             </div>
           </TabsContent>
 
           {/* CHATS TAB */}
           <TabsContent value="chats" className="absolute inset-0 m-0">
-            <div className="flex-1 overflow-y-auto px-3 pb-3">
-              <div className="flex flex-col items-center justify-center h-48 text-center">
-                <MessageSquare className="h-10 w-10 mb-3 text-muted-foreground/50" />
-                <p className="text-sm text-muted-foreground">
+            <div 
+              className="flex-1 overflow-y-auto pb-3"
+              style={{
+                paddingLeft: sidebarStyles.padding,
+                paddingRight: sidebarStyles.padding,
+              }}
+            >
+              <div 
+                className="flex flex-col items-center justify-center h-48 text-center"
+                style={{ gap: sidebarStyles.gap }}
+              >
+                <MessageSquare 
+                  className="mb-3 text-muted-foreground/50"
+                  style={{
+                    height: sidebarStyles.avatarSizeLg,
+                    width: sidebarStyles.avatarSizeLg,
+                  }}
+                />
+                <p 
+                  className="text-sm text-muted-foreground"
+                  style={{ fontSize: sidebarStyles.roomNameSize }}
+                >
                   Direct messages coming soon
                 </p>
               </div>

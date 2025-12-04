@@ -22,6 +22,7 @@ export default async function RootLayout({
       <body
         className={`${space_Grotesk.className} h-full w-full overflow-hidden bg-background text-foreground antialiased`}
       >
+       
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

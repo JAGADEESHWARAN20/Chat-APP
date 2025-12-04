@@ -1,3 +1,6 @@
+
+
+// components/ThemeToggleButton.tsx
 "use client";
 
 import React, { useRef } from "react";
@@ -10,6 +13,23 @@ import type { Theme } from "@/lib/utils/theme";
 export default function ThemeToggleButton() {
   const { triggerTransition, isDark, isTransitioning } = useThemeTransition();
   const btnRef = useRef<HTMLButtonElement>(null);
+  
+  // CSS Variables from your global CSS
+  const themeStyles = {
+    // Colors
+    sidebarBackground: 'hsl(var(--sidebar-background))',
+    sidebarForeground: 'hsl(var(--sidebar-foreground))',
+    sidebarPrimary: 'hsl(var(--sidebar-primary))',
+    
+    // Effects
+    glassOpacity: 'var(--glass-opacity, 0.6)',
+    glassBlur: 'var(--glass-blur, 32px)',
+    borderOpacity: 'var(--border-opacity, 0.1)',
+    
+    // Animation
+    transitionDuration: 'var(--motion-duration, 200ms)',
+    transitionEasing: 'var(--motion-easing, cubic-bezier(0.4, 0, 0.2, 1))',
+  };
 
   const handleClick = () => {
     if (isTransitioning) return;
@@ -33,36 +53,47 @@ export default function ThemeToggleButton() {
         key={isDark ? "dark" : "light"}
         initial={{ opacity: 0, x: -12 }}
         animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 0.3, ease: "easeOut" }}
+        transition={{ duration: 0.2, ease: "easeOut" }}
         className="text-xs font-medium uppercase tracking-widest opacity-70 flex items-center gap-2"
-        style={{ color: "hsl(var(--sidebar-foreground))" }}
+        style={{ color: themeStyles.sidebarForeground }}
       >
-        <Monitor className="w-3.5 h-3.5" />
+        <Monitor 
+          style={{
+            width: `calc(${themeStyles.transitionDuration} * 2)`,
+            height: `calc(${themeStyles.transitionDuration} * 2)`,
+          }}
+        />
         {isDark ? "Dark" : "Light"}
       </motion.div>
 
-      {/* PREMIUM TOGGLE — NO BG ON ICONS */}
+      {/* Premium Toggle Button */}
       <Button
         ref={btnRef}
         onClick={handleClick}
         disabled={isTransitioning}
         className="
-          relative group p-0 w-16 h-16 rounded-2xl overflow-hidden
-          border border-white/10 shadow-2xl
+          relative group p-0 overflow-hidden
           backdrop-blur-2xl
-           active:scale-[1.2]
-          transition-all duration-400
+          active:scale-[1.2]
+          transition-all
         "
         style={{
-          background: "hsl(var(--sidebar-background)/0.6)",
+          width: '4rem', // 64px
+          height: '4rem',
+          borderRadius: 'calc(var(--radius-unit, 0.5rem) * 1.5)',
+          border: `1px solid hsl(0 0% 100% / ${themeStyles.borderOpacity})`,
+          backgroundColor: `${themeStyles.sidebarBackground} / ${themeStyles.glassOpacity}`,
+          backdropFilter: `blur(${themeStyles.glassBlur})`,
           boxShadow: `
-            0 8px 32px hsl(var(--sidebar-primary)/0.2),
+            0 8px 32px ${themeStyles.sidebarPrimary} / 0.2,
             inset 0 1px 0 hsl(0 0% 100% / 0.1),
             inset 0 -1px 0 hsl(0 0% 0% / 0.15)
           `,
+          transitionDuration: themeStyles.transitionDuration,
+          transitionTimingFunction: themeStyles.transitionEasing,
         }}
       >
-        {/* Subtle Inner Glow Orb (no solid bg) */}
+        {/* Subtle Inner Glow Orb */}
         <div className="absolute inset-0 opacity-40 pointer-events-none">
           <div
             className="absolute inset-0 rounded-2xl blur-2xl"
@@ -74,37 +105,35 @@ export default function ThemeToggleButton() {
           />
         </div>
 
-        {/* 3D Flip Icon — Pure & Clean */}
+        {/* 3D Flip Icon — Immediate */}
         <AnimatePresence mode="wait">
           <motion.div
             key={isDark ? "moon" : "sun"}
             initial={{ rotateY: 180, opacity: 0, scale: 1 }}
             animate={{ rotateY: 0, opacity: 1, scale: 1 }}
             exit={{ rotateY: -180, opacity: 0, scale: 1 }}
-            transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }} // Faster animation
             className="relative z-10 flex items-center justify-center w-full h-full"
           >
             {isDark ? (
-              // MOON — Dark Mode (clean blue glow)
-               <div className="relative">
-                <Sun
-                  className="w-10 h-10"
-                  strokeWidth={2.2}
-                  style={{
-                    color: "hsl(var(--sidebar-foreground))",
-                    filter: "drop-shadow(0 0 20px hsl(48 100% 67% / 0.7))",
-                  }}
-                />
-               
-              </div>
-             
-            ) : (
-              // SUN — Light Mode (warm golden glow)
-              <Moon
-                className="w-9 h-9"
-                strokeWidth={2}
+              // MOON — Dark Mode
+              <Sun
                 style={{
-                  color: "hsl(var(--sidebar-foreground))",
+                  width: '2.5rem',
+                  height: '2.5rem',
+                  strokeWidth: '2.2',
+                  color: themeStyles.sidebarForeground,
+                  filter: "drop-shadow(0 0 20px hsl(48 100% 67% / 0.7))",
+                }}
+              />
+            ) : (
+              // SUN — Light Mode
+              <Moon
+                style={{
+                  width: '2.25rem',
+                  height: '2.25rem',
+                  strokeWidth: '2',
+                  color: themeStyles.sidebarForeground,
                   filter: "drop-shadow(0 0 16px hsl(240 90% 70% / 0.6))",
                 }}
               />
@@ -119,7 +148,7 @@ export default function ThemeToggleButton() {
               className="absolute inset-0 rounded-2xl pointer-events-none"
               initial={{ scale: 0, opacity: 0.8 }}
               animate={{ scale: 6, opacity: 0 }}
-              transition={{ duration: 1.6, ease: "circOut" }}
+              transition={{ duration: 0.8, ease: "circOut" }} // Faster ripple
               style={{
                 background: isDark
                   ? "radial-gradient(circle, hsl(48 100% 67% / 0.4), transparent 65%)"
@@ -136,7 +165,7 @@ export default function ThemeToggleButton() {
             style={{
               background: "linear-gradient(110deg, transparent 30%, hsl(0 0% 100% / 0.12) 50%, transparent 70%)",
               transform: "translateX(-200%)",
-              animation: "shimmer 3s infinite",
+              animation: "shimmer 2s infinite", // Faster shimmer
             }}
           />
         </div>

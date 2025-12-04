@@ -6,7 +6,6 @@ import Message from "./Message";
 import { DeleteAlert, EditAlert } from "./MessasgeActions";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Database } from "@/lib/types/supabase";
-import { useUser } from "@/lib/store/user";
 import { useSelectedRoom } from "@/lib/store/unified-roomstore";
 import TypingIndicator from "./TypingIndicator";
 import { Button } from "@/components/ui/button";
@@ -259,29 +258,96 @@ export default function ListMessages({
   const [userScrolled, setUserScrolled] = useState(false);
   const [notification, setNotification] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
 
   const [currentNavigatedMessageId, setCurrentNavigatedMessageId] = useState<string | null>(null);
   const [searchResults, setSearchResults] = useState<Imessage[]>([]);
   const [showSearchInfo, setShowSearchInfo] = useState(false);
 
   const selectedRoom = useSelectedRoom();
-  const user = useUser((state) => state.user);
-
   const {
     messages,
-    setMessages,
-    addMessage,
-    optimisticIds,
-    optimisticDeleteMessage,
-    optimisticUpdateMessage,
-  } = useMessage((state) => state);
+    setActiveRoom,
+    loadInitialMessages,
+    subscribeToRoom,
+    unsubscribeFromRoom,
+  } = useMessage((state) => ({
+    messages: state.messages,
+    setActiveRoom: state.setActiveRoom,
+    loadInitialMessages: state.loadInitialMessages,
+    subscribeToRoom: state.subscribeToRoom,
+    unsubscribeFromRoom: state.unsubscribeFromRoom,
+  }));
 
   const { setHighlightedMessageId } = useSearchHighlight();
   const supabase = getSupabaseBrowserClient();
-  const messagesLoadedRef = useRef<Set<string>>(new Set());
   const prevRoomIdRef = useRef<string | null>(null);
+  const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const searchEngineRef = useRef<MessageSearchEngine>(new MessageSearchEngine());
+
+  /* --------------------------------------------------------------------------
+     CSS VARIABLES STYLES
+  -------------------------------------------------------------------------- */
+  const messageStyles = useMemo(() => ({
+    // Layout & Spacing
+    containerHeight: 'calc(100dvh * 0.75)', // 75dvh of viewport
+    padding: 'var(--layout-gap, 1rem)',
+    gap: 'var(--layout-gap, 1rem)',
+    borderRadius: 'var(--radius-unit, 0.5rem)',
+    
+    // Typography
+    fontSize: 'var(--chat-message-size, calc(1rem * var(--chat-font-scale, 1.1)))',
+    fontFamily: 'var(--font-family-base, "Inter", system-ui, sans-serif)',
+    lineHeight: 'var(--lh-normal, 1.4)',
+    
+    // Colors
+    backgroundColor: 'hsl(var(--background))',
+    foregroundColor: 'hsl(var(--foreground))',
+    messageTextColor: 'hsl(var(--message-text-color))',
+    mutedForeground: 'hsl(var(--muted-foreground))',
+    
+    // Message bubble
+    bubbleRadius: 'var(--message-bubble-radius, 1.25rem)',
+    bubblePadding: 'var(--message-bubble-padding, 0.75rem 1rem)',
+    messageGap: 'var(--message-gap, 0.5rem)',
+    
+    // Sender & Date info
+    senderSize: 'var(--message-sender-size, 0.875rem)',
+    dateSize: 'var(--message-date-size, 0.75rem)',
+    senderColor: 'hsl(var(--message-sender-color))',
+    dateColor: 'hsl(var(--message-date-color))',
+    
+    // No messages state
+    noMessagesColor: 'hsl(var(--no-messages-color))',
+    noMessagesSize: 'var(--no-messages-size, 1em)',
+    
+    // Search UI
+    searchInfoBg: 'hsl(var(--accent))',
+    searchInfoText: 'hsl(var(--accent-foreground))',
+    searchHighlightBg: 'rgba(59, 130, 246, 0.3)', // Search highlight color
+    
+    // Buttons & Interactions
+    buttonSize: 'var(--spacing-unit, 1rem)',
+    iconSize: 'calc(var(--spacing-unit, 1rem) * 1.25)',
+    hoverOpacity: '0.85',
+    activeScale: '0.95',
+    
+    // Glass Effects
+    glassOpacity: 'var(--glass-opacity, 0.75)',
+    glassBlur: 'var(--glass-blur, 16px)',
+    borderOpacity: 'var(--border-opacity, 0.15)',
+    
+    // Responsive breakpoints
+    breakpointSm: '480px',
+    breakpointMd: '768px',
+    breakpointLg: '1024px',
+    
+    // Animation
+    transitionDuration: 'var(--motion-duration, 200ms)',
+    transitionEasing: 'var(--motion-easing, cubic-bezier(0.2, 0, 0, 1))',
+  }), []);
 
   const handleOnScroll = useCallback(() => {
     if (!scrollRef.current) return;
@@ -332,10 +398,14 @@ export default function ListMessages({
     if (messages.length > 0 && selectedRoom?.id) {
       const roomMessages = messages.filter(msg => msg.room_id === selectedRoom.id);
       if (roomMessages.length > 0) {
-        searchEngineRef.current.clear();
-        roomMessages.forEach(msg => {
-          searchEngineRef.current.indexMessage(msg);
-        });
+        // Clear and re-index only if needed
+        const currentCount = searchEngineRef.current.getMessageCount();
+        if (currentCount !== roomMessages.length) {
+          searchEngineRef.current.clear();
+          roomMessages.forEach(msg => {
+            searchEngineRef.current.indexMessage(msg);
+          });
+        }
       }
     }
   }, [messages, selectedRoom?.id]);
@@ -389,172 +459,87 @@ export default function ListMessages({
     }
   }, [searchQuery, handleClearSearch]);
 
-  // Load initial messages
+  // Load initial messages - FIXED: Use the store's loadInitialMessages instead of setMessages
   useEffect(() => {
     const currentRoomId = selectedRoom?.id;
 
     if (!currentRoomId) {
-      setMessages([]);
-      messagesLoadedRef.current.clear();
-      prevRoomIdRef.current = null;
-      searchEngineRef.current.clear();
+      setActiveRoom(null);
+      unsubscribeFromRoom();
+      setInitialLoadComplete(false);
       return;
     }
 
     const roomChanged = currentRoomId !== prevRoomIdRef.current;
 
     if (roomChanged) {
-      setMessages([]);
-      messagesLoadedRef.current.delete(prevRoomIdRef.current || "");
-      searchEngineRef.current.clear();
+      setActiveRoom(null);
+      setInitialLoadComplete(false);
       handleClearSearch();
+      prevRoomIdRef.current = currentRoomId;
+      
+      // Show skeleton immediately on room change
+      setIsLoading(true);
     }
 
-    const alreadyLoaded = messagesLoadedRef.current.has(currentRoomId);
-    if (alreadyLoaded || isLoading) return;
+    // Clear any existing timeout and abort controller
+    if (loadTimeoutRef.current) {
+      clearTimeout(loadTimeoutRef.current);
+    }
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
 
-    prevRoomIdRef.current = currentRoomId;
-
-    const loadInitialMessages = async () => {
+    // Set loading state with a small delay to prevent flicker
+    loadTimeoutRef.current = setTimeout(() => {
       setIsLoading(true);
+    }, 50);
+
+    // Use the store's loadInitialMessages method
+    const loadMessages = async () => {
       try {
-        const res = await fetch(`/api/messages/${currentRoomId}?t=${Date.now()}`);
-        const data = await res.json();
-        const fetchedMessages = Array.isArray(data.messages) ? data.messages : [];
-        const transformedMessages = fetchedMessages.map(transformApiMessage);
-        setMessages(transformedMessages);
-        messagesLoadedRef.current.add(currentRoomId);
-      } catch (error) {
-        console.error("Load messages error:", error);
-        setMessages([]);
+        await loadInitialMessages(currentRoomId, { force: roomChanged });
+        setInitialLoadComplete(true);
+      } catch (error: any) {
+        // Don't log abort errors
+        if (error.name !== 'AbortError') {
+          console.error("Load messages error:", error);
+        }
       } finally {
         setIsLoading(false);
+        if (loadTimeoutRef.current) {
+          clearTimeout(loadTimeoutRef.current);
+          loadTimeoutRef.current = null;
+        }
+        abortControllerRef.current = null;
       }
     };
 
-    loadInitialMessages();
-  }, [selectedRoom?.id, setMessages, isLoading, handleClearSearch]);
+    loadMessages();
+
+    return () => {
+      if (loadTimeoutRef.current) {
+        clearTimeout(loadTimeoutRef.current);
+        loadTimeoutRef.current = null;
+      }
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+    };
+  }, [selectedRoom?.id, setActiveRoom, handleClearSearch, loadInitialMessages, unsubscribeFromRoom]);
 
   // Real-time subscription
-  const handleRealtimePayload = useCallback(
-    (payload: any) => {
-      try {
-        const currentRoomId = selectedRoom?.id;
-        if (!currentRoomId || payload.new?.room_id !== currentRoomId) {
-          return;
-        }
-
-        const messagePayload = payload.new as MessageRow;
-
-        if (payload.eventType === "INSERT") {
-          if (optimisticIds.includes(messagePayload.id)) {
-            return;
-          }
-
-          if (messages.some(m => m.id === messagePayload.id)) {
-            return;
-          }
-
-          supabase
-            .from("profiles")
-            .select("*")
-            .eq("id", messagePayload.sender_id)
-            .single()
-            .then(({ data: profile, error }) => {
-              if (error) {
-                console.error("Error fetching profile:", error);
-                return;
-              }
-
-              const newMessage: Imessage = {
-                ...messagePayload,
-                profiles: profile ? {
-                  id: profile.id,
-                  avatar_url: profile.avatar_url ?? null,
-                  display_name: profile.display_name ?? null,
-                  username: profile.username ?? null,
-                  created_at: profile.created_at ?? null,
-                  bio: profile.bio ?? null,
-                  updated_at: profile.updated_at ?? null,
-                } : {
-                  id: messagePayload.sender_id,
-                  avatar_url: null,
-                  display_name: null,
-                  username: null,
-                  created_at: null,
-                  bio: null,
-                  updated_at: null,
-                },
-              };
-
-              addMessage(newMessage);
-              searchEngineRef.current.indexMessage(newMessage);
-
-              if (scrollRef.current) {
-                const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
-                const isAtBottom = scrollHeight - scrollTop <= clientHeight + 100;
-
-                if (!isAtBottom) {
-                  setNotification(prev => prev + 1);
-                }
-              }
-            });
-
-        } else if (payload.eventType === "UPDATE") {
-          optimisticUpdateMessage(messagePayload.id, {
-            text: messagePayload.text,
-            is_edited: messagePayload.is_edited,
-          });
-          const updatedMessage = messages.find(m => m.id === messagePayload.id);
-          if (updatedMessage) {
-            searchEngineRef.current.removeMessage(messagePayload.id);
-            searchEngineRef.current.indexMessage({
-              ...updatedMessage,
-              text: messagePayload.text,
-              is_edited: messagePayload.is_edited,
-            });
-          }
-
-        } else if (payload.eventType === "DELETE") {
-          optimisticDeleteMessage(payload.old.id);
-          searchEngineRef.current.removeMessage(payload.old.id);
-        }
-      } catch (err) {
-        console.error("[ListMessages] Realtime payload error:", err);
-      }
-    },
-    [selectedRoom?.id, messages, optimisticIds, addMessage, optimisticUpdateMessage, optimisticDeleteMessage, supabase]
-  );
-
   useEffect(() => {
     const currentRoomId = selectedRoom?.id;
     if (!currentRoomId) return;
 
-    const messageChannel = supabase.channel(`room_messages_${currentRoomId}`, {
-      config: {
-        broadcast: { self: false }
-      }
-    });
-
-    messageChannel
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'messages',
-          filter: `room_id=eq.${currentRoomId}`
-        },
-        handleRealtimePayload
-      )
-      .subscribe((status) => {
-        console.log(`[ListMessages] Realtime status for room ${currentRoomId}:`, status);
-      });
+    subscribeToRoom(currentRoomId);
 
     return () => {
-      supabase.removeChannel(messageChannel);
+      unsubscribeFromRoom();
     };
-  }, [selectedRoom?.id, supabase, handleRealtimePayload]);
+  }, [selectedRoom?.id, subscribeToRoom, unsubscribeFromRoom]);
 
   // Auto-scroll logic
   const prevMessagesLength = useRef(messages.length);
@@ -593,36 +578,94 @@ export default function ListMessages({
     return roomMessages;
   }, [messages, selectedRoom?.id, searchQuery, searchResults]);
 
+  // Show skeleton only when loading AND no messages are displayed yet
+  const showSkeleton = isLoading && displayMessages.length === 0;
+
   const SkeletonMessage = React.memo(() => (
-    <div className="flex gap-2 animate-pulse w-full p-2">
-      <div className="w-10 h-10 rounded-full bg-gray-700 flex-shrink-0" />
+    <div 
+      className="flex gap-2 w-full p-2"
+      style={{ gap: messageStyles.messageGap }}
+    >
+      <div 
+        className="rounded-full flex-shrink-0 animate-pulse"
+        style={{
+          width: messageStyles.iconSize,
+          height: messageStyles.iconSize,
+          backgroundColor: `hsl(${messageStyles.mutedForeground} / 0.3)`,
+        }}
+      />
       <div className="flex-1 space-y-2 min-w-0">
-        <div className="h-4 bg-gray-700 rounded w-1/4" />
-        <div className="h-3 bg-gray-700 rounded w-3/4 break-all" />
+        <div 
+          className="rounded animate-pulse"
+          style={{
+            height: messageStyles.senderSize,
+            backgroundColor: `hsl(${messageStyles.mutedForeground} / 0.3)`,
+            width: '25%',
+          }}
+        />
+        <div 
+          className="rounded animate-pulse break-all"
+          style={{
+            height: messageStyles.dateSize,
+            backgroundColor: `hsl(${messageStyles.mutedForeground} / 0.3)`,
+            width: '75%',
+          }}
+        />
       </div>
     </div>
   ));
 
   SkeletonMessage.displayName = "SkeletonMessage";
 
-  // Enhanced empty state with search context - REMOVED empty state rendering
-  const renderEmptyState = () => {
+  // Enhanced empty state with search context
+  const renderEmptyState = useMemo(() => {
     // Don't render empty state when searching
     if (searchQuery && displayMessages.length === 0) {
-      return null; // Don't show any empty state when searching
+      return (
+        <div 
+          className="flex flex-col items-center justify-center h-48 text-center"
+          style={{
+            color: messageStyles.noMessagesColor,
+            fontSize: messageStyles.noMessagesSize,
+          }}
+        >
+          <Search style={{ width: '2rem', height: '2rem', marginBottom: '1rem' }} />
+          <p>No messages found for "{searchQuery}"</p>
+        </div>
+      );
     }
 
-    // Don't render empty state for normal mode either
+    // Don't render empty state when loading
+    if (isLoading) {
+      return null;
+    }
+
+    // Show empty state for normal mode
+    if (displayMessages.length === 0 && initialLoadComplete) {
+      return (
+        <div 
+          className="flex flex-col items-center justify-center h-48 text-center"
+          style={{
+            color: messageStyles.noMessagesColor,
+            fontSize: messageStyles.noMessagesSize,
+          }}
+        >
+          <p>No messages yet. Start the conversation!</p>
+        </div>
+      );
+    }
+
     return null;
-  };
+  }, [searchQuery, displayMessages.length, isLoading, initialLoadComplete, messageStyles]);
 
   if (!selectedRoom?.id) {
     return (
       <div
         className="flex items-center justify-center h-full overflow-hidden"
         style={{
-          color: 'hsl(var(--no-messages-color))',
-          fontSize: 'var(--no-messages-size)'
+          color: messageStyles.noMessagesColor,
+          fontSize: messageStyles.noMessagesSize,
+          fontFamily: messageStyles.fontFamily,
         }}
       >
         <p>Select a room to start chatting</p>
@@ -631,7 +674,17 @@ export default function ListMessages({
   }
 
   return (
-    <div className="h-[75dvh] w-full flex flex-col overflow-hidden relative">
+    <div 
+      className="w-full flex flex-col overflow-hidden relative"
+      style={{
+        height: messageStyles.containerHeight,
+        backgroundColor: messageStyles.backgroundColor,
+        color: messageStyles.foregroundColor,
+        fontFamily: messageStyles.fontFamily,
+        fontSize: `calc(${messageStyles.fontSize} * var(--app-font-scale, 1))`,
+        transition: `all ${messageStyles.transitionDuration} ${messageStyles.transitionEasing}`,
+      }}
+    >
 
       {!isSearchExpanded && (
         <Button
@@ -639,23 +692,52 @@ export default function ListMessages({
           size="icon"
           onClick={handleSearchTrigger}
           className={cn(
-            "absolute top-4 right-4 z-30 w-[2.5em] h-[2.5em] flex items-center justify-center rounded-full",
-            "bg-[hsl(var(--background))]/60 backdrop-blur-md shadow-sm",
+            "absolute top-4 right-4 z-30 flex items-center justify-center rounded-full",
             "transition-all duration-300 ease-in-out group hover:bg-[hsl(var(--action-active))]/15 active:scale-95",
-            "focus-visible:ring-[hsl(var(--action-ring))]/50 focus-visible:ring-2",
-            "text-[hsl(var(--foreground))]"
+            "focus-visible:ring-[hsl(var(--action-ring))]/50 focus-visible:ring-2"
           )}
+          style={{
+            width: messageStyles.iconSize,
+            height: messageStyles.iconSize,
+            backgroundColor: `hsl(${messageStyles.backgroundColor}) / ${messageStyles.glassOpacity}`,
+            backdropFilter: `blur(${messageStyles.glassBlur})`,
+            boxShadow: `0 4px 16px hsl(0 0% 0% / var(--shadow-strength, 0.12))`,
+            border: `1px solid hsl(${messageStyles.foregroundColor} / ${messageStyles.borderOpacity})`,
+          }}
           title="Search Messages"
         >
-          <Search className="h-5 w-5 transition-all duration-300 stroke-[hsl(var(--muted-foreground))]" />
+          <Search 
+            className="transition-all duration-300"
+            style={{
+              width: `calc(${messageStyles.iconSize} * 0.6)`,
+              height: `calc(${messageStyles.iconSize} * 0.6)`,
+              color: `hsl(${messageStyles.mutedForeground})`,
+            }}
+          />
         </Button>
       )}
+      
       {/* Search Info Header */}
       {showSearchInfo && searchQuery && (
-        <div className="px-4 py-3 border-b bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 transition-all duration-300">
-          <div className="flex items-center justify-between text-sm">
+        <div 
+          className="px-4 py-3 border-b transition-all duration-300"
+          style={{
+            backgroundColor: messageStyles.searchInfoBg,
+            color: messageStyles.searchInfoText,
+            borderColor: `hsl(${messageStyles.foregroundColor} / ${messageStyles.borderOpacity})`,
+          }}
+        >
+          <div 
+            className="flex items-center justify-between"
+            style={{ fontSize: messageStyles.senderSize }}
+          >
             <div className="flex items-center gap-2">
-              <Search className="h-4 w-4" />
+              <Search 
+                style={{
+                  width: `calc(${messageStyles.iconSize} * 0.5)`,
+                  height: `calc(${messageStyles.iconSize} * 0.5)`,
+                }}
+              />
               <span>
                 Showing {displayMessages.length} results for &quot;{searchQuery}&quot;
               </span>
@@ -664,9 +746,20 @@ export default function ListMessages({
               variant="ghost"
               size="sm"
               onClick={handleClearSearch}
-              className="h-6 px-2 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-800/30"
+              className="hover:bg-blue-100 dark:hover:bg-blue-800/30"
+              style={{
+                height: `calc(${messageStyles.buttonSize} * 1.5)`,
+                padding: `0 calc(${messageStyles.buttonSize} * 0.5)`,
+                fontSize: messageStyles.dateSize,
+              }}
             >
-              <X className="h-3 w-3 mr-1" />
+              <X 
+                className="mr-1"
+                style={{
+                  width: `calc(${messageStyles.iconSize} * 0.375)`,
+                  height: `calc(${messageStyles.iconSize} * 0.375)`,
+                }}
+              />
               Clear
             </Button>
           </div>
@@ -677,11 +770,20 @@ export default function ListMessages({
       <div
         ref={scrollRef}
         onScroll={handleOnScroll}
-        className="flex-1 overflow-y-scroll px-3 py-2 space-y-2 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent"
+        className=""
+        style={{
+          paddingLeft: `calc(${messageStyles.padding} * 0.75)`,
+          paddingRight: `calc(${messageStyles.padding} * 0.75)`,
+          gap: messageStyles.messageGap,
+          scrollbarColor: `hsl(${messageStyles.mutedForeground} / 0.3) transparent`,
+        }}
       >
-        <div className="w-full max-w-full">
-          {isLoading ? (
-            <div className="space-y-4">
+        <div className="w-full h-[75vh] overflow-y-scroll py-2 space-y-2 scrollbar-thin">
+          {showSkeleton ? (
+            <div 
+              className="space-y-4"
+              style={{ gap: messageStyles.gap }}
+            >
               {Array.from({ length: 5 }, (_, index) => (
                 <SkeletonMessage key={index} />
               ))}
@@ -692,12 +794,12 @@ export default function ListMessages({
                 key={message.id}
                 message={message}
                 isNavigated={currentNavigatedMessageId === message.id}
-                searchQuery={searchQuery} // Always pass searchQuery for highlighting
+                searchQuery={searchQuery}
               />
             ))
           ) : (
-            // Don't render empty state - just show nothing
-            renderEmptyState()
+            // Render empty state when no messages
+            renderEmptyState
           )}
         </div>
       </div>
@@ -707,10 +809,23 @@ export default function ListMessages({
 
       {/* New messages notification - Hide when searching */}
       {!searchQuery && notification > 0 && (
-        <div className="absolute bottom-20 right-4 z-10">
+        <div 
+          className="absolute z-10"
+          style={{
+            bottom: `calc(${messageStyles.buttonSize} * 5)`,
+            right: messageStyles.buttonSize,
+          }}
+        >
           <button
             onClick={scrollDown}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg hover:bg-blue-700 transition-colors text-sm"
+            className="shadow-lg hover:bg-blue-700 transition-colors text-sm rounded-lg"
+            style={{
+              backgroundColor: `hsl(var(--primary))`,
+              color: `hsl(var(--primary-foreground))`,
+              padding: `${messageStyles.buttonSize} calc(${messageStyles.buttonSize} * 1.5)`,
+              fontSize: messageStyles.senderSize,
+              borderRadius: messageStyles.borderRadius,
+            }}
             title="Scroll to latest messages"
           >
             {notification} new message{notification > 1 ? 's' : ''} ↓

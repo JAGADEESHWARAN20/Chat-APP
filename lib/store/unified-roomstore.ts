@@ -125,7 +125,8 @@ interface UnifiedStore {
   typingUsers: { user_id: string; is_typing: boolean; display_name?: string }[];
   typingDisplayText: string;
   roomPresence: Record<string, { onlineUsers: number; userIds: string[]; lastUpdated?: string }>;
-
+  darkMode: boolean;
+  setDarkMode: (isDark: boolean) => void;
   // Global search state
   sidebarSearchTerm: string;
   setSidebarSearchTerm: (v: string) => void;
@@ -230,7 +231,10 @@ export const useUnifiedStore = create<UnifiedStore>()(
       roomPresence: {},
       sidebarSearchTerm: "",
       setSidebarSearchTerm: (v: string) => set({ sidebarSearchTerm: v }),
-
+      darkMode: false,
+      // ... existing setters ...
+      setDarkMode: (isDark: boolean) => set({ darkMode: isDark }),
+      
       // dispatcher
       dispatch: (evt: string, payload?: any) => dispatcher.emit(evt, payload),
       on: (evt: string, h: EventHandler) => dispatcher.on(evt, h),
