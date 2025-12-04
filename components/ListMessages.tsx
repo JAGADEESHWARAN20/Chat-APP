@@ -630,7 +630,7 @@ export default function ListMessages({
           }}
         >
           <Search style={{ width: '2rem', height: '2rem', marginBottom: '1rem' }} />
-          <p>No messages found for "{searchQuery}"</p>
+          <p>No messages found for {searchQuery}</p>
         </div>
       );
     }

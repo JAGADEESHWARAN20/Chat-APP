@@ -135,38 +135,42 @@ function UnifiedHomeContent({ initialSidebarState = "collapsed", sidebarState }:
   /* --------------------------------------------------------------------------
      CSS VARIABLES FOR INSTANT THEME SWITCHING
   -------------------------------------------------------------------------- */
-  const layoutStyles = {
-    // Colors - dynamically change with theme
-    backgroundColor: 'hsl(var(--background))',
-    foregroundColor: 'hsl(var(--foreground))',
-    accentColor: 'hsl(var(--accent))',
-    mutedBackground: 'hsl(var(--muted))',
-    borderColor: 'hsl(var(--border))',
-    
-    // Typography
-    fontSizeBase: 'var(--fs-body, 1rem)',
-    fontSizeLarge: 'var(--fs-subtitle, 1.25rem)',
-    fontFamily: 'var(--font-family-base, "Inter", system-ui, sans-serif)',
-    
-    // Layout & Spacing
-    headerHeight: 'var(--header-height, 3.75rem)',
-    spacingUnit: 'var(--spacing-unit, 1rem)',
-    gap: 'var(--layout-gap, 1rem)',
-    borderRadius: 'var(--radius-unit, 0.5rem)',
-    
-    // Effects
-    glassOpacity: 'var(--glass-opacity, 0.75)',
-    glassBlur: 'var(--glass-blur, 16px)',
-    borderOpacity: 'var(--border-opacity, 0.15)',
-    
-    // Animation
-    transitionDuration: 'var(--motion-duration, 200ms)',
-    transitionEasing: 'var(--motion-easing, cubic-bezier(0.2, 0, 0, 1))',
-    
-    // Responsive
-    sidebarWidthMobile: '280px',
-    sidebarWidthDesktop: '520px',
-  };
+  const layoutStyles = useMemo(
+    () => ({
+      // Colors
+      backgroundColor: 'hsl(var(--background))',
+      foregroundColor: 'hsl(var(--foreground))',
+      accentColor: 'hsl(var(--accent))',
+      mutedBackground: 'hsl(var(--muted))',
+      borderColor: 'hsl(var(--border))',
+  
+      // Typography
+      fontSizeBase: 'var(--fs-body, 1rem)',
+      fontSizeLarge: 'var(--fs-subtitle, 1.25rem)',
+      fontFamily: 'var(--font-family-base, "Inter")',
+  
+      // Layout
+      headerHeight: 'var(--header-height)',
+      spacingUnit: 'var(--spacing-unit)',
+      gap: 'var(--layout-gap)',
+      borderRadius: 'var(--radius-unit)',
+  
+      // Effects
+      glassOpacity: 'var(--glass-opacity)',
+      glassBlur: 'var(--glass-blur)',
+      borderOpacity: 'var(--border-opacity)',
+  
+      // Animation
+      transitionDuration: 'var(--motion-duration)',
+      transitionEasing: 'var(--motion-easing)',
+  
+      // Sidebar widths
+      sidebarWidthMobile: '280',
+      sidebarWidthDesktop: '520',
+    }),
+    [] // 👈 static, never changes
+  );
+  
 
   const leftSidebarStyle: React.CSSProperties = useMemo(() => {
     if (isMobile) {
