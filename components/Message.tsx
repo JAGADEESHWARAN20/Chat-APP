@@ -18,7 +18,7 @@ import { useUser } from "@/lib/store/user";
 import { useMediaQuery } from "@/hooks/use-media-query";
 
 interface MessageProps {
-  message: Imessage;
+  message: Imessage | undefined; // allow undefined to be safe
   isNavigated?: boolean;
   searchQuery?: string;
 }
@@ -36,7 +36,6 @@ interface MenuItemConfig {
 
 /* ----------------------
    Hook for menu items
-   (keeps menu config outside render)
    ---------------------- */
 const useMenuItems = () => {
   const setActionMessage = useMessage((state) => state.setActionMessage);
@@ -151,7 +150,30 @@ MessageMenu.displayName = "MessageMenu";
    Main Message component (memoized)
    ---------------------- */
 function MessageInner({ message, isNavigated = false }: MessageProps) {
-  // ✅ Early return comes BEFORE any hooks
+  // ✅ ALL HOOKS AT TOP, UNCONDITIONALLY
+  const user = useUser((state) => state.user);
+  const { highlightedMessageId } = useSearchHighlight();
+  const { menuItems, isMobile } = useMenuItems();
+
+  const [imageErrored, setImageErrored] = useState(false);
+  const onImageError = useCallback(() => setImageErrored(true), []);
+
+  // can safely handle undefined `message`
+  const initial = useMemo(() => {
+    if (!message) return "?";
+    return (
+      message.profiles?.display_name?.charAt(0)?.toUpperCase() ||
+      message.profiles?.username?.charAt(0)?.toUpperCase() ||
+      "?"
+    );
+  }, [message?.profiles?.display_name, message?.profiles?.username, message]);
+
+  const formattedDate = useMemo(() => {
+    if (!message?.created_at) return "Unknown date";
+    return new Date(message.created_at).toDateString();
+  }, [message?.created_at, message]);
+
+  // ✅ CONDITIONAL RETURN AFTER HOOKS
   if (!message) {
     return (
       <div
@@ -166,11 +188,6 @@ function MessageInner({ message, isNavigated = false }: MessageProps) {
     );
   }
 
-  // ✅ All hooks are now unconditional
-  const user = useUser((state) => state.user);
-  const { highlightedMessageId } = useSearchHighlight();
-  const { menuItems, isMobile } = useMenuItems();
-
   const isHighlighted = highlightedMessageId === message.id;
 
   // Classes
@@ -181,26 +198,6 @@ function MessageInner({ message, isNavigated = false }: MessageProps) {
     ? "bg-green-100/10 dark:bg-green-900/10 border-l-4 border-slate-500 ring-2 ring-green-500/20"
     : "";
   const backgroundClass = isNavigated ? navigationClass : highlightClass;
-
-  // image error state
-  const [imageErrored, setImageErrored] = useState(false);
-  const onImageError = useCallback(() => setImageErrored(true), []);
-
-  // memoized initials
-  const initial = useMemo(() => {
-    return (
-      message.profiles?.display_name?.charAt(0)?.toUpperCase() ||
-      message.profiles?.username?.charAt(0)?.toUpperCase() ||
-      "?"
-    );
-  }, [message.profiles?.display_name, message.profiles?.username]);
-
-  // memoized formatted date
-  const formattedDate = useMemo(() => {
-    return message.created_at
-      ? new Date(message.created_at).toDateString()
-      : "Unknown date";
-  }, [message.created_at]);
 
   return (
     <div
