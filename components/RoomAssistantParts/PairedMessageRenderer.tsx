@@ -132,8 +132,10 @@ export const PairedMessageRenderer = memo(
             {children}
           </blockquote>
         ),
-        code: ({ inline, children, className, ...props }) => {
-          if (inline) {
+        code: ({ children, className, ...props }: any) => {
+          const isInline = !className;
+        
+          if (isInline) {
             return (
               <code
                 className="bg-[hsl(var(--muted))]/60 px-1.5 py-0.5 rounded text-[0.75rem] font-mono"
@@ -143,12 +145,14 @@ export const PairedMessageRenderer = memo(
               </code>
             );
           }
+        
           return (
             <pre className="rounded-md overflow-x-auto p-3 bg-[hsl(var(--muted))]/10">
               <code className={className}>{children}</code>
             </pre>
           );
-        },
+        },        
+          
         a: ({ href, children, title, ...props }) => {
           if (!href) return <span {...props}>{children}</span>;
           return (
