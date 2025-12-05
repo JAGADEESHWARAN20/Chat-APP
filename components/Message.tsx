@@ -102,55 +102,39 @@ ResponsiveMenuItem.displayName = "ResponsiveMenuItem";
 /* ----------------------
    MessageMenu component (memoized)
    ---------------------- */
-const MessageMenu: React.FC<{ message: Imessage }> = React.memo(({ message }) => {
-  const { menuItems, isMobile } = useMenuItems();
-
-  if (!message) return null;
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger 
-        className="
-          text-gray-400 hover:text-slate-700 dark:text-slate-500 
-          dark:hover:text-slate-300 rounded-full p-1 
-          transition-all duration-200 hover:bg-slate-200 
-          dark:hover:bg-slate-700 focus:outline-none 
-          focus:ring-2 focus:ring-slate-400 focus:ring-opacity-50
-        "
-        aria-label="Message actions"
-      >
-        <MoreHorizontal className="h-5 w-5" />
-      </DropdownMenuTrigger>
-      
-      <DropdownMenuContent
-        align="end"
-        sideOffset={8}
-        className={`
-          bg-gray-800 border-gray-700/50 text-white rounded-xl 
-          shadow-2xl backdrop-blur-sm min-w-[180px]
-          ${isMobile ? 'w-16 py-2' : 'w-48 py-3'}
-        `}
-      >
-        <DropdownMenuLabel className="text-gray-300 px-4 py-2 text-xs font-semibold uppercase tracking-wide">
-          {isMobile ? "Actions" : "Message Actions"}
-        </DropdownMenuLabel>
-        
-        <DropdownMenuSeparator className="bg-gray-700/50 mx-2" />
-        
-        <div className="space-y-1">
-          {menuItems.map((item) => (
-            <ResponsiveMenuItem
-              key={item.type}
-              item={item}
-              message={message}
-              isMobile={isMobile}
-            />
-          ))}
-        </div>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-});
+   const MessageMenu: React.FC<{ 
+    message: Imessage; 
+    menuItems: MenuItemConfig[];
+    isMobile: boolean;
+  }> = React.memo(({ message, menuItems, isMobile }) => {
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger className="...">
+          <MoreHorizontal className="h-5 w-5" />
+        </DropdownMenuTrigger>
+  
+        <DropdownMenuContent className="...">
+          <DropdownMenuLabel className="...">
+            {isMobile ? "Actions" : "Message Actions"}
+          </DropdownMenuLabel>
+  
+          <DropdownMenuSeparator className="bg-gray-700/50 mx-2" />
+  
+          <div className="space-y-1">
+            {menuItems.map((item) => (
+              <ResponsiveMenuItem
+                key={item.type}
+                item={item}
+                message={message}
+                isMobile={isMobile}
+              />
+            ))}
+          </div>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  });
+  
 MessageMenu.displayName = "MessageMenu";
 
 /* ----------------------
@@ -159,7 +143,7 @@ MessageMenu.displayName = "MessageMenu";
 function MessageInner({ message, isNavigated = false }: MessageProps) {
   const user = useUser((state) => state.user);
   const { highlightedMessageId } = useSearchHighlight();
-
+  const { menuItems, isMobile } = useMenuItems();  // ← ALWAYS EXECUTED
   if (!message) {
     return (
       <div 
@@ -256,7 +240,12 @@ function MessageInner({ message, isNavigated = false }: MessageProps) {
           
           <div className="flex items-center gap-2">
             {message.profiles?.id && user?.id && message.profiles.id === user.id && (
-              <MessageMenu message={message} />
+             <MessageMenu 
+             message={message} 
+             menuItems={menuItems} 
+             isMobile={isMobile}
+           />
+           
             )}
           </div>
         </div>
