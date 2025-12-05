@@ -337,7 +337,7 @@ const renderRoom = useCallback(
 
         {/* HEADER */}
         <div 
-          className="flex-none border-b"
+          className="flex-none "
           style={{
             padding: `calc(${sidebarStyles.padding} * 0.75) ${sidebarStyles.padding}`,
             borderColor: `hsl(${sidebarStyles.borderColor})`,

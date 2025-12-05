@@ -15,11 +15,9 @@ export default function NotificationsWrapper() {
   const { user: currentUser, authUser } = useUser();
   const userId = currentUser?.id || authUser?.id;
 
-  // 🔥 UnifiedStore selectors — single source of truth
   const unread = useUnreadCount();
   const fetchNotifications = useUnifiedStore((s) => s.fetchNotifications);
 
-  // 🔥 Load notifications when panel opens
   useEffect(() => {
     if (isOpen && userId) {
       fetchNotifications();
@@ -36,7 +34,7 @@ export default function NotificationsWrapper() {
 
   return (
     <div className="relative">
-      {/* =============== TRIGGER BUTTON =============== */}
+      {/* ================= TRIGGER BUTTON (UI MATCHED) ================ */}
       <motion.button
         title="Notifications"
         aria-label={`Notifications ${unread > 0 ? `${unread} unread` : ""}`}
@@ -47,35 +45,43 @@ export default function NotificationsWrapper() {
         className={cn(
           "relative flex items-center justify-center rounded-full",
           "w-[2.6em] h-[2.6em] transition-all duration-300 shadow-sm",
-          "bg-[var(--action-bg)] border border-[var(--action-ring)] hover:bg-[var(--action-hover)] hover:shadow-lg",
+          "backdrop-blur-xl",
+
+          // Theme-aware backgrounds
+          "bg-[hsl(var(--background)/0.6)] border border-[hsl(var(--border)/0.3)]",
+          "hover:bg-[hsl(var(--accent)/0.3)] hover:shadow-md",
+
           !userId && "opacity-50 cursor-not-allowed"
         )}
       >
-        {/* Animated Glow */}
+        {/* Glow animation when unread exists */}
         <AnimatePresence>
           {unread > 0 && (
             <motion.div
               key="glow"
-              className="absolute inset-0 rounded-full bg-[var(--action-active)]/20 blur-md"
+              className="absolute inset-0 rounded-full blur-lg"
+              style={{
+                backgroundColor: "hsl(var(--primary)/0.25)",
+              }}
               initial={{ opacity: 0 }}
-              animate={{ opacity: [0.2, 0.5, 0.2] }}
+              animate={{ opacity: [0.25, 0.4, 0.25] }}
               exit={{ opacity: 0 }}
               transition={{ repeat: Infinity, duration: 1.8 }}
             />
           )}
         </AnimatePresence>
 
-        {/* Bell icon */}
+        {/* Bell Icon */}
         <Bell
           className={cn(
-            "relative z-10 h-[2em] w-[2em] transition-colors duration-200",
+            "relative z-10 h-[1.7em] w-[1.7em] transition-colors",
             unread > 0
-              ? "stroke-[var(--action-active)] fill-[var(--action-active)]"
-              : "stroke-[var(--action-text)]"
+              ? "stroke-[hsl(var(--primary))]"
+              : "stroke-[hsl(var(--foreground))]"
           )}
         />
 
-        {/* 🔴 Unread count badge */}
+        {/* Unread Badge */}
         <AnimatePresence>
           {unread > 0 && userId && (
             <motion.span
@@ -83,11 +89,14 @@ export default function NotificationsWrapper() {
               initial={{ opacity: 0, y: -5 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -5 }}
-              transition={{ duration: 0.2 }}
+              transition={{ duration: 0.25 }}
               className={cn(
-                "absolute -top-1.5 -right-1.5 min-w-[1.25rem] h-5 px-1 flex items-center justify-center",
-                "rounded-full bg-[var(--action-active)] text-white text-xs font-semibold shadow-md"
+                "absolute -top-1.5 -right-1.5 min-w-[1.2rem] h-5 px-1 flex items-center justify-center",
+                "rounded-full text-white text-xs font-semibold shadow-md"
               )}
+              style={{
+                backgroundColor: "hsl(var(--primary))",
+              }}
             >
               {unread > 99 ? "99+" : unread}
             </motion.span>
@@ -95,7 +104,7 @@ export default function NotificationsWrapper() {
         </AnimatePresence>
       </motion.button>
 
-      {/* =============== NOTIFICATION PANEL =============== */}
+      {/* ================= NOTIFICATION PANEL ================ */}
       <AnimatePresence>
         {isOpen && userId && (
           <motion.div

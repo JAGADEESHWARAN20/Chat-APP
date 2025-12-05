@@ -1,3 +1,4 @@
+// components/RoomAssistant.tsx
 "use client";
 
 import React, {
@@ -6,9 +7,9 @@ import React, {
   useRef,
   useTransition,
   memo,
+  useCallback,
   KeyboardEvent,
 } from "react";
-
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Bot,
@@ -18,7 +19,6 @@ import {
   MoreVertical,
   Maximize2,
   Minimize2,
-  Minimize,
   Maximize,
 } from "lucide-react";
 
@@ -31,16 +31,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Card,
-  CardHeader,
-  CardContent,
-} from "@/components/ui/card";
-import {
-  Popover,
-  PopoverTrigger,
-  PopoverContent,
-} from "@/components/ui/popover";
+import { Card, CardHeader, CardContent } from "@/components/ui/card";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 import { toast } from "@/components/ui/sonner";
@@ -52,10 +44,9 @@ import { PairedMessageRenderer } from "./RoomAssistantParts/PairedMessageRendere
 import { MessageSkeleton } from "./RoomAssistantParts/MessageSkeleton";
 import { MODELS } from "./RoomAssistantParts/constants";
 
-// ======================================================
-// TYPES
-// ======================================================
-
+/* -----------------------
+   Types
+   ----------------------- */
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
@@ -64,172 +55,200 @@ export interface ChatMessage {
   model?: string;
   structuredData?: any;
 }
-
 interface SummarizeResponse {
   success: boolean;
   fullContent: string;
   meta?: { tokens: number; model: string };
   error?: string;
 }
-
 interface RoomAssistantProps {
   roomId: string;
   roomName: string;
   className?: string;
   isExpanded?: boolean;
-  dialogMode?: boolean; // ✅ FIX: add this back
+  dialogMode?: boolean;
   onToggleExpand?: () => void;
   messages: ChatMessage[];
   setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
   loadingHistory: boolean;
+  onInputExpandChange?: (expanded: boolean) => void;
 }
 
-// ======================================================
-// COMPONENT
-// ======================================================
+/* -----------------------
+   Constants & Helpers
+   ----------------------- */
+const INPUT_HEIGHT_COMPACT = "h-[5em]";
+const INPUT_HEIGHT_EXPANDED = "h-[10em]";
+const SCROLLAREA_HEIGHT_COMPACT = "h-[53vh]";
+const SCROLLAREA_HEIGHT_EXPANDED = "h-[calc(55vh-5em)]"; // Subtract the additional 5em from expanded input
 
+/* -----------------------
+   Component
+   ----------------------- */
 function RoomAssistantComponent({
   roomId,
   roomName,
   className,
-  isExpanded: externalExpand,
+  isExpanded: externalExpand = false,
   onToggleExpand,
   messages,
   setMessages,
   loadingHistory,
+  onInputExpandChange,
 }: RoomAssistantProps) {
-  
   const { theme } = useTheme();
-
-  // Actual user from auth store
   const currentUser = useUser((s) => s.user);
 
+  // Local state
   const [prompt, setPrompt] = useState("");
-  const [model, setModel] = useState("gpt-4o-mini");
+  const [model, setModel] = useState<string>(MODELS[0] ?? "gpt-4o-mini");
   const [loading, setLoading] = useState(false);
+  const [isSending, setIsSending] = useState(false);
 
-  const [, startTransition] = useTransition();
-
-  const scrollRef = useRef<HTMLDivElement>(null);
+  // Local visual expand for textarea (affects textarea height and scrollarea height)
   const [expandedInput, setExpandedInput] = useState(false);
 
-  const isExpanded = externalExpand ?? expandedInput;
+  // Provide parent with updates (popover adjusts translateY)
+  useEffect(() => {
+    onInputExpandChange?.(expandedInput);
+  }, [expandedInput, onInputExpandChange]);
 
-  // ======================================================
-  // AUTOSCROLL
-  // ======================================================
+  const [, startTransition] = useTransition();
+  const scrollRef = useRef<any>(null);
 
+  // Auto-scroll (rAF)
   useEffect(() => {
     if (!scrollRef.current || loading) return;
-    scrollRef.current.scrollTo({
-      top: scrollRef.current.scrollHeight,
-      behavior: "smooth",
+    const raf = requestAnimationFrame(() => {
+      try {
+        const el =
+          scrollRef.current?.scrollTo
+            ? scrollRef.current
+            : scrollRef.current?.contentElement
+            ? scrollRef.current.contentElement
+            : scrollRef.current?.querySelector?.(".scrollable-content") ?? scrollRef.current;
+        el?.scrollTo?.({ top: el.scrollHeight, behavior: "smooth" });
+      } catch (e) {
+        // ignore
+      }
     });
+    return () => cancelAnimationFrame(raf);
   }, [messages, loading]);
 
-  // ======================================================
-  // SEND MESSAGE
-  // ======================================================
+  // Handlers
+  const handlePromptChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setPrompt(e.target.value);
+  }, []);
 
-  const handleSubmit = async (e?: React.FormEvent) => {
-    e?.preventDefault();
+  const toggleExpandedInput = useCallback(() => {
+    setExpandedInput((prev) => !prev);
+  }, []);
 
-    if (!prompt.trim()) return toast.error("Type something first");
-    if (loading) return;
-
-    const userMsg: ChatMessage = {
-      id: Date.now().toString(),
-      role: "user",
-      content: prompt,
-      timestamp: new Date(),
-    };
-
-    startTransition(() => {
-      setMessages((prev) => [...prev, userMsg]);
-      setPrompt("");
-      setLoading(true);
-    });
-
-    try {
-      const res = await fetch(`/api/ai/summarize`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt,
-          roomId,
-          model,
-          userId: currentUser?.id ?? null,
-        }),
-      });
-
-      const data: SummarizeResponse = await res.json();
-
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || "AI request failed");
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        void handleSubmit();
       }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [prompt]
+  );
 
-      const aiMsg: ChatMessage = {
-        id: Date.now().toString() + "-ai",
-        role: "assistant",
-        content: data.fullContent,
+  const handleSubmit = useCallback(
+    async (e?: React.FormEvent) => {
+      e?.preventDefault();
+      const text = prompt.trim();
+      if (!text) {
+        toast.error("Type something first");
+        return;
+      }
+      if (loading) return;
+
+      const tempId = Date.now().toString();
+      const userMsg: ChatMessage = {
+        id: tempId,
+        role: "user",
+        content: text,
         timestamp: new Date(),
-        model,
       };
 
       startTransition(() => {
-        setMessages((prev) => [...prev, aiMsg]);
+        setMessages((prev) => [...prev, userMsg]);
+        setPrompt("");
+        setLoading(true);
+        setIsSending(true);
       });
-    } catch (err: any) {
-      toast.error(err.message || "Request failed");
 
-      // Remove the previously added user message
-      startTransition(() => {
-        setMessages((prev) => prev.filter((m) => m.id !== userMsg.id));
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+      try {
+        const res = await fetch(`/api/ai/summarize`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prompt: text,
+            roomId,
+            model,
+            userId: currentUser?.id ?? null,
+          }),
+        });
+        const data: SummarizeResponse = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error || "AI request failed");
 
-  // ======================================================
-  // ENTER TO SEND
-  // ======================================================
+        const aiMsg: ChatMessage = {
+          id: `${Date.now().toString()}-ai`,
+          role: "assistant",
+          content: data.fullContent,
+          timestamp: new Date(),
+          model,
+        };
+        startTransition(() => setMessages((prev) => [...prev, aiMsg]));
+      } catch (err: any) {
+        toast.error(err?.message || "Request failed");
+        startTransition(() => setMessages((prev) => prev.filter((m) => m.id !== tempId)));
+      } finally {
+        setLoading(false);
+        setIsSending(false);
+      }
+    },
+    [prompt, model, roomId, currentUser?.id, setMessages, startTransition, loading]
+  );
 
-  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSubmit();
-    }
-  };
+  // Dynamic classes based on expandedInput state
+  const inputHeightClass = expandedInput ? INPUT_HEIGHT_EXPANDED : INPUT_HEIGHT_COMPACT;
+  const scrollAreaHeightClass = expandedInput
+    ? SCROLLAREA_HEIGHT_EXPANDED
+    : SCROLLAREA_HEIGHT_COMPACT;
 
-  // ======================================================
-  // RENDER UI
-  // ======================================================
+  const textareaClass = cn(
+    "rounded-xl resize-none pr-12 text-sm bg-background/60 border-border/40",
+    inputHeightClass,
+    "transition-all duration-150"
+  );
 
+  // Render
   return (
-    <div className={cn("relative w-full h-full", className)}>
+    <div className={cn("relative w-full h-[80vh]", className)}>
       <Card
         className={cn(
-          "flex flex-col h-full justify-between rounded-xl overflow-hidden backdrop-blur-xl border-border/40"
+          "flex flex-col min-h-0 h-full justify-between rounded-xl overflow-hidden backdrop-blur-xl border-border/40 relative z-40"
         )}
       >
-        {/* HEADER */}
-        <CardHeader
-          className={cn(
-            "flex items-center justify-between px-4 py-3 border-b border-border/40 bg-card/40"
-          )}
-        >
+        {/* Header */}
+        <CardHeader className="flex items-center justify-between px-4 py-3 border-b border-border/40 bg-card/40">
           <div className="w-full flex items-center justify-between gap-3">
-            
-            <Button variant="ghost" size="icon" onClick={onToggleExpand}>
-              {isExpanded ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onToggleExpand}
+              aria-label="Expand/Minimize"
+            >
+              {externalExpand ? (
                 <Minimize2 className="h-4 w-4" />
               ) : (
                 <Maximize2 className="h-4 w-4" />
               )}
             </Button>
 
-            {/* Title */}
             <motion.div
               className="flex items-center gap-2"
               initial={{ opacity: 0, y: -6 }}
@@ -241,15 +260,14 @@ function RoomAssistantComponent({
               <span className="font-medium text-sm">AI Assistant</span>
             </motion.div>
 
-            {/* MENU */}
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="ghost" size="icon">
+                <Button variant="ghost" size="icon" aria-label="Assistant menu">
                   <MoreVertical className="h-4 w-4" />
                 </Button>
               </PopoverTrigger>
 
-              <PopoverContent className="w-48 p-2 bg-popover border border-border/40 rounded-xl">
+              <PopoverContent className="w-48 p-2 bg-popover border border-border/40 rounded-xl z-[9999]">
                 <Button
                   variant="ghost"
                   size="sm"
@@ -264,9 +282,12 @@ function RoomAssistantComponent({
           </div>
         </CardHeader>
 
-        {/* MODEL SELECTOR */}
+        {/* Model selector */}
         <div className="px-4 py-2 border-b border-border/30 bg-card/50">
-          <Select value={model} onValueChange={setModel}>
+          <Select
+            value={model}
+            onValueChange={useCallback((v: string) => setModel(v), [])}
+          >
             <SelectTrigger className="h-9 text-xs rounded-xl border-border/40">
               <SelectValue placeholder="Model" />
             </SelectTrigger>
@@ -280,82 +301,80 @@ function RoomAssistantComponent({
           </Select>
         </div>
 
-        {/* MESSAGES */}
-        <ScrollArea
-          ref={scrollRef}
-          className={cn(
-            "flex-1 px-4 py-2 space-y-4",
-            expandedInput ? "max-h-[45%]" : "max-h-[75%]"
-          )}
-        >
-          <AnimatePresence mode="popLayout">
-            {loadingHistory ? (
-              <div className="flex flex-col gap-2 mt-8">
-                <MessageSkeleton />
-                <MessageSkeleton />
-              </div>
-            ) : messages.length > 0 ? (
-              messages.map((msg, idx) => {
-                if (msg.role !== "user") return null;
-
-                const next = messages[idx + 1];
-                const pair =
-                  next && next.role === "assistant"
-                    ? { user: msg, assistant: next }
-                    : { user: msg };
-
-                return (
-                  <PairedMessageRenderer
-                    key={msg.id}
-                    pair={pair}
-                    theme={theme === "dark" ? "dark" : "light"}
-                  />
-                );
-              })
-            ) : (
-              <div className="text-center py-10 text-muted-foreground">
-                <Bot className="mx-auto mb-2 h-7 w-7 text-primary" />
-                Ask something about #{roomName}
-              </div>
+        {/* Messages area with dynamic height */}
+        <div className="flex-1">
+          <ScrollArea
+            ref={scrollRef}
+            className={cn(
+              "px-4 py-2 space-y-4 overflow-hidden min-h-0",
+              scrollAreaHeightClass
             )}
-          </AnimatePresence>
-        </ScrollArea>
+          >
+            <AnimatePresence mode="popLayout">
+              {loadingHistory ? (
+                <div className="flex flex-col gap-2 mt-8">
+                  <MessageSkeleton />
+                  <MessageSkeleton />
+                </div>
+              ) : messages.length > 0 ? (
+                messages.map((msg, idx) => {
+                  const next = messages[idx + 1];
+                  const pair =
+                    next && next.role === "assistant"
+                      ? { user: msg, assistant: next }
+                      : { user: msg };
+                  return (
+                    <PairedMessageRenderer
+                      key={msg.id}
+                      pair={pair}
+                      theme={theme === "dark" ? "dark" : "light"}
+                    />
+                  );
+                })
+              ) : (
+                <div className="text-center py-10 text-muted-foreground">
+                  <Bot className="mx-auto mb-2 h-7 w-7 text-primary" />
+                  Ask something about #{roomName}
+                </div>
+              )}
+            </AnimatePresence>
+          </ScrollArea>
+        </div>
 
-        {/* INPUT BOX */}
-        <CardContent className="border-t border-border/30 p-3 bg-card/50">
+        {/* Input footer (fixed) */}
+        <CardContent className="border-t absolute bottom-0 w-[100%] border-border/30 p-3 bg-card/50">
           <div className="relative">
             <Textarea
               value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
+              onChange={handlePromptChange}
               onKeyDown={handleKeyDown}
               placeholder="Write your message..."
-              className={cn(
-                "rounded-xl resize-none pr-12 text-sm bg-background/60 border-border/40",
-                expandedInput ? "h-[20em]" : "h-16"
-              )}
+              aria-label="Assistant message input"
+              className={textareaClass}
+              rows={1}
             />
 
-            {/* SEND */}
             <Button
-              disabled={!prompt.trim() || loading}
+              disabled={!prompt.trim() || isSending}
               onClick={handleSubmit}
-              className="absolute bottom-2 right-2 h-8 w-8 p-0 rounded-full"
+              className="absolute bottom-3 right-3 h-8 w-8 p-0 rounded-full"
+              aria-label="Send"
             >
-              {loading ? (
+              {isSending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <Send className="h-4 w-4" />
               )}
             </Button>
 
-            {/* EXPAND INPUT */}
             <button
               type="button"
-              onClick={() => setExpandedInput((p) => !p)}
-              className="absolute bottom-2 left-2 text-muted-foreground hover:text-foreground"
+              onClick={toggleExpandedInput}
+              className="absolute bottom-3 left-3 text-muted-foreground hover:text-foreground"
+              aria-label="Toggle input size"
             >
               {expandedInput ? (
-                <Minimize className="h-4 w-4" />
+                <Minimize2 className="h-4 w-4" />
               ) : (
                 <Maximize className="h-4 w-4" />
               )}

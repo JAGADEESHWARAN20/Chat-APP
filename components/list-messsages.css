@@ -1,0 +1,200 @@
+/* list-messsages.css
+   Global classes prefixed with lm- to avoid conflicts
+*/
+
+/* container */
+.lm-container {
+    width: 100%;
+    height: calc(100dvh * 0.79);
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    background: var(--background, #fff);
+    color: var(--foreground, #0f172a);
+    transition: all 200ms cubic-bezier(0.2,0,0,1);
+    font-size: var(--chat-message-size, 1rem);
+    overscroll-behavior: contain;
+    -webkit-font-smoothing: antialiased;
+  }
+  
+  /* search button */
+  .lm-searchButton {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    z-index: 40;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    padding: 0.5rem;
+    backdrop-filter: blur(8px);
+  }
+  
+  /* search info */
+  .lm-searchInfo {
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+    background: var(--accent, #eff6ff);
+    color: var(--accent-foreground, #0b1220);
+  }
+  .lm-searchInfoInner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .lm-searchInfoLeft {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .lm-clearBtn {
+    height: calc(var(--spacing-unit, 1rem) * 1.5);
+    padding: 0 0.6rem;
+  }
+  
+  /* scrollable area */
+  .lm-scrollWrapper {
+    padding-left: calc(var(--layout-gap, 1rem) * 0.75);
+    padding-right: calc(var(--layout-gap, 1rem) * 0.75);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    flex: 1 1 auto;
+    scroll-behavior: smooth;
+    /* custom scrollbar base for Firefox */
+    scrollbar-width: thin;
+    scrollbar-color: rgba(100,100,110,0.2) transparent;
+    outline: none;
+  }
+  
+  /* custom scrollbar (WebKit browsers) */
+  .lm-scrollWrapper::-webkit-scrollbar {
+    width: 10px;
+  }
+  .lm-scrollWrapper::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .lm-scrollWrapper::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, rgba(100,116,139,0.18), rgba(100,116,139,0.28));
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  .lm-scrollWrapper:focus::-webkit-scrollbar-thumb,
+  .lm-scrollWrapper:hover::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, rgba(100,116,139,0.28), rgba(100,116,139,0.42));
+  }
+  
+  /* inner column */
+  .lm-messagesInner {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-height: 8rem;
+    width: 100%;
+  }
+  
+  /* individual message wrapper */
+  .lm-messageRow {
+    width: 100%;
+    padding-inline: 0.25rem;
+  }
+  
+  /* Animated skeleton */
+  .lm-skeletonList {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 8px;
+  }
+  .lm-skeletonRow {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    padding: 8px;
+  }
+  .lm-skeletonAvatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #e9eef6 0%, #f6fbff 50%, #e9eef6 100%);
+    background-size: 200% 100%;
+    animation: lm-skeletonShimmer 1.2s linear infinite;
+  }
+  .lm-skeletonContent {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .lm-skeletonLineShort, .lm-skeletonLineLong {
+    border-radius: 6px;
+    background: linear-gradient(90deg, #e9eef6 0%, #f6fbff 50%, #e9eef6 100%);
+    background-size: 200% 100%;
+    animation: lm-skeletonShimmer 1.2s linear infinite;
+  }
+  .lm-skeletonLineShort { width: 35%; height: 12px; }
+  .lm-skeletonLineLong { width: 80%; height: 12px; }
+  
+  @keyframes lm-skeletonShimmer {
+    0% { background-position: -200px 0; }
+    100% { background-position: calc(200px + 100%) 0; }
+  }
+  
+  /* Empty / center states */
+  .lm-emptyState {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 12rem;
+    color: var(--no-messages-color, #6b7280);
+  }
+  .lm-emptyIcon {
+    width: 2rem;
+    height: 2rem;
+    margin-bottom: 1rem;
+  }
+  
+  /* center when no room selected */
+  .lm-centerEmpty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--no-messages-color, #6b7280);
+  }
+  
+  /* New message floating button */
+  .lm-newMsgBtn {
+    position: absolute;
+    right: calc(var(--spacing-unit, 1rem));
+    bottom: calc(var(--spacing-unit, 1rem) * 4);
+    z-index: 30;
+  }
+  .lm-newMsgBtnInner {
+    background: var(--primary, #2563eb);
+    color: var(--primary-foreground, #fff);
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.5rem;
+    box-shadow: 0 6px 18px rgba(16,24,40,0.12);
+    border: none;
+  }
+  
+  /* responsive tweaks */
+  @media (max-width: 768px) {
+    .lm-container { height: calc(100dvh * 0.82); }
+    .lm-searchButton { top: 0.75rem; right: 0.75rem; }
+    .lm-messagesInner { gap: 10px; padding-left: 8px; padding-right: 8px; }
+    .lm-skeletonAvatar { width: 36px; height: 36px; }
+  }
+  
+  @media (max-width: 480px) {
+    .lm-container { height: calc(100dvh * 0.68); }
+    .lm-searchButton { display: none; }
+    .lm-newMsgBtn { right: 8px; bottom: 72px; }
+    .lm-emptyState { height: 10rem; padding: 8px; }
+  }
+  
