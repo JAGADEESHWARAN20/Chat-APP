@@ -46,11 +46,10 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
 
   return (
     <header
-      className="flex items-center justify-between"
+      className="flex items-center justify-between px-[2em]"
       style={{
         width: headerWidth,
-        height: "3.15rem",
-        padding: "0.6rem 1rem",
+        height: "3.1em",
         backgroundColor: "hsl(var(--background))",
         fontFamily: "var(--font-family-base)",
         boxSizing: "border-box",
@@ -79,16 +78,16 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
               title="Switch Room"
               className="relative flex items-center justify-center rounded-full transition-all active:scale-95"
               style={{
-                width: "2.5em",
-                height: "2.5em",
+                width: "3em",
+                height: "3em",
                 backgroundColor: "hsl(var(--background)) / 0.75",
                 border: "1px solid hsl(var(--border))",
               }}
             >
               <ArrowRightLeft
                 style={{
-                  width: "1.25rem",
-                  height: "1.25rem",
+                  width: "1.25em",
+                  height: "1.25em",
                   stroke: "hsl(var(--muted-foreground))",
                 }}
               />

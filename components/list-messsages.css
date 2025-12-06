@@ -20,14 +20,14 @@
   /* search button */
   .lm-searchButton {
     position: absolute;
-    top: 1rem;
-    right: 1rem;
+    top: 1em;
+    right: 1em;
     z-index: 40;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     border-radius: 9999px;
-    padding: 0.5rem;
+    padding: 2em;
     backdrop-filter: blur(8px);
   }
   
@@ -187,7 +187,7 @@
   /* responsive tweaks */
   @media (max-width: 768px) {
     .lm-container { height: calc(100dvh * 0.82); }
-    .lm-searchButton { top: 0.75rem; right: 0.75rem; }
+    .lm-searchButton { top: 0.7rem; right: 2em; }
     .lm-messagesInner { gap: 10px; padding-left: 8px; padding-right: 8px; }
     .lm-skeletonAvatar { width: 36px; height: 36px; }
   }

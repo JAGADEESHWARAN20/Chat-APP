@@ -424,7 +424,7 @@ export default function ListMessages({
           className={cn("lm-searchButton", "group")}
           title="Search Messages"
         >
-          <Search />
+          <Search className="w-[2em] h-[2em]" />
         </Button>
       )}
 
