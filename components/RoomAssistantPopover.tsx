@@ -1,4 +1,3 @@
-// components/RoomAssistantPopover.tsx
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
@@ -8,11 +7,6 @@ import { Bot } from "lucide-react";
 import RoomAssistantComponent, { ChatMessage } from "./RoomAssistant";
 import { cn } from "@/lib/utils";
 
-/**
- * RoomAssistantPopover
- *
- * Responsive popover that adjusts translateY when the input expands.
- */
 export function RoomAssistantPopover({
   roomId,
   roomName,
@@ -23,7 +17,7 @@ export function RoomAssistantPopover({
   triggerButton?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(false); // full popover expand
+  const [isExpanded, setIsExpanded] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputExpanded, setInputExpanded] = useState(false);
@@ -37,14 +31,13 @@ export function RoomAssistantPopover({
         const res = await fetch(`/api/ai-chat/history?roomId=${roomId}`);
         const data = await res.json();
         if (active && data?.success) setMessages(data.messages || []);
-      } catch (err) {
-        console.error("Failed to load AI history", err);
+      } catch {
       } finally {
         if (active) setHistoryLoading(false);
       }
     }
     loadHistory();
-    return () => { active = false; };
+    return () => { active = false };
   }, [open, roomId]);
 
   const defaultTrigger = (
@@ -52,34 +45,36 @@ export function RoomAssistantPopover({
       variant="ghost"
       size="icon"
       title="AI Assistant"
-      className="flex items-center justify-center"
+      className={cn(
+        "flex items-center justify-center rounded-full shadow-lg",
+        "transition-all duration-200 hover:scale-[1.03] active:scale-[0.97]"
+      )}
       style={{
-        width: "2.6em",
-        height: "2.6em",
-        borderRadius: "9999px",
-        backgroundColor: "hsl(var(--background) / 0.6)",
-        border: "1px solid hsl(var(--border) / 0.3)",
-        boxShadow: "0 8px 20px rgba(2,6,23,0.08)",
+        width: "2.9rem",
+        height: "2.9rem",
+        backgroundColor: "hsl(var(--background) / 0.7)",
+        border: "1px solid hsl(var(--border) / 0.25)",
       }}
     >
-      <Bot className="h-5 w-5" />
+      <Bot className="h-[1.15rem] w-[1.15rem] text-[hsl(var(--muted-foreground))]" />
     </Button>
   );
 
-  // dynamic translateY based on whether input is expanded (so popover lifts)
-  const translateY = inputExpanded ? "-1.5rem" : "-1.5rem";
+  const translateY = inputExpanded ? "-2.75rem" : "-1.25rem";
 
-  // When RoomAssistant toggles its input expand, we update this state.
   const handleInputExpandChange = useCallback((expanded: boolean) => {
     setInputExpanded(expanded);
   }, []);
 
-  // PopoverContent max heights (vh) - responsive
-  
-  const widthValue = isExpanded ? "min(92vw, 760px)" : "min(82vw, 560px)";
+  const widthValue = isExpanded
+    ? "clamp(90vw, 460px, 760px)"
+    : "clamp(88vw, 380px, 560px)";
 
   return (
-    <div aria-hidden={false} className="fixed right-6 md:bottom-6 bottom-[7em] z-[9999]">
+    <div
+      aria-hidden={false}
+      className="absolute right-4 bottom-[2em] md:bottom-6 z-[9999] flex items-end"
+    >
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <div>{triggerButton || defaultTrigger}</div>
@@ -88,35 +83,30 @@ export function RoomAssistantPopover({
         <PopoverContent
           side="top"
           align="end"
-          sideOffset={12}
+          sideOffset={10}
           className={cn(
-            "p-0 rounded-2xl shadow-xl",
-            "border border-[hsl(var(--border)/0.12)] bg-[hsl(var(--background)/0.95)]",
-            // keep overflow hidden on popover; internal content should scroll
-            "overflow-hidden"
+            "p-0 rounded-2xl shadow-xl overflow-hidden",
+            "border border-[hsl(var(--border)/0.12)]",
+            "bg-[hsl(var(--background)/0.95)]"
           )}
           style={{
             width: widthValue,
             display: "flex",
             flexDirection: "column",
-            padding: 0,
-            // nudge popover up so it doesn't overlap trigger; adjust dynamically when input expands
-            transform: `translateY(${translateY})`,
+            transform: `translateY(${translateY}) translateX(-0.25rem)`,
           }}
         >
-          <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column" }}>
-            <RoomAssistantComponent
-              roomId={roomId || ""}
-              roomName={roomName || ""}
-              dialogMode={false}
-              isExpanded={isExpanded}
-              onToggleExpand={() => setIsExpanded((v) => !v)}
-              messages={messages}
-              setMessages={setMessages}
-              loadingHistory={historyLoading}
-              onInputExpandChange={handleInputExpandChange}
-            />
-          </div>
+          <RoomAssistantComponent
+            roomId={roomId || ""}
+            roomName={roomName || ""}
+            dialogMode={false}
+            isExpanded={isExpanded}
+            onToggleExpand={() => setIsExpanded((v) => !v)}
+            messages={messages}
+            setMessages={setMessages}
+            loadingHistory={historyLoading}
+            onInputExpandChange={handleInputExpandChange}
+          />
         </PopoverContent>
       </Popover>
     </div>

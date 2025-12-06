@@ -168,7 +168,7 @@ export default function SearchComponent() {
     {/* RESULTS */}
 {tab === "rooms" && (
   <motion.div
-    className="flex-1 overflow-y-auto pr-1"
+    className="flex-1 overflow-y-auto scrollbar-thin pr-1"
     initial={{ opacity: 0 }}
     animate={{ opacity: 1 }}
     style={{
@@ -213,12 +213,12 @@ export default function SearchComponent() {
 
 {tab === "users" && (
   <motion.div
-    className="flex-1 overflow-y-auto pr-1"
+    className="flex-1 overflow-y-auto scrollbar-thin pr-1"
     initial={{ opacity: 0 }}
     animate={{ opacity: 1 }}
     style={{
       maxHeight: "var(--results-height)",
-      minHeight: "calc(var(--results-height) * 0.65)",
+      minHeight: "calc(var(--results-height) * 0.75)",
       paddingBottom: "0.5rem",
     }}
   >

@@ -22,7 +22,7 @@ export default memo(function UserCard({
         "relative w-full rounded-2xl border border-border/40 bg-card transition-all",
         "hover:shadow-md hover:border-border/60",
         // ===== Aspect Ratio 3:4 =====
-        "aspect-[3/4] flex flex-col overflow-hidden"
+        "w-[85vw] h-[30em] md:w-auto md:h-[20vw] flex flex-col overflow-hidden"
       )}
     >
       {/* Top Section */}

@@ -177,7 +177,7 @@
     --brand-lightness: 58%;
     --results-height: 55vh;
     --results-height-sm: 80vh;
-    --results-height-lg: 68vh;
+    --results-height-lg: 78vh;
     /* ── CUSTOM COLORS (override primary) ── */
     --custom-primary: hsl(var(--brand-hue), var(--brand-saturation), var(--brand-lightness));
   }

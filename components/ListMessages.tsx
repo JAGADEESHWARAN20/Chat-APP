@@ -11,6 +11,7 @@ import { Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSearchHighlight } from "@/lib/store/SearchHighlightContext";
 import "./list-messsages.css"; // plain CSS (global). keep file name exactly as in your project
+import RoomAssistantPopover from "@/components/RoomAssistantPopover";
 
 interface ListMessagesProps {
   searchQuery?: string;
@@ -444,15 +445,15 @@ export default function ListMessages({
       )}
 
       {/* messages scroll area */}
-      <div className="lm-scrollWrapper" ref={scrollRef} onScroll={handleOnScroll} tabIndex={0}>
-        <div className="lm-messagesInner">
+      <div className="lm-scrollWrapper " ref={scrollRef} onScroll={handleOnScroll} tabIndex={0}>
+        <div className="lm-messagesInner ">
           {showSkeleton ? (
             <div className="lm-skeletonList">
               {Array.from({ length: 12 }).map((_, i) => <SkeletonMessage key={i} />)}
             </div>
           ) : displayMessages.length > 0 ? (
             displayMessages.map((message) => (
-              <div key={message.id} className="lm-messageRow">
+              <div key={message.id} className="lm-messageRow ">
                 <Message
                   message={message}
                   isNavigated={currentNavigatedMessageId === message.id}
@@ -463,6 +464,13 @@ export default function ListMessages({
           ) : (
             renderEmptyState
           )}
+         
+{selectedRoom && (
+  <RoomAssistantPopover
+    roomId={selectedRoom.id}
+    roomName={selectedRoom.name ?? ""}
+  />
+)}
         </div>
       </div>
 

@@ -32,7 +32,7 @@ import {
   stopUnifiedBackgroundJobs,
   useUnifiedStore
 } from "@/lib/store/unified-roomstore";
-import RoomAssistantPopover from "@/components/RoomAssistantPopover";
+
 
 /**
  * UnifiedHomeContent
@@ -604,8 +604,6 @@ function UnifiedHomeContent({ initialSidebarState = "collapsed", sidebarState }:
           </AnimatePresence>
         </div>
 
-        {/* bottom-right assistant popover (floats above content) */}
-        {selectedRoomId && <RoomAssistantPopover roomId={selectedRoomId} roomName={selectedRoom?.name ?? ""} />}
       </main>
 
       {/* RIGHT SIDEBAR */}
