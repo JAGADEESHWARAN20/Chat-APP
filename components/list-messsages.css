@@ -89,7 +89,7 @@
   /* inner column */
   .lm-messagesInner {
     padding-top: 0.5rem;
-    padding-bottom: 0.5rem;
+    padding-bottom: 2em;
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
@@ -100,7 +100,7 @@
   /* individual message wrapper */
   .lm-messageRow {
     width: 100%;
-    padding-inline: 0.25rem;
+    
   }
   
   /* Animated skeleton */

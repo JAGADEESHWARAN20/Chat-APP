@@ -12,6 +12,7 @@ import { Imessage } from "@/lib/store/messages";
 import { Send, Loader2 } from "lucide-react";
 import { useTypingStatus } from "@/hooks/useTypingStatus";
 import { useRoomActions, useSelectedRoom } from "@/lib/store/unified-roomstore";
+import { cn } from "@/lib/utils";
 
 export default function ChatInput() {
   const [text, setText] = useState("");
@@ -127,26 +128,57 @@ export default function ChatInput() {
   }, [hasActiveChat, stopTyping]);
 
   return (
-    <div className="flex gap-2 p-2 w-full border-t border-white/10  bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <Input
-        ref={inputRef}
-        value={text}
-        onChange={handleInputChange}
-        onBlur={handleBlur}
-        onKeyDown={handleKeyDown}
-        placeholder={hasActiveChat ? `Message #${selectedRoom?.name}` : "Select a room to start messaging..."}
-        className="flex-1 min-h-[44px] resize-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-        disabled={isSending}
-      />
-      <Button
-        onClick={handleSend}
-        disabled={!canSend || isSending}
-        className="gap-2 h-[44px] px-4"
-        size="sm"
+    <div
+      className={cn(
+        "w-full border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60",
+        "px-3 py-2 flex items-center",
+        hasActiveChat ? "opacity-100" : "opacity-60 pointer-events-none"
+      )}
+    >
+      <div
+        className={cn(
+          "flex items-center w-full gap-2",
+          "border border-border/30 bg-background/70 backdrop-blur-sm",
+          "rounded-xl px-3 py-2",
+          "transition-all duration-150",
+          "focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-indigo-500"
+        )}
       >
-
-        {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="w-4 h-4" />}
-      </Button>
+        {/* Input */}
+        <Input
+          ref={inputRef}
+          value={text}
+          onChange={handleInputChange}
+          onBlur={handleBlur}
+          onKeyDown={handleKeyDown}
+          placeholder={
+            hasActiveChat
+              ? `Message #${selectedRoom?.name}`
+              : "Select a room to start messaging..."
+          }
+          disabled={isSending || !hasActiveChat}
+          className={cn(
+            "flex-1 border-none shadow-none bg-transparent outline-none",
+            "focus-visible:ring-0 focus-visible:outline-none",
+            "min-h-[42px]"
+          )}
+        />
+  
+        {/* Send Button inside same wrapper */}
+        <Button
+          onClick={handleSend}
+          disabled={!canSend || isSending}
+          className="rounded-full h-[42px] w-[42px] flex items-center justify-center"
+          size="icon"
+        >
+          {isSending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Send className="h-4 w-4" />
+          )}
+        </Button>
+      </div>
     </div>
   );
+  
 }

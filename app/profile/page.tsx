@@ -52,9 +52,9 @@ export default function MyProfilePage() {
     <div className="mx-[1em] my-[1em] p-3 bg-card text-card-foreground rounded-2xl border border-border">
       <Button
         onClick={() => router.back()}
-        className="flex items-center text-muted-foreground transition-colors mb-6"
+        className="flex w-[3.5em] h-[3.5em] p-[1.5em] items-center rounded-full text-muted-foreground transition-colors mb-6"
       >
-        <ChevronLeft className="w-full h-full stroke-white" />
+        <ChevronLeft className="w-[2em] h-[2em]  stroke-white" />
       </Button>
 
       <div className="flex items-center gap-6">

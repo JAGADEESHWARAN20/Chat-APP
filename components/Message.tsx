@@ -202,7 +202,7 @@ function MessageInner({ message, isNavigated = false }: MessageProps) {
   return (
     <div
       id={`msg-${message.id}`}
-      className={`flex gap-2 items-center py-1 px-2 rounded-lg transition-all duration-300 ${backgroundClass}`}
+      className={`flex gap-2 items-center py-1  rounded-lg transition-all duration-300 ${backgroundClass}`}
       data-message-id={message.id}
     >
       <div className="flex-shrink-0">

@@ -338,7 +338,7 @@ function UnifiedHomeContent({ initialSidebarState = "collapsed", sidebarState }:
                   variant="ghost"
                   size="icon"
                   onClick={handleToggleLeft}
-                  className="hover:bg-accent opacity-60"
+                  className={`hover:bg-accent ${isLeftSidebarOpen || useUnifiedStore.getState().activeTab === "search" ?"hidden":"block"} opacity-60`}
                   style={{
                     borderRadius: `calc(${layoutStyles.borderRadius} * 1.5)`,
                     backgroundColor: `${layoutStyles.mutedBackground} / 0.3`,

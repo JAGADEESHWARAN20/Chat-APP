@@ -467,11 +467,11 @@ useEffect(() => {
       <div className="flex items-center justify-between animate-slide-in">
         <Button
           onClick={() => router.back()}
-          className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-all duration-200 scale-135"
+          className="flex w-[3.5em] p-[1.5em] h-[3.5em] rounded-full p-[1.5em] items-center gap-2 text-muted-foreground hover:text-foreground transition-all duration-200 scale-135"
           disabled={saving || uploading}
           aria-label="Go back"
         >
-          <ChevronLeft className="w-full h-full stroke-white " />
+          <ChevronLeft className="w-[2.5em] h-[2.5em] stroke-white " />
           
         </Button>
         <Badge variant="outline" className="text-sm border-primary/50 bg-gradient-to-r from-primary/5 to-secondary/5">

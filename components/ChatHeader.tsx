@@ -76,10 +76,11 @@ export default function ChatHeader({ user }: { user: SupabaseUser | undefined })
               variant="ghost"
               size="icon"
               title="Switch Room"
-              className="relative flex items-center justify-center rounded-full transition-all active:scale-95"
+              className="relative flex  items-center justify-center rounded-full transition-all active:scale-95"
               style={{
                 width: "3em",
                 height: "3em",
+                marginRight:"1em",
                 backgroundColor: "hsl(var(--background)) / 0.75",
                 border: "1px solid hsl(var(--border))",
               }}
