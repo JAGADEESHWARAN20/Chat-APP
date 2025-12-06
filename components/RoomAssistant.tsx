@@ -79,8 +79,8 @@ interface RoomAssistantProps {
    ----------------------- */
 const INPUT_HEIGHT_COMPACT = "h-[5em]";
 const INPUT_HEIGHT_EXPANDED = "h-[10em]";
-const SCROLLAREA_HEIGHT_COMPACT = "h-[50vh]";
-const SCROLLAREA_HEIGHT_EXPANDED = "h-[calc(50vh-5vh)]"; // Subtract the additional 5em from expanded input
+const SCROLLAREA_HEIGHT_COMPACT = "h-[45vh]";
+const SCROLLAREA_HEIGHT_EXPANDED = "h-[60vh]"; 
 
 /* -----------------------
    Component
@@ -227,7 +227,7 @@ function RoomAssistantComponent({
 
   // Render
   return (
-    <div className={cn("relative w-full h-[70vh]", className)}>
+    <div className={cn("relative w-full h-[80vh]", className)}>
       <Card
         className={cn(
           "flex flex-col min-h-0 h-full justify-between rounded-xl overflow-hidden backdrop-blur-xl border-border/40 relative z-40"

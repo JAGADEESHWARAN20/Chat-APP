@@ -60,16 +60,18 @@ export function RoomAssistantPopover({
     </Button>
   );
 
-  const translateY = inputExpanded ? "-0.2rem" : "-.1rem";
+  const translateY = inputExpanded ? "-0.2rem" : "-0.2rem";
 
   const handleInputExpandChange = useCallback((expanded: boolean) => {
     setInputExpanded(expanded);
   }, []);
 
   const widthValue = isExpanded
-    ? "clamp(90vw, 460px, 760px)"
-    : "clamp(88vw, 380px, 560px)";
-
+    ? "clamp(90vw, 45vw, 76vw)"
+    : "clamp(90vw, 38vw, 56vw)";
+    const heightValue = isExpanded
+    ? "85vh"
+    : "65vh";
   return (
     <div
       aria-hidden={false}
@@ -91,6 +93,7 @@ export function RoomAssistantPopover({
           )}
           style={{
             width: widthValue,
+            height:heightValue,
             display: "flex",
             flexDirection: "column",
             transform: `translateY(${translateY}) translateX(-0.25rem)`,
