@@ -186,14 +186,14 @@
   
   /* responsive tweaks */
   @media (max-width: 768px) {
-    .lm-container { height: calc(100dvh * 0.82); }
+    .lm-container { height: calc(100dvh * 0.80); }
     .lm-searchButton { top: 0.7rem; right: 2em; }
     .lm-messagesInner { gap: 10px; padding-left: 8px; padding-right: 8px; }
     .lm-skeletonAvatar { width: 36px; height: 36px; }
   }
   
   @media (max-width: 480px) {
-    .lm-container { height: calc(100dvh * 0.83); }
+    .lm-container { height: calc(100dvh * 0.80); }
     .lm-searchButton { display: none; }
     .lm-newMsgBtn { right: 8px; bottom: 72px; }
     .lm-emptyState { height: 10rem; padding: 8px; }

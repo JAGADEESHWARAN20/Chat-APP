@@ -538,7 +538,7 @@ function UnifiedHomeContent({ initialSidebarState = "collapsed", sidebarState }:
                 <div className="flex-1 flex flex-col w-full" style={{ height: "var(--messages-area-height)" }}>
                   {/* CHAT HEADER */}
                   <div
-                    className="flex-none  px-4 py-[.2em] border-b"
+                    className="flex-none  px-4 py-[1.2em] border-b"
                     style={{
                       height: "var(--chat-header-height)",
                       backgroundColor: `${layoutStyles.backgroundColor} / 0.5`,

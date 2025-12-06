@@ -28,7 +28,7 @@
   --chat-message-size: calc(1rem * var(--chat-font-scale));
   --chat-sender-size: var(--fs-small);
   --chat-date-size: var(--fs-tiny);
-  --chat-header-height: 3.4rem;
+  --chat-header-height: 5em;
 
 
   /* Layout responsive units */
