@@ -60,7 +60,7 @@ export function RoomAssistantPopover({
     </Button>
   );
 
-  const translateY = inputExpanded ? "-2.75rem" : "-1.25rem";
+  const translateY = inputExpanded ? "-0.2rem" : "-.1rem";
 
   const handleInputExpandChange = useCallback((expanded: boolean) => {
     setInputExpanded(expanded);
@@ -73,7 +73,7 @@ export function RoomAssistantPopover({
   return (
     <div
       aria-hidden={false}
-      className="absolute right-4 bottom-[2em] md:bottom-6 z-[9999] flex items-end"
+      className="absolute right-4 bottom-[.2em] md:bottom-6 z-[9999] flex items-end"
     >
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
