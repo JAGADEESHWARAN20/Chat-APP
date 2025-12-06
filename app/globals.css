@@ -165,17 +165,26 @@
     --motion-duration: 200ms;
     --motion-easing: cubic-bezier(0.2, 0, 0, 1);
     --motion-reduced: false; /* set via data-reduced-motion */
-
+    --tab-bg: hsl(var(--muted) / 0.45);           /* container background */
+    --tab-active-bg: hsl(var(--action-active) / 0.20);
+    --tab-active-text: hsl(var(--room-text-active));
+    --tab-text: hsl(var(--room-text));
+    --tab-height: 2.6rem;       /* default height */
+    --tab-radius: .6rem; 
     /* ── CUSTOM BRAND & ACCENT ── */
     --brand-hue: 262;
     --brand-saturation: 83%;
     --brand-lightness: 58%;
-
+    --results-height: 55vh;
+    --results-height-sm: 80vh;
+    --results-height-lg: 68vh;
     /* ── CUSTOM COLORS (override primary) ── */
     --custom-primary: hsl(var(--brand-hue), var(--brand-saturation), var(--brand-lightness));
   }
 
   .dark {
+    --tab-height: 2.6rem;
+    --tab-radius: .6rem;
     /* Dark theme */
     --room-text: 217.9 10.6% 64.9%;              /* Muted foreground */
     --room-text-active: 263.4 70% 50.4%;         /* Primary accent */
@@ -214,7 +223,10 @@
     --z-overlay: 20; /* popovers, modals that should sit above core UI */
     --z-top: 50; /* toasts/alerts that must always be on top */
     --text-color-sidebar: #fff;
-
+    --tab-bg: hsl(var(--muted) / 0.25);
+    --tab-active-bg: hsl(var(--action-active) / 0.28);
+    --tab-active-text: hsl(var(--room-text-active));
+    --tab-text: hsl(var(--room-text));
     --action-bg: hsl(240 35% 20%);
     --action-hover: hsl(240 50% 25%);
     --action-active: hsl(240 90% 70%);
@@ -242,15 +254,43 @@
     --brand-lightness: 65%;
   }
 }
+@media (max-width: 768px) {
+  :root {
+    --results-height: var(--results-height-sm);
+  }
+}
 
+@media (min-width: 1024px) {
+  :root {
+    --results-height: var(--results-height-lg);
+  }
+}
+
+@media (max-width: 768px) {
+  :root {
+    --tab-height: 2.35rem;
+  }
+}
+@media (max-width: 480px) {
+  :root {
+    --tab-height: 2.15rem;
+  }
+}
 @layer utilities {
+  
   /* Dynamic spacing */
   .p-dynamic { padding: var(--spacing-unit); }
   .px-dynamic { padding-left: var(--spacing-unit); padding-right: var(--spacing-unit); }
   .py-dynamic { padding-top: var(--spacing-unit); padding-bottom: var(--spacing-unit); }
   .m-dynamic { margin: var(--spacing-unit); }
   .gap-dynamic { gap: var(--spacing-unit); }
-
+  [data-state="active"] {
+    transition:
+      background-color var(--motion-duration) var(--motion-easing),
+      color var(--motion-duration) var(--motion-easing),
+      font-weight var(--motion-duration) var(--motion-easing);
+  }
+  
   /* Dynamic radius */
   .rounded-dynamic { border-radius: var(--radius-unit); }
   .rounded-lg-dynamic { border-radius: calc(var(--radius-unit) * 1.5); }

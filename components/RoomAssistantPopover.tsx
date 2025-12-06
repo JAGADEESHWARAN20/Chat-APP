@@ -79,7 +79,7 @@ export function RoomAssistantPopover({
   const widthValue = isExpanded ? "min(92vw, 760px)" : "min(82vw, 560px)";
 
   return (
-    <div aria-hidden={false} className="fixed right-6 bottom-6 z-[9999]">
+    <div aria-hidden={false} className="fixed right-6 md:bottom-6 bottom-[7em] z-[9999]">
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <div>{triggerButton || defaultTrigger}</div>
@@ -97,7 +97,6 @@ export function RoomAssistantPopover({
           )}
           style={{
             width: widthValue,
-
             display: "flex",
             flexDirection: "column",
             padding: 0,
