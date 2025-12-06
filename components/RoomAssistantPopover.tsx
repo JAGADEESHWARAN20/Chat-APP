@@ -17,7 +17,7 @@ export function RoomAssistantPopover({
   triggerButton?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(false); // THE ONLY SIZE STATE OWNER
   const [historyLoading, setHistoryLoading] = useState(true);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputExpanded, setInputExpanded] = useState(false);
@@ -25,61 +25,69 @@ export function RoomAssistantPopover({
   useEffect(() => {
     if (!open || !roomId) return;
     let active = true;
+
     async function loadHistory() {
       setHistoryLoading(true);
       try {
         const res = await fetch(`/api/ai-chat/history?roomId=${roomId}`);
         const data = await res.json();
         if (active && data?.success) setMessages(data.messages || []);
-      } catch {
-      } finally {
+      } catch {}
+      finally {
         if (active) setHistoryLoading(false);
       }
     }
+
     loadHistory();
     return () => { active = false };
   }, [open, roomId]);
 
-  const defaultTrigger = (
+  const trigger = (
     <Button
       variant="ghost"
       size="icon"
       title="AI Assistant"
-      className={cn(
-        "flex items-center justify-center rounded-full shadow-lg",
-        "transition-all duration-200 hover:scale-[1.03] active:scale-[0.97]"
-      )}
+      className="flex items-center justify-center rounded-full shadow-lg transition-all duration-200  active:scale-[0.96]"
       style={{
-        width: "2.9rem",
-        height: "2.9rem",
-        backgroundColor: "hsl(var(--background) / 0.7)",
+        width: "4rem",
+        height: "4rem",
+        backgroundColor: "hsl(var(--action-text) )",
         border: "1px solid hsl(var(--border) / 0.25)",
       }}
     >
-      <Bot className="h-[1.15rem] w-[1.15rem] text-[hsl(var(--muted-foreground))]" />
+      <Bot className="h-[2em] w-[2em]  text-[hsl(var(--action-hover))]" />
     </Button>
   );
 
-  const translateY = inputExpanded ? "-0.2rem" : "-0.2rem";
+  /** Popover height + width dynamically governed by expand state */
+  const popoverWidth = expanded
+    ? "min(95vw, 760px)"
+    : "min(88vw, 520px)";
 
-  const handleInputExpandChange = useCallback((expanded: boolean) => {
-    setInputExpanded(expanded);
+  const popoverHeight = expanded
+    ? "80vh"
+    : "62vh";
+
+  /** Child expands internal textarea → nudge UI */
+  const handleInputExpandChange = useCallback((expandedInput: boolean) => {
+    setInputExpanded(expandedInput);
   }, []);
 
-  const widthValue = isExpanded
-    ? "clamp(90vw, 45vw, 76vw)"
-    : "clamp(90vw, 38vw, 56vw)";
-    const heightValue = isExpanded
-    ? "85vh"
-    : "65vh";
+  /** RoomAssistant wants to expand the whole panel → we toggle popover size */
+  const handleFullExpandToggle = useCallback(() => {
+    setExpanded(prev => !prev);
+  }, []);
+
   return (
     <div
       aria-hidden={false}
-      className="absolute right-4 bottom-[.2em] md:bottom-6 z-[9999] flex items-end"
+      className="absolute right-4 bottom-[0em] md:bottom-6 z-[9999] pointer-events-none"
     >
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <div>{triggerButton || defaultTrigger}</div>
+          <div className="pointer-events-auto">
+            {triggerButton || trigger}
+          </div>
         </PopoverTrigger>
 
         <PopoverContent
@@ -87,24 +95,24 @@ export function RoomAssistantPopover({
           align="end"
           sideOffset={10}
           className={cn(
-            "p-0 rounded-2xl shadow-xl overflow-hidden",
-            "border border-[hsl(var(--border)/0.12)]",
-            "bg-[hsl(var(--background)/0.95)]"
+            "p-0 rounded-2xl shadow-xl overflow-hidden duration-100 transition-all pointer-events-auto",
+            "border border-[hsl(var(--border)/0.15)]",
+            "bg-[hsl(var(--background)/0.95)] backdrop-blur-xl"
           )}
           style={{
-            width: widthValue,
-            height:heightValue,
+            width: popoverWidth,
+            height: popoverHeight,
             display: "flex",
             flexDirection: "column",
-            transform: `translateY(${translateY}) translateX(-0.25rem)`,
+            transform: `translateY(${inputExpanded ? "-1rem" : "-0.5rem"}) translateX(-0.25rem)`
           }}
         >
           <RoomAssistantComponent
-            roomId={roomId || ""}
-            roomName={roomName || ""}
+            roomId={roomId ?? ""}
+            roomName={roomName ?? ""}
             dialogMode={false}
-            isExpanded={isExpanded}
-            onToggleExpand={() => setIsExpanded((v) => !v)}
+            isExpanded={expanded}
+            onToggleExpand={handleFullExpandToggle}
             messages={messages}
             setMessages={setMessages}
             loadingHistory={historyLoading}

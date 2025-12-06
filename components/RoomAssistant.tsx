@@ -1,4 +1,3 @@
-// components/RoomAssistant.tsx
 "use client";
 
 import React, {
@@ -20,6 +19,7 @@ import {
   Maximize2,
   Minimize2,
   Maximize,
+  Minimize,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -44,9 +44,7 @@ import { PairedMessageRenderer } from "./RoomAssistantParts/PairedMessageRendere
 import { MessageSkeleton } from "./RoomAssistantParts/MessageSkeleton";
 import { MODELS } from "./RoomAssistantParts/constants";
 
-/* -----------------------
-   Types
-   ----------------------- */
+/* ---------------- TYPES ---------------- */
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
@@ -55,12 +53,7 @@ export interface ChatMessage {
   model?: string;
   structuredData?: any;
 }
-interface SummarizeResponse {
-  success: boolean;
-  fullContent: string;
-  meta?: { tokens: number; model: string };
-  error?: string;
-}
+
 interface RoomAssistantProps {
   roomId: string;
   roomName: string;
@@ -74,17 +67,13 @@ interface RoomAssistantProps {
   onInputExpandChange?: (expanded: boolean) => void;
 }
 
-/* -----------------------
-   Constants & Helpers
-   ----------------------- */
-const INPUT_HEIGHT_COMPACT = "h-[5em]";
-const INPUT_HEIGHT_EXPANDED = "h-[10em]";
-const SCROLLAREA_HEIGHT_COMPACT = "h-[45vh]";
-const SCROLLAREA_HEIGHT_EXPANDED = "h-[60vh]"; 
+/* ---------------- CONSTANTS ---------------- */
 
-/* -----------------------
-   Component
-   ----------------------- */
+const INPUT_MIN_HEIGHT = "min-h-[4.5rem]";
+const INPUT_MAX_HEIGHT = "min-h-[9rem]";
+
+/* ---------------- COMPONENT ---------------- */
+
 function RoomAssistantComponent({
   roomId,
   roomName,
@@ -99,43 +88,41 @@ function RoomAssistantComponent({
   const { theme } = useTheme();
   const currentUser = useUser((s) => s.user);
 
-  // Local state
   const [prompt, setPrompt] = useState("");
   const [model, setModel] = useState<string>(MODELS[0] ?? "gpt-4o-mini");
   const [loading, setLoading] = useState(false);
   const [isSending, setIsSending] = useState(false);
 
-  // Local visual expand for textarea (affects textarea height and scrollarea height)
   const [expandedInput, setExpandedInput] = useState(false);
+  const scrollRef = useRef<any>(null);
 
-  // Provide parent with updates (popover adjusts translateY)
+  const [, startTransition] = useTransition();
+
+  /* inform parent popover when input expands */
   useEffect(() => {
     onInputExpandChange?.(expandedInput);
   }, [expandedInput, onInputExpandChange]);
 
-  const [, startTransition] = useTransition();
-  const scrollRef = useRef<any>(null);
-
-  // Auto-scroll (rAF)
+  /* Auto-scroll on new messages */
   useEffect(() => {
     if (!scrollRef.current || loading) return;
     const raf = requestAnimationFrame(() => {
       try {
         const el =
-          scrollRef.current?.scrollTo
-            ? scrollRef.current
-            : scrollRef.current?.contentElement
-            ? scrollRef.current.contentElement
-            : scrollRef.current?.querySelector?.(".scrollable-content") ?? scrollRef.current;
-        el?.scrollTo?.({ top: el.scrollHeight, behavior: "smooth" });
-      } catch (e) {
-        // ignore
-      }
+          scrollRef.current?.contentElement ??
+          scrollRef.current ??
+          scrollRef.current?.querySelector?.(".scrollable-content");
+
+        el?.scrollTo?.({
+          top: el.scrollHeight,
+          behavior: "smooth",
+        });
+      } catch {}
     });
     return () => cancelAnimationFrame(raf);
   }, [messages, loading]);
 
-  // Handlers
+  /* input handlers */
   const handlePromptChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setPrompt(e.target.value);
   }, []);
@@ -151,10 +138,10 @@ function RoomAssistantComponent({
         void handleSubmit();
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [prompt]
   );
 
+  /* submit */
   const handleSubmit = useCallback(
     async (e?: React.FormEvent) => {
       e?.preventDefault();
@@ -191,16 +178,17 @@ function RoomAssistantComponent({
             userId: currentUser?.id ?? null,
           }),
         });
-        const data: SummarizeResponse = await res.json();
+        const data = await res.json();
         if (!res.ok || !data.success) throw new Error(data.error || "AI request failed");
 
         const aiMsg: ChatMessage = {
-          id: `${Date.now().toString()}-ai`,
+          id: `${Date.now()}-ai`,
           role: "assistant",
           content: data.fullContent,
           timestamp: new Date(),
           model,
         };
+
         startTransition(() => setMessages((prev) => [...prev, aiMsg]));
       } catch (err: any) {
         toast.error(err?.message || "Request failed");
@@ -213,40 +201,21 @@ function RoomAssistantComponent({
     [prompt, model, roomId, currentUser?.id, setMessages, startTransition, loading]
   );
 
-  // Dynamic classes based on expandedInput state
-  const inputHeightClass = expandedInput ? INPUT_HEIGHT_EXPANDED : INPUT_HEIGHT_COMPACT;
-  const scrollAreaHeightClass = expandedInput
-    ? SCROLLAREA_HEIGHT_EXPANDED
-    : SCROLLAREA_HEIGHT_COMPACT;
-
+  /* textarea classes */
   const textareaClass = cn(
-    "rounded-xl resize-none pr-12 text-sm bg-background/60 border-border/40",
-    inputHeightClass,
-    "transition-all duration-150"
+    "rounded-xl resize-none pr-12 text-sm bg-background/60 border border-border/40 w-full transition-all duration-150",
+    expandedInput ? INPUT_MAX_HEIGHT : INPUT_MIN_HEIGHT
   );
 
-  // Render
   return (
-    <div className={cn("relative w-full h-[80vh]", className)}>
-      <Card
-        className={cn(
-          "flex flex-col min-h-0 h-full justify-between rounded-xl overflow-hidden backdrop-blur-xl border-border/40 relative z-40"
-        )}
-      >
-        {/* Header */}
-        <CardHeader className="flex items-center justify-between px-4 py-3 border-b border-border/40 bg-card/40">
-          <div className="w-full flex items-center justify-between gap-3">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onToggleExpand}
-              aria-label="Expand/Minimize"
-            >
-              {externalExpand ? (
-                <Minimize2 className="h-4 w-4" />
-              ) : (
-                <Maximize2 className="h-4 w-4" />
-              )}
+    <div className={cn("relative w-full h-full flex flex-col", className)}>
+      <Card className="flex flex-col flex-1 rounded-xl overflow-hidden border-border/40 bg-background/40 backdrop-blur-xl">
+        
+        {/* HEADER */}
+        <CardHeader className="flex items-center justify-between px-4 py-3 border-b border-border/40 bg-card/40 flex-shrink-0">
+          <div className="flex items-center justify-between w-full">
+            <Button variant="ghost" size="icon" onClick={onToggleExpand}>
+              {externalExpand ? <Minimize2 /> : <Maximize2 />}
             </Button>
 
             <motion.div
@@ -262,19 +231,18 @@ function RoomAssistantComponent({
 
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="ghost" size="icon" aria-label="Assistant menu">
-                  <MoreVertical className="h-4 w-4" />
+                <Button variant="ghost" size="icon">
+                  <MoreVertical />
                 </Button>
               </PopoverTrigger>
-
-              <PopoverContent className="w-48 p-2 bg-popover border border-border/40 rounded-xl z-[9999]">
+              <PopoverContent className="w-48 p-2 bg-popover border border-border/40 rounded-xl">
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => setMessages([])}
                   className="w-full justify-start text-red-500 hover:bg-red-500/10"
                 >
-                  <Trash2 className="h-3.5 w-3.5 mr-2" />
+                  <Trash2 className="h-4 w-4 mr-2" />
                   Clear Chat
                 </Button>
               </PopoverContent>
@@ -282,12 +250,9 @@ function RoomAssistantComponent({
           </div>
         </CardHeader>
 
-        {/* Model selector */}
-        <div className="px-4 py-2 border-b border-border/30 bg-card/50">
-          <Select
-            value={model}
-            onValueChange={useCallback((v: string) => setModel(v), [])}
-          >
+        {/* MODEL SELECT */}
+        <div className="px-4 py-2 border-b border-border/30 bg-card/50 flex-shrink-0">
+          <Select value={model} onValueChange={(v) => setModel(v)}>
             <SelectTrigger className="h-9 text-xs rounded-xl border-border/40">
               <SelectValue placeholder="Model" />
             </SelectTrigger>
@@ -301,83 +266,65 @@ function RoomAssistantComponent({
           </Select>
         </div>
 
-        {/* Messages area with dynamic height */}
-        <div className="flex-1">
-          <ScrollArea
-            ref={scrollRef}
-            className={cn(
-              "px-4 py-2 space-y-4 overflow-hidden min-h-0",
-              scrollAreaHeightClass
+        {/* MESSAGES AREA (flex-grow) */}
+        <ScrollArea
+          ref={scrollRef}
+          className="flex-1 min-h-0 px-4 py-2 "
+        >
+          <AnimatePresence mode="popLayout">
+            {loadingHistory ? (
+              <div className="flex flex-col gap-2 mt-8">
+                <MessageSkeleton />
+                <MessageSkeleton />
+              </div>
+            ) : messages.length > 0 ? (
+              messages.map((msg, i) => {
+                const next = messages[i + 1];
+                const pair =
+                  next && next.role === "assistant"
+                    ? { user: msg, assistant: next }
+                    : { user: msg };
+                return (
+                  <PairedMessageRenderer
+                    key={msg.id}
+                    pair={pair}
+                    theme={theme === "dark" ? "dark" : "light"}
+                  />
+                );
+              })
+            ) : (
+              <div className="text-center py-10 text-muted-foreground">
+                <Bot className="mx-auto mb-2 h-7 w-7 text-primary" />
+                Ask something about #{roomName}
+              </div>
             )}
-          >
-            <AnimatePresence mode="popLayout">
-              {loadingHistory ? (
-                <div className="flex flex-col gap-2 mt-8">
-                  <MessageSkeleton />
-                  <MessageSkeleton />
-                </div>
-              ) : messages.length > 0 ? (
-                messages.map((msg, idx) => {
-                  const next = messages[idx + 1];
-                  const pair =
-                    next && next.role === "assistant"
-                      ? { user: msg, assistant: next }
-                      : { user: msg };
-                  return (
-                    <PairedMessageRenderer
-                      key={msg.id}
-                      pair={pair}
-                      theme={theme === "dark" ? "dark" : "light"}
-                    />
-                  );
-                })
-              ) : (
-                <div className="text-center py-10 text-muted-foreground">
-                  <Bot className="mx-auto mb-2 h-7 w-7 text-primary" />
-                  Ask something about #{roomName}
-                </div>
-              )}
-            </AnimatePresence>
-          </ScrollArea>
-        </div>
+          </AnimatePresence>
+        </ScrollArea>
 
-        {/* Input footer (fixed) */}
-        <CardContent className="border-t absolute bottom-0 w-[100%] border-border/30 p-3 bg-card/50">
+        {/* INPUT AREA (flex-shrink-0) */}
+        <CardContent className="border-t border-border/30 bg-card/50 p-3 flex-shrink-0">
           <div className="relative">
             <Textarea
               value={prompt}
               onChange={handlePromptChange}
               onKeyDown={handleKeyDown}
               placeholder="Write your message..."
-              aria-label="Assistant message input"
               className={textareaClass}
-              rows={1}
             />
 
             <Button
               disabled={!prompt.trim() || isSending}
               onClick={handleSubmit}
               className="absolute bottom-3 right-3 h-8 w-8 p-0 rounded-full"
-              aria-label="Send"
             >
-              {isSending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
+              {isSending ? <Loader2 className="animate-spin h-4 w-4" /> : <Send className="h-4 w-4" />}
             </Button>
 
             <button
-              type="button"
               onClick={toggleExpandedInput}
               className="absolute bottom-3 left-3 text-muted-foreground hover:text-foreground"
-              aria-label="Toggle input size"
             >
-              {expandedInput ? (
-                <Minimize2 className="h-4 w-4" />
-              ) : (
-                <Maximize className="h-4 w-4" />
-              )}
+              {expandedInput ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
             </button>
           </div>
         </CardContent>
