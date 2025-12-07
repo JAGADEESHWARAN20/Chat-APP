@@ -195,7 +195,7 @@ const renderRoom = useCallback(
         key={room.id}
         onClick={() => handleRoomClick(room.id)}
         className={cn(
-          "w-full flex items-start rounded-lg transition-dynamic mb-1 text-left select-none",
+          "w-full flex items-start rounded-lg transition-dynamic mb-1  text-left select-none",
           selectedRoom?.id === room.id ? "border shadow-sm" : "hover:border-transparent"
         )}
         style={{
@@ -230,27 +230,10 @@ const renderRoom = useCallback(
               #{room.name}
             </div>
 
-            {unread > 0 && (
-              <span
-                className="font-bold rounded-full px-1.5 py-0.5"
-                style={{
-                  fontSize: sidebarStyles.metaInfoSize,
-                  backgroundColor: sidebarStyles.unreadBg,
-                  color: sidebarStyles.unreadColor,
-                }}
-              >
-                {unread > 99 ? "99+" : unread}
-              </span>
-            )}
+           
           </div>
 
-          {/* LATEST MESSAGE */}
-          <div
-            className="text-muted-foreground truncate mb-1.5"
-            style={{ fontSize: sidebarStyles.messagePreviewSize }}
-          >
-            {room.latest_message ?? "No messages yet"}
-          </div>
+         
 
           {/* MEMBER + ONLINE COUNTS */}
           <div className="flex items-center justify-between">
@@ -271,14 +254,21 @@ const renderRoom = useCallback(
               )}
             </div>
 
-            <span
-              className="px-1.5 py-0.5 bg-emerald-100/60 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400 rounded-full"
-              style={{ fontSize: sidebarStyles.metaInfoSize }}
-            >
-              Joined
-            </span>
           </div>
-        </div>
+        
+        </div>  
+        {unread > 0 && (
+              <span
+                className="font-bold rounded-full px-[1.8em] py-[.5em]"
+                style={{
+                  fontSize: sidebarStyles.metaInfoSize,
+                  backgroundColor: sidebarStyles.unreadBg,
+                  color: sidebarStyles.unreadColor,
+                }}
+              >
+                {unread > 99 ? "99+" : unread}
+              </span>
+            )}
       </button>
     );
   },

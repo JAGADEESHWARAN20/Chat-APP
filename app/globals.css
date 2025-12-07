@@ -14,7 +14,7 @@
   --fs-display: calc(2.5rem * var(--font-scale-md));
   --fs-title: calc(1.75rem * var(--font-scale-md));
   --fs-subtitle: calc(1.25rem * var(--font-scale-md));
-  --fs-body: calc(1rem * var(--font-scale-md));
+  --fs-body: calc(1em * var(--font-scale-md));
   --fs-small: calc(1.5em * var(--font-scale-md));
   --fs-tiny: calc(1.4em * var(--font-scale-md));
 
@@ -139,11 +139,11 @@
     --spacing-unit: 1rem;                   /* Base for padding/margin/gap */
     --radius-unit: 0.5rem;                  /* Base border-radius */
     --sidebar-width-collapsed: 5rem;
-    --header-height: 4em;
+    --header-height: 3.4em;
     --chat-input-height: 4rem;
 
     /* ── VISUAL DENSITY PRESETS ── */
-    --density-padding: .31rem;
+    --density-padding: .71rem;
     --density-gap: 0.75rem;
     --density-radius: 0.5rem;
 
@@ -157,7 +157,7 @@
     /* ── MESSAGE BUBBLES ── */
     --message-bubble-radius: 1.25rem;
     --message-bubble-padding: 0.75rem 1rem;
-    --message-sender-size: 0.875rem;
+    --message-sender-size: 1em;
     --message-date-size: 0.75rem;
     --message-gap: 0.5rem;
 
@@ -191,7 +191,7 @@
     --message-text-color: 210 20% 98%; /* Same as foreground */
     --message-text-size: 1.22em; /* Your existing text size */
     --message-sender-color: 210 20% 98%; /* Same as foreground */
-    --message-sender-size: 0.875rem; /* 14px for sender name */
+    --message-sender-size: 1em; /* 14px for sender name */
     --message-date-color: 217.9 10.6% 64.9%; /* Same as muted-foreground */
     --message-date-size: 0.75rem; /* 12px for date */
     --no-messages-color: 217.9 10.6% 64.9%; /* Same as muted-foreground */
@@ -235,7 +235,7 @@
     --sidebar-background: hsl(240, 25%, 8%);      /* Deep blue-black (not pure black = easier on eyes) */
     --sidebar-foreground: 240, 15%, 94%;          /* Crisp off-white */
     --sidebar-primary: 240, 90%, 65%;             /* Electric blue accent (pops beautifully) */
-    --sidebar-primary-foreground: 240, 10%, 10%;  /* Near-black for perfect contrast on active */
+    --sidebar-primary-foreground: 240, 10%, 90%;  /* Near-black for perfect contrast on active */
     --sidebar-accent: 240, 20%, 14%;              /* Slightly lighter than bg for depth */
     --sidebar-accent-foreground: 240, 15%, 90%;   /* Bright text on hover */
     --sidebar-border: 240, 15%, 18%;

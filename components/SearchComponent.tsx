@@ -83,7 +83,7 @@ export default function SearchComponent() {
     >
       {/* SEARCH + TABS */}
       <div
-        className="flex flex-col sm:flex-row gap-4 items-center mb-6 w-full"
+        className="flex flex-col sm:flex-row gap-2 items-center mb-6 w-full"
         style={{ gap: s.gap }}
       >
         {/* Search Field Container */}
@@ -109,9 +109,9 @@ export default function SearchComponent() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search rooms or users..."
-            className="w-full ml-[2em] outline-none bg-transparent"
+            className="w-full ml-[2em] text-[1.2em]  outline-none bg-transparent"
             style={{
-              fontSize: s.fontSize,
+          
               fontFamily: s.fontFamily,
             }}
           />
