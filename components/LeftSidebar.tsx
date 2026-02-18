@@ -31,9 +31,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useDirectChatStore, type DirectChatSummary } from "@/lib/store/directChatStore";
-
 import { useDirectChatActions } from "@/lib/hooks/useDirectChatActions";
-
 
 /* ----------------------------------------------------------------------------
    LEFT SIDEBAR PROPS
@@ -88,7 +86,6 @@ const LeftSidebar = memo<LeftSidebarProps>(function LeftSidebar({
   const [isCreating, setIsCreating] = useState(false);
 
   const [isLoadingChats, setIsLoadingChats] = useState(false);
-
   const [chatUserQuery, setChatUserQuery] = useState("");
   const [chatUserResults, setChatUserResults] = useState<Array<{
     id: string;
@@ -98,7 +95,6 @@ const LeftSidebar = memo<LeftSidebarProps>(function LeftSidebar({
   }>>([]);
   const [isSearchingUsers, setIsSearchingUsers] = useState(false);
   const { openOrCreateDirectChat } = useDirectChatActions();
-
 
   useEffect(() => {
     let mounted = true;
@@ -186,7 +182,6 @@ const LeftSidebar = memo<LeftSidebarProps>(function LeftSidebar({
     },
     [openOrCreateDirectChat]
   );
-
 
   /* --------------------------------------------------------------------------
      DERIVED: JOINED ROOMS
@@ -740,6 +735,14 @@ const renderRoom = useCallback(
                           <p className="text-xs text-muted-foreground truncate">
                             {chat.latest_message || "Start a conversation"}
                           </p>
+                          {chat.interest_status === "pending" && (
+                            <p className="text-[11px] mt-1 text-amber-600 dark:text-amber-400">
+                              {chat.initiator_id === user?.id ? "Pending acceptance" : "New request"}
+                            </p>
+                          )}
+                          {chat.interest_status === "declined" && (
+                            <p className="text-[11px] mt-1 text-rose-600 dark:text-rose-400">Declined</p>
+                          )}
                         </div>
                         {chat.unread_count > 0 && (
                           <span

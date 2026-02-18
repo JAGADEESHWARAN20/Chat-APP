@@ -13,6 +13,8 @@ type DirectChatRow = {
   id: string;
   user_id_1: string;
   user_id_2: string;
+  initiator_id: string;
+  interest_status: string | null;
   created_at: string | null;
 };
 
@@ -22,7 +24,7 @@ export const GET = (req: NextRequest) =>
 
     const { data: chats, error } = await supabase
       .from("direct_chats")
-      .select("id, user_id_1, user_id_2, created_at")
+      .select("id, user_id_1, user_id_2, initiator_id, interest_status, created_at")
       .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`)
       .order("created_at", { ascending: false });
 
@@ -133,7 +135,7 @@ export const POST = (req: NextRequest) =>
 
       const { data: existingChat } = await supabase
         .from("direct_chats")
-        .select("id, user_id_1, user_id_2, created_at")
+        .select("id, user_id_1, user_id_2, initiator_id, interest_status, created_at")
         .eq("user_id_1", firstUserId)
         .eq("user_id_2", secondUserId)
         .maybeSingle();
@@ -148,8 +150,9 @@ export const POST = (req: NextRequest) =>
           user_id_1: firstUserId,
           user_id_2: secondUserId,
           initiator_id: user.id,
+          interest_status: "pending",
         })
-        .select("id, user_id_1, user_id_2, created_at")
+        .select("id, user_id_1, user_id_2, initiator_id, interest_status, created_at")
         .single();
 
       if (createError || !createdChat) {

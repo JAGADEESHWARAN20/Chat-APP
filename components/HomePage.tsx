@@ -576,7 +576,7 @@ function UnifiedHomeContent({ initialSidebarState = "collapsed", sidebarState }:
                   {/* CHAT BODY */}
                   <div className="flex-1 flex flex-col w-full relative">
                     <div className="absolute inset-0 flex flex-col">
-                      {user && selectedRoomId ? (
+                      {user && (selectedRoomId || selectedDirectChat?.id) ? (
                         <div className="w-full md:w-[50vw] h-auto flex flex-col lg:flex-row">
                           <div className="flex-1 flex flex-col">
                             {/* MESSAGES */}

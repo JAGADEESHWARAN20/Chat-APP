@@ -5,7 +5,9 @@ export interface DirectChat {
   id: string;
   user_id_1: string;
   user_id_2: string;
-  created_at: string;
+  created_at: string | null;
+  initiator_id: string;
+  interest_status: string | null;
 }
 
 export interface DirectChatSummary extends DirectChat {

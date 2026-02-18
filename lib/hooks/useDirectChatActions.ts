@@ -13,12 +13,17 @@ type ChatTargetUser = {
 };
 
 const normalizeFallbackChat = (
-  chat: { id: string; user_id_1: string; user_id_2: string; created_at: string | null },
-  currentUserId: string,
+  chat: {
+    id: string;
+    user_id_1: string;
+    user_id_2: string;
+    initiator_id: string;
+    interest_status: string | null;
+    created_at: string | null;
+  },
   target: ChatTargetUser
 ): DirectChatSummary => ({
   ...chat,
-  created_at: chat.created_at ?? new Date().toISOString(),
   unread_count: 0,
   latest_message: null,
   latest_message_created_at: null,
@@ -31,14 +36,28 @@ const normalizeFallbackChat = (
 });
 
 export function useDirectChatActions() {
-  const { setChats, setSelectedChat } = useDirectChatStore((s) => ({
+  const { setChats, setSelectedChat, selectedChat } = useDirectChatStore((s) => ({
     setChats: s.setChats,
     setSelectedChat: s.setSelectedChat,
+    selectedChat: s.selectedChat,
   }));
 
   const setSelectedRoomId = useUnifiedStore((s) => s.setSelectedRoomId);
   const setActiveTab = useUnifiedStore((s) => s.setActiveTab);
   const currentUserId = useUnifiedStore((s) => s.userId);
+
+  const refreshChats = useCallback(async () => {
+    const listRes = await fetch("/api/direct-chats", { method: "GET" });
+    if (!listRes.ok) return null;
+
+    const listData = await listRes.json();
+    const chats = Array.isArray(listData?.chats)
+      ? (listData.chats as DirectChatSummary[])
+      : [];
+
+    setChats(chats);
+    return chats;
+  }, [setChats]);
 
   const openOrCreateDirectChat = useCallback(
     async (targetUser: ChatTargetUser): Promise<boolean> => {
@@ -71,7 +90,14 @@ export function useDirectChatActions() {
 
         const createData = await createRes.json();
         const createdChat = createData?.chat as
-          | { id: string; user_id_1: string; user_id_2: string; created_at: string | null }
+          | {
+              id: string;
+              user_id_1: string;
+              user_id_2: string;
+              initiator_id: string;
+              interest_status: string | null;
+              created_at: string | null;
+            }
           | undefined;
 
         if (!createdChat?.id) {
@@ -79,14 +105,8 @@ export function useDirectChatActions() {
           return false;
         }
 
-        const listRes = await fetch("/api/direct-chats", { method: "GET" });
-        if (listRes.ok) {
-          const listData = await listRes.json();
-          const chats = Array.isArray(listData?.chats)
-            ? (listData.chats as DirectChatSummary[])
-            : [];
-
-          setChats(chats);
+        const chats = await refreshChats();
+        if (chats) {
           const selected = chats.find((c) => c.id === createdChat.id);
           if (selected) {
             setSelectedRoomId(null);
@@ -97,7 +117,7 @@ export function useDirectChatActions() {
         }
 
         setSelectedRoomId(null);
-        setSelectedChat(normalizeFallbackChat(createdChat, currentUserId, targetUser));
+        setSelectedChat(normalizeFallbackChat(createdChat, targetUser));
         setActiveTab("home");
         return true;
       } catch {
@@ -105,8 +125,40 @@ export function useDirectChatActions() {
         return false;
       }
     },
-    [currentUserId, setActiveTab, setChats, setSelectedChat, setSelectedRoomId]
+    [currentUserId, refreshChats, setActiveTab, setSelectedChat, setSelectedRoomId]
   );
 
-  return { openOrCreateDirectChat };
+  const respondToSelectedChatRequest = useCallback(
+    async (action: "accept" | "decline"): Promise<boolean> => {
+      if (!selectedChat?.id) return false;
+
+      try {
+        const res = await fetch(`/api/direct-chats/${selectedChat.id}/status`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action }),
+        });
+
+        if (!res.ok) {
+          toast.error(action === "accept" ? "Failed to accept request" : "Failed to decline request");
+          return false;
+        }
+
+        const chats = await refreshChats();
+        if (chats) {
+          const nextSelected = chats.find((chat) => chat.id === selectedChat.id) ?? null;
+          setSelectedChat(nextSelected);
+        }
+
+        toast.success(action === "accept" ? "Request accepted" : "Request declined");
+        return true;
+      } catch {
+        toast.error("Unable to update request");
+        return false;
+      }
+    },
+    [refreshChats, selectedChat?.id, setSelectedChat]
+  );
+
+  return { openOrCreateDirectChat, respondToSelectedChatRequest, refreshChats };
 }

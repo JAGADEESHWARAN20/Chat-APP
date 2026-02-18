@@ -22,7 +22,7 @@ export const GET = (req: NextRequest, ctx: { params: { chatId: string } }) =>
 
       const { data: chat } = await supabase
         .from("direct_chats")
-        .select("user_id_1, user_id_2")
+        .select("user_id_1, user_id_2, initiator_id, interest_status")
         .eq("id", chatId)
         .single();
 
@@ -67,12 +67,32 @@ export const POST = (req: NextRequest, ctx: { params: { chatId: string } }) =>
 
       const { data: chat } = await supabase
         .from("direct_chats")
-        .select("user_id_1, user_id_2")
+        .select("user_id_1, user_id_2, initiator_id, interest_status")
         .eq("id", chatId)
         .single();
 
       if (!chat || (chat.user_id_1 !== user.id && chat.user_id_2 !== user.id)) {
         return errorResponse("Not a participant in this direct chat", "NOT_A_PARTICIPANT", 403);
+      }
+
+      if (chat.interest_status === "declined") {
+        return errorResponse("Conversation request was declined", "CHAT_DECLINED", 403);
+      }
+
+      if (chat.interest_status === "pending") {
+        if (chat.initiator_id !== user.id) {
+          return errorResponse("Accept request before replying", "CHAT_PENDING_ACCEPTANCE", 403);
+        }
+
+        const { count } = await supabase
+          .from("messages")
+          .select("id", { count: "exact", head: true })
+          .eq("direct_chat_id", chatId)
+          .eq("sender_id", user.id);
+
+        if ((count ?? 0) >= 1) {
+          return errorResponse("Only one intro message is allowed until accepted", "INTRO_MESSAGE_LIMIT", 403);
+        }
       }
 
       const { data: message, error } = await supabase

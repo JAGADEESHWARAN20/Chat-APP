@@ -32,8 +32,13 @@ export default function ChatInput() {
   const { handleTyping, stopTyping } = useTypingStatus();
 
   // ✅ FIXED: Update canSend and hasActiveChat to only check selectedRoom
-  const canSend = Boolean(text.trim()) && !isSending && (selectedRoom || selectedDirectChat) && user;
   const hasActiveChat = Boolean(selectedRoom || selectedDirectChat);
+  const isDirectPending = selectedDirectChat?.interest_status === "pending";
+  const isCurrentUserInitiator = Boolean(selectedDirectChat?.initiator_id && selectedDirectChat?.initiator_id === user?.id);
+  const canSendInCurrentContext = selectedDirectChat
+    ? !isDirectPending || isCurrentUserInitiator
+    : Boolean(selectedRoom);
+  const canSend = Boolean(text.trim()) && !isSending && Boolean(user) && canSendInCurrentContext;
 
   // FIXED: Use handleTyping for proper debouncing
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -184,7 +189,15 @@ export default function ChatInput() {
           )}
         </Button>
       </div>
+      {selectedDirectChat && isDirectPending && (
+        <p className="text-xs text-muted-foreground mt-1 px-1">
+          {isCurrentUserInitiator
+            ? "You can send one intro message while waiting for acceptance."
+            : "Accept this request before you can reply."}
+        </p>
+      )}
+
     </div>
   );
-  
+
 }
