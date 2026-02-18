@@ -31,7 +31,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useDirectChatStore, type DirectChatSummary } from "@/lib/store/directChatStore";
+
 import { useDirectChatActions } from "@/lib/hooks/useDirectChatActions";
+
 
 /* ----------------------------------------------------------------------------
    LEFT SIDEBAR PROPS
@@ -86,6 +88,7 @@ const LeftSidebar = memo<LeftSidebarProps>(function LeftSidebar({
   const [isCreating, setIsCreating] = useState(false);
 
   const [isLoadingChats, setIsLoadingChats] = useState(false);
+
   const [chatUserQuery, setChatUserQuery] = useState("");
   const [chatUserResults, setChatUserResults] = useState<Array<{
     id: string;
@@ -95,6 +98,7 @@ const LeftSidebar = memo<LeftSidebarProps>(function LeftSidebar({
   }>>([]);
   const [isSearchingUsers, setIsSearchingUsers] = useState(false);
   const { openOrCreateDirectChat } = useDirectChatActions();
+
 
   useEffect(() => {
     let mounted = true;
@@ -182,6 +186,7 @@ const LeftSidebar = memo<LeftSidebarProps>(function LeftSidebar({
     },
     [openOrCreateDirectChat]
   );
+
 
   /* --------------------------------------------------------------------------
      DERIVED: JOINED ROOMS
