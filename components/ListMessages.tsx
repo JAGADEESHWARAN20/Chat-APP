@@ -5,6 +5,7 @@ import React, { useEffect, useRef, useState, useCallback, useMemo } from "react"
 import Message from "./Message";
 import { DeleteAlert, EditAlert } from "./MessasgeActions";
 import { useSelectedRoom } from "@/lib/store/unified-roomstore";
+import { useDirectChatStore } from "@/lib/store/directChatStore";
 import TypingIndicator from "./TypingIndicator";
 import { Button } from "@/components/ui/button";
 import { Search, X } from "lucide-react";
@@ -129,16 +130,19 @@ export default function ListMessages({
   const [showSearchInfo, setShowSearchInfo] = useState(false);
 
   const selectedRoom = useSelectedRoom();
+  const selectedDirectChat = useDirectChatStore((state) => state.selectedChat);
   const {
     messages,
     setActiveRoom,
     loadInitialMessages,
+    loadInitialDirectMessages,
     subscribeToRoom,
     unsubscribeFromRoom,
   } = useMessage((state) => ({
     messages: state.messages,
     setActiveRoom: state.setActiveRoom,
     loadInitialMessages: state.loadInitialMessages,
+    loadInitialDirectMessages: state.loadInitialDirectMessages,
     subscribeToRoom: state.subscribeToRoom,
     unsubscribeFromRoom: state.unsubscribeFromRoom,
   }));
@@ -272,22 +276,24 @@ export default function ListMessages({
      Load initial messages & room change
   ---------------------- */
   useEffect(() => {
-    const currentRoomId = selectedRoom?.id;
+    const currentRoomId = selectedRoom?.id ?? null;
+    const currentDirectChatId = selectedDirectChat?.id ?? null;
+    const activeConversationId = currentRoomId ?? currentDirectChatId;
 
-    if (!currentRoomId) {
+    if (!activeConversationId) {
       setActiveRoom(null);
       unsubscribeFromRoom();
       setInitialLoadComplete(false);
       return;
     }
 
-    const roomChanged = currentRoomId !== prevRoomIdRef.current;
+    const roomChanged = activeConversationId !== prevRoomIdRef.current;
 
     if (roomChanged) {
       setActiveRoom(null);
       setInitialLoadComplete(false);
       handleClearSearch();
-      prevRoomIdRef.current = currentRoomId;
+      prevRoomIdRef.current = activeConversationId;
       setIsLoading(true);
       indexedIdsRef.current.clear();
       searchEngineRef.current.clear();
@@ -299,76 +305,110 @@ export default function ListMessages({
     loadTimeoutRef.current = setTimeout(() => setIsLoading(true), 50);
 
     const loadMessages = async () => {
-      const t0 = performance.now();
       try {
-        await loadInitialMessages(currentRoomId!, { force: roomChanged });
+        if (currentRoomId) {
+          await loadInitialMessages(currentRoomId, { force: roomChanged });
+        } else if (currentDirectChatId) {
+          await loadInitialDirectMessages(currentDirectChatId, { force: roomChanged });
+        }
         setInitialLoadComplete(true);
       } catch (error: any) {
-        if (error?.name !== "AbortError") console.error("Load messages error:", error);
+        if (error?.name !== "AbortError") {
+          console.error("Load messages error:", error);
+        }
       } finally {
         setIsLoading(false);
-        if (loadTimeoutRef.current) { clearTimeout(loadTimeoutRef.current); loadTimeoutRef.current = null; }
+        if (loadTimeoutRef.current) {
+          clearTimeout(loadTimeoutRef.current);
+          loadTimeoutRef.current = null;
+        }
         abortControllerRef.current = null;
-        const t1 = performance.now();
-        // instrumentation - optionally log or send to telemetry
-        // console.log(`loadInitialMessages ${Math.round(t1 - t0)}ms`);
       }
     };
 
     loadMessages();
 
     return () => {
-      if (loadTimeoutRef.current) { clearTimeout(loadTimeoutRef.current); loadTimeoutRef.current = null; }
-      if (abortControllerRef.current) { abortControllerRef.current.abort(); abortControllerRef.current = null; }
+      if (loadTimeoutRef.current) {
+        clearTimeout(loadTimeoutRef.current);
+        loadTimeoutRef.current = null;
+      }
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
     };
-  }, [selectedRoom?.id, setActiveRoom, handleClearSearch, loadInitialMessages, unsubscribeFromRoom]);
+  }, [
+    selectedRoom?.id,
+    selectedDirectChat?.id,
+    setActiveRoom,
+    handleClearSearch,
+    loadInitialMessages,
+    loadInitialDirectMessages,
+    unsubscribeFromRoom,
+  ]);
 
   /* ----------------------
      Realtime subscription
   ---------------------- */
   useEffect(() => {
     const currentRoomId = selectedRoom?.id;
-    if (!currentRoomId) return;
-    subscribeToRoom(currentRoomId);
-    return () => unsubscribeFromRoom();
-  }, [selectedRoom?.id, subscribeToRoom, unsubscribeFromRoom]);
+    const currentDirectChatId = selectedDirectChat?.id;
+
+    if (currentRoomId) {
+      subscribeToRoom(currentRoomId);
+      return () => unsubscribeFromRoom();
+    }
+
+    if (currentDirectChatId) {
+      subscribeToRoom(undefined, currentDirectChatId);
+      return () => unsubscribeFromRoom();
+    }
+
+    return;
+  }, [selectedRoom?.id, selectedDirectChat?.id, subscribeToRoom, unsubscribeFromRoom]);
 
   /* ----------------------
      Auto-scroll when new messages arrive
   ---------------------- */
   const prevMessagesLen = useRef(messages.length);
   useEffect(() => {
-    if (!scrollRef.current || !selectedRoom?.id) return;
+    if (!scrollRef.current || !(selectedRoom?.id || selectedDirectChat?.id)) return;
     const isNewMessage = prevMessagesLen.current < messages.length;
-    const isRoomChanged = selectedRoom.id !== prevRoomIdRef.current;
+    const activeConversationId = selectedRoom?.id ?? selectedDirectChat?.id ?? null;
+    const isRoomChanged = activeConversationId !== prevRoomIdRef.current;
 
     if (isRoomChanged) {
       scrollRef.current.scrollTop = 0;
-      prevRoomIdRef.current = selectedRoom.id;
+      prevRoomIdRef.current = activeConversationId;
     } else if (isNewMessage && !userScrolled) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
 
     prevMessagesLen.current = messages.length;
-  }, [messages.length, userScrolled, selectedRoom?.id]);
+  }, [messages.length, userScrolled, selectedRoom?.id, selectedDirectChat?.id]);
 
   /* ----------------------
      Filter messages for current room / search
   ---------------------- */
   const displayMessages = useMemo(() => {
-    const currentRoomId = selectedRoom?.id;
-    if (!messages.length || !currentRoomId) return [];
+    const currentRoomId = selectedRoom?.id ?? null;
+    const currentDirectChatId = selectedDirectChat?.id ?? null;
 
-    const roomMessages = messages
-      .filter(msg => msg.room_id === currentRoomId)
+    if (!messages.length || (!currentRoomId && !currentDirectChatId)) return [];
+
+    const scopedMessages = messages
+      .filter((msg) =>
+        currentRoomId ? msg.room_id === currentRoomId : msg.direct_chat_id === currentDirectChatId
+      )
       .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 
     if (searchQuery && searchQuery.trim().length > 0) {
       return searchResults.length > 0 ? searchResults : [];
     }
 
-    return roomMessages;
-  }, [messages, selectedRoom?.id, searchQuery, searchResults]);
+    return scopedMessages;
+  }, [messages, selectedRoom?.id, selectedDirectChat?.id, searchQuery, searchResults]);
 
   const showSkeleton = isLoading && displayMessages.length === 0;
 
@@ -405,10 +445,10 @@ export default function ListMessages({
     return null;
   }, [searchQuery, displayMessages.length, isLoading, initialLoadComplete]);
 
-  if (!selectedRoom?.id) {
+  if (!selectedRoom?.id && !selectedDirectChat?.id) {
     return (
       <div className="lm-centerEmpty" role="status">
-        <p>Select a room to start chatting</p>
+        <p>Select a room or direct chat to start chatting</p>
       </div>
     );
   }
@@ -465,7 +505,7 @@ export default function ListMessages({
             renderEmptyState
           )}
          
-{selectedRoom && (
+{selectedRoom?.id && (
   <RoomAssistantPopover
     roomId={selectedRoom.id}
     roomName={selectedRoom.name ?? ""}

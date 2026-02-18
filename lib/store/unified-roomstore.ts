@@ -559,11 +559,9 @@ export async function initUnifiedRealtime(userId: string | null) {
         (payload: any) => useUnifiedStore.getState().handleMessageInsert(payload)
       )
       .subscribe((status) => {
-        console.log("unified realtime status:", status);
       });
 
     activeRealtime.set(userId, channel);
-    console.log("started unified realtime for", userId);
   } catch (err) {
     console.error("initUnifiedRealtime error:", err);
   }
@@ -584,7 +582,6 @@ export function teardownUnifiedRealtime(userId: string | null) {
     console.error("teardownUnifiedRealtime removeChannel error:", err);
   } finally {
     activeRealtime.delete(userId);
-    console.log("stopped unified realtime for", userId);
   }
 }
 
@@ -660,16 +657,28 @@ export const useRoomActions = () => {
       }
     },
 
-    sendMessage: async (roomId: string, text: string) => {
+    sendMessage: async (roomId?: string, text?: string, directChatId?: string) => {
+      if (!text || !text.trim()) return false;
+
       try {
-        const { error } = await supabase.from("messages").insert({ room_id: roomId, text });
-        if (error) {
-          console.error("sendMessage error:", error);
+        const payload = {
+          roomId: roomId ?? null,
+          directChatId: directChatId ?? null,
+          text: text.trim(),
+        };
+
+        const response = await fetch("/api/messages/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
           return false;
         }
+
         return true;
-      } catch (err) {
-        console.error("sendMessage error:", err);
+      } catch {
         return false;
       }
     },

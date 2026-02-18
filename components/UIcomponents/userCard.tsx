@@ -6,26 +6,23 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { type UserData } from "@/lib/store/unified-roomstore";
 import { cn } from "@/lib/utils";
 
-export default memo(function UserCard({
-  user,
-  query,
-}: {
+interface UserCardProps {
   user: UserData;
   query: string;
-}) {
+  onMessage?: (user: UserData) => void;
+}
+
+export default memo(function UserCard({ user, onMessage }: UserCardProps) {
   const name = user.display_name || user.username || "Unknown";
 
   return (
     <article
       className={cn(
-        // ===== Card Base =====
         "relative w-full rounded-2xl border border-border/40 bg-card transition-all",
         "hover:shadow-md hover:border-border/60",
-        // ===== Aspect Ratio 3:4 =====
         "w-[85vw] h-[30em] md:w-auto md:h-[20vw] flex flex-col overflow-hidden"
       )}
     >
-      {/* Top Section */}
       <div className="p-4 flex items-center gap-4">
         <Avatar className="h-14 w-14 rounded-xl flex-shrink-0">
           <AvatarImage src={user.avatar_url || ""} alt={name} />
@@ -40,19 +37,15 @@ export default memo(function UserCard({
         </div>
       </div>
 
-      {/* Bio Section */}
       <div className="px-4 flex-1 flex items-start">
         {user.bio ? (
-          <p className="text-sm text-muted-foreground leading-snug line-clamp-4">
-            {user.bio}
-          </p>
+          <p className="text-sm text-muted-foreground leading-snug line-clamp-4">{user.bio}</p>
         ) : (
           <p className="text-xs text-muted-foreground/60 italic">No bio added...</p>
         )}
       </div>
 
-      {/* Footer Button */}
-      <div className="p-4 mt-auto">
+      <div className="p-4 mt-auto grid grid-cols-2 gap-2">
         <Button
           size="sm"
           variant="outline"
@@ -60,6 +53,13 @@ export default memo(function UserCard({
           asChild
         >
           <a href={`/profile/${user.id}`}>View Profile</a>
+        </Button>
+        <Button
+          size="sm"
+          className="w-full rounded-lg h-10"
+          onClick={() => onMessage?.(user)}
+        >
+          Message
         </Button>
       </div>
     </article>
