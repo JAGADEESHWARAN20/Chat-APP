@@ -3,8 +3,8 @@
 import { Imessage, useMessage } from "@/lib/store/messages";
 import React, { useMemo, useState, useCallback } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { useSearchHighlight } from "@/lib/store/SearchHighlightContext";
-
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,14 +16,14 @@ import {
 import { MoreHorizontal, Edit, Trash2 } from "lucide-react";
 import { useUser } from "@/lib/store/user";
 import { useMediaQuery } from "@/hooks/use-media-query";
+import { useDirectChatActions } from "@/lib/hooks/useDirectChatActions";
 
 interface MessageProps {
-  message: Imessage | undefined; // allow undefined to be safe
+  message: Imessage | undefined;
   isNavigated?: boolean;
   searchQuery?: string;
 }
 
-// Types for menu configuration
 type MenuActionType = "edit" | "delete" | "reply" | "copy";
 
 interface MenuItemConfig {
@@ -34,9 +34,6 @@ interface MenuItemConfig {
   destructive?: boolean;
 }
 
-/* ----------------------
-   Hook for menu items
-   ---------------------- */
 const useMenuItems = () => {
   const setActionMessage = useMessage((state) => state.setActionMessage);
   const isMobile = useMediaQuery("(max-width: 768px)");
@@ -59,12 +56,7 @@ const useMenuItems = () => {
 
   const menuItems: MenuItemConfig[] = useMemo(
     () => [
-      {
-        type: "edit",
-        label: "Edit",
-        icon: Edit,
-        onClick: onEdit,
-      },
+      { type: "edit", label: "Edit", icon: Edit, onClick: onEdit },
       {
         type: "delete",
         label: "Delete",
@@ -79,9 +71,6 @@ const useMenuItems = () => {
   return { menuItems, isMobile };
 };
 
-/* ----------------------
-   Responsive menu item
-   ---------------------- */
 const ResponsiveMenuItem: React.FC<{
   item: MenuItemConfig;
   message: Imessage;
@@ -108,9 +97,6 @@ const ResponsiveMenuItem: React.FC<{
 };
 ResponsiveMenuItem.displayName = "ResponsiveMenuItem";
 
-/* ----------------------
-   MessageMenu component (memoized)
-   ---------------------- */
 const MessageMenu: React.FC<{
   message: Imessage;
   menuItems: MenuItemConfig[];
@@ -146,19 +132,16 @@ const MessageMenu: React.FC<{
 
 MessageMenu.displayName = "MessageMenu";
 
-/* ----------------------
-   Main Message component (memoized)
-   ---------------------- */
 function MessageInner({ message, isNavigated = false }: MessageProps) {
-  // ✅ ALL HOOKS AT TOP, UNCONDITIONALLY
   const user = useUser((state) => state.user);
+  const router = useRouter();
+  const { openOrCreateDirectChat } = useDirectChatActions();
   const { highlightedMessageId } = useSearchHighlight();
   const { menuItems, isMobile } = useMenuItems();
 
   const [imageErrored, setImageErrored] = useState(false);
   const onImageError = useCallback(() => setImageErrored(true), []);
 
-  // can safely handle undefined `message`
   const initial = useMemo(() => {
     if (!message) return "?";
     return (
@@ -166,14 +149,13 @@ function MessageInner({ message, isNavigated = false }: MessageProps) {
       message.profiles?.username?.charAt(0)?.toUpperCase() ||
       "?"
     );
-  }, [message?.profiles?.display_name, message?.profiles?.username, message]);
+  }, [message]);
 
   const formattedDate = useMemo(() => {
     if (!message?.created_at) return "Unknown date";
     return new Date(message.created_at).toDateString();
-  }, [message?.created_at, message]);
+  }, [message]);
 
-  // ✅ CONDITIONAL RETURN AFTER HOOKS
   if (!message) {
     return (
       <div
@@ -188,9 +170,30 @@ function MessageInner({ message, isNavigated = false }: MessageProps) {
     );
   }
 
+  const isSelfMessage = Boolean(message.profiles?.id && user?.id && message.profiles.id === user.id);
   const isHighlighted = highlightedMessageId === message.id;
 
-  // Classes
+  const handleOpenProfile = () => {
+    if (message.profiles?.id) {
+      router.push(`/profile/${message.profiles.id}`);
+    }
+  };
+
+  const handleMessageSender = async () => {
+    if (!message.profiles?.id || isSelfMessage) return;
+
+    const opened = await openOrCreateDirectChat({
+      id: message.profiles.id,
+      username: message.profiles.username,
+      display_name: message.profiles.display_name,
+      avatar_url: message.profiles.avatar_url,
+    });
+
+    if (opened) {
+      router.push("/");
+    }
+  };
+
   const highlightClass = isHighlighted
     ? "bg-slate-700/10 dark:bg-yellow-900/10 border-l-4 border-slate-500"
     : "bg-transparent";
@@ -202,10 +205,15 @@ function MessageInner({ message, isNavigated = false }: MessageProps) {
   return (
     <div
       id={`msg-${message.id}`}
-      className={`flex gap-2 items-center py-1  rounded-lg transition-all duration-300 ${backgroundClass}`}
+      className={`flex gap-2 items-center py-1 rounded-lg transition-all duration-300 ${backgroundClass}`}
       data-message-id={message.id}
     >
-      <div className="flex-shrink-0">
+      <button
+        type="button"
+        onClick={handleOpenProfile}
+        className="flex-shrink-0"
+        aria-label="Open sender profile"
+      >
         {message.profiles?.avatar_url && !imageErrored ? (
           <Image
             src={message.profiles.avatar_url}
@@ -222,27 +230,35 @@ function MessageInner({ message, isNavigated = false }: MessageProps) {
           />
         ) : (
           <div className="w-10 h-10 rounded-full bg-gray-300 dark:bg-gray-700 flex items-center justify-center">
-            <span className="text-gray-600 dark:text-gray-300 text-sm font-medium">
-              {initial}
-            </span>
+            <span className="text-gray-600 dark:text-gray-300 text-sm font-medium">{initial}</span>
           </div>
         )}
-      </div>
+      </button>
 
       <div className="flex-1 flex-col">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <h2
-              className="font-semibold text-sm sm:text-base"
+            <button
+              type="button"
+              onClick={handleOpenProfile}
+              className="font-semibold text-sm sm:text-base hover:underline"
               style={{
                 color: "hsl(var(--message-sender-color))",
                 fontSize: "var(--message-sender-size)",
               }}
             >
-              {message.profiles?.display_name ||
-                message.profiles?.username ||
-                "Unknown User"}
-            </h2>
+              {message.profiles?.display_name || message.profiles?.username || "Unknown User"}
+            </button>
+
+            {!isSelfMessage && message.profiles?.id && (
+              <button
+                type="button"
+                onClick={handleMessageSender}
+                className="text-[11px] px-2 py-0.5 rounded-full border border-border/50 hover:bg-accent"
+              >
+                Message
+              </button>
+            )}
 
             <time
               className="text-xs truncate"
@@ -258,15 +274,9 @@ function MessageInner({ message, isNavigated = false }: MessageProps) {
           </div>
 
           <div className="flex items-center gap-2">
-            {message.profiles?.id &&
-              user?.id &&
-              message.profiles.id === user.id && (
-                <MessageMenu
-                  message={message}
-                  menuItems={menuItems}
-                  isMobile={isMobile}
-                />
-              )}
+            {isSelfMessage && (
+              <MessageMenu message={message} menuItems={menuItems} isMobile={isMobile} />
+            )}
           </div>
         </div>
 

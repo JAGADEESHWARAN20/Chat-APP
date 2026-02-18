@@ -23,6 +23,7 @@ import {
   Users,
   Plus,
   ChevronLeft,
+  Search,
 } from "lucide-react";
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -30,6 +31,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useDirectChatStore, type DirectChatSummary } from "@/lib/store/directChatStore";
+
+import { useDirectChatActions } from "@/lib/hooks/useDirectChatActions";
+
 
 /* ----------------------------------------------------------------------------
    LEFT SIDEBAR PROPS
@@ -85,6 +89,17 @@ const LeftSidebar = memo<LeftSidebarProps>(function LeftSidebar({
 
   const [isLoadingChats, setIsLoadingChats] = useState(false);
 
+  const [chatUserQuery, setChatUserQuery] = useState("");
+  const [chatUserResults, setChatUserResults] = useState<Array<{
+    id: string;
+    username: string | null;
+    display_name: string | null;
+    avatar_url: string | null;
+  }>>([]);
+  const [isSearchingUsers, setIsSearchingUsers] = useState(false);
+  const { openOrCreateDirectChat } = useDirectChatActions();
+
+
   useEffect(() => {
     let mounted = true;
 
@@ -116,6 +131,62 @@ const LeftSidebar = memo<LeftSidebarProps>(function LeftSidebar({
       mounted = false;
     };
   }, [user?.id, setChats]);
+
+
+  useEffect(() => {
+    let active = true;
+
+    const run = async () => {
+      const q = chatUserQuery.trim();
+      if (q.length < 2) {
+        if (active) setChatUserResults([]);
+        return;
+      }
+
+      setIsSearchingUsers(true);
+      try {
+        const res = await fetch(`/api/users/search?query=${encodeURIComponent(q)}`);
+        if (!res.ok) {
+          if (active) setChatUserResults([]);
+          return;
+        }
+
+        const data = await res.json();
+        if (!active) return;
+
+        const next = Array.isArray(data)
+          ? data.map((u: any) => ({
+              id: String(u.id),
+              username: u.username ?? null,
+              display_name: u.display_name ?? null,
+              avatar_url: u.avatar_url ?? null,
+            }))
+          : [];
+
+        setChatUserResults(next);
+      } finally {
+        if (active) setIsSearchingUsers(false);
+      }
+    };
+
+    run();
+
+    return () => {
+      active = false;
+    };
+  }, [chatUserQuery]);
+
+  const handleStartChatWithUser = useCallback(
+    async (target: { id: string; username: string | null; display_name: string | null; avatar_url: string | null }) => {
+      const opened = await openOrCreateDirectChat(target);
+      if (opened) {
+        setChatUserQuery("");
+        setChatUserResults([]);
+      }
+    },
+    [openOrCreateDirectChat]
+  );
+
 
   /* --------------------------------------------------------------------------
      DERIVED: JOINED ROOMS
@@ -571,6 +642,40 @@ const renderRoom = useCallback(
                 paddingRight: sidebarStyles.padding,
               }}
             >
+              <div className="mb-3 space-y-2">
+                <div className="relative">
+                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    value={chatUserQuery}
+                    onChange={(e) => setChatUserQuery(e.target.value)}
+                    placeholder="Search users to message..."
+                    className="pl-8 h-9"
+                  />
+                </div>
+
+                {chatUserQuery.trim().length >= 2 && (
+                  <div className="rounded-md border border-border/50 bg-background/60 max-h-40 overflow-y-auto">
+                    {isSearchingUsers ? (
+                      <div className="p-2 text-xs text-muted-foreground">Searching users...</div>
+                    ) : chatUserResults.length === 0 ? (
+                      <div className="p-2 text-xs text-muted-foreground">No users found</div>
+                    ) : (
+                      chatUserResults.map((u) => (
+                        <button
+                          key={u.id}
+                          type="button"
+                          onClick={() => handleStartChatWithUser(u)}
+                          className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-accent text-left"
+                        >
+                          <span className="text-sm truncate">{u.display_name || u.username || "Unknown user"}</span>
+                          <span className="text-[11px] px-2 py-0.5 rounded-full border border-border/50">Message</span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+
               {isLoadingChats ? (
                 <div className="flex items-center justify-center h-48 text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
