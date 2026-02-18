@@ -12,6 +12,7 @@ import { Imessage } from "@/lib/store/messages";
 import { Send, Loader2 } from "lucide-react";
 import { useTypingStatus } from "@/hooks/useTypingStatus";
 import { useRoomActions, useSelectedRoom } from "@/lib/store/unified-roomstore";
+import { useDirectChatStore } from "@/lib/store/directChatStore";
 import { cn } from "@/lib/utils";
 
 export default function ChatInput() {
@@ -23,6 +24,7 @@ export default function ChatInput() {
 
   // ✅ FIXED: Use Zustand selectors
   const selectedRoom = useSelectedRoom();
+  const selectedDirectChat = useDirectChatStore((state) => state.selectedChat);
   const { sendMessage } = useRoomActions();
   const user = useUser((state) => state.user);
 
@@ -30,8 +32,8 @@ export default function ChatInput() {
   const { handleTyping, stopTyping } = useTypingStatus();
 
   // ✅ FIXED: Update canSend and hasActiveChat to only check selectedRoom
-  const canSend = Boolean(text.trim()) && !isSending && selectedRoom && user;
-  const hasActiveChat = Boolean(selectedRoom);
+  const canSend = Boolean(text.trim()) && !isSending && (selectedRoom || selectedDirectChat) && user;
+  const hasActiveChat = Boolean(selectedRoom || selectedDirectChat);
 
   // FIXED: Use handleTyping for proper debouncing
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -52,7 +54,7 @@ export default function ChatInput() {
   }, [stopTyping, hasActiveChat]);
 
   const handleSend = useCallback(async () => {
-    if (!canSend || !selectedRoom?.id) return;
+    if (!canSend || (!selectedRoom?.id && !selectedDirectChat?.id)) return;
 
     setIsSending(true);
     stopTyping(); // Stop typing when sending
@@ -62,8 +64,8 @@ export default function ChatInput() {
       id: optimisticId,
       text: text.trim(),
       sender_id: user!.id,
-      room_id: selectedRoom.id,
-      direct_chat_id: null,
+      room_id: selectedRoom?.id ?? null,
+      direct_chat_id: selectedDirectChat?.id ?? null,
       dm_thread_id: null,
       created_at: new Date().toISOString(),
       is_edited: false,
@@ -91,7 +93,9 @@ export default function ChatInput() {
 
     try {
       // ✅ FIXED: Use the room store's sendMessage action
-      const success = await sendMessage(selectedRoom.id, text.trim());
+      const success = selectedDirectChat?.id
+        ? await sendMessage(undefined, text.trim(), selectedDirectChat.id)
+        : await sendMessage(selectedRoom!.id, text.trim());
 
       if (success) {
         // remove the optimistic; the realtime INSERT will add the final message
@@ -108,7 +112,7 @@ export default function ChatInput() {
       setIsSending(false);
       inputRef.current?.focus();
     }
-  }, [canSend, text, user, selectedRoom, setOptimisticIds, addMessage, sendMessage, stopTyping, optimisticDeleteMessage]);
+  }, [canSend, text, user, selectedRoom, selectedDirectChat, setOptimisticIds, addMessage, sendMessage, stopTyping, optimisticDeleteMessage]);
 
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -153,8 +157,10 @@ export default function ChatInput() {
           onKeyDown={handleKeyDown}
           placeholder={
             hasActiveChat
-              ? `Message #${selectedRoom?.name}`
-              : "Select a room to start messaging..."
+              ? selectedDirectChat
+                ? `Message ${selectedDirectChat.other_user.display_name || selectedDirectChat.other_user.username || "direct chat"}`
+                : `Message #${selectedRoom?.name}`
+              : "Select a room or direct chat to start messaging..."
           }
           disabled={isSending || !hasActiveChat}
           className={cn(
