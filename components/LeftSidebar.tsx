@@ -5,6 +5,7 @@ import React, {
   useState,
   useMemo,
   useCallback,
+  useEffect,
 } from "react";
 
 import {
@@ -22,12 +23,15 @@ import {
   Users,
   Plus,
   ChevronLeft,
+  Search,
 } from "lucide-react";
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { useDirectChatStore, type DirectChatSummary } from "@/lib/store/directChatStore";
+import { useDirectChatActions } from "@/lib/hooks/useDirectChatActions";
 
 /* ----------------------------------------------------------------------------
    LEFT SIDEBAR PROPS
@@ -66,6 +70,13 @@ const LeftSidebar = memo<LeftSidebarProps>(function LeftSidebar({
   const setSearchTerm = useUnifiedStore((s) => s.setSidebarSearchTerm);
 
   const { setSelectedRoomId, createRoom } = useRoomActions();
+  const { chats, setChats, selectedChat, setSelectedChat } = useDirectChatStore((s) => ({
+    chats: s.chats,
+    setChats: s.setChats,
+    selectedChat: s.selectedChat,
+    setSelectedChat: s.setSelectedChat,
+  }));
+
 
   /* --------------------------------------------------------------------------
      LOCAL STATE
@@ -73,6 +84,104 @@ const LeftSidebar = memo<LeftSidebarProps>(function LeftSidebar({
   const [showCreateRoom, setShowCreateRoom] = useState(false);
   const [newRoomName, setNewRoomName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+
+  const [isLoadingChats, setIsLoadingChats] = useState(false);
+  const [chatUserQuery, setChatUserQuery] = useState("");
+  const [chatUserResults, setChatUserResults] = useState<Array<{
+    id: string;
+    username: string | null;
+    display_name: string | null;
+    avatar_url: string | null;
+  }>>([]);
+  const [isSearchingUsers, setIsSearchingUsers] = useState(false);
+  const { openOrCreateDirectChat } = useDirectChatActions();
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadChats = async () => {
+      if (!user?.id) {
+        setChats([]);
+        return;
+      }
+
+      setIsLoadingChats(true);
+      try {
+        const res = await fetch("/api/direct-chats", { method: "GET" });
+        if (!res.ok) return;
+
+        const data = await res.json();
+        const nextChats = Array.isArray(data?.chats) ? (data.chats as DirectChatSummary[]) : [];
+
+        if (mounted) {
+          setChats(nextChats);
+        }
+      } finally {
+        if (mounted) setIsLoadingChats(false);
+      }
+    };
+
+    loadChats();
+
+    return () => {
+      mounted = false;
+    };
+  }, [user?.id, setChats]);
+
+
+  useEffect(() => {
+    let active = true;
+
+    const run = async () => {
+      const q = chatUserQuery.trim();
+      if (q.length < 2) {
+        if (active) setChatUserResults([]);
+        return;
+      }
+
+      setIsSearchingUsers(true);
+      try {
+        const res = await fetch(`/api/users/search?query=${encodeURIComponent(q)}`);
+        if (!res.ok) {
+          if (active) setChatUserResults([]);
+          return;
+        }
+
+        const data = await res.json();
+        if (!active) return;
+
+        const next = Array.isArray(data)
+          ? data.map((u: any) => ({
+              id: String(u.id),
+              username: u.username ?? null,
+              display_name: u.display_name ?? null,
+              avatar_url: u.avatar_url ?? null,
+            }))
+          : [];
+
+        setChatUserResults(next);
+      } finally {
+        if (active) setIsSearchingUsers(false);
+      }
+    };
+
+    run();
+
+    return () => {
+      active = false;
+    };
+  }, [chatUserQuery]);
+
+  const handleStartChatWithUser = useCallback(
+    async (target: { id: string; username: string | null; display_name: string | null; avatar_url: string | null }) => {
+      const opened = await openOrCreateDirectChat(target);
+      if (opened) {
+        setChatUserQuery("");
+        setChatUserResults([]);
+      }
+    },
+    [openOrCreateDirectChat]
+  );
 
   /* --------------------------------------------------------------------------
      DERIVED: JOINED ROOMS
@@ -99,6 +208,7 @@ const LeftSidebar = memo<LeftSidebarProps>(function LeftSidebar({
   -------------------------------------------------------------------------- */
   const handleRoomClick = useCallback(
     (roomId: string) => {
+      setSelectedChat(null);
       setSelectedRoomId(roomId);
 
       // Always switch Home tab when selecting a room
@@ -107,8 +217,15 @@ const LeftSidebar = memo<LeftSidebarProps>(function LeftSidebar({
       // Close sidebar on mobile
       onClose?.();
     },
-    [setSelectedRoomId, onClose]
+    [setSelectedChat, setSelectedRoomId, onClose]
   );
+
+  const handleChatClick = useCallback((chat: DirectChatSummary) => {
+    setSelectedChat(chat);
+    setSelectedRoomId(null);
+    useUnifiedStore.getState().setActiveTab("home");
+    onClose?.();
+  }, [setSelectedChat, setSelectedRoomId, onClose]);
 
   /* --------------------------------------------------------------------------
      CREATE ROOM
@@ -520,24 +637,122 @@ const renderRoom = useCallback(
                 paddingRight: sidebarStyles.padding,
               }}
             >
-              <div 
-                className="flex flex-col items-center justify-center h-48 text-center"
-                style={{ gap: sidebarStyles.gap }}
-              >
-                <MessageSquare 
-                  className="mb-3 text-muted-foreground/50"
-                  style={{
-                    height: sidebarStyles.avatarSizeLg,
-                    width: sidebarStyles.avatarSizeLg,
-                  }}
-                />
-                <p 
-                  className="text-sm text-muted-foreground"
-                  style={{ fontSize: sidebarStyles.roomNameSize }}
-                >
-                  Direct messages coming soon
-                </p>
+              <div className="mb-3 space-y-2">
+                <div className="relative">
+                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    value={chatUserQuery}
+                    onChange={(e) => setChatUserQuery(e.target.value)}
+                    placeholder="Search users to message..."
+                    className="pl-8 h-9"
+                  />
+                </div>
+
+                {chatUserQuery.trim().length >= 2 && (
+                  <div className="rounded-md border border-border/50 bg-background/60 max-h-40 overflow-y-auto">
+                    {isSearchingUsers ? (
+                      <div className="p-2 text-xs text-muted-foreground">Searching users...</div>
+                    ) : chatUserResults.length === 0 ? (
+                      <div className="p-2 text-xs text-muted-foreground">No users found</div>
+                    ) : (
+                      chatUserResults.map((u) => (
+                        <button
+                          key={u.id}
+                          type="button"
+                          onClick={() => handleStartChatWithUser(u)}
+                          className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-accent text-left"
+                        >
+                          <span className="text-sm truncate">{u.display_name || u.username || "Unknown user"}</span>
+                          <span className="text-[11px] px-2 py-0.5 rounded-full border border-border/50">Message</span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
+
+              {isLoadingChats ? (
+                <div className="flex items-center justify-center h-48 text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                </div>
+              ) : chats.length === 0 ? (
+                <div 
+                  className="flex flex-col items-center justify-center h-48 text-center"
+                  style={{ gap: sidebarStyles.gap }}
+                >
+                  <MessageSquare 
+                    className="mb-3 text-muted-foreground/50"
+                    style={{
+                      height: sidebarStyles.avatarSizeLg,
+                      width: sidebarStyles.avatarSizeLg,
+                    }}
+                  />
+                  <p 
+                    className="text-sm text-muted-foreground"
+                    style={{ fontSize: sidebarStyles.roomNameSize }}
+                  >
+                    No direct chats yet
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {chats.map((chat) => {
+                    const isActive = selectedChat?.id === chat.id;
+                    return (
+                      <button
+                        key={chat.id}
+                        onClick={() => handleChatClick(chat)}
+                        className={cn(
+                          "w-full flex items-start rounded-lg transition-dynamic text-left select-none",
+                          isActive ? "border shadow-sm" : "hover:border-transparent"
+                        )}
+                        style={{
+                          padding: sidebarStyles.roomPadding,
+                          gap: sidebarStyles.roomGap,
+                          borderRadius: sidebarStyles.roomBorderRadius,
+                          backgroundColor: isActive ? sidebarStyles.activeBg : "transparent",
+                          border: isActive ? `1px solid ${sidebarStyles.activeBorder}` : "1px solid transparent",
+                        }}
+                      >
+                        <Avatar
+                          className="border"
+                          style={{
+                            height: sidebarStyles.avatarSizeSm,
+                            width: sidebarStyles.avatarSizeSm,
+                            borderColor: `hsl(${sidebarStyles.borderColor} / 0.4)`,
+                          }}
+                        >
+                          <AvatarFallback>
+                            {(chat.other_user.display_name || chat.other_user.username || "?").charAt(0).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0" style={{ marginLeft: sidebarStyles.roomGap }}>
+                          <div className="flex items-center justify-between mb-1">
+                            <div className="font-semibold truncate" style={{ fontSize: sidebarStyles.roomNameSize }}>
+                              {chat.other_user.display_name || chat.other_user.username || "Unknown user"}
+                            </div>
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {chat.latest_message || "Start a conversation"}
+                          </p>
+                        </div>
+                        {chat.unread_count > 0 && (
+                          <span
+                            className="font-bold rounded-full px-[1.1em] py-[.35em]"
+                            style={{
+                              fontSize: sidebarStyles.metaInfoSize,
+                              backgroundColor: sidebarStyles.unreadBg,
+                              color: sidebarStyles.unreadColor,
+                            }}
+                          >
+                            {chat.unread_count > 99 ? "99+" : chat.unread_count}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </TabsContent>
 

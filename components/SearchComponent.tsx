@@ -7,6 +7,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Search as SearchIcon } from "lucide-react";
 
 import { useRooms, useUsers, useUnifiedStore, useRoomActions } from "@/lib/store/unified-roomstore";
+import { useDirectChatActions } from "@/lib/hooks/useDirectChatActions";
 import RoomCard from "@/components/UIcomponents/RoomCard";
 import UserCard from "@/components/UIcomponents/userCard";
 
@@ -16,6 +17,8 @@ export default function SearchComponent() {
   const { joinRoom, leaveRoom } = useRoomActions();
   const setSelectedRoomId = useUnifiedStore((s) => s.setSelectedRoomId);
   const setActiveTab = useUnifiedStore((s) => s.setActiveTab);
+  const currentUserId = useUnifiedStore((s) => s.userId);
+  const { openOrCreateDirectChat } = useDirectChatActions();
 
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState<"rooms" | "users">("rooms");
@@ -63,10 +66,11 @@ export default function SearchComponent() {
     const q = debounced.toLowerCase();
     return users.filter(
       (u) =>
-        u.username?.toLowerCase().includes(q) ||
-        (u.display_name || "").toLowerCase().includes(q)
+        u.id !== currentUserId &&
+        (u.username?.toLowerCase().includes(q) ||
+          (u.display_name || "").toLowerCase().includes(q))
     );
-  }, [users, debounced]);
+  }, [users, debounced, currentUserId]);
 
   /* -------------------------------------------------------------------------- */
   /* UI */
@@ -232,7 +236,7 @@ export default function SearchComponent() {
       {filteredUsers.length ? (
         filteredUsers.map((user) => (
           <div key={user.id} className="col-span-1">
-            <UserCard user={user} query={debounced} />
+            <UserCard user={user} query={debounced} onMessage={openOrCreateDirectChat} />
           </div>
         ))
       ) : (

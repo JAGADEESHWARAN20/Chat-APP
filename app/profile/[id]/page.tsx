@@ -8,7 +8,8 @@ import Image from "next/image";
 import { useRouter, useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, MessageCircle } from "lucide-react";
+import { useDirectChatActions } from "@/lib/hooks/useDirectChatActions";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 
@@ -18,6 +19,8 @@ export default function OtherUserProfilePage() {
   const router = useRouter();
 
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [isStartingChat, setIsStartingChat] = useState(false);
+  const { openOrCreateDirectChat } = useDirectChatActions();
 
   const [supabase] = useState(() =>
     createBrowserClient(
@@ -41,6 +44,24 @@ export default function OtherUserProfilePage() {
 
     load();
   }, [supabase, userId]);
+
+
+  const handleMessageUser = async () => {
+    if (!profile) return;
+
+    setIsStartingChat(true);
+    const opened = await openOrCreateDirectChat({
+      id: profile.id,
+      username: profile.username,
+      display_name: profile.display_name,
+      avatar_url: profile.avatar_url,
+    });
+    setIsStartingChat(false);
+
+    if (opened) {
+      router.push("/");
+    }
+  };
 
   if (!profile)
     return (
@@ -74,6 +95,17 @@ export default function OtherUserProfilePage() {
           </h2>
           <p className="text-muted-foreground">@{profile.username}</p>
         </div>
+      </div>
+
+      <div className="mt-4">
+        <Button
+          onClick={handleMessageUser}
+          disabled={isStartingChat}
+          className="inline-flex items-center gap-2"
+        >
+          <MessageCircle className="h-4 w-4" />
+          {isStartingChat ? "Opening..." : "Message"}
+        </Button>
       </div>
 
       <div className="mt-6">

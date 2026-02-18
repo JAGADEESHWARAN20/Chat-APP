@@ -106,6 +106,7 @@ interface MessageState {
 
   // 🚀 NEW: room-aware loading
   loadInitialMessages: (roomId: string, opts?: { force?: boolean }) => Promise<void>;
+  loadInitialDirectMessages: (directChatId: string, opts?: { force?: boolean }) => Promise<void>;
   loadMoreMessages: (roomId: string) => Promise<void>;
 
   // realtime
@@ -400,6 +401,87 @@ export const useMessage = create<MessageState>()((set, get) => ({
         roomBuckets: {
           ...s.roomBuckets,
           [roomId]: {
+            messages: existingBucket?.messages ?? [],
+            hasMore: existingBucket?.hasMore ?? true,
+            isLoading: false,
+            initialized: existingBucket?.initialized ?? false,
+            oldestCreatedAt: existingBucket?.oldestCreatedAt ?? null,
+          },
+        },
+      }));
+    }
+  },
+
+
+  loadInitialDirectMessages: async (directChatId, opts) => {
+    const { force = false } = opts ?? {};
+    const state = get();
+
+    const existingBucket = state.roomBuckets[directChatId];
+    if (existingBucket && existingBucket.initialized && !force) {
+      set({
+        activeRoomId: directChatId,
+        messages: existingBucket.messages,
+        hasMore: existingBucket.hasMore,
+      });
+      return;
+    }
+
+    try {
+      set((s) => ({
+        roomBuckets: {
+          ...s.roomBuckets,
+          [directChatId]: {
+            messages: existingBucket?.messages ?? [],
+            hasMore: existingBucket?.hasMore ?? true,
+            isLoading: true,
+            initialized: existingBucket?.initialized ?? false,
+            oldestCreatedAt: existingBucket?.oldestCreatedAt ?? null,
+          },
+        },
+      }));
+
+      const res = await fetch(`/api/direct-chats/${directChatId}/messages?limit=${LIMIT_MESSAGE}`, {
+        method: "GET",
+      });
+
+      if (!res.ok) {
+        throw new Error(`Failed to load direct messages (${res.status})`);
+      }
+
+      const data = await res.json();
+      const rows = Array.isArray(data.messages) ? data.messages : [];
+
+      const transformed = rows.map(transformApiMessage);
+      const sorted = transformed.sort(
+        (a: Imessage, b: Imessage) =>
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+
+      const bucket: RoomBucket = {
+        messages: sorted,
+        hasMore: sorted.length >= LIMIT_MESSAGE,
+        isLoading: false,
+        initialized: true,
+        oldestCreatedAt: sorted[0]?.created_at ?? null,
+      };
+
+      set((s) => ({
+        activeRoomId: directChatId,
+        messages: sorted,
+        hasMore: bucket.hasMore,
+        roomBuckets: {
+          ...s.roomBuckets,
+          [directChatId]: bucket,
+        },
+      }));
+    } catch (err) {
+      console.error("loadInitialDirectMessages error:", err);
+      toast.error("Failed to load direct messages");
+      set((s) => ({
+        roomBuckets: {
+          ...s.roomBuckets,
+          [directChatId]: {
             messages: existingBucket?.messages ?? [],
             hasMore: existingBucket?.hasMore ?? true,
             isLoading: false,

@@ -64,7 +64,7 @@ export async function POST(
     return NextResponse.json({ error: rpcError.message }, { status: 400 });
   }
 
-  console.log("✅ Join request accepted successfully");
+
 
   return NextResponse.json({ 
     success: true,

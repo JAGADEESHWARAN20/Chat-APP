@@ -18,7 +18,7 @@ export async function ensureSystemUserExists(): Promise<string | null> {
     .single();
 
   if (error || !profile) {
-    console.log("⚠️ System profile missing. Creating...");
+
     
     const { error: insertError } = await supabase.from("profiles").insert({
       id: SYSTEM_USER_ID,
@@ -33,7 +33,7 @@ export async function ensureSystemUserExists(): Promise<string | null> {
       return null;
     }
     
-    console.log("✅ System profile ensured");
+
   }
 
   return SYSTEM_USER_ID;

@@ -2,14 +2,16 @@
 
 import React from "react";
 import { useSelectedRoom, useTypingUsers, useTypingDisplayText } from "@/lib/store/unified-roomstore";
+import { useDirectChatStore } from "@/lib/store/directChatStore";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function TypingIndicator() {
   const selectedRoom = useSelectedRoom();
+  const selectedDirectChat = useDirectChatStore((state) => state.selectedChat);
   const typingUsers = useTypingUsers();
   const typingDisplayText = useTypingDisplayText();
 
-  const shouldShow = selectedRoom?.id && typingUsers.length > 0 && typingDisplayText;
+  const shouldShow = (selectedRoom?.id || selectedDirectChat?.id) && typingUsers.length > 0 && typingDisplayText;
 
   return (
     <AnimatePresence>
