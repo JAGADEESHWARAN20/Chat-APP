@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { ThemeTransitionWrapper } from "./ThemeTransitionWrapper";
 import { PresenceConnector } from "./PresenceConnector";
+import { useDirectChatStore } from "@/lib/store/directChatStore";
 
 import { useUser } from "@/lib/store/user";
 import { useMessage } from "@/lib/store/messages";
@@ -72,12 +73,21 @@ function UnifiedHomeContent({ initialSidebarState = "collapsed", sidebarState }:
     [rooms, selectedRoomId]
   );
 
-  const { setActiveRoom, loadInitialMessages, subscribeToRoom, unsubscribeFromRoom } = useMessage((s) => ({
+  const {
+    setActiveRoom,
+    loadInitialMessages,
+    loadInitialDirectMessages,
+    subscribeToRoom,
+    unsubscribeFromRoom,
+  } = useMessage((s) => ({
     setActiveRoom: s.setActiveRoom,
     loadInitialMessages: s.loadInitialMessages,
+    loadInitialDirectMessages: s.loadInitialDirectMessages,
     subscribeToRoom: s.subscribeToRoom,
     unsubscribeFromRoom: s.unsubscribeFromRoom,
   }));
+
+  const selectedDirectChat = useDirectChatStore((state) => state.selectedChat);
 
   const { setSelectedRoomId } = useRoomActions();
 
@@ -274,20 +284,35 @@ function UnifiedHomeContent({ initialSidebarState = "collapsed", sidebarState }:
      Wire messages subsystem when selectedRoomId changes
      ---------------------------- */
   useEffect(() => {
-    if (!selectedRoomId) {
-      setActiveRoom(null);
-      unsubscribeFromRoom();
-      return;
+    if (selectedDirectChat?.id) {
+      setActiveRoom(selectedDirectChat.id);
+      loadInitialDirectMessages(selectedDirectChat.id);
+      subscribeToRoom(undefined, selectedDirectChat.id);
+      return () => {
+        unsubscribeFromRoom();
+      };
     }
 
-    setActiveRoom(selectedRoomId);
-    loadInitialMessages(selectedRoomId);
-    subscribeToRoom(selectedRoomId);
+    if (selectedRoomId) {
+      setActiveRoom(selectedRoomId);
+      loadInitialMessages(selectedRoomId);
+      subscribeToRoom(selectedRoomId);
+      return () => {
+        unsubscribeFromRoom();
+      };
+    }
 
-    return () => {
-      unsubscribeFromRoom();
-    };
-  }, [selectedRoomId, setActiveRoom, loadInitialMessages, subscribeToRoom, unsubscribeFromRoom]);
+    setActiveRoom(null);
+    unsubscribeFromRoom();
+  }, [
+    selectedDirectChat?.id,
+    selectedRoomId,
+    setActiveRoom,
+    loadInitialMessages,
+    loadInitialDirectMessages,
+    subscribeToRoom,
+    unsubscribeFromRoom,
+  ]);
 
   // Render
   return (

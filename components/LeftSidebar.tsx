@@ -5,6 +5,7 @@ import React, {
   useState,
   useMemo,
   useCallback,
+  useEffect,
 } from "react";
 
 import {
@@ -28,6 +29,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { useDirectChatStore, type DirectChatSummary } from "@/lib/store/directChatStore";
 
 /* ----------------------------------------------------------------------------
    LEFT SIDEBAR PROPS
@@ -66,6 +68,13 @@ const LeftSidebar = memo<LeftSidebarProps>(function LeftSidebar({
   const setSearchTerm = useUnifiedStore((s) => s.setSidebarSearchTerm);
 
   const { setSelectedRoomId, createRoom } = useRoomActions();
+  const { chats, setChats, selectedChat, setSelectedChat } = useDirectChatStore((s) => ({
+    chats: s.chats,
+    setChats: s.setChats,
+    selectedChat: s.selectedChat,
+    setSelectedChat: s.setSelectedChat,
+  }));
+
 
   /* --------------------------------------------------------------------------
      LOCAL STATE
@@ -73,6 +82,40 @@ const LeftSidebar = memo<LeftSidebarProps>(function LeftSidebar({
   const [showCreateRoom, setShowCreateRoom] = useState(false);
   const [newRoomName, setNewRoomName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+
+  const [isLoadingChats, setIsLoadingChats] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadChats = async () => {
+      if (!user?.id) {
+        setChats([]);
+        return;
+      }
+
+      setIsLoadingChats(true);
+      try {
+        const res = await fetch("/api/direct-chats", { method: "GET" });
+        if (!res.ok) return;
+
+        const data = await res.json();
+        const nextChats = Array.isArray(data?.chats) ? (data.chats as DirectChatSummary[]) : [];
+
+        if (mounted) {
+          setChats(nextChats);
+        }
+      } finally {
+        if (mounted) setIsLoadingChats(false);
+      }
+    };
+
+    loadChats();
+
+    return () => {
+      mounted = false;
+    };
+  }, [user?.id, setChats]);
 
   /* --------------------------------------------------------------------------
      DERIVED: JOINED ROOMS
@@ -99,6 +142,7 @@ const LeftSidebar = memo<LeftSidebarProps>(function LeftSidebar({
   -------------------------------------------------------------------------- */
   const handleRoomClick = useCallback(
     (roomId: string) => {
+      setSelectedChat(null);
       setSelectedRoomId(roomId);
 
       // Always switch Home tab when selecting a room
@@ -107,8 +151,15 @@ const LeftSidebar = memo<LeftSidebarProps>(function LeftSidebar({
       // Close sidebar on mobile
       onClose?.();
     },
-    [setSelectedRoomId, onClose]
+    [setSelectedChat, setSelectedRoomId, onClose]
   );
+
+  const handleChatClick = useCallback((chat: DirectChatSummary) => {
+    setSelectedChat(chat);
+    setSelectedRoomId(null);
+    useUnifiedStore.getState().setActiveTab("home");
+    onClose?.();
+  }, [setSelectedChat, setSelectedRoomId, onClose]);
 
   /* --------------------------------------------------------------------------
      CREATE ROOM
@@ -520,24 +571,88 @@ const renderRoom = useCallback(
                 paddingRight: sidebarStyles.padding,
               }}
             >
-              <div 
-                className="flex flex-col items-center justify-center h-48 text-center"
-                style={{ gap: sidebarStyles.gap }}
-              >
-                <MessageSquare 
-                  className="mb-3 text-muted-foreground/50"
-                  style={{
-                    height: sidebarStyles.avatarSizeLg,
-                    width: sidebarStyles.avatarSizeLg,
-                  }}
-                />
-                <p 
-                  className="text-sm text-muted-foreground"
-                  style={{ fontSize: sidebarStyles.roomNameSize }}
+              {isLoadingChats ? (
+                <div className="flex items-center justify-center h-48 text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                </div>
+              ) : chats.length === 0 ? (
+                <div 
+                  className="flex flex-col items-center justify-center h-48 text-center"
+                  style={{ gap: sidebarStyles.gap }}
                 >
-                  Direct messages coming soon
-                </p>
-              </div>
+                  <MessageSquare 
+                    className="mb-3 text-muted-foreground/50"
+                    style={{
+                      height: sidebarStyles.avatarSizeLg,
+                      width: sidebarStyles.avatarSizeLg,
+                    }}
+                  />
+                  <p 
+                    className="text-sm text-muted-foreground"
+                    style={{ fontSize: sidebarStyles.roomNameSize }}
+                  >
+                    No direct chats yet
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {chats.map((chat) => {
+                    const isActive = selectedChat?.id === chat.id;
+                    return (
+                      <button
+                        key={chat.id}
+                        onClick={() => handleChatClick(chat)}
+                        className={cn(
+                          "w-full flex items-start rounded-lg transition-dynamic text-left select-none",
+                          isActive ? "border shadow-sm" : "hover:border-transparent"
+                        )}
+                        style={{
+                          padding: sidebarStyles.roomPadding,
+                          gap: sidebarStyles.roomGap,
+                          borderRadius: sidebarStyles.roomBorderRadius,
+                          backgroundColor: isActive ? sidebarStyles.activeBg : "transparent",
+                          border: isActive ? `1px solid ${sidebarStyles.activeBorder}` : "1px solid transparent",
+                        }}
+                      >
+                        <Avatar
+                          className="border"
+                          style={{
+                            height: sidebarStyles.avatarSizeSm,
+                            width: sidebarStyles.avatarSizeSm,
+                            borderColor: `hsl(${sidebarStyles.borderColor} / 0.4)`,
+                          }}
+                        >
+                          <AvatarFallback>
+                            {(chat.other_user.display_name || chat.other_user.username || "?").charAt(0).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0" style={{ marginLeft: sidebarStyles.roomGap }}>
+                          <div className="flex items-center justify-between mb-1">
+                            <div className="font-semibold truncate" style={{ fontSize: sidebarStyles.roomNameSize }}>
+                              {chat.other_user.display_name || chat.other_user.username || "Unknown user"}
+                            </div>
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {chat.latest_message || "Start a conversation"}
+                          </p>
+                        </div>
+                        {chat.unread_count > 0 && (
+                          <span
+                            className="font-bold rounded-full px-[1.1em] py-[.35em]"
+                            style={{
+                              fontSize: sidebarStyles.metaInfoSize,
+                              backgroundColor: sidebarStyles.unreadBg,
+                              color: sidebarStyles.unreadColor,
+                            }}
+                          >
+                            {chat.unread_count > 99 ? "99+" : chat.unread_count}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </TabsContent>
 

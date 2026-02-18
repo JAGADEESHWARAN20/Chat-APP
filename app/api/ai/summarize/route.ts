@@ -60,7 +60,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       ? rawUserId 
       : SYSTEM_USER_ID;
 
-    console.log("📨 Summarize Request:", { userId, roomId, model });
+
 
     // Ensure system user exists
     await ensureSystemUserExists();
@@ -106,7 +106,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       console.error("❌ Supabase Insert Error:", insertError.message);
       console.warn("Continuing without saving to DB...");
     } else {
-      console.log("✅ Chat Saved to DB");
+
     }
 
     return NextResponse.json({

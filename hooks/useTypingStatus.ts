@@ -4,19 +4,21 @@ import { useEffect, useCallback, useRef } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import type { Database } from "@/lib/types/supabase";
 
-import { 
-  useUnifiedStore, 
-  useRoomById 
-} from "@/lib/store/unified-roomstore";
+import { useUnifiedStore } from "@/lib/store/unified-roomstore";
+import { useDirectChatStore } from "@/lib/store/directChatStore";
 
 export function useTypingStatus() {
-  const supabase = createBrowserClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  const supabaseRef = useRef(
+    createBrowserClient<Database>(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
   );
+  const supabase = supabaseRef.current;
 
   // --- UNIFIED STORE FIELDS ---
   const selectedRoomId = useUnifiedStore((s) => s.selectedRoomId);
+  const selectedDirectChatId = useDirectChatStore((s) => s.selectedChat?.id ?? null);
   const typingUsers = useUnifiedStore((s) => s.typingUsers);
   const typingDisplayText = useUnifiedStore((s) => s.typingDisplayText);
 
@@ -25,7 +27,7 @@ export function useTypingStatus() {
 
   const userId = useUnifiedStore((s) => s.userId);
 
-  const selectedRoom = useRoomById(selectedRoomId);
+  const activeConversationId = selectedRoomId ?? selectedDirectChatId;
 
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -36,7 +38,7 @@ export function useTypingStatus() {
     typingUsersRef.current = typingUsers;
   }, [typingUsers]);
 
-  const canOperate = Boolean(selectedRoomId && userId);
+  const canOperate = Boolean(activeConversationId && userId);
 
   /* -------------------------------------------------------
      SEND TYPING START/STOP
@@ -110,7 +112,7 @@ export function useTypingStatus() {
       return;
     }
 
-    const channel = supabase.channel(`typing-${selectedRoomId}`, {
+    const channel = supabase.channel(`typing-${activeConversationId}`, {
       config: { broadcast: { self: false } },
     });
 
@@ -152,11 +154,7 @@ export function useTypingStatus() {
         );
       })
 
-      .subscribe((status) => {
-        if (status === "SUBSCRIBED") {
-          console.log(`🔥 Typing realtime active → room ${selectedRoomId}`);
-        }
-      });
+.subscribe();
 
     channelRef.current = channel;
 
@@ -167,7 +165,7 @@ export function useTypingStatus() {
       channelRef.current = null;
       updateTypingUsers([]);
     };
-  }, [selectedRoomId, userId, canOperate, stopTyping]);
+  }, [activeConversationId, userId, canOperate, stopTyping, supabase, updateTypingUsers]);
 
 
   return {

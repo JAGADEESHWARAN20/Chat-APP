@@ -99,7 +99,7 @@ export default function InitRoom({ rooms }: { rooms: Room[] }) {
           setRooms(result as RoomData[]);
           initState.current = true;
 
-          console.log(`✅ Initialized ${result.length} rooms`);
+          
         } catch (error) {
           toast.error("Failed to initialize rooms");
           console.error(error);
